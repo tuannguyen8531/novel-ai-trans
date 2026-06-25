@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv
+venv
+
+# Environment config
+.env
+!.env.example
+
+# Runtime data — generated during crawls / translations / packaging
+# logs/ stays at the repo root.
+logs/*
+!logs/.gitkeep
+*.log
+
+# Per-novel artefacts
+translated/
+!translated/.gitkeep
+
+# Global runtime state
+runtime/
+!runtime/.gitkeep
+
+# Local-only configs
+configs/*
+!configs/.gitkeep
+!configs/example.json
+
+# Docs
+docs/*
+!docs/.gitkeep
+
+# Translation rule templates
+rules/*
+!rules/.gitkeep
+!rules/en/
+!rules/vi/
+!rules/en/chinese.md
+!rules/en/common.md
+!rules/en/japanese.md
+!rules/en/korean.md
+!rules/vi/chinese.md
+!rules/vi/common.md
+!rules/vi/japanese.md
+
+# OS
+.DS_Store
+Thumbs.db

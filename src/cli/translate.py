@@ -1,0 +1,659 @@
+"""Batch translate + glossary CLI commands.
+
+- `translate_main` runs the batch translation pipeline for a single novel.
+- `glossary_main` is the per-novel glossary manager (add, remove, characters,
+  relationships, validate, audit, …).
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import signal
+import sys
+import time
+from pathlib import Path
+
+from src.config import config
+from src.domain.target_language import (
+    SUPPORTED_TARGET_LANGUAGES,
+    normalize_target_language,
+    target_language_name,
+)
+from src.graph.builder import build_graph
+from src.models.state import initial_state
+from src.services.logger import log_error
+from src.utils.display import (
+    DIM,
+    GREEN,
+    RED,
+    RESET,
+    YELLOW,
+    check_provider,
+)
+from src.utils.progress import ProgressTracker
+from src.utils.text import normalize_paragraph_spacing
+
+# ---------------------------------------------------------------------------
+# Paths & module state
+# ---------------------------------------------------------------------------
+
+INPUT_DIR = Path("runtime/input")
+OUTPUT_DIR = Path("runtime/output")
+REPORT_DIR = Path("runtime/reports")
+PROGRESS_DIR = Path("runtime/progress")
+
+_shutdown_requested = False
+_graph = None
+
+
+# ---------------------------------------------------------------------------
+# Shared helpers
+# ---------------------------------------------------------------------------
+
+
+def _signal_handler(signum, frame) -> None:
+    global _shutdown_requested
+    _shutdown_requested = True
+    print(f"\n{YELLOW}⚠ Shutting down gracefully...{DIM}")
+
+
+# ---------------------------------------------------------------------------
+# Translator helpers
+# ---------------------------------------------------------------------------
+
+
+def _get_input_dir(novel_name: str) -> Path:
+    if config.translated_dir:
+        return Path(config.translated_dir) / novel_name / "input"
+    return INPUT_DIR / novel_name
+
+
+def _targeted_path(base_dir: Path, novel_name: str, target_language: str | None = None) -> Path:
+    target = normalize_target_language(target_language or config.target_language)
+    if target == "vi":
+        return base_dir / novel_name
+    return base_dir / target / novel_name
+
+
+def _get_output_dir(novel_name: str, target_language: str | None = None) -> Path:
+    target = normalize_target_language(target_language or config.target_language)
+    if config.translated_dir:
+        base_dir = Path(config.translated_dir) / novel_name / "output"
+        return base_dir if target == "vi" else base_dir / target
+    return _targeted_path(OUTPUT_DIR, novel_name, target)
+
+
+def scan_chapters(novel_name: str) -> dict[int, Path]:
+    """Scan input directory for chapter files.
+
+    Returns dict of chapter_number -> file_path, sorted by chapter number.
+    """
+    novel_dir = _get_input_dir(novel_name)
+    if not novel_dir.exists():
+        print(f"{RED}✗ Input directory not found: {novel_dir}{RESET}")
+        sys.exit(1)
+
+    chapters = {}
+    pattern = re.compile(r"^chapter_(\d+)\.txt$")
+
+    for f in novel_dir.iterdir():
+        if f.is_file():
+            match = pattern.match(f.name)
+            if match:
+                chapters[int(match.group(1))] = f
+
+    return dict(sorted(chapters.items()))
+
+
+def find_untranslated(
+    novel_name: str,
+    chapters: dict[int, Path],
+    force: bool = False,
+    target_language: str | None = None,
+) -> list[int]:
+    """Find chapters that exist in input but haven't been translated yet."""
+    if force:
+        return sorted(chapters.keys())
+
+    output_dir = _get_output_dir(novel_name, target_language)
+    translated = set()
+    if output_dir.exists():
+        for f in output_dir.iterdir():
+            match = re.match(r"^chapter_(\d+)\.txt$", f.name)
+            if match:
+                translated.add(int(match.group(1)))
+    return [ch for ch in chapters if ch not in translated]
+
+
+def _progress_path(novel_name: str, target_language: str | None = None) -> Path:
+    target = normalize_target_language(target_language or config.target_language)
+    if target == "vi":
+        return PROGRESS_DIR / f"{novel_name}.json"
+    return PROGRESS_DIR / target / f"{novel_name}.json"
+
+
+def load_progress(novel_name: str, target_language: str | None = None) -> dict:
+    """Load chapter-level progress state."""
+    path = _progress_path(novel_name, target_language)
+    if not path.exists():
+        return {"completed": [], "failed": []}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {"completed": [], "failed": []}
+
+
+def save_progress(novel_name: str, progress: dict, target_language: str | None = None) -> None:
+    """Save chapter-level progress state."""
+    PROGRESS_DIR.mkdir(parents=True, exist_ok=True)
+    normalized = {
+        "completed": sorted(set(progress.get("completed", []))),
+        "failed": sorted(set(progress.get("failed", []))),
+    }
+    progress_path = _progress_path(novel_name, target_language)
+    progress_path.parent.mkdir(parents=True, exist_ok=True)
+    progress_path.write_text(json.dumps(normalized, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _report_path(novel_name: str, chapter_number: int, target_language: str | None = None) -> Path:
+    return _targeted_path(REPORT_DIR, novel_name, target_language) / f"chapter_{chapter_number:03d}.json"
+
+
+def save_quality_report(
+    novel_name: str,
+    chapter_number: int,
+    report: dict,
+    target_language: str | None = None,
+) -> None:
+    """Persist a chapter quality report."""
+    report_path = _report_path(novel_name, chapter_number, target_language)
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def audit_glossary_outputs(
+    novel_name: str,
+    terms: dict[str, str],
+    target_language: str | None = None,
+) -> list[dict]:
+    """Audit translated chapters for obvious glossary consistency problems."""
+    from src.domain.glossary import audit_term_usage
+
+    issues: list[dict] = []
+    source_dir = _get_input_dir(novel_name)
+    output_dir = _get_output_dir(novel_name, target_language)
+    if not source_dir.exists() or not output_dir.exists():
+        return issues
+
+    for source_path in sorted(source_dir.glob("chapter_*.txt")):
+        match = re.match(r"^chapter_(\d+)\.txt$", source_path.name)
+        if not match:
+            continue
+        chapter = int(match.group(1))
+        output_path = output_dir / f"chapter_{chapter:03d}.txt"
+        if not output_path.exists():
+            output_path = output_dir / source_path.name
+        if not output_path.exists():
+            continue
+
+        source_text = source_path.read_text(encoding="utf-8")
+        translated_text = output_path.read_text(encoding="utf-8")
+        for issue in audit_term_usage(terms, source_text, translated_text):
+            issues.append({"chapter": chapter, **issue})
+
+    return issues
+
+
+def translate_file(
+    input_path: Path,
+    novel_name: str,
+    chapter_number: int,
+    language: str = "",
+    target_language: str = "vi",
+    graph=None,
+) -> tuple[bool, int, float, int]:
+    """Run the translation pipeline on a file. Returns (success, char_count, elapsed, new_terms_count)."""
+    source_text = input_path.read_text(encoding="utf-8")
+    if not source_text.strip():
+        return False, 0, 0, 0
+
+    if graph is None:
+        graph = build_graph()
+
+    start = time.time()
+
+    result = graph.invoke(
+        initial_state(
+            source_text=source_text,
+            source_language=language,
+            target_language=target_language,
+            novel_name=novel_name,
+            chapter_number=chapter_number,
+        )
+    )
+
+    elapsed = time.time() - start
+
+    output_dir = _get_output_dir(novel_name, target_language)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_file = output_dir / f"chapter_{chapter_number:03d}.txt"
+
+    final_text = result.get("final_translation", "")
+    normalized_text = normalize_paragraph_spacing(final_text)
+    new_terms_count = len(result.get("new_terms", {}))
+    output_file.write_text(normalized_text, encoding="utf-8")
+
+    quality_report = {
+        "chapter": chapter_number,
+        "target_language": target_language,
+        "output_chars": len(normalized_text),
+        "elapsed_seconds": round(elapsed, 3),
+        "new_terms_count": new_terms_count,
+        "new_characters_count": len(result.get("new_characters", {}).get("entities", {})),
+        "chunks": result.get("quality_reports", []),
+    }
+    save_quality_report(novel_name, chapter_number, quality_report, target_language)
+
+    return True, len(normalized_text), elapsed, new_terms_count
+
+
+# ---------------------------------------------------------------------------
+# Glossary command
+# ---------------------------------------------------------------------------
+
+
+def glossary_main(argv: list[str] | None = None) -> None:
+    """Manage per-novel glossary data."""
+    from src.services.glossary import (
+        clean_glossary,
+        load_glossary_data,
+        remove_glossary_term,
+        save_character,
+        save_character_pronoun,
+        save_glossary,
+        save_relationship,
+        validate_glossary,
+    )
+
+    parser = argparse.ArgumentParser(description="Manage novel glossary data")
+    public_commands = "{list,add,remove,export,characters,pronoun,character,relationship,validate,audit}"
+    subparsers = parser.add_subparsers(dest="command", required=True, metavar=public_commands)
+
+    list_parser = subparsers.add_parser("list", help="List glossary terms")
+    list_parser.add_argument("novel")
+
+    add_parser = subparsers.add_parser("add", help="Add or update a glossary term")
+    add_parser.add_argument("novel")
+    add_parser.add_argument("original")
+    add_parser.add_argument("translated")
+
+    remove_parser = subparsers.add_parser("remove", help="Remove a glossary term")
+    remove_parser.add_argument("novel")
+    remove_parser.add_argument("original")
+
+    export_parser = subparsers.add_parser("export", help="Print full glossary JSON")
+    export_parser.add_argument("novel")
+
+    character_parser = subparsers.add_parser("characters", help="List character memory")
+    character_parser.add_argument("novel")
+
+    pronoun_parser = subparsers.add_parser("pronoun", help="Set a character pronoun")
+    pronoun_parser.add_argument("novel")
+    pronoun_parser.add_argument("original")
+    pronoun_parser.add_argument("pronoun")
+
+    character_edit_parser = subparsers.add_parser("character", help="Update a character name or role")
+    character_edit_parser.add_argument("novel")
+    character_edit_parser.add_argument("original")
+    character_edit_parser.add_argument("--translated-name", default="", help="Target-language character name")
+    character_edit_parser.add_argument("--name-vi", default="", help=argparse.SUPPRESS)
+    character_edit_parser.add_argument("--role", default="", help="Character role")
+
+    relationship_parser = subparsers.add_parser("relationship", help="Add or update a character relationship")
+    relationship_parser.add_argument("novel")
+    relationship_parser.add_argument("from_char")
+    relationship_parser.add_argument("to_char")
+    relationship_parser.add_argument("relationship")
+    relationship_parser.add_argument("--since", type=int, default=None, help="Chapter where this relationship starts")
+
+    validate_parser = subparsers.add_parser("validate", help="Validate glossary JSON")
+    validate_parser.add_argument("novel")
+
+    clean_parser = subparsers.add_parser("clean", help=argparse.SUPPRESS)
+    clean_parser.add_argument("novel")
+    subparsers._choices_actions = [action for action in subparsers._choices_actions if action.dest != "clean"]
+
+    audit_parser = subparsers.add_parser("audit", help="Audit translated output against glossary terms")
+    audit_parser.add_argument("novel")
+
+    args = parser.parse_args(argv)
+
+    if args.command == "list":
+        terms = load_glossary_data(args.novel).get("terms", {})
+        if not terms:
+            print(f"{DIM}No glossary terms for {args.novel}.{RESET}")
+            return
+        for original, translated in sorted(terms.items()):
+            print(f"{original}\t{translated}")
+        return
+
+    if args.command == "add":
+        save_glossary(args.novel, {args.original: args.translated})
+        print(f"{GREEN}✓ Added glossary term:{RESET} {args.original} → {args.translated}")
+        return
+
+    if args.command == "remove":
+        removed = remove_glossary_term(args.novel, args.original)
+        if removed:
+            print(f"{GREEN}✓ Removed glossary term:{RESET} {args.original}")
+        else:
+            print(f"{YELLOW}Term not found:{RESET} {args.original}")
+        return
+
+    if args.command == "export":
+        print(json.dumps(load_glossary_data(args.novel), ensure_ascii=False, indent=2))
+        return
+
+    if args.command == "characters":
+        entities = load_glossary_data(args.novel).get("entities", {})
+        if not entities:
+            print(f"{DIM}No characters for {args.novel}.{RESET}")
+            return
+        for original, info in sorted(entities.items()):
+            translated_name = info.get("translated_name") or info.get("name_vi", "")
+            role = info.get("role", "")
+            pronoun = info.get("pronoun", "")
+            print(f"{original}\t{translated_name}\t{role}\t{pronoun}")
+        return
+
+    if args.command == "pronoun":
+        updated = save_character_pronoun(args.novel, args.original, args.pronoun)
+        if updated:
+            print(f"{GREEN}✓ Updated pronoun:{RESET} {args.original} → {args.pronoun}")
+        else:
+            print(f"{YELLOW}Character not found:{RESET} {args.original}")
+        return
+
+    if args.command == "character":
+        translated_name = args.translated_name or args.name_vi
+        if not translated_name and not args.role:
+            print(f"{YELLOW}Nothing to update. Use --translated-name and/or --role.{RESET}")
+            return
+        updated = save_character(args.novel, args.original, translated_name=translated_name, role=args.role)
+        if updated:
+            print(f"{GREEN}✓ Updated character:{RESET} {args.original}")
+        else:
+            print(f"{YELLOW}Character not found:{RESET} {args.original}")
+        return
+
+    if args.command == "relationship":
+        updated = save_relationship(
+            args.novel,
+            args.from_char,
+            args.to_char,
+            args.relationship,
+            since_chapter=args.since,
+        )
+        if updated:
+            print(f"{GREEN}✓ Updated relationship:{RESET} {args.from_char} → {args.to_char} ({args.relationship})")
+        else:
+            print(f"{YELLOW}Relationship not updated; both characters must exist.{RESET}")
+        return
+
+    if args.command == "validate":
+        issues = validate_glossary(args.novel)
+        if not issues:
+            print(f"{GREEN}✓ Glossary valid:{RESET} {args.novel}")
+            return
+        for issue in issues:
+            print(f"{RED}✗ {issue}{RESET}")
+        sys.exit(1)
+
+    if args.command == "clean":
+        stats = clean_glossary(args.novel)
+        print(
+            f"{GREEN}✓ Cleaned glossary:{RESET} {args.novel} "
+            f"{DIM}entities={stats['entities']} edges={stats['edges_before']}→{stats['edges_after']} "
+            f"address_rules={stats['address_rules_before']}→{stats['address_rules_after']} "
+            f"pronoun_examples_removed={stats['pronoun_examples_removed']}{RESET}"
+        )
+        return
+
+    if args.command == "audit":
+        terms = load_glossary_data(args.novel).get("terms", {})
+        issues = audit_glossary_outputs(args.novel, terms)
+        if not issues:
+            print(f"{GREEN}✓ No glossary audit issues found:{RESET} {args.novel}")
+            return
+        for issue in issues:
+            print(f"{RED}✗ Ch.{issue['chapter']} {issue['issue']}:{RESET} {issue['term']} → {issue['expected']}")
+        sys.exit(1)
+
+
+# ---------------------------------------------------------------------------
+# Translate command
+# ---------------------------------------------------------------------------
+
+
+def translate_main() -> None:
+    global _graph
+
+    if len(sys.argv) > 1 and sys.argv[1] == "glossary":
+        glossary_main(sys.argv[2:])
+        return
+
+    parser = argparse.ArgumentParser(
+        description="📚 Novel Translator — Batch translate chapters",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python main.py translate my-novel
+  python main.py translate my-novel -l chinese
+  python main.py translate my-novel --target en
+  python main.py translate my-novel -p gemini -r -s
+        """,
+    )
+    parser.add_argument(
+        "novel",
+        help="Novel name (must match directory in translated/{novel}/input or input/)",
+    )
+    parser.add_argument(
+        "-l",
+        "--lang",
+        choices=["chinese", "korean", "japanese"],
+        default="",
+        help="Source language (auto-detect if omitted)",
+    )
+    parser.add_argument(
+        "-t",
+        "--target",
+        choices=sorted(SUPPORTED_TARGET_LANGUAGES),
+        default=config.target_language,
+        help="Target language (default: vi)",
+    )
+    parser.add_argument(
+        "-p",
+        "--provider",
+        choices=["ollama", "gemini", "openrouter"],
+        default=None,
+        help="LLM provider (overrides .env)",
+    )
+    parser.add_argument(
+        "-r",
+        "--review",
+        action="store_true",
+        help="Enable review step",
+    )
+    parser.add_argument(
+        "-s",
+        "--summary",
+        action="store_true",
+        help="Enable chapter summary generation",
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Print full AI request/response to console",
+    )
+    parser.add_argument(
+        "-n",
+        "--start",
+        dest="start_chapter",
+        type=int,
+        default=0,
+        help="Start from this chapter number",
+    )
+    parser.add_argument(
+        "-e",
+        "--to",
+        dest="end_chapter",
+        type=int,
+        default=0,
+        help="Stop at this chapter number (0 = all)",
+    )
+    parser.add_argument(
+        "-f",
+        "--force",
+        action="store_true",
+        help="Re-translate already translated chapters",
+    )
+    parser.add_argument(
+        "-d",
+        "--dry-run",
+        action="store_true",
+        help="List chapters to translate without actually translating",
+    )
+    parser.add_argument(
+        "-R",
+        "--resume",
+        action="store_true",
+        help="Skip chapters marked completed in target-specific progress",
+    )
+    parser.add_argument(
+        "-F",
+        "--failed-only",
+        action="store_true",
+        help="Translate only chapters marked failed in target-specific progress",
+    )
+    parser.add_argument(
+        "-m",
+        "--limit",
+        type=int,
+        default=0,
+        help="Translate at most N chapters (0 = no limit)",
+    )
+
+    args = parser.parse_args()
+
+    novel_name = args.novel
+
+    if args.provider:
+        config.llm_provider = args.provider
+    config.target_language = args.target
+    if args.review:
+        config.enable_review = True
+    if args.summary:
+        config.enable_summary = True
+
+    if args.verbose:
+        from src.services.logger import set_verbose
+
+        set_verbose(True)
+
+    chapters = scan_chapters(novel_name)
+    if not chapters:
+        input_dir = _get_input_dir(novel_name)
+        print(f"{RED}✗ No chapter files found in {input_dir}/{novel_name}/{RESET}")
+        print(f"  Expected format: {input_dir}/{novel_name}/chapter_1.txt{RESET}")
+        sys.exit(1)
+
+    untranslated = find_untranslated(novel_name, chapters, force=args.force, target_language=args.target)
+
+    if args.start_chapter > 0:
+        untranslated = [ch for ch in untranslated if ch >= args.start_chapter]
+    if args.end_chapter > 0:
+        untranslated = [ch for ch in untranslated if ch <= args.end_chapter]
+
+    progress_state = load_progress(novel_name, args.target)
+    if args.failed_only:
+        failed = set(progress_state.get("failed", []))
+        untranslated = [ch for ch in untranslated if ch in failed]
+    elif args.resume:
+        completed = set(progress_state.get("completed", []))
+        untranslated = [ch for ch in untranslated if ch not in completed]
+
+    if args.limit > 0:
+        untranslated = untranslated[: args.limit]
+
+    if not untranslated:
+        print(f"{GREEN}✓ All {len(chapters)} chapters already translated.{RESET}")
+        return
+
+    if args.dry_run:
+        print(f"{DIM}📕 {novel_name}: {len(chapters)} chapters total, {len(untranslated)} would be translated{RESET}")
+        print(f"{DIM}   Chapters: {', '.join(str(c) for c in untranslated)}{RESET}")
+        return
+
+    if not check_provider(config):
+        sys.exit(1)
+
+    total = len(untranslated)
+    print(f"{DIM}📕 {novel_name}: {len(chapters)} chapters found, {total} to translate{RESET}")
+    print(f"{DIM}   Chapters: {untranslated[0]}-{untranslated[-1]}{RESET}")
+    print()
+
+    language = args.lang
+    if not language:
+        from src.services.glossary import load_source_language
+
+        language = load_source_language(novel_name)
+        if language:
+            print(f"{DIM}🌐 Language: {language} (from glossary){RESET}")
+        else:
+            print(f"{DIM}🌐 Language: auto-detect{RESET}")
+    else:
+        print(f"{DIM}🌐 Language: {language} (specified){RESET}")
+    print(f"{DIM}🎯 Target: {target_language_name(args.target)} ({args.target}){RESET}")
+    print()
+
+    signal.signal(signal.SIGINT, _signal_handler)
+
+    _graph = build_graph()
+    progress = ProgressTracker(total, novel_name)
+
+    for index, chapter_num in enumerate(untranslated, 1):
+        if _shutdown_requested:
+            save_progress(novel_name, progress_state, args.target)
+            print(f"\n{YELLOW}⚠ Interrupted at chapter {chapter_num}. Progress saved.{RESET}")
+            break
+
+        chapter_path = chapters[chapter_num]
+        file_size = len(chapter_path.read_text(encoding="utf-8"))
+
+        progress.start_chapter(index, chapter_num, file_size)
+
+        try:
+            success, out_chars, elapsed, new_terms_count = translate_file(
+                chapter_path, novel_name, chapter_num, language, args.target, graph=_graph
+            )
+            progress.chapter_done(success)
+            if success:
+                progress_state.setdefault("completed", []).append(chapter_num)
+                progress_state["failed"] = [ch for ch in progress_state.get("failed", []) if ch != chapter_num]
+                save_progress(novel_name, progress_state, args.target)
+                terms_msg = f" [+ {new_terms_count} terms]" if new_terms_count > 0 else ""
+                print(f"  {GREEN}✓ Ch.{chapter_num}{RESET} {DIM}→ {out_chars:,} chars · {elapsed:.1f}s{terms_msg}{RESET}")
+            else:
+                progress_state.setdefault("failed", []).append(chapter_num)
+                save_progress(novel_name, progress_state, args.target)
+        except Exception as e:
+            progress.chapter_done(False)
+            progress_state.setdefault("failed", []).append(chapter_num)
+            save_progress(novel_name, progress_state, args.target)
+            log_error(f"Translation failed for chapter {chapter_num}", e, chapter=chapter_num, novel=novel_name)
+            print(f"  {RED}✗ Ch.{chapter_num}: {e}{RESET}")
+
+    progress.print_summary()

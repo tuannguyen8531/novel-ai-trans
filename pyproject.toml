@@ -1,0 +1,79 @@
+[project]
+name = "novel-ai-trans"
+version = "0.1.0"
+description = "End-to-end pipeline for crawling, translating, and packaging public-domain novels with LLMs"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+authors = [{name = "SeventhS"}]
+keywords = [
+    "crawler", "translation", "novel", "lightnovel", "webnovel",
+    "llm", "ollama", "gemini", "openrouter",
+    "chinese", "korean", "japanese", "vietnamese", "english",
+    "epub", "pdf", "langgraph",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: End Users/Desktop",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Text Processing :: Markup",
+    "Topic :: Text Processing :: Linguistic",
+]
+
+dependencies = [
+    "beautifulsoup4>=4.12.3",
+    "fpdf2>=2.8.7",
+    "httpx>=0.28.1",
+    "langchain-core>=1.3.3",
+    "langgraph>=1.1.10",
+    "playwright>=1.49.0",
+    "pydantic>=2.13.4",
+    "python-dotenv>=1.2.2",
+]
+
+[project.scripts]
+crawl     = "src.cli.crawl:crawl_main"
+generate  = "src.cli.crawl:generate_main"
+validate  = "src.cli.crawl:validate_main"
+import    = "src.cli.crawl:import_main"
+translate = "src.cli.translate:translate_main"
+pack      = "src.cli.pack:pack_main"
+glossary  = "src.cli.translate:glossary_main"
+test      = "src.cli.test:test_main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1.390",
+    "pytest>=8.3.0",
+    "ruff>=0.9.0",
+]
+
+# ---------------------------------------------------------------------------
+# Tooling
+# ---------------------------------------------------------------------------
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 130
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pyright]
+pythonVersion = "3.12"
+venvPath = "."
+venv = ".venv"
