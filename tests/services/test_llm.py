@@ -1,5 +1,6 @@
 """Tests for LLM service."""
 
+from contextlib import ExitStack
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -34,21 +35,39 @@ class TestLLMService:
 
     def _mock_httpx_post(self, mock_config, provider, response_json):
         """Helper to mock HTTP responses for LLM providers."""
+        provider_config_patch = ""
+        provider_config_attrs = {}
+
         if provider == "ollama":
             mock_config.llm_provider = "ollama"
             mock_config.fallback_provider = "ollama"  # Same = no fallback wrapper
             mock_config.ollama_base_url = "http://localhost:11434"
             mock_config.ollama_model = "test-model"
+            provider_config_patch = "src.services.llm.ollama.config"
+            provider_config_attrs = {
+                "ollama_base_url": "http://localhost:11434",
+                "ollama_model": "test-model",
+            }
         elif provider == "gemini":
             mock_config.llm_provider = "gemini"
             mock_config.fallback_provider = "gemini"
             mock_config.gemini_api_key = "test-key"
             mock_config.gemini_model = "gemini-test"
+            provider_config_patch = "src.services.llm.gemini.config"
+            provider_config_attrs = {
+                "gemini_api_key": "test-key",
+                "gemini_model": "gemini-test",
+            }
         elif provider == "openrouter":
             mock_config.llm_provider = "openrouter"
             mock_config.fallback_provider = "openrouter"
             mock_config.openrouter_api_key = "test-key"
             mock_config.openrouter_model = "test-model"
+            provider_config_patch = "src.services.llm.openrouter.config"
+            provider_config_attrs = {
+                "openrouter_api_key": "test-key",
+                "openrouter_model": "test-model",
+            }
 
         reset_llm()
         service = get_llm()
@@ -57,13 +76,15 @@ class TestLLMService:
         mock_response.status_code = 200
         mock_response.json.return_value = response_json
 
-        with patch("httpx.Client") as MockClient:
+        with ExitStack() as stack:
+            provider_config = stack.enter_context(patch(provider_config_patch))
+            for key, value in provider_config_attrs.items():
+                setattr(provider_config, key, value)
+            MockClient = stack.enter_context(patch("httpx.Client"))
             MockClient.return_value.post.return_value = mock_response
-            with (
-                patch("src.services.llm.base.log_api_request_sent", return_value="test-call-id"),
-                patch("src.services.llm.base.log_api_request_received"),
-            ):
-                return service.generate("system", "user", "translate")
+            stack.enter_context(patch("src.services.llm.base.log_api_request_sent", return_value="test-call-id"))
+            stack.enter_context(patch("src.services.llm.base.log_api_request_received"))
+            return service.generate("system", "user", "translate")
 
     def test_ollama_generate(self):
         with patch("src.services.llm.factory.config") as mock_config:

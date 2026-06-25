@@ -28,7 +28,7 @@ class CliTest(unittest.TestCase):
         self.assertEqual(args.max_chapters, 5)
 
     def test_resolve_config_path_accepts_novel_name(self) -> None:
-        self.assertEqual(_resolve_config_path("sfacg-760079"), Path("configs/sfacg-760079.json"))
+        self.assertEqual(_resolve_config_path("example"), Path("configs/example.json"))
 
     def test_resolve_config_path_accepts_direct_path(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
