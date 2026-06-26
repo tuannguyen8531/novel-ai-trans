@@ -5,10 +5,11 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 An end-to-end toolkit for turning web novels or EPUB files into translated EPUB
-and PDF books with LLMs.
+and PDF books with LLMs. Crawl, translate, package — one pipeline.
 
-`novel-ai-trans` combines a configurable crawler, an LLM translation pipeline,
-glossary memory, quality checks, and EPUB/PDF packaging in one repository.
+`novel-ai-trans` combines a configurable crawler, an LLM translation pipeline
+with glossary memory and quality checks, and EPUB/PDF packaging in one
+repository.
 
 ```text
 Website / EPUB
@@ -20,33 +21,38 @@ Website / EPUB
 
 ## Features
 
-- Crawl public novel sites with per-site JSON selector configs.
-- Generate and validate crawler configs with an LLM-assisted workflow.
-- Import EPUB files into the same chapter pipeline used by the crawler.
-- Translate Chinese, Korean, and Japanese source chapters into Vietnamese or
-  English.
-- Use Ollama, Gemini, or OpenRouter, with optional fallback provider support.
-- Maintain per-novel glossary data for terms, character names, pronouns, and
-  relationships.
-- Preserve EPUB illustrations through source markers and restore them during
+- **Crawl public novel sites** with per-site JSON selector configs, or generate
+  and validate configs with an LLM-assisted workflow.
+- **Import EPUB files** into the same chapter pipeline used by the crawler.
+- **Translate** Chinese, Korean, and Japanese source chapters into Vietnamese
+  or English.
+- **Multiple providers** — Ollama (local), Gemini, or OpenRouter, with optional
+  fallback provider support.
+- **Per-novel glossary memory** for terms, character names, pronouns, and
+  relationships — kept consistent across the whole book.
+- **Preserve EPUB illustrations** through source markers and restore them during
   packaging.
-- Produce EPUB and PDF output from translated chapter text.
-- Run optional review and summary steps when quality is worth the extra tokens.
+- **EPUB and PDF output** from translated chapter text, with cover image and
+  dark-mode PDF support.
+- **Resume anytime** — chapter-level progress tracking, retry failed chapters,
+  retranslate ranges.
+- **Optional review and summary steps** when quality is worth the extra tokens.
+- **Telegram notifications** when a crawl or translation run finishes.
 
 ## Requirements
 
 - Python 3.12+
 - [uv](https://docs.astral.sh/uv/)
 - One supported LLM provider:
-  - local Ollama server, or
-  - Gemini API key, or
-  - OpenRouter API key
+  - local [Ollama](https://ollama.com/) server, or
+  - [Gemini](https://aistudio.google.com/apikey) API key, or
+  - [OpenRouter](https://openrouter.ai/keys) API key
 - Playwright Chromium if you crawl JavaScript-heavy sites
 
-## Installation
+## Quick Start
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/tuannguyen8531/novel-ai-trans.git
 cd novel-ai-trans
 
 uv sync
@@ -66,8 +72,6 @@ For browser-based crawling:
 ```bash
 uv run playwright install chromium
 ```
-
-## Quick Start
 
 ### Option 1: import an EPUB
 
@@ -102,19 +106,34 @@ translated/<novel>/
 └── <novel>.en.pdf
 ```
 
+See [docs/GUIDE.md](docs/GUIDE.md) for the full walkthrough.
+
+## Providers
+
+| Provider    | Type   | Get started                                         |
+| ----------- | ------ | --------------------------------------------------- |
+| **Ollama**  | Local  | [ollama.com](https://ollama.com/)                   |
+| **Gemini**  | Cloud  | [Google AI Studio](https://aistudio.google.com/apikey) |
+| **OpenRouter** | Cloud (200+ models) | [openrouter.ai/keys](https://openrouter.ai/keys) |
+
+Any provider can be paired with a different `FALLBACK_PROVIDER` for automatic
+failover when the primary errors out.
+
+See [docs/PROVIDERS.md](docs/PROVIDERS.md) for detailed setup instructions.
+
 ## Commands
 
-The project exposes short console commands through `pyproject.toml`.
+The project exposes short console commands through `pyproject.toml`:
 
 ```bash
-uv run crawl <config-or-name>
-uv run generate <toc-url>
-uv run validate <config-or-name>
-uv run import <book.epub>
-uv run translate <novel>
-uv run glossary <command> <novel>
-uv run pack <novel>
-uv run test
+uv run crawl <config-or-name>        # download chapters from a site
+uv run generate <toc-url>            # AI-generate a site config
+uv run validate <config-or-name>     # test selectors against live HTML
+uv run import <book.epub>            # import an EPUB into the pipeline
+uv run translate <novel>             # batch translate chapters
+uv run glossary <command> <novel>    # manage per-novel glossary
+uv run pack <novel>                  # build EPUB / PDF
+uv run test                          # ruff + pytest
 ```
 
 `main.py` also provides a single dispatcher for local use:
@@ -123,161 +142,11 @@ uv run test
 uv run python main.py <command> --help
 ```
 
-### Crawl
-
-Use a config from `configs/<name>.json`. For example, `configs/example.json`
-is loaded as `example`:
-
-```bash
-uv run crawl example
-```
-
-Limit chapters:
-
-```bash
-uv run crawl example --max 10
-```
-
-Use Playwright browser mode for JavaScript-heavy pages:
-
-```bash
-uv run crawl example --browser --workers 1
-```
-
-Preview discovered chapters without writing files:
-
-```bash
-uv run crawl example --dry-run
-```
-
-Ignore `robots.txt` only when you have permission:
-
-```bash
-uv run crawl example --ignore-robots
-```
-
-### Generate a Site Config
-
-```bash
-uv run generate https://example.com/novel/table-of-contents --name my-novel
-uv run validate my-novel
-uv run crawl my-novel
-```
-
-Site configs live in `configs/` and use CSS selectors:
-
-```json
-{
-  "name": "example-public-site",
-  "start_url": "https://example.com/novel/table-of-contents",
-  "novel_title_selector": "h1",
-  "author_selector": ".author",
-  "chapter_link_selector": ".chapter-list a",
-  "chapter_title_selector": "h1",
-  "chapter_content_selector": ".chapter-content",
-  "remove_selectors": ["script", "style", ".ads"],
-  "same_domain": true,
-  "filter_non_chapter_links": true,
-  "request_delay_seconds": 1.5,
-  "version": 1
-}
-```
-
-### Import EPUB
-
-```bash
-uv run import ./book.epub --name my-novel
-```
-
-Keep existing source chapters in the destination:
-
-```bash
-uv run import ./book.epub --name my-novel --keep-existing
-```
-
-### Translate
-
-Translate all untranslated chapters:
-
-```bash
-uv run translate my-novel
-```
-
-Select source language and provider:
-
-```bash
-uv run translate my-novel --lang chinese --provider gemini
-```
-
-Translate a chapter range:
-
-```bash
-uv run translate my-novel --start 20 --to 30
-```
-
-Re-translate existing chapters:
-
-```bash
-uv run translate my-novel --start 20 --to 20 --force
-```
-
-Resume from progress state or retry failed chapters:
-
-```bash
-uv run translate my-novel --resume
-uv run translate my-novel --failed-only
-```
-
-Translate to English:
-
-```bash
-uv run translate my-novel --target en
-```
-
-Enable token-heavier review and summary steps:
-
-```bash
-uv run translate my-novel --review --summary
-```
-
-### Glossary
-
-```bash
-uv run glossary list my-novel
-uv run glossary add my-novel "原名" "Ten dich"
-uv run glossary remove my-novel "原名"
-uv run glossary characters my-novel
-uv run glossary character my-novel "李明" --translated-name "Ly Minh" --role protagonist
-uv run glossary pronoun my-novel "李明" "anh"
-uv run glossary relationship my-novel "李明" "张伟" friend --since 3
-uv run glossary validate my-novel
-uv run glossary audit my-novel
-```
-
-### Package
-
-Build both EPUB and PDF:
-
-```bash
-uv run pack my-novel --target vi
-```
-
-Build one format:
-
-```bash
-uv run pack my-novel --format epub
-uv run pack my-novel --format pdf --dark
-```
-
-Override metadata or output directory:
-
-```bash
-uv run pack my-novel --title "My Novel" --author "Author Name" --output ./dist
-```
+See [docs/GUIDE.md](docs/GUIDE.md) for every flag and example.
 
 ## Configuration
 
-Settings are loaded from `.env`.
+Settings are loaded from `.env`. Copy `.env.example` to `.env` and edit.
 
 | Key | Default | Purpose |
 | --- | --- | --- |
@@ -299,6 +168,8 @@ Settings are loaded from `.env`.
 | `MAX_RETRIES` | `2` | Translation retry count |
 | `ENABLE_REVIEW` | `false` | Enable review by default |
 | `ENABLE_SUMMARY` | `false` | Enable summary by default |
+| `TELEGRAM_BOT_TOKEN` | empty | Telegram bot token for notifications |
+| `TELEGRAM_CHAT_ID` | empty | Telegram chat id to notify |
 
 ## Project Layout
 
@@ -320,6 +191,13 @@ novel-ai-trans/
 
 `translated/` and `runtime/` are local runtime data. They are intentionally
 separate from source code.
+
+## Documentation
+
+| Guide | Description |
+| --- | --- |
+| [docs/GUIDE.md](docs/GUIDE.md) | Full walkthrough: crawl, generate, import, translate, glossary, pack |
+| [docs/PROVIDERS.md](docs/PROVIDERS.md) | Detailed provider setup (Ollama, Gemini, OpenRouter, fallback) |
 
 ## Development
 
