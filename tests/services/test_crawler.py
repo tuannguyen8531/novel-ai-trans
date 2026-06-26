@@ -79,6 +79,38 @@ class BlockingFlakyClient:
         )
 
 
+class ConsecutiveFailureClient:
+    def __init__(self, *, fail_urls: set[str]) -> None:
+        self.fail_urls = fail_urls
+        self.calls: list[str] = []
+
+    def fetch(self, url: str) -> FetchResponse:
+        self.calls.append(url)
+        if url == "https://public.example/novel":
+            return FetchResponse(
+                url=url,
+                body="""
+                    <h1 class="title">Demo Novel</h1>
+                    <nav class="chapters">
+                      <a href="/c1">Chapter 1</a>
+                      <a href="/c2">Chapter 2</a>
+                      <a href="/c3">Chapter 3</a>
+                      <a href="/c4">Chapter 4</a>
+                      <a href="/c5">Chapter 5</a>
+                      <a href="/c6">Chapter 6</a>
+                    </nav>
+                """,
+                content_type="text/html",
+            )
+        if url in self.fail_urls:
+            raise FetchError("chapter unavailable")
+        return FetchResponse(
+            url=url,
+            body="<h1>Chapter</h1><div class='content'>Recovered</div>",
+            content_type="text/html",
+        )
+
+
 class SuccessfulClient:
     def __init__(self) -> None:
         self.calls: list[str] = []
@@ -302,6 +334,65 @@ class NovelCrawlerTest(unittest.TestCase):
         self.assertEqual([chapter.title for chapter in chapters], ["Chapter 1", "Chapter 2"])
         self.assertEqual(client.click_selectors, ["text=Show all chapters"])
         self.assertEqual(client.wait_for_selector, ".chapters a")
+
+    def test_discover_reads_next_data_toc_when_dom_is_collapsed(self) -> None:
+        config = replace(
+            demo_config(),
+            start_url="https://kakuyomu.jp/works/12345",
+            chapter_link_selector=".chapters a",
+        )
+        next_data = {
+            "props": {
+                "pageProps": {
+                    "__APOLLO_STATE__": {
+                        "Work:12345": {
+                            "__typename": "Work",
+                            "id": "12345",
+                            "tableOfContentsV2": [{"__ref": "TableOfContentsChapter:"}],
+                        },
+                        "TableOfContentsChapter:": {
+                            "__typename": "TableOfContentsChapter",
+                            "episodeUnions": [
+                                {"__ref": "Episode:111"},
+                                {"__ref": "Episode:222"},
+                                {"__ref": "EmptyEpisode:333"},
+                            ],
+                        },
+                        "Episode:111": {
+                            "__typename": "Episode",
+                            "id": "111",
+                            "title": "第1話　Visible",
+                        },
+                        "Episode:222": {
+                            "__typename": "Episode",
+                            "id": "222",
+                            "title": "第2話　From state",
+                        },
+                    }
+                }
+            }
+        }
+        pages = {
+            "https://kakuyomu.jp/works/12345": f"""
+                <h1 class="title">Demo Novel</h1>
+                <nav class="chapters">
+                  <a href="/works/12345/episodes/111">Read from first episode</a>
+                </nav>
+                <script id="__NEXT_DATA__" type="application/json">{json.dumps(next_data)}</script>
+            """,
+        }
+        crawler = NovelCrawler(config, fetcher=FakeClient(pages))
+
+        _, chapters = crawler.discover_chapters()
+
+        self.assertEqual(
+            [(chapter.title, chapter.url) for chapter in chapters],
+            [
+                ("第1話　Visible", "https://kakuyomu.jp/works/12345/episodes/111"),
+                ("第2話　From state", "https://kakuyomu.jp/works/12345/episodes/222"),
+                ("Episode 3", "https://kakuyomu.jp/works/12345/episodes/333"),
+            ],
+        )
 
     def test_discover_sorts_mixed_latest_and_full_numbered_toc(self) -> None:
         pages = {
@@ -633,6 +724,46 @@ class NovelCrawlerTest(unittest.TestCase):
             )
 
         self.assertEqual(client.calls, ["https://public.example/c1"])
+
+    def test_crawl_stops_after_five_consecutive_chapter_failures(self) -> None:
+        crawler = NovelCrawler(demo_config())
+        client = ConsecutiveFailureClient(
+            fail_urls={
+                "https://public.example/c1",
+                "https://public.example/c2",
+                "https://public.example/c3",
+                "https://public.example/c4",
+                "https://public.example/c5",
+            }
+        )
+        crawler.client = client
+
+        with tempfile.TemporaryDirectory() as output:
+            with self.assertRaisesRegex(
+                FetchError,
+                "5 consecutive chapter failures",
+            ):
+                crawler.crawl(
+                    Path(output) / "runtime",
+                    share_root=Path(output) / "translated",
+                    workers=1,
+                )
+            manifest = json.loads((Path(output) / "runtime" / "demo" / "manifest.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(
+            client.calls,
+            [
+                "https://public.example/novel",
+                "https://public.example/c1",
+                "https://public.example/c2",
+                "https://public.example/c3",
+                "https://public.example/c4",
+                "https://public.example/c5",
+            ],
+        )
+        self.assertEqual(manifest["status"], "failed")
+        self.assertEqual(manifest["failed_chapters"], 5)
+        self.assertEqual(manifest["completed_chapters"], 5)
 
     def test_keyboard_interrupt_writes_interrupted_manifest_and_shared_metadata(self) -> None:
         crawler = NovelCrawler(demo_config())

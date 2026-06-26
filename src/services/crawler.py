@@ -8,7 +8,7 @@ from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Protocol, TypedDict
+from typing import Any, Protocol, TypedDict
 from urllib.parse import urljoin, urlparse
 
 from bs4 import BeautifulSoup
@@ -28,6 +28,7 @@ from src.utils.text import html_to_plain_text, normalize_text, slugify
 
 ProgressCallback = Callable[[CrawlProgress], None]
 _CSS_URL = re.compile(r"url\((['\"]?)(.*?)\1\)", re.IGNORECASE)
+CONSECUTIVE_FAILURE_LIMIT = 5
 
 
 class Fetcher(Protocol):
@@ -52,6 +53,33 @@ class CrawlError(TypedDict):
 
 class InvalidChapterContentError(FetchError):
     """A fetched page did not contain usable chapter content."""
+
+
+def _iter_apollo_refs(value: Any) -> list[str]:
+    """Return Apollo cache references from nested lists/dicts."""
+    refs: list[str] = []
+    if isinstance(value, dict):
+        ref = value.get("__ref")
+        if isinstance(ref, str):
+            refs.append(ref)
+        else:
+            for child in value.values():
+                refs.extend(_iter_apollo_refs(child))
+    elif isinstance(value, list):
+        for item in value:
+            refs.extend(_iter_apollo_refs(item))
+    return refs
+
+
+def _is_better_title(candidate: str, current: str) -> bool:
+    """Prefer explicit chapter titles over generic navigation labels."""
+    candidate_number = detect_chapter_number(candidate)
+    current_number = detect_chapter_number(current)
+    if candidate_number is not None and current_number is None:
+        return True
+    if candidate_number is not None and current_number is not None:
+        return len(candidate) > len(current)
+    return False
 
 
 class NovelCrawler:
@@ -79,6 +107,7 @@ class NovelCrawler:
         visited_toc_urls: set[str] = set()
         seen_chapters: set[str] = set()
         chapters: list[ChapterLink] = []
+        chapter_index_by_url: dict[str, int] = {}
         metadata: NovelMetadata | None = None
 
         for _ in range(config.max_toc_pages):
@@ -103,6 +132,19 @@ class NovelCrawler:
                 title = normalize_text(anchor.get_text(" ", strip=True)) or chapter_url
                 chapters.append(ChapterLink(title=title, url=chapter_url))
                 seen_chapters.add(chapter_url)
+                chapter_index_by_url[chapter_url] = len(chapters) - 1
+
+            for chapter in self._extract_next_data_chapters(soup, response.url):
+                if config.same_domain and urlparse(chapter.url).netloc != start_netloc:
+                    continue
+                if chapter.url in seen_chapters:
+                    index = chapter_index_by_url.get(chapter.url)
+                    if index is not None and _is_better_title(chapter.title, chapters[index].title):
+                        chapters[index] = chapter
+                    continue
+                chapters.append(chapter)
+                seen_chapters.add(chapter.url)
+                chapter_index_by_url[chapter.url] = len(chapters) - 1
 
             next_url = self._next_toc_url(soup, response.url)
             if not next_url:
@@ -139,6 +181,65 @@ class NovelCrawler:
 
         if self.config.reverse_chapter_order:
             return list(reversed(chapters))
+        return chapters
+
+    @staticmethod
+    def _extract_next_data_chapters(soup: BeautifulSoup, page_url: str) -> list[ChapterLink]:
+        """Extract chapter links from Next.js Apollo state when the DOM TOC is collapsed.
+
+        Kakuyomu renders only part of long TOCs in the HTML, but the embedded
+        Apollo state includes the ordered episode IDs. Some later episodes are
+        represented as EmptyEpisode records without titles; their real titles are
+        still read from the chapter page during crawl.
+        """
+        script = soup.select_one("script#__NEXT_DATA__")
+        raw_json = script.string if script else None
+        if not raw_json:
+            return []
+
+        match = re.search(r"/works/([^/?#]+)", page_url)
+        if not match:
+            return []
+        work_id = match.group(1)
+
+        try:
+            data = json.loads(raw_json)
+        except json.JSONDecodeError:
+            return []
+
+        apollo = data.get("props", {}).get("pageProps", {}).get("__APOLLO_STATE__", {})
+        if not isinstance(apollo, dict):
+            return []
+
+        work = apollo.get(f"Work:{work_id}", {})
+        if not isinstance(work, dict):
+            return []
+
+        chapters: list[ChapterLink] = []
+        position = 0
+        for toc_ref in _iter_apollo_refs(work.get("tableOfContentsV2")):
+            toc = apollo.get(toc_ref, {})
+            if not isinstance(toc, dict):
+                continue
+            for episode_ref in _iter_apollo_refs(toc.get("episodeUnions")):
+                typename, _, episode_id = episode_ref.partition(":")
+                if typename not in {"Episode", "EmptyEpisode"} or not episode_id:
+                    continue
+                episode = apollo.get(episode_ref, {})
+                title = ""
+                if isinstance(episode, dict):
+                    title = normalize_text(str(episode.get("title") or ""))
+                if not title:
+                    title = f"Episode {position + 1}"
+                elif detect_chapter_number(title) is None:
+                    title = f"Episode {position + 1} {title}"
+                chapters.append(
+                    ChapterLink(
+                        title=title,
+                        url=urljoin(page_url, f"/works/{work_id}/episodes/{episode_id}"),
+                    )
+                )
+                position += 1
         return chapters
 
     def crawl(
@@ -224,6 +325,32 @@ class NovelCrawler:
         next_chapter = 0
         pending: dict[Future[ChapterResult], tuple[int, ChapterLink]] = {}
         attempted_chapters: dict[int, tuple[ChapterLink, Path]] = {}
+        chapter_outcomes: dict[int, bool] = {}
+        next_outcome_index = 1
+        consecutive_failures = 0
+
+        def _record_chapter_outcome(index: int, *, success: bool) -> bool:
+            nonlocal next_outcome_index, consecutive_failures
+            chapter_outcomes[index] = success
+            while next_outcome_index in chapter_outcomes:
+                if chapter_outcomes[next_outcome_index]:
+                    consecutive_failures = 0
+                else:
+                    consecutive_failures += 1
+                    if consecutive_failures >= CONSECUTIVE_FAILURE_LIMIT:
+                        return True
+                next_outcome_index += 1
+            return False
+
+        def _raise_if_too_many_consecutive_failures() -> None:
+            results.sort(key=lambda r: r.index)
+            errors.sort(key=lambda error: error["index"])
+            _write_running_manifest(status="failed")
+            for future in pending:
+                future.cancel()
+            raise FetchError(
+                f"Stopped after {CONSECUTIVE_FAILURE_LIMIT} consecutive chapter failures. Progress was saved to manifest.json."
+            )
 
         def _fill_pending(executor: ThreadPoolExecutor) -> None:
             nonlocal next_chapter
@@ -258,6 +385,8 @@ class NovelCrawler:
                         path=str(chapter_path),
                     )
                     _write_running_manifest()
+                    if _record_chapter_outcome(index, success=True):
+                        _raise_if_too_many_consecutive_failures()
                     continue
 
                 attempted_chapters[index] = (chapter_link, chapter_path)
@@ -295,6 +424,8 @@ class NovelCrawler:
                         if fail_fast:
                             raise
                         pending.pop(future, None)
+                        if _record_chapter_outcome(index, success=False):
+                            _raise_if_too_many_consecutive_failures()
                     else:
                         results.append(result)
                         fetched_count += 1
@@ -309,6 +440,8 @@ class NovelCrawler:
                         )
                         _write_running_manifest()
                         pending.pop(future, None)
+                        if _record_chapter_outcome(index, success=True):
+                            _raise_if_too_many_consecutive_failures()
                 _fill_pending(executor)
         except KeyboardInterrupt:
             for future in pending:
