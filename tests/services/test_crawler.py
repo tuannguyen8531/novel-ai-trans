@@ -700,6 +700,7 @@ class NovelCrawlerTest(unittest.TestCase):
         self.assertEqual(len(result.chapters), 1)
         self.assertEqual(result.chapters[0].title, "Chapter")
         self.assertFalse(result.chapters[0].skipped)
+        self.assertEqual(result.errors, [{"index": 1, "url": "https://public.example/c1", "error": "Flaky fail"}])
         self.assertEqual(len(client.calls), 2)
 
     def test_fail_fast_halts_workers_immediately(self) -> None:

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TypedDict
 
 __all__ = [
     "ChapterLink",
     "NovelMetadata",
     "ChapterResult",
+    "CrawlError",
     "CrawlResult",
     "CrawlProgress",
     "TranslationState",
@@ -38,12 +40,19 @@ class ChapterResult:
     skipped: bool = False
 
 
+class CrawlError(TypedDict):
+    index: int
+    url: str
+    error: str
+
+
 @dataclass(frozen=True)
 class CrawlResult:
     metadata: NovelMetadata
     chapters: list[ChapterResult]
     output_dir: str
     chapter_output_dir: str
+    errors: list[CrawlError] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

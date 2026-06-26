@@ -12,10 +12,11 @@ from src.config import SiteConfig, config
 from src.models import CrawlProgress
 from src.services.browser import BrowserFetcher
 from src.services.config_generator import ConfigGenerator
-from src.services.crawler import NovelCrawler
+from src.services.crawler import ConsecutiveFailureError, NovelCrawler
 from src.services.epub_importer import EpubImportError, import_epub
 from src.services.http import FetchError, HttpClient
 from src.services.llm import get_llm
+from src.services.notifier import get_notifier
 from src.utils.logging import get_logger, setup_logging
 
 RUNTIME_OUTPUT_ROOT = Path("runtime/crawler")
@@ -369,13 +370,32 @@ def _run_crawl(
             progress_callback=_print_progress,
             workers=args.workers,
         )
+    except ConsecutiveFailureError as error:
+        get_logger().error("Error: %s", error)
+        get_notifier().send(
+            "Status: Failed\n"
+            "Task: Crawl\n"
+            f"Novel: {_notifier_escape(_novel_label(crawler))}\n"
+            f"Detail: {_notifier_escape(str(error))}"
+        )
+        return 1
     except (OSError, ValueError, FetchError) as error:
         get_logger().error("Error: %s", error)
         return 1
 
     skipped = sum(1 for ch in result.chapters if ch.skipped)
     fetched = len(result.chapters) - skipped
+    failed = len(result.errors)
     _print_output(f"Done: {result.metadata.title} ({fetched} new, {skipped} skipped)")
+    status = "Success" if failed == 0 else "Failed"
+    detail = "Crawl finished." if failed == 0 else "Crawl finished with chapter errors."
+    get_notifier().send(
+        f"Status: {status}\n"
+        "Task: Crawl\n"
+        f"Novel: {_notifier_escape(result.metadata.title)}\n"
+        f"Detail: {detail}\n"
+        f"Stats: New: {fetched} · Skipped: {skipped} · Failed: {failed}"
+    )
     return 0
 
 
@@ -440,6 +460,16 @@ def _print_progress(progress: CrawlProgress) -> None:
         f"[{progress.current}/{progress.total}] {progress.title} ({progress.status})",
         flush=True,
     )
+
+
+def _notifier_escape(text: str) -> str:
+    """HTML-escape text for Telegram HTML parse mode."""
+    return get_notifier().escape(text)
+
+
+def _novel_label(crawler: NovelCrawler) -> str:
+    """Best-effort display name for a crawler in a notification."""
+    return getattr(crawler.config, "name", None) or "novel"
 
 
 def _fetch_toc_for_config(fetcher: object, site_config: SiteConfig) -> Any:

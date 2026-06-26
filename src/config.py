@@ -64,9 +64,22 @@ class Config:
     enable_review: bool = False
     enable_summary: bool = False
 
+    # --- Telegram notifications ---
+    telegram_bot_token: str = ""
+    telegram_chat_id: str = ""
+    telegram_api_base: str = "https://api.telegram.org"
+    telegram_parse_mode: str = "HTML"
+    telegram_disable_notification: bool = False
+    telegram_timeout_seconds: float = 10.0
+
     @property
     def translated_path(self) -> Path:
         return Path(self.translated_dir).expanduser()
+
+    @property
+    def telegram_enabled(self) -> bool:
+        """Telegram notifications are on only when both token and chat_id are set."""
+        return bool(self.telegram_bot_token and self.telegram_chat_id)
 
     def __post_init__(self) -> None:
         """Validate configuration values."""
@@ -82,6 +95,12 @@ class Config:
             raise ValueError(f"translation_max_tokens must be >= 1, got {self.translation_max_tokens}")
         if self.target_language not in ("vi", "en"):
             raise ValueError(f"target_language must be one of: vi, en; got {self.target_language}")
+        if self.telegram_parse_mode not in ("", "HTML"):
+            raise ValueError(f"telegram_parse_mode must be one of: '', 'HTML'; got {self.telegram_parse_mode!r}")
+        if self.telegram_timeout_seconds <= 0:
+            raise ValueError(f"telegram_timeout_seconds must be > 0, got {self.telegram_timeout_seconds}")
+        if not self.telegram_api_base:
+            raise ValueError("telegram_api_base must not be empty")
 
     @classmethod
     def from_env(cls) -> Config:
@@ -111,6 +130,12 @@ class Config:
             max_retries=int(os.getenv("MAX_RETRIES", "2")),
             enable_review=_bool("ENABLE_REVIEW", "false"),
             enable_summary=_bool("ENABLE_SUMMARY", "false"),
+            telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN", ""),
+            telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID", ""),
+            telegram_api_base=os.getenv("TELEGRAM_API_BASE", "https://api.telegram.org"),
+            telegram_parse_mode=os.getenv("TELEGRAM_PARSE_MODE", "HTML"),
+            telegram_disable_notification=_bool("TELEGRAM_DISABLE_NOTIFICATION", "false"),
+            telegram_timeout_seconds=float(os.getenv("TELEGRAM_TIMEOUT_SECONDS") or "10.0"),
         )
 
 
