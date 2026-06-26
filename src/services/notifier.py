@@ -10,6 +10,8 @@ crash a crawl or translation run.
 from __future__ import annotations
 
 import html
+import time
+from datetime import datetime
 from typing import Any
 
 import httpx
@@ -21,6 +23,17 @@ _logger = get_logger()
 
 _SEND_MESSAGE_PATH = "/bot{token}/sendMessage"
 _DEFAULT_TIMEOUT_SECONDS = 10.0
+
+
+def format_run_footer(started_at: float) -> str:
+    """Build the trailing timestamp + runtime block for run notifications.
+
+    Format: ``Time: YYYY-MM-DD HH:MM\\nRuntime: <seconds>s``.
+    """
+    now = time.time()
+    timestamp = datetime.fromtimestamp(now).strftime("%Y-%m-%d %H:%M")
+    runtime = max(0, int(now - started_at))
+    return f"Time: {timestamp}\nRuntime: {runtime}s"
 
 
 class TelegramNotifier:

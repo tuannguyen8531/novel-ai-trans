@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -16,7 +17,7 @@ from src.services.crawler import ConsecutiveFailureError, NovelCrawler
 from src.services.epub_importer import EpubImportError, import_epub
 from src.services.http import FetchError, HttpClient
 from src.services.llm import get_llm
-from src.services.notifier import get_notifier
+from src.services.notifier import format_run_footer, get_notifier
 from src.utils.logging import get_logger, setup_logging
 
 RUNTIME_OUTPUT_ROOT = Path("runtime/crawler")
@@ -288,6 +289,7 @@ def _print_output(*args: object, **kwargs: Any) -> None:
 
 
 def _crawl(args: argparse.Namespace) -> int:
+    started_at = time.time()
     try:
         config_path = _resolve_config_path(args.target)
         site_config = SiteConfig.from_file(config_path)
@@ -313,10 +315,10 @@ def _crawl(args: argparse.Namespace) -> int:
                 retry_backoff_seconds=site_config.retry_backoff_seconds,
                 max_concurrency=args.workers,
             ) as fetcher:
-                return _crawl_with_fetcher(site_config, fetcher, args, max_chapters, share_root)
+                return _crawl_with_fetcher(site_config, fetcher, args, max_chapters, share_root, started_at)
         else:
             crawler = NovelCrawler(site_config, respect_robots=not args.ignore_robots)
-            return _run_crawl(crawler, args, max_chapters, share_root)
+            return _run_crawl(crawler, args, max_chapters, share_root, started_at)
     except (OSError, ValueError, FetchError) as error:
         get_logger().error("Error: %s", error)
         return 1
@@ -331,13 +333,14 @@ def _crawl_with_fetcher(
     args: argparse.Namespace,
     max_chapters: int | None,
     share_root: Path | None,
+    started_at: float,
 ) -> int:
     crawler = NovelCrawler(
         site_config,
         respect_robots=not args.ignore_robots,
         fetcher=fetcher,  # type: ignore[arg-type]
     )
-    return _run_crawl(crawler, args, max_chapters, share_root)
+    return _run_crawl(crawler, args, max_chapters, share_root, started_at)
 
 
 def _run_crawl(
@@ -345,6 +348,7 @@ def _run_crawl(
     args: argparse.Namespace,
     max_chapters: int | None,
     share_root: Path | None,
+    started_at: float,
 ) -> int:
     try:
         if args.dry_run:
@@ -376,7 +380,8 @@ def _run_crawl(
             "Status: Failed\n"
             "Task: Crawl\n"
             f"Novel: {_notifier_escape(_novel_label(crawler))}\n"
-            f"Detail: {_notifier_escape(str(error))}"
+            f"Detail: {_notifier_escape(str(error))}\n"
+            f"{format_run_footer(started_at)}"
         )
         return 1
     except (OSError, ValueError, FetchError) as error:
@@ -394,7 +399,8 @@ def _run_crawl(
         "Task: Crawl\n"
         f"Novel: {_notifier_escape(_novel_label(crawler))}\n"
         f"Detail: {detail}\n"
-        f"Stats: New: {fetched} · Skipped: {skipped} · Failed: {failed}"
+        f"Stats: New: {fetched} · Skipped: {skipped} · Failed: {failed}\n"
+        f"{format_run_footer(started_at)}"
     )
     return 0
 

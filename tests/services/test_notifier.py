@@ -12,7 +12,13 @@ from unittest.mock import patch
 import httpx
 
 from src.services import notifier as notifier_module
-from src.services.notifier import TelegramNotifier, _NullNotifier, get_notifier, reset_notifier_cache
+from src.services.notifier import (
+    TelegramNotifier,
+    _NullNotifier,
+    format_run_footer,
+    get_notifier,
+    reset_notifier_cache,
+)
 
 
 class _FakeResponse:
@@ -239,6 +245,7 @@ class CliNotificationWiringTest(unittest.TestCase):
 
         with (
             patch.object(crawl_module, "get_notifier", return_value=_Stub()),
+            patch.object(crawl_module, "format_run_footer", return_value="Time: 2026-01-01 00:00\nRuntime: 0s"),
             patch.object(crawl_module, "_resolve_config_path", return_value=Path("/tmp/demo.json")),
             patch.object(crawl_module, "SiteConfig") as mock_site_config,
             patch.object(crawl_module, "NovelCrawler") as mock_crawler_cls,
@@ -288,7 +295,10 @@ class CliNotificationWiringTest(unittest.TestCase):
             def escape(text: str) -> str:
                 return text
 
-        with patch.object(translate_module, "get_notifier", return_value=_Stub()):
+        with (
+            patch.object(translate_module, "get_notifier", return_value=_Stub()),
+            patch.object(translate_module, "format_run_footer", return_value="Time: 2026-01-01 00:00\nRuntime: 0s"),
+        ):
             translate_module._notify_translation(
                 translate_module.get_notifier(),
                 "demo-novel",
@@ -307,6 +317,8 @@ class CliNotificationWiringTest(unittest.TestCase):
                     "Novel: demo-novel",
                     "Detail: Translation finished.",
                     "Stats: Translated: 3/3",
+                    "Time: 2026-01-01 00:00",
+                    "Runtime: 0s",
                 ]
             ),
         )
@@ -329,7 +341,10 @@ class CliNotificationWiringTest(unittest.TestCase):
             def escape(text: str) -> str:
                 return text
 
-        with patch.object(translate_module, "get_notifier", return_value=_Stub()):
+        with (
+            patch.object(translate_module, "get_notifier", return_value=_Stub()),
+            patch.object(translate_module, "format_run_footer", return_value="Time: 2026-01-01 00:00\nRuntime: 12s"),
+        ):
             translate_module._notify_translation(
                 translate_module.get_notifier(),
                 "demo-novel",
@@ -347,6 +362,8 @@ class CliNotificationWiringTest(unittest.TestCase):
                     "Novel: demo-novel",
                     "Detail: Translation finished with errors.",
                     "Stats: Translated: 3/5 · Failed: 2",
+                    "Time: 2026-01-01 00:00",
+                    "Runtime: 12s",
                 ]
             ),
         )
@@ -369,7 +386,10 @@ class CliNotificationWiringTest(unittest.TestCase):
             def escape(text: str) -> str:
                 return text
 
-        with patch.object(translate_module, "get_notifier", return_value=_Stub()):
+        with (
+            patch.object(translate_module, "get_notifier", return_value=_Stub()),
+            patch.object(translate_module, "format_run_footer", return_value="Time: 2026-01-01 00:00\nRuntime: 0s"),
+        ):
             translate_module._notify_translation(
                 translate_module.get_notifier(),
                 "demo-novel",
@@ -386,6 +406,8 @@ class CliNotificationWiringTest(unittest.TestCase):
                     "Task: Translation",
                     "Novel: demo-novel",
                     "Detail: no input chapters",
+                    "Time: 2026-01-01 00:00",
+                    "Runtime: 0s",
                 ]
             ),
         )
@@ -437,7 +459,10 @@ class CliNotificationWiringTest(unittest.TestCase):
             def escape(text: str) -> str:
                 return text
 
-        with patch.object(translate_module, "get_notifier", return_value=_Stub()):
+        with (
+            patch.object(translate_module, "get_notifier", return_value=_Stub()),
+            patch.object(translate_module, "format_run_footer", return_value="Time: 2026-01-01 00:00\nRuntime: 45s"),
+        ):
             translate_module._notify_translation(
                 translate_module.get_notifier(),
                 "demo-novel",
@@ -455,9 +480,35 @@ class CliNotificationWiringTest(unittest.TestCase):
                     "Novel: demo-novel",
                     "Detail: Translation interrupted.",
                     "Stats: Translated: 2/5",
+                    "Time: 2026-01-01 00:00",
+                    "Runtime: 45s",
                 ]
             ),
         )
+
+
+class FormatRunFooterTest(unittest.TestCase):
+    def test_footer_has_timestamp_and_runtime(self) -> None:
+        import re
+        import time as _time
+
+        started = _time.time() - 30.0
+        footer = format_run_footer(started)
+        lines = footer.split("\n")
+        self.assertEqual(len(lines), 2)
+        self.assertRegex(lines[0], r"^Time: \d{4}-\d{2}-\d{2} \d{2}:\d{2}$")
+        self.assertRegex(lines[1], r"^Runtime: (\d+)s$")
+        match = re.search(r"Runtime: (\d+)s", lines[1])
+        assert match is not None
+        runtime = int(match.group(1))
+        self.assertGreaterEqual(runtime, 29)
+
+    def test_footer_clamps_negative_runtime_to_zero(self) -> None:
+        footer = format_run_footer(2_000_000_000.0)
+        # started_at far in the future → now - started_at negative → clamped to 0
+        self.assertRegex(footer.split("\n")[1], r"^Runtime: \d+s$")
+        runtime = int(footer.split("\n")[1].removeprefix("Runtime: ").removesuffix("s"))
+        self.assertGreaterEqual(runtime, 0)
 
 
 class ModuleReloadTest(unittest.TestCase):

@@ -24,7 +24,7 @@ from src.domain.target_language import (
 from src.graph.builder import build_graph
 from src.models.state import initial_state
 from src.services.logger import log_error
-from src.services.notifier import get_notifier
+from src.services.notifier import format_run_footer, get_notifier
 from src.utils.display import (
     DIM,
     GREEN,
@@ -551,6 +551,7 @@ Examples:
 
     novel_name = args.novel
     notifier = get_notifier()
+    started_at = time.time()
     outcome = "skipped"
     failure_reason = ""
     stats = {"total": 0, "success": 0, "failed": 0}
@@ -688,10 +689,10 @@ Examples:
             failure_reason = str(e) or type(e).__name__
         raise
     finally:
-        _notify_translation(notifier, novel_name, outcome, failure_reason, stats)
+        _notify_translation(notifier, novel_name, outcome, failure_reason, stats, started_at)
 
 
-def _notify_translation(notifier, novel_name: str, outcome: str, reason: str, stats: dict) -> None:
+def _notify_translation(notifier, novel_name: str, outcome: str, reason: str, stats: dict, started_at: float = 0.0) -> None:
     """Send a Telegram notification summarising the translation run outcome."""
     if outcome == "skipped":
         return
@@ -727,4 +728,5 @@ def _notify_translation(notifier, novel_name: str, outcome: str, reason: str, st
         message = f"Status: Failed\nTask: Translation\nNovel: {title}\nDetail: {detail}"
     else:
         return
+    message += "\n" + format_run_footer(started_at)
     notifier.send(message)

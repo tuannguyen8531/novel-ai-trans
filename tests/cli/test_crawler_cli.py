@@ -182,8 +182,11 @@ class CliTest(unittest.TestCase):
         )
         args = argparse.Namespace(dry_run=False, fail_fast=False, overwrite=False, workers=1)
 
-        with unittest.mock.patch("src.cli.crawl.get_notifier", return_value=_StubNotifier()):
-            result = crawl._run_crawl(crawler, args, max_chapters=None, share_root=None)
+        with (
+            unittest.mock.patch("src.cli.crawl.get_notifier", return_value=_StubNotifier()),
+            unittest.mock.patch("src.cli.crawl.format_run_footer", return_value="Time: 2026-01-01 00:00\nRuntime: 0s"),
+        ):
+            result = crawl._run_crawl(crawler, args, max_chapters=None, share_root=None, started_at=0.0)
 
         self.assertEqual(result, 0)
         self.assertEqual(len(sent), 1)
@@ -196,6 +199,8 @@ class CliTest(unittest.TestCase):
                     "Novel: demo-slug",
                     "Detail: Crawl finished with chapter errors.",
                     "Stats: New: 1 · Skipped: 1 · Failed: 1",
+                    "Time: 2026-01-01 00:00",
+                    "Runtime: 0s",
                 ]
             ),
         )
