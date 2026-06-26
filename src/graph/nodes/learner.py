@@ -14,7 +14,7 @@ from src.domain.glossary import (
     normalize_character_edges,
 )
 from src.domain.target_language import target_language_name
-from src.domain.terms import MIN_TERM_FREQUENCY, filter_terms_by_frequency
+from src.domain.terms import filter_extracted_terms
 from src.models.state import TranslationState
 from src.prompts import render_prompt
 from src.services.glossary import (
@@ -494,9 +494,9 @@ def learner_node(state: TranslationState) -> dict:
         cleaned_edges.append([from_char, to_char, normalized_rel] + edge[3:])
     new_characters["edges"] = normalize_character_edges(cleaned_edges, edge_entities)
 
-    # Filter: only keep terms that appear at least MIN_TERM_FREQUENCY times
+    # Keep learner-selected terms only when they are grounded in this chapter.
     if new_terms:
-        new_terms = filter_terms_by_frequency(source_text, new_terms, MIN_TERM_FREQUENCY)
+        new_terms = filter_extracted_terms(source_text, new_terms)
 
     if new_terms:
         save_glossary(novel_name, new_terms)

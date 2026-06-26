@@ -5,12 +5,13 @@ Extract only named/proper terms that need exact consistency across chapters:
 1. Named places, organizations, realms, sects, clans, schools, companies
 2. Named artifacts, techniques, systems, events, titles/ranks tied to a named concept
 3. Recurring named concepts whose translation should stay fixed
+4. In-world system/status-panel named concepts such as abilities, missions, titles, permissions, skills, curses, or blessings
 
 DO NOT include:
 - Character names here; put named people in characters.entities instead
 - Common nouns, verbs, adjectives, descriptive phrases, or everyday setting terms
 - Generic role/kinship/address words unless they are part of a unique proper name
-- One-off mentions, dialogue fragments, idioms, jokes, insults, or tone/style rules
+- One-off mentions, dialogue fragments, idioms, jokes, insults, or tone/style rules, unless they are in-world system/status-panel named concepts
 - Generic terms like "sword", "fire", "mountain" unless they are proper names
 - Terms already in the existing glossary
 

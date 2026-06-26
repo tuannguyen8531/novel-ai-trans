@@ -21,3 +21,16 @@ def filter_terms_by_frequency(text: str, terms: dict[str, str], min_count: int) 
         if count >= min_count:
             filtered[original] = translation
     return filtered
+
+
+def filter_extracted_terms(source_text: str, terms: dict[str, str]) -> dict[str, str]:
+    """Keep LLM-extracted terms that are present in the source text."""
+    filtered = {}
+    for original, translation in terms.items():
+        if not isinstance(original, str) or not isinstance(translation, str):
+            continue
+        original = original.strip()
+        translation = translation.strip()
+        if original and translation and original in source_text:
+            filtered[original] = translation
+    return filtered

@@ -1,6 +1,6 @@
 """Tests for learner node term filtering."""
 
-from src.domain.terms import MIN_TERM_FREQUENCY, count_occurrences, filter_terms_by_frequency
+from src.domain.terms import MIN_TERM_FREQUENCY, count_occurrences, filter_extracted_terms, filter_terms_by_frequency
 
 
 class TestCountOccurrences:
@@ -46,3 +46,15 @@ class TestFilterByFrequency:
         result = filter_terms_by_frequency(text, terms, MIN_TERM_FREQUENCY)
         assert "term" in result
         assert "rare" not in result
+
+    def test_keeps_llm_extracted_terms_when_present_below_frequency_threshold(self):
+        text = "天赋“卷王的恩赐 (异常/诅咒)”从宿主灵魂中移除。【天赋：卷王的恩赐 (异常/诅咒) 已激活。】"
+        terms = {"卷王的恩赐": "Ân tứ của Cuộn Vương"}
+
+        result = filter_extracted_terms(text, terms)
+
+        assert result == {"卷王的恩赐": "Ân tứ của Cuộn Vương"}
+
+    def test_drops_llm_extracted_terms_absent_from_source_text(self):
+        result = filter_extracted_terms("这里只有真实术语", {"不存在术语": "thuật ngữ ảo"})
+        assert result == {}
