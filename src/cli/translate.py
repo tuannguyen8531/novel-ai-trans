@@ -716,7 +716,7 @@ def _notify_translation(notifier, novel_name: str, outcome: str, reason: str, st
             )
     elif outcome == "interrupted":
         message = (
-            "Status: Failed\n"
+            "Status: Success\n"
             "Task: Translation\n"
             f"Novel: {title}\n"
             "Detail: Translation interrupted.\n"

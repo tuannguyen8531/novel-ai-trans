@@ -450,7 +450,7 @@ class CliNotificationWiringTest(unittest.TestCase):
             sent[0],
             "\n".join(
                 [
-                    "Status: Failed",
+                    "Status: Success",
                     "Task: Translation",
                     "Novel: demo-novel",
                     "Detail: Translation interrupted.",

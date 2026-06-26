@@ -392,7 +392,7 @@ def _run_crawl(
     get_notifier().send(
         f"Status: {status}\n"
         "Task: Crawl\n"
-        f"Novel: {_notifier_escape(result.metadata.title)}\n"
+        f"Novel: {_notifier_escape(_novel_label(crawler))}\n"
         f"Detail: {detail}\n"
         f"Stats: New: {fetched} · Skipped: {skipped} · Failed: {failed}"
     )

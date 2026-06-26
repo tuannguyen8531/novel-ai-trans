@@ -33,10 +33,6 @@ configs/*
 !configs/example.json
 !configs/samples/
 
-# Docs
-docs/*
-!docs/.gitkeep
-
 # Translation rule templates
 rules/*
 !rules/.gitkeep

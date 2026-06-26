@@ -168,6 +168,8 @@ class CliTest(unittest.TestCase):
                 return text
 
         crawler = unittest.mock.MagicMock()
+        crawler.config = unittest.mock.MagicMock()
+        crawler.config.name = "demo-slug"
         crawler.crawl.return_value = CrawlResult(
             metadata=NovelMetadata(title="Demo <Novel>", author=None, source_url="url", site_name="demo"),
             chapters=[
@@ -191,7 +193,7 @@ class CliTest(unittest.TestCase):
                 [
                     "Status: Failed",
                     "Task: Crawl",
-                    "Novel: Demo <Novel>",
+                    "Novel: demo-slug",
                     "Detail: Crawl finished with chapter errors.",
                     "Stats: New: 1 · Skipped: 1 · Failed: 1",
                 ]
