@@ -8,6 +8,7 @@ from collections.abc import Callable
 CHAPTER_PATTERNS = (
     re.compile(r"(?<!\d)(?:제\s*)?(\d+)\s*(?:화|장)(?!\d)", re.IGNORECASE),
     re.compile(r"第\s*(\d+)\s*[章节話话回]", re.IGNORECASE),
+    re.compile(r"(?<!\d)(\d+)\s*[章节話话回](?!\d)", re.IGNORECASE),
     re.compile(r"\b(?:chương|chuong)\s*(\d+)\b", re.IGNORECASE),
     re.compile(r"\b(?:chapter|chap\.?|ch\.?)\s*#?\s*(\d+)\b", re.IGNORECASE),
     re.compile(r"\b(?:episode|ep\.?)\s*#?\s*(\d+)\b", re.IGNORECASE),

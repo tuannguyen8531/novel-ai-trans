@@ -39,6 +39,7 @@ class EpubImporterTest(unittest.TestCase):
             "Episode 8 - Return": 8,
             "第9章 帰還": 9,
             "第10話 帰還": 10,
+            "12章 别让八班嚣张起来": 12,
         }
 
         for title, expected in cases.items():

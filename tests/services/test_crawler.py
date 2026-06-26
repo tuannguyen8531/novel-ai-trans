@@ -251,6 +251,7 @@ class NovelCrawlerTest(unittest.TestCase):
                 <nav class="chapters">
                   <a href="/notice">Notice: schedule update</a>
                   <a href="/c1">第1章 Start</a>
+                  <a href="/c12">12章 Bare marker</a>
                   <a href="/extra">Bonus story</a>
                   <a href="/c2">第2章 Next</a>
                 </nav>
@@ -260,7 +261,7 @@ class NovelCrawlerTest(unittest.TestCase):
 
         _, chapters = crawler.discover_chapters()
 
-        self.assertEqual([chapter.title for chapter in chapters], ["第1章 Start", "第2章 Next"])
+        self.assertEqual([chapter.title for chapter in chapters], ["第1章 Start", "第2章 Next", "12章 Bare marker"])
 
     def test_discover_falls_back_to_unnumbered_titles_after_removing_notices(self) -> None:
         pages = {
