@@ -1,0 +1,30 @@
+{
+  "name": "kakuyomu",
+  "start_url": "https://kakuyomu.jp/",
+  "version": 1,
+  "novel_title_selector": "h1.Heading_heading__lQ85n a",
+  "author_selector": ".partialGiftWidgetActivityName a",
+  "illustration_selector": ".RegularWorkHeader_promotionalImage__AHdA2",
+  "chapter_link_selector": "a[href*='/episodes/']",
+  "toc_next_selector": null,
+  "toc_expand_selector": null,
+  "chapter_title_selector": ".widget-episodeTitle",
+  "chapter_content_selector": ".widget-episodeBody",
+  "remove_selectors": [
+    "script",
+    "style",
+    ".widget-episodeTitle",
+    "#episode-bottomAd-PC",
+    "#episodeFooter",
+    "#contentMain-nextEpisode"
+  ],
+  "same_domain": true,
+  "reverse_chapter_order": false,
+  "filter_non_chapter_links": true,
+  "request_delay_seconds": 2.0,
+  "timeout_seconds": 30.0,
+  "retry_attempts": 3,
+  "retry_backoff_seconds": 2.0,
+  "max_toc_pages": 1,
+  "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36"
+}

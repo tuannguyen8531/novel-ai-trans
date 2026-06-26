@@ -227,10 +227,12 @@ class ConfigGenerator:
         *,
         use_browser: bool = False,
         user_agent: str = DEFAULT_USER_AGENT,
+        samples_dir: Path | None = None,
     ) -> None:
         self._llm = llm
         self._use_browser = use_browser
         self._user_agent = user_agent
+        self._samples_dir = samples_dir
 
     # -- public API ---------------------------------------------------------
 
@@ -240,16 +242,32 @@ class ConfigGenerator:
         *,
         name: str | None = None,
         configs_dir: Path | None = None,
+        samples_dir: Path | None = None,
         cache_dir: Path | None = None,
+        use_samples: bool = True,
     ) -> dict[str, Any]:
         """Run both phases and return a complete config dict.
 
-        Returns the raw dict (not yet a SiteConfig) so the caller can
-        review / edit before persisting.
+        When ``use_samples`` is true and ``samples_dir`` (or the constructor
+        default) holds a JSON whose ``start_url`` netloc matches the TOC URL,
+        that sample is returned directly — no fetch, no LLM call. Returns the
+        raw dict (not yet a SiteConfig) so the caller can review / edit before
+        persisting.
         """
         configs_dir = configs_dir or Path("configs")
-        cache = _HtmlCache(cache_dir or Path("runtime/crawler") / ".gen-cache")
+        effective_samples_dir = samples_dir or self._samples_dir or (configs_dir / "samples")
         domain = urlparse(toc_url).netloc
+
+        if use_samples:
+            sample = self._load_sample(domain, effective_samples_dir)
+            if sample is not None:
+                print(f"✅ Using bundled sample template for domain {domain} (no fetch, no LLM).")
+                result = json.loads(json.dumps(sample))
+                result["start_url"] = toc_url
+                result["name"] = name or self._derive_name(toc_url)
+                return result
+
+        cache = _HtmlCache(cache_dir or Path("runtime/crawler") / ".gen-cache")
         known = self._load_known_domain_config(domain, configs_dir)
 
         with self._open_fetcher() as fetcher:
@@ -446,6 +464,27 @@ class ConfigGenerator:
         # Check body text for error messages.
         body_text = soup.get_text(" ", strip=True)[:500].lower()
         return any(sig in body_text for sig in ("页面不存在", "页面已删除", "page not found"))
+
+    @staticmethod
+    def _load_sample(domain: str, samples_dir: Path) -> dict[str, Any] | None:
+        """Return a deep copy of a sample config matching ``domain``.
+
+        ``samples_dir`` is a directory of per-site sample JSONs. Each file's
+        ``start_url`` netloc is compared against ``domain``; the first match
+        wins. Returns a deep copy so callers can mutate freely, or ``None``
+        if the directory is missing or contains no matching sample.
+        """
+        if not samples_dir.is_dir():
+            return None
+        for path in sorted(samples_dir.glob("*.json")):
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                start_url = data.get("start_url", "")
+                if urlparse(start_url).netloc == domain:
+                    return json.loads(json.dumps(data))
+            except (OSError, ValueError):
+                continue
+        return None
 
     @staticmethod
     def _load_known_domain_config(domain: str, configs_dir: Path) -> dict[str, Any] | None:

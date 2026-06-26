@@ -31,6 +31,7 @@ runtime/
 configs/*
 !configs/.gitkeep
 !configs/example.json
+!configs/samples/
 
 # Docs
 docs/*

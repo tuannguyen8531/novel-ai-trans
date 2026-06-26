@@ -42,6 +42,11 @@ class CliTest(unittest.TestCase):
         self.assertEqual(args.command, "validate")
         self.assertEqual(args.target, "demo")
 
+    def test_generate_parser_accepts_ignore_sample(self) -> None:
+        args = build_parser().parse_args(["generate", "https://example.com/book/", "--ignore-sample"])
+        self.assertEqual(args.command, "generate")
+        self.assertTrue(args.ignore_sample)
+
     def test_import_parser_accepts_name_and_translated_output(self) -> None:
         args = build_parser().parse_args(["import", "book.epub", "-n", "manual-name", "--translated-output", "/tmp/translated"])
         short_args = build_import_parser().parse_args(["book.epub", "--keep-existing"])

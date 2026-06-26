@@ -1,0 +1,30 @@
+{
+  "name": "ixdzs8",
+  "start_url": "https://ixdzs8.com/",
+  "version": 1,
+  "novel_title_selector": ".novel h1",
+  "author_selector": ".bauthor",
+  "illustration_selector": null,
+  "chapter_link_selector": "ul.u-chapter li a",
+  "toc_next_selector": null,
+  "toc_expand_selector": "text=查看完整章节目录",
+  "chapter_title_selector": ".page-d-name",
+  "chapter_content_selector": ".page-content section",
+  "remove_selectors": [
+    "script",
+    "style",
+    ".page-content h3",
+    ".chapter-act",
+    "#page-toolbar",
+    ".page-turn"
+  ],
+  "same_domain": true,
+  "reverse_chapter_order": false,
+  "filter_non_chapter_links": true,
+  "request_delay_seconds": 2.0,
+  "timeout_seconds": 30.0,
+  "retry_attempts": 3,
+  "retry_backoff_seconds": 2.0,
+  "max_toc_pages": 1,
+  "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36"
+}

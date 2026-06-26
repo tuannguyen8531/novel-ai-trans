@@ -179,6 +179,11 @@ def _add_generate_arguments(parser: argparse.ArgumentParser) -> None:
         help="Skip the HTML cache and always re-fetch pages.",
     )
     parser.add_argument(
+        "--ignore-sample",
+        action="store_true",
+        help="Ignore bundled sample templates and generate from live HTML.",
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         default=CONFIG_DIR,
@@ -464,7 +469,12 @@ def _generate(args: argparse.Namespace) -> int:
 
         generator = ConfigGenerator(llm, use_browser=args.browser)
         cache_dir = None if args.no_cache else Path("runtime/crawler") / ".gen-cache"
-        config_dict = generator.generate(args.url, name=args.name, cache_dir=cache_dir)
+        config_dict = generator.generate(
+            args.url,
+            name=args.name,
+            cache_dir=cache_dir,
+            use_samples=not args.ignore_sample,
+        )
 
         # Validate before showing.
         try:

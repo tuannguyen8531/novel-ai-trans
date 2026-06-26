@@ -1,0 +1,33 @@
+{
+  "name": "69shuba",
+  "start_url": "https://www.69shuba.com/",
+  "version": 1,
+  "novel_title_selector": "#catalog h1 a",
+  "author_selector": null,
+  "illustration_selector": null,
+  "chapter_link_selector": "#catalog ul li a",
+  "toc_next_selector": null,
+  "toc_expand_selector": null,
+  "chapter_title_selector": ".txtnav h1",
+  "chapter_content_selector": ".txtnav",
+  "remove_selectors": [
+    "script",
+    "style",
+    ".txtnav h1",
+    ".txtinfo",
+    "#txtright",
+    ".contentadv",
+    ".bottom-ad",
+    ".page1",
+    ".readinline"
+  ],
+  "same_domain": true,
+  "reverse_chapter_order": false,
+  "filter_non_chapter_links": true,
+  "request_delay_seconds": 2.0,
+  "timeout_seconds": 30.0,
+  "retry_attempts": 3,
+  "retry_backoff_seconds": 2.0,
+  "max_toc_pages": 1,
+  "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36"
+}
