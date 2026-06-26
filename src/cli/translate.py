@@ -24,6 +24,7 @@ from src.domain.target_language import (
 from src.graph.builder import build_graph
 from src.models.state import initial_state
 from src.services.logger import log_error
+from src.services.notifier import get_notifier
 from src.utils.display import (
     DIM,
     GREEN,
@@ -549,111 +550,181 @@ Examples:
     args = parser.parse_args()
 
     novel_name = args.novel
+    notifier = get_notifier()
+    outcome = "skipped"
+    failure_reason = ""
+    stats = {"total": 0, "success": 0, "failed": 0}
 
-    if args.provider:
-        config.llm_provider = args.provider
-    config.target_language = args.target
-    if args.review:
-        config.enable_review = True
-    if args.summary:
-        config.enable_summary = True
+    try:
+        if args.provider:
+            config.llm_provider = args.provider
+        config.target_language = args.target
+        if args.review:
+            config.enable_review = True
+        if args.summary:
+            config.enable_summary = True
 
-    if args.verbose:
-        from src.services.logger import set_verbose
+        if args.verbose:
+            from src.services.logger import set_verbose
 
-        set_verbose(True)
+            set_verbose(True)
 
-    chapters = scan_chapters(novel_name)
-    if not chapters:
-        input_dir = _get_input_dir(novel_name)
-        print(f"{RED}✗ No chapter files found in {input_dir}/{novel_name}/{RESET}")
-        print(f"  Expected format: {input_dir}/{novel_name}/chapter_1.txt{RESET}")
-        sys.exit(1)
+        chapters = scan_chapters(novel_name)
+        if not chapters:
+            input_dir = _get_input_dir(novel_name)
+            print(f"{RED}✗ No chapter files found in {input_dir}/{novel_name}/{RESET}")
+            print(f"  Expected format: {input_dir}/{novel_name}/chapter_1.txt{RESET}")
+            outcome = "failed"
+            failure_reason = "no input chapters"
+            sys.exit(1)
 
-    untranslated = find_untranslated(novel_name, chapters, force=args.force, target_language=args.target)
+        untranslated = find_untranslated(novel_name, chapters, force=args.force, target_language=args.target)
 
-    if args.start_chapter > 0:
-        untranslated = [ch for ch in untranslated if ch >= args.start_chapter]
-    if args.end_chapter > 0:
-        untranslated = [ch for ch in untranslated if ch <= args.end_chapter]
+        if args.start_chapter > 0:
+            untranslated = [ch for ch in untranslated if ch >= args.start_chapter]
+        if args.end_chapter > 0:
+            untranslated = [ch for ch in untranslated if ch <= args.end_chapter]
 
-    progress_state = load_progress(novel_name, args.target)
-    if args.failed_only:
-        failed = set(progress_state.get("failed", []))
-        untranslated = [ch for ch in untranslated if ch in failed]
-    elif args.resume:
-        completed = set(progress_state.get("completed", []))
-        untranslated = [ch for ch in untranslated if ch not in completed]
+        progress_state = load_progress(novel_name, args.target)
+        if args.failed_only:
+            failed = set(progress_state.get("failed", []))
+            untranslated = [ch for ch in untranslated if ch in failed]
+        elif args.resume:
+            completed = set(progress_state.get("completed", []))
+            untranslated = [ch for ch in untranslated if ch not in completed]
 
-    if args.limit > 0:
-        untranslated = untranslated[: args.limit]
+        if args.limit > 0:
+            untranslated = untranslated[: args.limit]
 
-    if not untranslated:
-        print(f"{GREEN}✓ All {len(chapters)} chapters already translated.{RESET}")
-        return
+        if not untranslated:
+            print(f"{GREEN}✓ All {len(chapters)} chapters already translated.{RESET}")
+            outcome = "skipped"
+            return
 
-    if args.dry_run:
-        print(f"{DIM}📕 {novel_name}: {len(chapters)} chapters total, {len(untranslated)} would be translated{RESET}")
-        print(f"{DIM}   Chapters: {', '.join(str(c) for c in untranslated)}{RESET}")
-        return
+        if args.dry_run:
+            print(f"{DIM}📕 {novel_name}: {len(chapters)} chapters total, {len(untranslated)} would be translated{RESET}")
+            print(f"{DIM}   Chapters: {', '.join(str(c) for c in untranslated)}{RESET}")
+            outcome = "skipped"
+            return
 
-    if not check_provider(config):
-        sys.exit(1)
+        if not check_provider(config):
+            outcome = "failed"
+            failure_reason = "LLM provider check failed"
+            sys.exit(1)
 
-    total = len(untranslated)
-    print(f"{DIM}📕 {novel_name}: {len(chapters)} chapters found, {total} to translate{RESET}")
-    print(f"{DIM}   Chapters: {untranslated[0]}-{untranslated[-1]}{RESET}")
-    print()
+        total = len(untranslated)
+        stats["total"] = total
+        print(f"{DIM}📕 {novel_name}: {len(chapters)} chapters found, {total} to translate{RESET}")
+        print(f"{DIM}   Chapters: {untranslated[0]}-{untranslated[-1]}{RESET}")
+        print()
 
-    language = args.lang
-    if not language:
-        from src.services.glossary import load_source_language
+        language = args.lang
+        if not language:
+            from src.services.glossary import load_source_language
 
-        language = load_source_language(novel_name)
-        if language:
-            print(f"{DIM}🌐 Language: {language} (from glossary){RESET}")
-        else:
-            print(f"{DIM}🌐 Language: auto-detect{RESET}")
-    else:
-        print(f"{DIM}🌐 Language: {language} (specified){RESET}")
-    print(f"{DIM}🎯 Target: {target_language_name(args.target)} ({args.target}){RESET}")
-    print()
-
-    signal.signal(signal.SIGINT, _signal_handler)
-
-    _graph = build_graph()
-    progress = ProgressTracker(total, novel_name)
-
-    for index, chapter_num in enumerate(untranslated, 1):
-        if _shutdown_requested:
-            save_progress(novel_name, progress_state, args.target)
-            print(f"\n{YELLOW}⚠ Interrupted at chapter {chapter_num}. Progress saved.{RESET}")
-            break
-
-        chapter_path = chapters[chapter_num]
-        file_size = len(chapter_path.read_text(encoding="utf-8"))
-
-        progress.start_chapter(index, chapter_num, file_size)
-
-        try:
-            success, out_chars, elapsed, new_terms_count = translate_file(
-                chapter_path, novel_name, chapter_num, language, args.target, graph=_graph
-            )
-            progress.chapter_done(success)
-            if success:
-                progress_state.setdefault("completed", []).append(chapter_num)
-                progress_state["failed"] = [ch for ch in progress_state.get("failed", []) if ch != chapter_num]
-                save_progress(novel_name, progress_state, args.target)
-                terms_msg = f" [+ {new_terms_count} terms]" if new_terms_count > 0 else ""
-                print(f"  {GREEN}✓ Ch.{chapter_num}{RESET} {DIM}→ {out_chars:,} chars · {elapsed:.1f}s{terms_msg}{RESET}")
+            language = load_source_language(novel_name)
+            if language:
+                print(f"{DIM}🌐 Language: {language} (from glossary){RESET}")
             else:
+                print(f"{DIM}🌐 Language: auto-detect{RESET}")
+        else:
+            print(f"{DIM}🌐 Language: {language} (specified){RESET}")
+        print(f"{DIM}🎯 Target: {target_language_name(args.target)} ({args.target}){RESET}")
+        print()
+
+        signal.signal(signal.SIGINT, _signal_handler)
+
+        _graph = build_graph()
+        progress = ProgressTracker(total, novel_name)
+        outcome = "success"
+
+        for index, chapter_num in enumerate(untranslated, 1):
+            if _shutdown_requested:
+                save_progress(novel_name, progress_state, args.target)
+                print(f"\n{YELLOW}⚠ Interrupted at chapter {chapter_num}. Progress saved.{RESET}")
+                outcome = "interrupted"
+                break
+
+            chapter_path = chapters[chapter_num]
+            file_size = len(chapter_path.read_text(encoding="utf-8"))
+
+            progress.start_chapter(index, chapter_num, file_size)
+
+            try:
+                success, out_chars, elapsed, new_terms_count = translate_file(
+                    chapter_path, novel_name, chapter_num, language, args.target, graph=_graph
+                )
+                progress.chapter_done(success)
+                if success:
+                    stats["success"] += 1
+                    progress_state.setdefault("completed", []).append(chapter_num)
+                    progress_state["failed"] = [ch for ch in progress_state.get("failed", []) if ch != chapter_num]
+                    save_progress(novel_name, progress_state, args.target)
+                    terms_msg = f" [+ {new_terms_count} terms]" if new_terms_count > 0 else ""
+                    print(f"  {GREEN}✓ Ch.{chapter_num}{RESET} {DIM}→ {out_chars:,} chars · {elapsed:.1f}s{terms_msg}{RESET}")
+                else:
+                    stats["failed"] += 1
+                    progress_state.setdefault("failed", []).append(chapter_num)
+                    save_progress(novel_name, progress_state, args.target)
+            except Exception as e:
+                progress.chapter_done(False)
+                stats["failed"] += 1
                 progress_state.setdefault("failed", []).append(chapter_num)
                 save_progress(novel_name, progress_state, args.target)
-        except Exception as e:
-            progress.chapter_done(False)
-            progress_state.setdefault("failed", []).append(chapter_num)
-            save_progress(novel_name, progress_state, args.target)
-            log_error(f"Translation failed for chapter {chapter_num}", e, chapter=chapter_num, novel=novel_name)
-            print(f"  {RED}✗ Ch.{chapter_num}: {e}{RESET}")
+                log_error(f"Translation failed for chapter {chapter_num}", e, chapter=chapter_num, novel=novel_name)
+                print(f"  {RED}✗ Ch.{chapter_num}: {e}{RESET}")
 
-    progress.print_summary()
+        progress.print_summary()
+    except KeyboardInterrupt:
+        if outcome not in ("skipped", "failed"):
+            outcome = "interrupted"
+        raise
+    except SystemExit:
+        # outcome was set by the explicit "sys.exit" branches above
+        raise
+    except Exception as e:
+        if outcome not in ("skipped", "failed"):
+            outcome = "failed"
+            failure_reason = str(e) or type(e).__name__
+        raise
+    finally:
+        _notify_translation(notifier, novel_name, outcome, failure_reason, stats)
+
+
+def _notify_translation(notifier, novel_name: str, outcome: str, reason: str, stats: dict) -> None:
+    """Send a Telegram notification summarising the translation run outcome."""
+    if outcome == "skipped":
+        return
+    esc = notifier.escape
+    title = esc(novel_name) if novel_name else "novel"
+    if outcome == "success":
+        if stats["failed"] > 0:
+            message = (
+                "Status: Failed\n"
+                "Task: Translation\n"
+                f"Novel: {title}\n"
+                "Detail: Translation finished with errors.\n"
+                f"Stats: Translated: {stats['success']}/{stats['total']} · Failed: {stats['failed']}"
+            )
+        else:
+            message = (
+                "Status: Success\n"
+                "Task: Translation\n"
+                f"Novel: {title}\n"
+                "Detail: Translation finished.\n"
+                f"Stats: Translated: {stats['success']}/{stats['total']}"
+            )
+    elif outcome == "interrupted":
+        message = (
+            "Status: Failed\n"
+            "Task: Translation\n"
+            f"Novel: {title}\n"
+            "Detail: Translation interrupted.\n"
+            f"Stats: Translated: {stats['success']}/{stats['total']}"
+        )
+    elif outcome == "failed":
+        detail = esc(reason) if reason else "Translation failed."
+        message = f"Status: Failed\nTask: Translation\nNovel: {title}\nDetail: {detail}"
+    else:
+        return
+    notifier.send(message)

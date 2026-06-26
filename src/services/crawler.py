@@ -8,7 +8,7 @@ from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Protocol, TypedDict
+from typing import Any, Protocol
 from urllib.parse import urljoin, urlparse
 
 from bs4 import BeautifulSoup
@@ -17,6 +17,7 @@ from src.config import SiteConfig
 from src.models import (
     ChapterLink,
     ChapterResult,
+    CrawlError,
     CrawlProgress,
     CrawlResult,
     NovelMetadata,
@@ -45,14 +46,12 @@ class ExpandableFetcher(Fetcher, Protocol):
     ) -> FetchResponse: ...
 
 
-class CrawlError(TypedDict):
-    index: int
-    url: str
-    error: str
-
-
 class InvalidChapterContentError(FetchError):
     """A fetched page did not contain usable chapter content."""
+
+
+class ConsecutiveFailureError(FetchError):
+    """Raised when too many chapter fetches fail in a row and the crawl aborts."""
 
 
 def _iter_apollo_refs(value: Any) -> list[str]:
@@ -348,7 +347,7 @@ class NovelCrawler:
             _write_running_manifest(status="failed")
             for future in pending:
                 future.cancel()
-            raise FetchError(
+            raise ConsecutiveFailureError(
                 f"Stopped after {CONSECUTIVE_FAILURE_LIMIT} consecutive chapter failures. Progress was saved to manifest.json."
             )
 
@@ -520,6 +519,7 @@ class NovelCrawler:
             chapters=results,
             output_dir=str(novel_dir),
             chapter_output_dir=str(chapter_output_dir),
+            errors=list(errors),
         )
 
     def _extract_metadata(self, soup: BeautifulSoup, source_url: str) -> NovelMetadata:

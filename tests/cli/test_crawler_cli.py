@@ -16,7 +16,7 @@ from src.cli.crawl import (
     build_parser,
     build_short_parser,
 )
-from src.models import CrawlProgress
+from src.models import ChapterResult, CrawlProgress, CrawlResult, NovelMetadata
 from src.utils.logging import get_logger, setup_logging
 
 
@@ -152,6 +152,51 @@ class CliTest(unittest.TestCase):
             result = crawl.crawl_main(["missing-config"])
         self.assertEqual(result, 1)
         self.assertIn("Config not found", error_output.getvalue())
+
+    def test_crawl_notification_counts_result_errors(self) -> None:
+        import argparse
+
+        sent: list[str] = []
+
+        class _StubNotifier:
+            def send(self, message: str, *, silent: bool | None = None) -> bool:
+                sent.append(message)
+                return True
+
+            @staticmethod
+            def escape(text: str) -> str:
+                return text
+
+        crawler = unittest.mock.MagicMock()
+        crawler.crawl.return_value = CrawlResult(
+            metadata=NovelMetadata(title="Demo <Novel>", author=None, source_url="url", site_name="demo"),
+            chapters=[
+                ChapterResult(index=1, title="C1", source_url="u1", path="p1"),
+                ChapterResult(index=2, title="C2", source_url="u2", path="p2", skipped=True),
+            ],
+            output_dir="runtime/demo",
+            chapter_output_dir="runtime/demo/chapters",
+            errors=[{"index": 3, "url": "u3", "error": "failed"}],
+        )
+        args = argparse.Namespace(dry_run=False, fail_fast=False, overwrite=False, workers=1)
+
+        with unittest.mock.patch("src.cli.crawl.get_notifier", return_value=_StubNotifier()):
+            result = crawl._run_crawl(crawler, args, max_chapters=None, share_root=None)
+
+        self.assertEqual(result, 0)
+        self.assertEqual(len(sent), 1)
+        self.assertEqual(
+            sent[0],
+            "\n".join(
+                [
+                    "Status: Failed",
+                    "Task: Crawl",
+                    "Novel: Demo <Novel>",
+                    "Detail: Crawl finished with chapter errors.",
+                    "Stats: New: 1 · Skipped: 1 · Failed: 1",
+                ]
+            ),
+        )
 
 
 if __name__ == "__main__":
