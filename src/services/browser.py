@@ -63,7 +63,7 @@ class BrowserFetcher:
     max_concurrency: int = 1
     profile_dir: Path | None = None
     headless: bool = True
-    challenge_timeout_seconds: float = 30.0
+    challenge_timeout_seconds: float | None = None
     _last_request_at: float = field(default=0.0, init=False)
     _loop: asyncio.AbstractEventLoop | None = field(default=None, init=False)
     _loop_thread: threading.Thread | None = field(default=None, init=False)
@@ -344,6 +344,9 @@ class BrowserFetcher:
                 await page.close()
 
     async def _read_after_challenge(self, page: Any, url: str) -> str:
+        if self.challenge_timeout_seconds is None:
+            return await page.content()
+
         deadline = time.monotonic() + max(0.0, self.challenge_timeout_seconds)
         challenge_seen = False
         while True:

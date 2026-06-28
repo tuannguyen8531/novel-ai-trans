@@ -134,6 +134,7 @@ uv run translate <novel>             # batch translate chapters
 uv run glossary <command> <novel>    # manage per-novel glossary
 uv run pack <novel>                  # build EPUB / PDF
 uv run test                          # ruff + pytest
+uv run serve                         # build, then serve API + GUI
 ```
 
 `main.py` also provides a single dispatcher for local use:

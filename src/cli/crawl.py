@@ -53,7 +53,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_crawl_arguments(crawl, target_help="Config path or novel name from configs/{novel}.json.")
 
-    gen = subparsers.add_parser("generate", help="Use AI to generate a site config from a TOC URL.")
+    gen = subparsers.add_parser(
+        "generate",
+        help="Use AI to generate a site config from a TOC URL.",
+        add_help=False,
+    )
     _add_generate_arguments(gen)
 
     validate = subparsers.add_parser(
@@ -85,6 +89,7 @@ def build_generate_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="generate",
         description="Use AI to generate a site config from a TOC URL.",
+        add_help=False,
     )
     _add_generate_arguments(parser)
     return parser
@@ -174,6 +179,11 @@ def _add_crawl_arguments(parser: argparse.ArgumentParser, *, target_help: str) -
 
 
 def _add_generate_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--help",
+        action="help",
+        help="Show this help message and exit.",
+    )
     parser.add_argument("url", type=str, help="URL of the novel's table-of-contents page.")
     parser.add_argument(
         "--name",
@@ -187,11 +197,18 @@ def _add_generate_arguments(parser: argparse.ArgumentParser) -> None:
         default=None,
         help="LLM provider override (ollama/gemini).",
     )
-    parser.add_argument(
+    browser_mode = parser.add_mutually_exclusive_group()
+    browser_mode.add_argument(
         "-b",
         "--browser",
         action="store_true",
-        help="Use headless browser to fetch pages.",
+        help="Use an ephemeral headless browser to fetch pages.",
+    )
+    browser_mode.add_argument(
+        "-h",
+        "--headed",
+        action="store_true",
+        help="Use a visible browser to fetch pages.",
     )
     parser.add_argument(
         "--no-cache",
@@ -201,7 +218,7 @@ def _add_generate_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--ignore-sample",
         action="store_true",
-        help="Ignore bundled sample templates and generate from live HTML.",
+        help="Ignore bundled samples and known-domain configs; analyze live HTML with the LLM.",
     )
     parser.add_argument(
         "--output",
@@ -338,7 +355,7 @@ def _crawl(args: argparse.Namespace) -> int:
                 max_concurrency=args.workers,
                 profile_dir=_browser_profile_dir(site_config.start_url) if headed else None,
                 headless=not headed,
-                challenge_timeout_seconds=120.0 if headed else 30.0,
+                challenge_timeout_seconds=120.0 if headed else None,
             ) as fetcher:
                 return _crawl_with_fetcher(site_config, fetcher, args, max_chapters, share_root, started_at)
         else:
@@ -537,7 +554,7 @@ def _generate(args: argparse.Namespace) -> int:
         else:
             llm = get_llm()
 
-        generator = ConfigGenerator(llm, use_browser=args.browser)
+        generator = ConfigGenerator(llm, use_browser=args.browser, headed=args.headed)
         cache_dir = None if args.no_cache else Path("runtime/crawler") / ".gen-cache"
         config_dict = generator.generate(
             args.url,

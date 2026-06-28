@@ -153,7 +153,7 @@ def run_crawl(
             max_concurrency=workers,
             profile_dir=_browser_profile_dir(site_config.start_url) if request.headed else None,
             headless=not request.headed,
-            challenge_timeout_seconds=120.0 if request.headed else 30.0,
+            challenge_timeout_seconds=120.0 if request.headed else None,
         )
         crawler = NovelCrawler(
             site_config,

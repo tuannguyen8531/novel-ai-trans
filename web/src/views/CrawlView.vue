@@ -356,7 +356,7 @@ function discardDraft() {
             </label>
             <label class="check">
               <input v-model="generateIgnoreSample" type="checkbox" />
-              <span>Ignore bundled sample templates</span>
+              <span>Ignore samples and known-domain configs</span>
             </label>
           </div>
         </div>

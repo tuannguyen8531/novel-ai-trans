@@ -13,6 +13,7 @@ from src.cli import crawl
 from src.cli.crawl import (
     _browser_profile_dir,
     _resolve_config_path,
+    build_generate_parser,
     build_import_parser,
     build_parser,
     build_short_parser,
@@ -62,6 +63,19 @@ class CliTest(unittest.TestCase):
         args = build_parser().parse_args(["generate", "https://example.com/book/", "--ignore-sample"])
         self.assertEqual(args.command, "generate")
         self.assertTrue(args.ignore_sample)
+
+    def test_generate_parser_accepts_headed_browser(self) -> None:
+        args = build_generate_parser().parse_args(["https://example.com/book/", "-h"])
+        dispatched_args = build_parser().parse_args(["generate", "https://example.com/book/", "-h"])
+
+        self.assertTrue(args.headed)
+        self.assertFalse(args.browser)
+        self.assertTrue(dispatched_args.headed)
+        self.assertFalse(dispatched_args.browser)
+
+    def test_generate_browser_modes_are_mutually_exclusive(self) -> None:
+        with self.assertRaises(SystemExit):
+            build_generate_parser().parse_args(["https://example.com/book/", "-b", "-h"])
 
     def test_import_parser_accepts_name_and_translated_output(self) -> None:
         args = build_parser().parse_args(["import", "book.epub", "-n", "manual-name", "--translated-output", "/tmp/translated"])
@@ -114,7 +128,7 @@ class CliTest(unittest.TestCase):
             max_concurrency=4,
             profile_dir=None,
             headless=True,
-            challenge_timeout_seconds=30.0,
+            challenge_timeout_seconds=None,
         )
 
     @unittest.mock.patch("src.cli.crawl.BrowserFetcher")
@@ -142,7 +156,7 @@ class CliTest(unittest.TestCase):
             max_concurrency=1,
             profile_dir=None,
             headless=True,
-            challenge_timeout_seconds=30.0,
+            challenge_timeout_seconds=None,
         )
 
     @unittest.mock.patch("src.cli.crawl.BrowserFetcher")

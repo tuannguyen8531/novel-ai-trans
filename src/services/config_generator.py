@@ -250,11 +250,10 @@ class ConfigGenerator:
     ) -> dict[str, Any]:
         """Run both phases and return a complete config dict.
 
-        When ``use_samples`` is true and ``samples_dir`` (or the constructor
-        default) holds a JSON whose ``start_url`` netloc matches the TOC URL,
-        that sample is returned directly — no fetch, no LLM call. Returns the
-        raw dict (not yet a SiteConfig) so the caller can review / edit before
-        persisting.
+        When ``use_samples`` is true, matching bundled samples and known-domain
+        configs may be reused before calling the LLM. Disabling it forces live
+        HTML analysis for both phases. Returns the raw dict (not yet a
+        SiteConfig) so the caller can review / edit before persisting.
         """
         configs_dir = configs_dir or Path("configs")
         effective_samples_dir = samples_dir or self._samples_dir or (configs_dir / "samples")
@@ -270,7 +269,7 @@ class ConfigGenerator:
                 return result
 
         cache = _HtmlCache(cache_dir or Path("runtime/crawler") / ".gen-cache")
-        known = self._load_known_domain_config(domain, configs_dir)
+        known = self._load_known_domain_config(domain, configs_dir) if use_samples else None
 
         with self._open_fetcher() as fetcher:
             # Phase 1: TOC analysis
@@ -444,11 +443,11 @@ class ConfigGenerator:
         if not self._is_challenge_page(ch_html):
             return ch_html, ch_soup
 
-        get_logger().warning("Chapter page looks like an anti-bot challenge — trying browser fallback...")
         if self._use_browser:
-            get_logger().warning("Already using browser, but still got a challenge page. Proceeding anyway.")
-            return ch_html, ch_soup
+            get_logger().warning("Chapter page is an anti-bot challenge — skipping Phase 2.")
+            return ch_html, None
 
+        get_logger().warning("Chapter page looks like an anti-bot challenge — trying browser fallback...")
         from src.services.browser import BrowserFetcher
 
         with BrowserFetcher(

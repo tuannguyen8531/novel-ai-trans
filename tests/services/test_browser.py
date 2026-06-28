@@ -281,6 +281,20 @@ class BrowserFetcherTest(unittest.TestCase):
 
         self.assertIn("Chapter 1", response.body)
 
+    def test_headless_default_does_not_wait_for_cloudflare_challenge(self) -> None:
+        playwright = FakePlaywright()
+        challenge = "<html><title>Just a moment...</title><div id='cf-wrapper'></div></html>"
+        playwright.browser.context.content_sequence = [challenge]
+        starter = FakePlaywrightStarter(playwright)
+
+        with (
+            patch("src.services.browser.async_playwright", return_value=starter),
+            BrowserFetcher(delay_seconds=0, retry_attempts=1) as fetcher,
+        ):
+            response = fetcher.fetch("https://example.test/chapter-1")
+
+        self.assertEqual(response.body, challenge)
+
     def test_reports_persistent_cloudflare_challenge(self) -> None:
         playwright = FakePlaywright()
         playwright.browser.context.content_sequence = [

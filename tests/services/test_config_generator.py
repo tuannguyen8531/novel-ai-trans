@@ -130,6 +130,21 @@ class ConfigGeneratorTest(unittest.TestCase):
             self.assertEqual(cache.get("https://example.com"), html)
             self.assertIsNone(cache.get("https://other.com"))
 
+    def test_headless_browser_challenge_skips_chapter_analysis(self) -> None:
+        url = "https://example.com/chapter-1"
+        challenge = "<html><title>Just a moment...</title><div id='cf-wrapper'></div></html>"
+        generator = ConfigGenerator(_BoomLLM(), use_browser=True)  # type: ignore[arg-type]
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            html, soup = generator._fetch_chapter_with_fallback(
+                _StaticFetcher({url: challenge}),
+                url,
+                _HtmlCache(Path(tempdir)),
+            )
+
+        self.assertEqual(html, challenge)
+        self.assertIsNone(soup)
+
     def test_html_cache_invalidates_bad_html(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             cache = _HtmlCache(Path(tempdir))
@@ -248,12 +263,24 @@ class ConfigGeneratorTest(unittest.TestCase):
             after = json.loads(sample_path.read_text(encoding="utf-8"))
             self.assertEqual(original, after)
 
-    def test_generate_can_ignore_matching_sample(self) -> None:
+    def test_generate_can_ignore_samples_and_known_domain_config(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             root = Path(tempdir)
-            samples_dir = root / "samples"
-            samples_dir.mkdir()
+            configs_dir = root / "configs"
+            samples_dir = configs_dir / "samples"
+            samples_dir.mkdir(parents=True)
             (samples_dir / "ixdzs8.json").write_text(json.dumps(_SAMPLE_FULL), encoding="utf-8")
+            (configs_dir / "known.json").write_text(
+                json.dumps(
+                    {
+                        **_SAMPLE_FULL,
+                        "chapter_link_selector": ".known-chapters a",
+                        "chapter_title_selector": ".known-chapter-title",
+                        "chapter_content_selector": ".known-content",
+                    }
+                ),
+                encoding="utf-8",
+            )
 
             toc_url = "https://ixdzs8.com/read/999999/"
             chapter_url = "https://ixdzs8.com/read/999999/1.html"
@@ -276,6 +303,7 @@ class ConfigGeneratorTest(unittest.TestCase):
 
             result = generator.generate(
                 toc_url,
+                configs_dir=configs_dir,
                 samples_dir=samples_dir,
                 cache_dir=root / "cache",
                 use_samples=False,
