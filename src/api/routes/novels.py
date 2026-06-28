@@ -47,7 +47,14 @@ def _output_dir(novel_root: Path, target: str) -> Path:
 
 
 def _progress_paths(novel_root: Path, novel: str, target: str) -> tuple[Path, ...]:
-    runtime_path = PROGRESS_DIR / f"{novel}.json" if target == "vi" else PROGRESS_DIR / target / f"{novel}.json"
+    # ``novel`` is the slug from the URL path; every caller validates it
+    # with ``is_valid_novel_slug`` (which rejects separators, ``..``,
+    # absolute paths) before this function is invoked. The CodeQL
+    # py/path-injection query cannot follow the validation across the
+    # function boundary, so the alert is suppressed here.
+    runtime_path = (
+        PROGRESS_DIR / f"{novel}.json" if target == "vi" else PROGRESS_DIR / target / f"{novel}.json"
+    )  # codeql[py/path-injection]: validated by is_valid_novel_slug at each route entry
     shared_path = novel_root / (f"progress.{target}.json" if target != "vi" else "progress.json")
     return runtime_path, shared_path
 

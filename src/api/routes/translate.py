@@ -98,8 +98,13 @@ def translation_progress(
         raise ResourceNotFoundError(f"Invalid novel name: {name!r}")
     novel_root = safe_novel_path(root, name)
     resolved_target: Literal["vi", "en"] = target or ("en" if config.target_language == "en" else "vi")
+    # ``name`` is the slug from the URL path; it is validated by
+    # ``is_valid_novel_slug`` above. CodeQL can't trace the call, so the
+    # alert is suppressed at the interpolation.
     progress_paths = [
-        PROGRESS_DIR / f"{name}.json" if resolved_target == "vi" else PROGRESS_DIR / resolved_target / f"{name}.json",
+        PROGRESS_DIR / f"{name}.json"
+        if resolved_target == "vi"
+        else PROGRESS_DIR / resolved_target / f"{name}.json",  # codeql[py/path-injection]: validated by is_valid_novel_slug
         novel_root / ("progress.json" if resolved_target == "vi" else f"progress.{resolved_target}.json"),
     ]
     completed: set[int] = set()
