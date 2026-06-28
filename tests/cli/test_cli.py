@@ -17,18 +17,39 @@ from src.cli.translate import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _patch_cli_paths():
+    """Each test patches the application config_context default rather than
+    the legacy module-level ``config`` global."""
+    yield
+
+
+def _patch_config(**attrs):
+    """Return a context manager that overrides the application config snapshot."""
+    from src.application import config_context
+
+    class _FakeConfig:
+        def __init__(self):
+            for key, value in attrs.items():
+                setattr(self, key, value)
+
+        def __getattr__(self, name):
+            return ""
+
+    return patch.object(config_context, "get_config", lambda: _FakeConfig())
+
+
 class TestScanChapters:
     def setup_method(self):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.patcher_input = patch("src.cli.translate.INPUT_DIR", Path(self.temp_dir.name))
         self.patcher_input.start()
-        self.patcher_config = patch("src.cli.translate.config")
-        self.mock_config = self.patcher_config.start()
-        self.mock_config.translated_dir = ""
+        self.patcher_get = _patch_config(translated_dir="", target_language="vi")
+        self.patcher_get.start()
 
     def teardown_method(self):
         self.patcher_input.stop()
-        self.patcher_config.stop()
+        self.patcher_get.stop()
         self.temp_dir.cleanup()
 
     def _create_chapter(self, novel: str, num: int, content: str = "test"):
@@ -89,9 +110,7 @@ class TestFindUntranslated:
             2: self.base / "input/my-novel/chapter_2.txt",
             3: self.base / "input/my-novel/chapter_3.txt",
         }
-        with patch("src.cli.translate.OUTPUT_DIR", self.base / "output"), patch("src.cli.translate.config") as mock_config:
-            mock_config.translated_dir = ""
-            mock_config.target_language = "vi"
+        with _patch_config(translated_dir="", target_language="vi"):
             result = find_untranslated("my-novel", chapters)
         assert result == [1, 2, 3]
 
@@ -103,9 +122,10 @@ class TestFindUntranslated:
             2: self.base / "input/my-novel/chapter_2.txt",
             3: self.base / "input/my-novel/chapter_3.txt",
         }
-        with patch("src.cli.translate.OUTPUT_DIR", self.base / "output"), patch("src.cli.translate.config") as mock_config:
-            mock_config.translated_dir = ""
-            mock_config.target_language = "vi"
+        with (
+            patch("src.cli.translate.OUTPUT_DIR", self.base / "output"),
+            _patch_config(translated_dir="", target_language="vi"),
+        ):
             result = find_untranslated("my-novel", chapters)
         assert result == [2, 3]
 
@@ -113,9 +133,10 @@ class TestFindUntranslated:
         self._create_input("my-novel", [1, 2])
         self._create_output("my-novel", [1, 2])
         chapters = {1: self.base / "input/my-novel/chapter_1.txt", 2: self.base / "input/my-novel/chapter_2.txt"}
-        with patch("src.cli.translate.OUTPUT_DIR", self.base / "output"), patch("src.cli.translate.config") as mock_config:
-            mock_config.translated_dir = ""
-            mock_config.target_language = "vi"
+        with (
+            patch("src.cli.translate.OUTPUT_DIR", self.base / "output"),
+            _patch_config(translated_dir="", target_language="vi"),
+        ):
             result = find_untranslated("my-novel", chapters)
         assert result == []
 
@@ -127,9 +148,10 @@ class TestFindUntranslated:
         en_output.write_text("translated", encoding="utf-8")
 
         chapters = {1: self.base / "input/my-novel/chapter_1.txt", 2: self.base / "input/my-novel/chapter_2.txt"}
-        with patch("src.cli.translate.OUTPUT_DIR", self.base / "output"), patch("src.cli.translate.config") as mock_config:
-            mock_config.translated_dir = ""
-            mock_config.target_language = "vi"
+        with (
+            patch("src.cli.translate.OUTPUT_DIR", self.base / "output"),
+            _patch_config(translated_dir="", target_language="vi"),
+        ):
             result = find_untranslated("my-novel", chapters, target_language="en")
 
         assert result == [1]
@@ -149,13 +171,13 @@ class TestDryRun:
     def test_dry_run_does_not_check_provider(self, capsys):
         with (
             patch("sys.argv", ["translate", "my-novel", "--dry-run"]),
+            patch("src.application.paths.INPUT_DIR", self.base / "input"),
+            patch("src.application.paths.OUTPUT_DIR", self.base / "output"),
             patch("src.cli.translate.INPUT_DIR", self.base / "input"),
             patch("src.cli.translate.OUTPUT_DIR", self.base / "output"),
-            patch("src.cli.translate.config") as mock_config,
+            _patch_config(translated_dir="", target_language="vi"),
             patch("src.cli.translate.check_provider") as mock_check_provider,
         ):
-            mock_config.translated_dir = ""
-            mock_config.target_language = "vi"
             translate_main()
 
         mock_check_provider.assert_not_called()
@@ -173,14 +195,12 @@ class TestProgressState:
         self.temp_dir.cleanup()
 
     def test_save_and_load_progress_normalizes_lists(self):
-        with patch("src.cli.translate.PROGRESS_DIR", self.base / ".progress"), patch("src.cli.translate.config") as mock_config:
-            mock_config.target_language = "vi"
+        with patch("src.cli.translate.PROGRESS_DIR", self.base / ".progress"), _patch_config(target_language="vi"):
             save_progress("my-novel", {"completed": [2, 1, 2], "failed": [3, 3]})
             assert load_progress("my-novel") == {"completed": [1, 2], "failed": [3]}
 
     def test_target_language_uses_separate_progress_file(self):
-        with patch("src.cli.translate.PROGRESS_DIR", self.base / ".progress"), patch("src.cli.translate.config") as mock_config:
-            mock_config.target_language = "vi"
+        with patch("src.cli.translate.PROGRESS_DIR", self.base / ".progress"), _patch_config(target_language="vi"):
             save_progress("my-novel", {"completed": [1], "failed": []})
             save_progress("my-novel", {"completed": [2], "failed": []}, target_language="en")
 
@@ -219,10 +239,8 @@ class TestQualityReport:
         with (
             patch("src.cli.translate.OUTPUT_DIR", self.base / "output"),
             patch("src.cli.translate.REPORT_DIR", self.base / "reports"),
-            patch("src.cli.translate.config") as mock_config,
+            _patch_config(translated_dir="", target_language="vi"),
         ):
-            mock_config.translated_dir = ""
-            mock_config.target_language = "vi"
             success, out_chars, elapsed, new_terms_count = translate_file(
                 self.input_path,
                 "my-novel",
@@ -343,10 +361,9 @@ class TestGlossaryCli:
             patch("src.services.glossary.GLOSSARY_DIR", glossary_dir),
             patch("src.cli.translate.INPUT_DIR", input_dir),
             patch("src.cli.translate.OUTPUT_DIR", output_dir),
-            patch("src.cli.translate.config") as mock_config,
+            _patch_config(translated_dir="", target_language="vi"),
             pytest.raises(SystemExit),
         ):
-            mock_config.translated_dir = ""
             translate_main()
 
         data = json.loads(glossary_file.read_text(encoding="utf-8"))

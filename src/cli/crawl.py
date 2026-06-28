@@ -416,7 +416,8 @@ def _run_crawl(
     skipped = sum(1 for ch in result.chapters if ch.skipped)
     fetched = len(result.chapters) - skipped
     failed = len(result.errors)
-    _print_output(f"Done: {result.metadata.title} ({fetched} new, {skipped} skipped)")
+    total = len(result.chapters) + failed
+    _print_output(f"Done: {result.metadata.title} ({fetched}/{total} new, {skipped}/{total} skipped)")
     status = "Success" if failed == 0 else "Failed"
     detail = "Crawl finished." if failed == 0 else "Crawl finished with chapter errors."
     get_notifier().send(
@@ -424,7 +425,7 @@ def _run_crawl(
         "Task: Crawl\n"
         f"Novel: {_notifier_escape(_novel_label(crawler))}\n"
         f"Detail: {detail}\n"
-        f"Stats: New: {fetched} · Skipped: {skipped} · Failed: {failed}\n"
+        f"Stats: New: {fetched}/{total} · Skipped: {skipped}/{total} · Failed: {failed}/{total}\n"
         f"{format_run_footer(started_at)}"
     )
     return 0

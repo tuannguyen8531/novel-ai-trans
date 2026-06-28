@@ -129,12 +129,16 @@ class _NullNotifier:
 
 
 _NOTIFIER: TelegramNotifier | _NullNotifier | None = None
+_NOTIFIER_CONFIG_ID: int | None = None
 
 
 def get_notifier() -> TelegramNotifier | _NullNotifier:
-    """Return a process-wide notifier (real Telegram client or null object)."""
-    global _NOTIFIER
-    if _NOTIFIER is not None:
+    """Return a notifier cached for the active configuration snapshot."""
+    from src.config import get_active_config
+
+    global _NOTIFIER, _NOTIFIER_CONFIG_ID
+    cache_key = id(get_active_config()) if config.__class__.__name__ == "_ConfigProxy" else id(config)
+    if _NOTIFIER is not None and cache_key == _NOTIFIER_CONFIG_ID:
         return _NOTIFIER
     if config.telegram_enabled:
         _NOTIFIER = TelegramNotifier(
@@ -147,13 +151,15 @@ def get_notifier() -> TelegramNotifier | _NullNotifier:
         )
     else:
         _NOTIFIER = _NullNotifier()
+    _NOTIFIER_CONFIG_ID = cache_key
     return _NOTIFIER
 
 
 def reset_notifier_cache() -> None:
     """Drop the cached notifier (used by tests to pick up env changes)."""
-    global _NOTIFIER
+    global _NOTIFIER, _NOTIFIER_CONFIG_ID
     _NOTIFIER = None
+    _NOTIFIER_CONFIG_ID = None
 
 
 def _safe_truncate(text: str, limit: int) -> str:

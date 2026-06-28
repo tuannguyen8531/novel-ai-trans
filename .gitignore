@@ -49,3 +49,14 @@ rules/*
 # OS
 .DS_Store
 Thumbs.db
+
+# Web frontend build output
+web/dist/
+web/node_modules/
+
+# Generated config drafts (created by the API server)
+runtime/config-drafts/
+
+# Coverage artifacts
+.coverage
+htmlcov/

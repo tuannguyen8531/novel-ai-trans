@@ -12,7 +12,11 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass
+import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -83,6 +87,8 @@ class Config:
 
     def __post_init__(self) -> None:
         """Validate configuration values."""
+        if self.fallback_provider and self.fallback_provider == self.llm_provider:
+            raise ValueError(f"fallback_provider ({self.fallback_provider}) must differ from llm_provider")
         if not 0.0 <= self.translation_temperature <= 1.0:
             raise ValueError(f"translation_temperature must be 0-1, got {self.translation_temperature}")
         if self.chunk_overlap >= self.chunk_size:
@@ -138,8 +144,72 @@ class Config:
             telegram_timeout_seconds=float(os.getenv("TELEGRAM_TIMEOUT_SECONDS") or "10.0"),
         )
 
+    def clone(self, **overrides: Any) -> Config:
+        """Return a copy of this Config with the given field overrides applied.
 
-config = Config.from_env()
+        Uses dataclasses.replace so __post_init__ validation runs on the
+        resulting instance. Any field that is None in overrides is treated
+        as "no change" so callers can pass ``override=None`` to mean
+        "keep the existing value".
+        """
+        clean: dict[str, Any] = {k: v for k, v in overrides.items() if v is not None}
+        return replace(self, **clean)
+
+
+_INITIAL_CONFIG = Config.from_env()
+_DEFAULT_CONFIG = _INITIAL_CONFIG
+_CURRENT_CONFIG: ContextVar[Config | None] = ContextVar("novel_ai_trans_config", default=None)
+_CONFIG_LOCK = threading.RLock()
+
+
+def get_active_config() -> Config:
+    """Return the current job snapshot or the process-wide default."""
+    current = _CURRENT_CONFIG.get()
+    if current is not None:
+        return current
+    with _CONFIG_LOCK:
+        return _DEFAULT_CONFIG
+
+
+def set_default_config(value: Config) -> None:
+    """Replace defaults used by future contexts without changing active jobs."""
+    global _DEFAULT_CONFIG
+    with _CONFIG_LOCK:
+        _DEFAULT_CONFIG = value
+
+
+def reset_default_config() -> None:
+    set_default_config(_INITIAL_CONFIG)
+
+
+@contextmanager
+def active_config_scope(snapshot: Config) -> Iterator[Config]:
+    token = _CURRENT_CONFIG.set(snapshot)
+    try:
+        yield snapshot
+    finally:
+        _CURRENT_CONFIG.reset(token)
+
+
+class _ConfigProxy:
+    """Backward-compatible proxy resolving configuration at execution time.
+
+    Existing graph, provider, glossary, notifier, and packaging modules import
+    ``config`` directly. Keeping that public object as a proxy makes those
+    imports context-aware without allowing a job snapshot to leak globally.
+    """
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(get_active_config(), name)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        setattr(get_active_config(), name, value)
+
+    def clone(self, **overrides: Any) -> Config:
+        return get_active_config().clone(**overrides)
+
+
+config = _ConfigProxy()
 
 
 @dataclass(frozen=True)

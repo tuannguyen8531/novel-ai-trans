@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import _thread
 import json
 import tempfile
 import threading
@@ -767,32 +766,32 @@ class NovelCrawlerTest(unittest.TestCase):
         self.assertEqual(manifest["failed_chapters"], 5)
         self.assertEqual(manifest["completed_chapters"], 5)
 
-    def test_keyboard_interrupt_writes_interrupted_manifest_and_shared_metadata(self) -> None:
+    def test_cancel_event_stops_scheduling_and_writes_cancelled_manifest(self) -> None:
         crawler = NovelCrawler(demo_config())
         client = SlowChapterClient()
         crawler.client = client  # type: ignore[arg-type]
+        cancel_event = threading.Event()
 
-        def interrupt_after_chapter_starts() -> None:
-            if client.chapter_started.wait(timeout=1):
-                time.sleep(0.05)
-                _thread.interrupt_main()
+        def cancel_after_chapter_starts() -> None:
+            if client.chapter_started.wait(timeout=2):
+                cancel_event.set()
 
-        interrupter = threading.Thread(target=interrupt_after_chapter_starts, daemon=True)
+        canceller = threading.Thread(target=cancel_after_chapter_starts, daemon=True)
         with tempfile.TemporaryDirectory() as output:
             output_path = Path(output)
-            interrupter.start()
-            with self.assertRaises(KeyboardInterrupt):
-                crawler.crawl(
-                    output_path / "runtime",
-                    share_root=output_path / "translated",
-                    workers=1,
-                )
-            interrupter.join(timeout=1)
-
+            canceller.start()
+            result = crawler.crawl(
+                output_path / "runtime",
+                share_root=output_path / "translated",
+                workers=1,
+                cancel_event=cancel_event,
+            )
+            canceller.join(timeout=2)
             manifest = json.loads((output_path / "runtime" / "demo" / "manifest.json").read_text(encoding="utf-8"))
             shared_metadata = json.loads((output_path / "translated" / "demo" / "metadata.json").read_text(encoding="utf-8"))
 
-        self.assertEqual(manifest["status"], "interrupted")
+        self.assertTrue(result.cancelled)
+        self.assertEqual(manifest["status"], "cancelled")
         self.assertEqual(manifest["fetched_chapters"], 1)
         self.assertEqual(shared_metadata["title"], "Demo Novel")
 

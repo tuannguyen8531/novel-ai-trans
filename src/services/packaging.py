@@ -1,0 +1,567 @@
+"""Reusable packaging building blocks used by the CLI and API adapters.
+
+The pure EPUB/PDF builders, metadata resolvers, text cleanup helpers and
+font discovery live here. The CLI command keeps its argparse entry point
+in :mod:`src.cli.pack`; the application workflow in :mod:`src.application.pack`
+delegates the file construction to this module.
+"""
+
+from __future__ import annotations
+
+import html
+import os
+import re
+import tempfile
+import uuid
+import zipfile
+from pathlib import Path
+from urllib.error import URLError
+from urllib.request import Request, urlopen
+
+from fpdf import FPDF
+
+from src.config import config
+from src.domain.illustrations import parse_illustration_marker
+from src.domain.target_language import normalize_target_language
+
+# ---------------------------------------------------------------------------
+# Path helpers
+# ---------------------------------------------------------------------------
+
+
+def _get_output_dir(novel_name: str, target_language: str | None = None) -> Path:
+    target = normalize_target_language(target_language or config.target_language)
+    if config.translated_dir:
+        base_dir = Path(config.translated_dir) / novel_name / "output"
+        return base_dir if target == "vi" else base_dir / target
+    if target == "vi":
+        return Path("runtime/output") / novel_name
+    return Path("runtime/output") / target / novel_name
+
+
+def _get_default_package_dir(novel_name: str, target_language: str | None = None) -> Path:
+    """Return the default directory where EPUB/PDF files are written."""
+    if config.translated_dir:
+        return Path(config.translated_dir) / novel_name
+    return Path("runtime/output")
+
+
+def _get_novel_root_dir(novel_name: str) -> Path:
+    if config.translated_dir:
+        return Path(config.translated_dir) / novel_name
+    return Path("runtime/input") / novel_name
+
+
+def _package_file_stem(novel_name: str, target_language: str | None = None) -> str:
+    target = normalize_target_language(target_language or config.target_language)
+    return f"{novel_name}.{target}"
+
+
+def package_file_stem(novel_name: str, target_language: str | None = None) -> str:
+    """Public alias for the package file stem helper."""
+    return _package_file_stem(novel_name, target_language)
+
+
+# ---------------------------------------------------------------------------
+# Metadata loading
+# ---------------------------------------------------------------------------
+
+
+def load_metadata(novel_name: str) -> dict:
+    """Load metadata.json from the novel root directory.
+
+    Returns an empty dict if the file doesn't exist or is invalid.
+    """
+    import json
+
+    metadata_path = _get_novel_root_dir(novel_name) / "metadata.json"
+    if not metadata_path.exists():
+        return {}
+    try:
+        return json.loads(metadata_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def resolve_book_title(metadata: dict, target_language: str, fallback_novel_name: str) -> str:
+    """Resolve book title from metadata with target-language fallback chain."""
+    translated = metadata.get("translated", {})
+    target = normalize_target_language(target_language)
+    if target in translated and translated[target]:
+        return translated[target]
+    if metadata.get("title"):
+        return metadata["title"]
+    return fallback_novel_name.replace("-", " ").title()
+
+
+def resolve_book_author(metadata: dict, fallback_author: str) -> str:
+    """Resolve author from metadata, treating null/blank author as missing."""
+    author = metadata.get("author")
+    if author is None:
+        return fallback_author
+    author_text = str(author).strip()
+    return author_text or fallback_author
+
+
+def resolve_cover_image(metadata: dict) -> Path | None:
+    """Resolve cover image from metadata.
+
+    Supports web URLs (downloaded to a temp file) and local file paths.
+    """
+    illustration_url = metadata.get("illustration_url", "")
+    if not illustration_url:
+        return None
+
+    if not illustration_url.startswith(("http://", "https://")):
+        local_path = Path(illustration_url)
+        return local_path if local_path.exists() else None
+
+    try:
+        req = Request(illustration_url, headers={"User-Agent": "Mozilla/5.0"})
+        with urlopen(req, timeout=30) as resp:
+            content_type = resp.headers.get("Content-Type", "")
+            if "png" in content_type:
+                suffix = ".png"
+            elif "webp" in content_type:
+                suffix = ".webp"
+            else:
+                suffix = ".jpg"
+
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix, prefix="novel_cover_") as tmp:
+                tmp.write(resp.read())
+                return Path(tmp.name)
+    except (URLError, OSError):
+        return None
+
+
+def resolve_illustration(illustrations_dir: Path | None, filename: str) -> Path | None:
+    """Resolve a marker filename inside the novel's illustrations directory."""
+    if illustrations_dir is None or Path(filename).name != filename:
+        return None
+    path = illustrations_dir / filename
+    return path if path.is_file() else None
+
+
+def image_media_type(path: Path) -> str:
+    """Return the EPUB media type for an illustration file."""
+    return {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".gif": "image/gif",
+        ".webp": "image/webp",
+        ".svg": "image/svg+xml",
+    }.get(path.suffix.lower(), "application/octet-stream")
+
+
+def find_serif_fonts() -> tuple[str, str]:
+    """Find DejaVuSerif fonts on the Linux system for Vietnamese support."""
+    font_dir = "/usr/share/fonts"
+    candidates = [
+        (
+            f"{font_dir}/truetype/dejavu/DejaVuSerif.ttf",
+            f"{font_dir}/truetype/dejavu/DejaVuSerif-Bold.ttf",
+        ),
+        (
+            f"{font_dir}/dejavu-serif-fonts/DejaVuSerif.ttf",
+            f"{font_dir}/dejavu-serif-fonts/DejaVuSerif-Bold.ttf",
+        ),
+        (
+            f"{font_dir}/TTF/DejaVuSerif.ttf",
+            f"{font_dir}/TTF/DejaVuSerif-Bold.ttf",
+        ),
+        (
+            f"{font_dir}/truetype/liberation/LiberationSerif-Regular.ttf",
+            f"{font_dir}/truetype/liberation/LiberationSerif-Bold.ttf",
+        ),
+    ]
+    for reg, bold in candidates:
+        if os.path.exists(reg) and os.path.exists(bold):
+            return reg, bold
+
+    for font_path in Path(font_dir).glob("**/DejaVuSerif.ttf"):
+        bold_path = font_path.parent / "DejaVuSerif-Bold.ttf"
+        if bold_path.exists():
+            return str(font_path), str(bold_path)
+
+    return (
+        "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf",
+    )
+
+
+def clean_text(text: str) -> str:
+    """Clean text by replacing CJK punctuation and removing residual untranslated CJK characters."""
+    if not text:
+        return ""
+
+    replacements = {
+        "『": '"',
+        "』": '"',
+        "「": '"',
+        "」": '"',
+        "【": "[",
+        "】": "]",
+        "〖": "[",
+        "〗": "]",
+        "—": "-",
+        "–": "-",
+        "﹏": "~",
+    }
+    for orig, rep in replacements.items():
+        text = text.replace(orig, rep)
+
+    cjk_pattern = re.compile(
+        r"[\u4e00-\u9fff"
+        r"\u3040-\u309f"
+        r"\u30a0-\u30ff"
+        r"\uac00-\ud7af"
+        r"\u1100-\u11ff"
+        r"\u3130-\u318f"
+        r"\ufe30-\ufe4f"
+        r"]"
+    )
+    text = cjk_pattern.sub("", text)
+
+    text = re.sub(r" +", " ", text)
+    return text.strip()
+
+
+def parse_chapter_file(file_path: Path) -> tuple[str, list[str]]:
+    """Parse chapter content. Extracts the cleaned title and paragraphs."""
+    try:
+        content = file_path.read_text(encoding="utf-8")
+    except Exception:  # noqa: BLE001
+        return f"Chương {file_path.stem}", []
+
+    lines = [line.strip() for line in content.split("\n")]
+    lines = [stripped for stripped in lines if stripped]
+
+    if not lines:
+        return f"Chương {file_path.stem}", []
+
+    header_lines = []
+    for idx, line in enumerate(lines[:5]):
+        if line.startswith("Chương ") or "Chương" in line or line.lower().startswith("chapter"):
+            header_lines.append((idx, line))
+        else:
+            break
+
+    if header_lines:
+        title_idx, title = header_lines[-1]
+        body_start_idx = title_idx + 1
+    else:
+        title = lines[0]
+        body_start_idx = 1
+
+    title = clean_text(title)
+    paragraphs = [clean_text(p) for p in lines[body_start_idx:]]
+    paragraphs = [p for p in paragraphs if p]
+
+    return title, paragraphs
+
+
+# ---------------------------------------------------------------------------
+# EPUB builder
+# ---------------------------------------------------------------------------
+
+
+class EPUBBuilder:
+    """Pure Python EPUB generator with zero dependencies."""
+
+    def __init__(
+        self,
+        title: str,
+        author: str = "AI Translator",
+        language: str = "vi",
+        cover_image: Path | None = None,
+        illustrations_dir: Path | None = None,
+    ):
+        self.title = title
+        self.author = author
+        self.language = language
+        self.chapters = []
+        self.book_id = f"urn:uuid:{uuid.uuid4()}"
+        self.cover_image = cover_image
+        self.illustrations_dir = illustrations_dir
+        self.illustrations: dict[str, Path] = {}
+
+    def add_chapter(self, title: str, paragraphs: list[str]):
+        chapter_id = f"chapter_{len(self.chapters) + 1}"
+        content_html = f"<h1>{html.escape(title)}</h1>\n"
+        for p in paragraphs:
+            illustration_name = parse_illustration_marker(p)
+            if illustration_name:
+                illustration_path = resolve_illustration(self.illustrations_dir, illustration_name)
+                if illustration_path:
+                    self.illustrations[illustration_name] = illustration_path
+                    content_html += (
+                        '<div class="illustration">'
+                        f'<img src="images/{html.escape(illustration_name)}" alt="Illustration"/>'
+                        "</div>\n"
+                    )
+                    continue
+            content_html += f"<p>{html.escape(p)}</p>\n"
+        self.chapters.append({"id": chapter_id, "title": title, "content_html": content_html})
+
+    def write(self, output_path: Path):
+        with zipfile.ZipFile(output_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("mimetype", "application/epub+zip", compress_type=zipfile.ZIP_STORED)
+
+            container_xml = """<?xml version="1.0" encoding="UTF-8"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>"""
+            zf.writestr("META-INF/container.xml", container_xml)
+
+            style_css = """body {
+  font-family: "DejaVu Serif", serif;
+  margin: 5%;
+  line-height: 1.6;
+}
+h1 {
+  text-align: center;
+  margin-top: 1em;
+  margin-bottom: 2em;
+}
+p {
+  margin-bottom: 0.8em;
+  text-align: justify;
+}
+.illustration {
+  margin: 1.2em 0;
+  text-align: center;
+}
+.illustration img {
+  max-width: 100%;
+  height: auto;
+}"""
+            zf.writestr("OEBPS/style.css", style_css)
+
+            if self.cover_image and self.cover_image.exists():
+                suffix = self.cover_image.suffix.lower()
+                cover_filename = f"cover{suffix}"
+                zf.write(str(self.cover_image), f"OEBPS/{cover_filename}")
+
+                cover_xhtml = f"""<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="{self.language}">
+<head>
+  <title>Cover</title>
+  <style type="text/css">
+    body {{ margin: 0; padding: 0; text-align: center; }}
+    img {{ max-width: 100%; max-height: 100%; }}
+  </style>
+</head>
+<body>
+  <div>
+    <img src="{cover_filename}" alt="Cover"/>
+  </div>
+</body>
+</html>"""
+                zf.writestr("OEBPS/cover.xhtml", cover_xhtml)
+
+            for filename, illustration_path in self.illustrations.items():
+                zf.write(str(illustration_path), f"OEBPS/images/{filename}")
+
+            for ch in self.chapters:
+                ch_html = f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="{self.language}">
+<head>
+  <title>{html.escape(ch["title"])}</title>
+  <link rel="stylesheet" href="style.css" type="text/css"/>
+</head>
+<body>
+  {ch["content_html"]}
+</body>
+</html>"""
+                zf.writestr(f"OEBPS/{ch['id']}.xhtml", ch_html)
+
+            toc_ncx = self._build_toc_ncx()
+            zf.writestr("OEBPS/toc.ncx", toc_ncx)
+
+            content_opf = self._build_content_opf()
+            zf.writestr("OEBPS/content.opf", content_opf)
+
+    def _build_toc_ncx(self) -> str:
+        nav_points = []
+        for i, ch in enumerate(self.chapters, 1):
+            nav_points.append(f"""    <navPoint id="{ch["id"]}" playOrder="{i}">
+      <navLabel>
+        <text>{html.escape(ch["title"])}</text>
+      </navLabel>
+      <content src="{ch["id"]}.xhtml"/>
+    </navPoint>""")
+
+        return f"""<?xml version="1.0" encoding="UTF-8"?>
+<ncx xmlns="http://www.safaribooksonline.com/codex/1.2/ncx/" version="2005-1">
+  <head>
+    <meta name="dtb:uid" content="{self.book_id}"/>
+    <meta name="dtb:depth" content="1"/>
+    <meta name="dtb:totalPageCount" content="0"/>
+    <meta name="dtb:maxPageNumber" content="0"/>
+  </head>
+  <docTitle>
+    <text>{html.escape(self.title)}</text>
+  </docTitle>
+  <navMap>
+{"\n".join(nav_points)}
+  </navMap>
+</ncx>"""
+
+    def _build_content_opf(self) -> str:
+        manifest_items = [
+            '    <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>',
+            '    <item id="style" href="style.css" media-type="text/css"/>',
+        ]
+        spine_items = []
+        cover_meta = ""
+
+        if self.cover_image and self.cover_image.exists():
+            suffix = self.cover_image.suffix.lower()
+            cover_filename = f"cover{suffix}"
+            manifest_items.append(f'    <item id="cover-image" href="{cover_filename}" media-type="image/jpeg"/>')
+            manifest_items.append('    <item id="cover" href="cover.xhtml" media-type="application/xhtml+xml"/>')
+            spine_items.append('    <itemref idref="cover"/>')
+            cover_meta = '\n    <meta name="cover" content="cover-image"/>'
+
+        for ch in self.chapters:
+            manifest_items.append(f'    <item id="{ch["id"]}" href="{ch["id"]}.xhtml" media-type="application/xhtml+xml"/>')
+            spine_items.append(f'    <itemref idref="{ch["id"]}"/>')
+
+        for index, (filename, illustration_path) in enumerate(self.illustrations.items(), start=1):
+            manifest_items.append(
+                f'    <item id="illustration-{index}" href="images/{html.escape(filename)}" '
+                f'media-type="{image_media_type(illustration_path)}"/>'
+            )
+
+        return f"""<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" unique-identifier="BookId" version="2.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
+    <dc:identifier id="BookId">{self.book_id}</dc:identifier>
+    <dc:title>{html.escape(self.title)}</dc:title>
+    <dc:creator opf:role="aut">{html.escape(self.author)}</dc:creator>
+    <dc:language>{self.language}</dc:language>{cover_meta}
+  </metadata>
+  <manifest>
+{"\n".join(manifest_items)}
+  </manifest>
+  <spine toc="ncx">
+{"\n".join(spine_items)}
+  </spine>
+</package>"""
+
+
+# ---------------------------------------------------------------------------
+# PDF builder
+# ---------------------------------------------------------------------------
+
+
+class NovelPDF(FPDF):
+    """FPDF subclass for formatting novels with customized footers and headers."""
+
+    def __init__(
+        self,
+        title: str,
+        author: str,
+        font_reg: str,
+        font_bold: str,
+        dark_mode: bool = False,
+        illustrations_dir: Path | None = None,
+    ):
+        super().__init__()
+        self.book_title = title
+        self.book_author = author
+        self.font_reg_path = font_reg
+        self.font_bold_path = font_bold
+        self.dark_mode = dark_mode
+        self.illustrations_dir = illustrations_dir
+
+        self.set_margins(20, 20, 20)
+        self.set_auto_page_break(auto=True, margin=20)
+
+    def header(self):
+        if self.dark_mode:
+            self.set_fill_color(30, 30, 30)
+            self.rect(0, 0, self.w, self.h, "F")
+
+        if self.page_no() > 1:
+            self.set_font("DejaVuSerif", size=8)
+            if self.dark_mode:
+                self.set_text_color(160, 160, 160)
+            else:
+                self.set_text_color(128, 128, 128)
+            self.cell(0, 10, self.book_title, align="R", new_x="LMARGIN", new_y="NEXT")
+            self.ln(2)
+
+    def footer(self):
+        if self.page_no() > 1:
+            self.set_y(-15)
+            self.set_font("DejaVuSerif", size=9)
+            if self.dark_mode:
+                self.set_text_color(160, 160, 160)
+            else:
+                self.set_text_color(128, 128, 128)
+            self.cell(0, 10, f"Trang {self.page_no()}", align="C")
+
+    def create_cover(self):
+        self.add_page()
+        self.add_font("DejaVuSerif", fname=self.font_reg_path)
+        self.add_font("DejaVuSerif-Bold", fname=self.font_bold_path)
+
+        if self.dark_mode:
+            self.set_text_color(240, 240, 240)
+        else:
+            self.set_text_color(0, 0, 0)
+
+        self.set_y(80)
+        self.set_font("DejaVuSerif-Bold", size=24)
+        self.multi_cell(0, 12, self.book_title, align="C", new_x="LMARGIN", new_y="NEXT")
+
+        self.ln(15)
+        self.set_font("DejaVuSerif", size=14)
+        if self.dark_mode:
+            self.set_text_color(200, 200, 200)
+        self.cell(0, 10, f"Tác giả: {self.book_author}", align="C", new_x="LMARGIN", new_y="NEXT")
+
+        self.set_y(-40)
+        self.set_font("DejaVuSerif", size=10)
+        if self.dark_mode:
+            self.set_text_color(160, 160, 160)
+        else:
+            self.set_text_color(128, 128, 128)
+        self.cell(0, 10, "Được đóng gói tự động bằng AI Novel Translator", align="C")
+
+    def add_chapter(self, title: str, paragraphs: list[str]):
+        self.add_page()
+        self.set_font("DejaVuSerif-Bold", size=16)
+        if self.dark_mode:
+            self.set_text_color(245, 230, 211)
+        else:
+            self.set_text_color(0, 0, 0)
+        self.multi_cell(0, 10, title, align="C", new_x="LMARGIN", new_y="NEXT")
+        self.ln(10)
+
+        self.set_font("DejaVuSerif", size=11)
+        if self.dark_mode:
+            self.set_text_color(220, 220, 220)
+        else:
+            self.set_text_color(0, 0, 0)
+
+        for p in paragraphs:
+            text = p.strip()
+            if not text:
+                continue
+            illustration_name = parse_illustration_marker(text)
+            if illustration_name:
+                illustration_path = resolve_illustration(self.illustrations_dir, illustration_name)
+                if illustration_path:
+                    available_width = self.w - self.l_margin - self.r_margin
+                    self.image(str(illustration_path), w=available_width)
+                    self.ln(3.5)
+                    continue
+            self.multi_cell(w=0, h=6.5, text=text, align="J", new_x="LMARGIN", new_y="NEXT")
+            self.ln(3.5)

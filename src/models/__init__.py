@@ -53,6 +53,7 @@ class CrawlResult:
     output_dir: str
     chapter_output_dir: str
     errors: list[CrawlError] = field(default_factory=list)
+    cancelled: bool = False
 
 
 @dataclass(frozen=True)

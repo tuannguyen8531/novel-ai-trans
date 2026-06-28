@@ -25,6 +25,7 @@ classifiers = [
 
 dependencies = [
     "beautifulsoup4>=4.12.3",
+    "fastapi>=0.138.1",
     "fpdf2>=2.8.7",
     "httpx>=0.28.1",
     "langchain-core>=1.3.3",
@@ -32,6 +33,9 @@ dependencies = [
     "playwright>=1.49.0",
     "pydantic>=2.13.4",
     "python-dotenv>=1.2.2",
+    "python-multipart>=0.0.32",
+    "sse-starlette>=3.4.5",
+    "uvicorn[standard]>=0.49.0",
 ]
 
 [project.scripts]
@@ -42,7 +46,9 @@ import    = "src.cli.crawl:import_main"
 translate = "src.cli.translate:translate_main"
 pack      = "src.cli.pack:pack_main"
 glossary  = "src.cli.translate:glossary_main"
+serve     = "src.api.__main__:main"
 test      = "src.cli.test:test_main"
+build     = "scripts.build:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -53,8 +59,10 @@ packages = ["src"]
 
 [dependency-groups]
 dev = [
+    "httpx>=0.28",
     "pyright>=1.1.390",
     "pytest>=8.3.0",
+    "pytest-cov>=7.1.0",
     "ruff>=0.9.0",
 ]
 
@@ -72,6 +80,14 @@ line-length = 130
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/api/**" = ["B008"]  # FastAPI Depends/File/Form/Query in defaults are intentional
+"src/api/jobs.py" = ["B008", "SIM105"]  # Event loop dispatch uses try/except RuntimeError
+"src/api/services/glossary_runtime.py" = ["B008", "SIM105"]
+"src/application/crawl.py" = ["B008", "SIM105"]
+"src/application/translate.py" = ["SIM105"]
+"src/application/pack.py" = ["SIM105"]
 
 [tool.pyright]
 pythonVersion = "3.12"

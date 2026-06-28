@@ -226,11 +226,13 @@ class ConfigGenerator:
         llm: BaseProvider,
         *,
         use_browser: bool = False,
+        headed: bool = False,
         user_agent: str = DEFAULT_USER_AGENT,
         samples_dir: Path | None = None,
     ) -> None:
         self._llm = llm
-        self._use_browser = use_browser
+        self._use_browser = use_browser or headed
+        self._headed = headed
         self._user_agent = user_agent
         self._samples_dir = samples_dir
 
@@ -380,12 +382,23 @@ class ConfigGenerator:
         if self._use_browser:
             from src.services.browser import BrowserFetcher
 
-            with BrowserFetcher(
-                user_agent=self._user_agent,
-                timeout_seconds=30,
-                delay_seconds=1.0,
-            ) as fetcher:
-                yield fetcher
+            if self._headed:
+                # Headed mode uses the host's real Chrome identity and a
+                # longer challenge window; persistent profile is left to
+                # the caller (the crawler wires one for repeat runs).
+                with BrowserFetcher(
+                    user_agent=None,
+                    headless=False,
+                    challenge_timeout_seconds=120.0,
+                ) as fetcher:
+                    yield fetcher
+            else:
+                with BrowserFetcher(
+                    user_agent=self._user_agent,
+                    timeout_seconds=30,
+                    delay_seconds=1.0,
+                ) as fetcher:
+                    yield fetcher
         else:
             yield HttpClient(
                 user_agent=self._user_agent,

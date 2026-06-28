@@ -14,6 +14,7 @@ _PROVIDER_MAP: dict[str, type[BaseProvider]] = {
 }
 
 _llm_instance: BaseProvider | None = None
+_llm_config_id: int | None = None
 
 
 def _create_provider(name: str) -> BaseProvider:
@@ -25,9 +26,14 @@ def _create_provider(name: str) -> BaseProvider:
 
 
 def get_llm() -> BaseProvider:
-    """Get the global LLM service instance, with fallback if configured."""
-    global _llm_instance
-    if _llm_instance is None:
+    """Get an LLM service cached for the active configuration snapshot."""
+    from src.config import get_active_config
+
+    global _llm_config_id, _llm_instance
+    cache_key = id(get_active_config()) if config.__class__.__name__ == "_ConfigProxy" else id(config)
+    if _llm_instance is None or _llm_config_id != cache_key:
+        if _llm_instance is not None:
+            _llm_instance.close()
         primary = _create_provider(config.llm_provider)
 
         # Wrap with fallback if configured and different from primary
@@ -36,13 +42,15 @@ def get_llm() -> BaseProvider:
             _llm_instance = FallbackProvider(primary, fallback)
         else:
             _llm_instance = primary
+        _llm_config_id = cache_key
 
     return _llm_instance
 
 
 def reset_llm():
     """Reset the global LLM instance (useful after config changes)."""
-    global _llm_instance
+    global _llm_config_id, _llm_instance
     if _llm_instance is not None:
         _llm_instance.close()
     _llm_instance = None
+    _llm_config_id = None

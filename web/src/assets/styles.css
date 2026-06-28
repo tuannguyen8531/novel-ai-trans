@@ -1,0 +1,253 @@
+:root {
+  color-scheme: dark;
+  --bg: #0f1115;
+  --bg-elev: #161922;
+  --bg-elev-2: #1d212c;
+  --fg: #e8eaed;
+  --fg-dim: #a8adb8;
+  --accent: #6aa1ff;
+  --accent-strong: #4a86ff;
+  --danger: #f06262;
+  --warn: #f0b86a;
+  --ok: #5ec18a;
+  --border: #2a2f3a;
+  --radius: 8px;
+  --font: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #f5f6f8;
+  --bg-elev: #ffffff;
+  --bg-elev-2: #eef0f3;
+  --fg: #1c1f25;
+  --fg-dim: #5a6271;
+  --accent: #2962e0;
+  --accent-strong: #1d4ec5;
+  --danger: #c0392b;
+  --warn: #b97a1a;
+  --ok: #2e7d4f;
+  --border: #d3d7df;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font);
+  font-size: 14px;
+  background: var(--bg);
+  color: var(--fg);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  background: var(--accent);
+  color: #fff;
+  border: 0;
+  border-radius: var(--radius);
+  padding: 0.5rem 0.9rem;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+button:hover:not(:disabled) {
+  background: var(--accent-strong);
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+button.secondary {
+  background: var(--bg-elev-2);
+  color: var(--fg);
+  border: 1px solid var(--border);
+}
+
+button.danger {
+  background: var(--danger);
+}
+
+input,
+select,
+textarea {
+  background: var(--bg-elev);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.4rem 0.6rem;
+  width: 100%;
+}
+
+textarea {
+  min-height: 6rem;
+  resize: vertical;
+}
+
+label {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: var(--fg-dim);
+  font-size: 0.85rem;
+}
+
+.check {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+  cursor: pointer;
+  user-select: none;
+  line-height: 1.35;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.check:hover {
+  background: var(--bg-elev-2);
+}
+
+.check input[type="checkbox"],
+.check input[type="radio"] {
+  width: 1rem;
+  height: 1rem;
+  margin: 0.15rem 0 0;
+  flex-shrink: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.check > span {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--fg);
+}
+
+.check-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.check-row .check {
+  flex: 1 1 12rem;
+  min-width: 12rem;
+  background: var(--bg-elev-2);
+  border-color: var(--border);
+}
+
+.check-row .check:hover {
+  border-color: var(--accent);
+}
+
+.row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.card {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+}
+
+.muted {
+  color: var(--fg-dim);
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  background: var(--bg-elev-2);
+  color: var(--fg-dim);
+  border: 1px solid var(--border);
+}
+
+.badge.ok { color: var(--ok); border-color: var(--ok); }
+.badge.warn { color: var(--warn); border-color: var(--warn); }
+.badge.danger { color: var(--danger); border-color: var(--danger); }
+
+.progress {
+  position: relative;
+  height: 8px;
+  background: var(--bg-elev-2);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progress > .fill {
+  position: absolute;
+  inset: 0;
+  background: var(--accent);
+  width: 0;
+  transition: width 0.3s ease;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.45rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+}
+
+th {
+  color: var(--fg-dim);
+  font-weight: 500;
+}
+
+.error {
+  color: var(--danger);
+}
+
+.flex-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.gap-1 { gap: 0.25rem; }
+.gap-2 { gap: 0.5rem; }
+.gap-3 { gap: 1rem; }
+
+.grid {
+  display: grid;
+  gap: 1rem;
+}
