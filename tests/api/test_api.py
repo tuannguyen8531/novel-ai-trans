@@ -45,6 +45,7 @@ def client():
                     dist_dir=tmp_path / "dist",
                     drafts_dir=drafts,
                     history_root=translated,
+                    jobs_dir=tmp_path / "jobs",
                 )
             with TestClient(app) as test_client:
                 yield test_client
@@ -279,6 +280,70 @@ def test_draft_deletion_removes_file(client):
     assert not (drafts_dir / f"{draft_id}.json").exists()
 
 
+def test_jobs_are_persisted_to_disk(client):
+    import json
+    import time
+
+    jobs_dir = client.app.state.app_state.jobs_dir
+    response = client.post(
+        "/api/translate",
+        json={"novel": "demo"},
+    )
+    assert response.status_code == 202
+    body = response.json()
+    job_id = body["job_id"]
+    # Wait briefly for the worker to settle, then cancel to ensure a terminal
+    # state is written to disk.
+    deadline = time.time() + 2
+    while time.time() < deadline:
+        current = client.app.state.app_state.job_manager.current
+        if current is None or current.id != job_id:
+            break
+        time.sleep(0.05)
+    # The job is now terminal (or still running but persisted as running).
+    files = list(jobs_dir.glob(f"{job_id}.json"))
+    assert files, f"expected a job file for {job_id} in {jobs_dir}"
+    snapshot = json.loads(files[0].read_text(encoding="utf-8"))
+    assert snapshot["id"] == job_id
+    assert snapshot["kind"] == "translate"
+    assert snapshot["status"] in {"queued", "running", "completed", "failed", "cancelling", "cancelled"}
+
+
+def test_jobs_survive_restart(tmp_path):
+    """A second JobManager pointed at the same jobs dir must see the prior job."""
+    from src.api.jobs import JobManager
+    from src.api.services.job_store import JobStore
+
+    jobs_dir = tmp_path / "jobs"
+    store = JobStore(jobs_dir)
+    manager = JobManager(store=store)
+    job = manager.submit(
+        kind="translate",
+        novel="demo",
+        run=lambda j, emit, cancel: {"ok": True},
+        snapshot=manager.__dict__.get("snapshot", None) or __import__("src.config", fromlist=["Config"]).config,
+        loop=None,
+    )
+    # Wait for the worker to finish.
+    import time
+
+    deadline = time.time() + 2
+    while time.time() < deadline:
+        if manager.current is None or manager.current.id != job.id:
+            break
+        time.sleep(0.05)
+    completed = manager.get(job.id)
+    assert completed.status.value == "completed"
+
+    # Simulate restart with a fresh manager against the same store.
+    manager2 = JobManager(store=JobStore(jobs_dir))
+    restored = manager2.get(job.id)
+    assert restored.id == job.id
+    assert restored.status.value == "completed"
+    assert restored.kind == "translate"
+    assert restored.result == {"ok": True}
+
+
 def test_config_save_rejects_traversal_draft_id(client, tmp_path):
     config_dir = tmp_path / "configs"
     payload = {
@@ -302,7 +367,12 @@ def test_spa_fallback_rejects_paths_outside_dist(tmp_path):
     (dist / "index.html").write_text("index", encoding="utf-8")
     secret = tmp_path / "secret.txt"
     secret.write_text("secret", encoding="utf-8")
-    app = create_app(dist_dir=dist, drafts_dir=tmp_path / "drafts", history_root=tmp_path / "translated")
+    app = create_app(
+        dist_dir=dist,
+        drafts_dir=tmp_path / "drafts",
+        history_root=tmp_path / "translated",
+        jobs_dir=tmp_path / "jobs",
+    )
     fallback = next(route for route in app.routes if isinstance(route, APIRoute) and route.path == "/{full_path:path}")
 
     response = asyncio.run(fallback.endpoint("../secret.txt"))

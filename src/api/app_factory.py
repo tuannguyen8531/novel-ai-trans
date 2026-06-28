@@ -30,6 +30,7 @@ class AppState:
     dist_dir: Path
     drafts_dir: Path
     config_drafts_dir: Path
+    jobs_dir: Path
     shutdown_event: asyncio.Event
     max_upload_bytes: int = 100 * 1024 * 1024
 
@@ -59,6 +60,7 @@ def create_app(
     dist_dir: Path | None = None,
     drafts_dir: Path | None = None,
     history_root: Path | None = None,
+    jobs_dir: Path | None = None,
     max_upload_bytes: int = 100 * 1024 * 1024,
 ) -> FastAPI:
     """Construct the FastAPI application."""
@@ -66,12 +68,24 @@ def create_app(
 
     base = Path(__file__).resolve().parent.parent.parent
     _ = base / "runtime"
+    jobs_dir = jobs_dir or base / "runtime" / "jobs"
+    from src.api.services.job_store import JobStore
+
+    job_store = JobStore(jobs_dir)
+    # Drop expired job files so the on-disk history mirrors the in-memory
+    # retention window. Run synchronously: it's a few mtime checks at most.
+    removed = job_store.cleanup()
+    if removed:
+        import logging as _logging
+        _logging.getLogger(__name__).info("Cleaned up %d expired job file(s)", removed)
+
     state = AppState(
-        job_manager=JobManager(),
+        job_manager=JobManager(store=job_store),
         history_root=history_root or base / "translated",
         dist_dir=dist_dir or base / "web" / "dist",
         drafts_dir=drafts_dir or base / "runtime" / "config-drafts",
         config_drafts_dir=drafts_dir or base / "runtime" / "config-drafts",
+        jobs_dir=jobs_dir,
         shutdown_event=asyncio.Event(),
         max_upload_bytes=max_upload_bytes,
     )

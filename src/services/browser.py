@@ -229,6 +229,11 @@ class BrowserFetcher:
 
                         status = response.status
                         await page.wait_for_load_state("domcontentloaded", timeout=5000)
+                        # Wait for network activity to settle so JS-based
+                        # challenges (e.g. Cloudflare "Just a moment...")
+                        # finish before we read page content.
+                        with suppress(Exception):
+                            await page.wait_for_load_state("networkidle", timeout=8000)
                         if click_selectors:
                             before_count = await self._selector_count(page, wait_for_selector) if wait_for_selector else None
                             await self._click_selectors(page, click_selectors)

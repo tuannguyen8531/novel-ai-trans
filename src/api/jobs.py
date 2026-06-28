@@ -30,6 +30,8 @@ from enum import StrEnum
 from typing import Any
 
 from src.api.events import JobEvent, event_from_application
+from src.api.services.job_store import JobStore, job_to_snapshot
+from src.api.services.job_store import snapshot_to_job as _snapshot_to_job
 from src.application.config_context import config_scope
 from src.config import Config
 
@@ -79,7 +81,7 @@ class Job:
             "progress": dict(self.progress),
             "result": self.result,
             "error": asdict(self.error) if self.error else None,
-            "logs": list(self.logs),
+            "logs": list(self.logs) if self.logs is not None else [],
         }
         return data
 
@@ -208,13 +210,21 @@ class JobManager:
 
     HISTORY_LIMIT_DEFAULT = 50
 
-    def __init__(self, *, history_limit: int = HISTORY_LIMIT_DEFAULT) -> None:
+    def __init__(
+        self,
+        *,
+        history_limit: int = HISTORY_LIMIT_DEFAULT,
+        store: JobStore | None = None,
+    ) -> None:
         self._current: Job | None = None
         self._history: deque[Job] = deque(maxlen=history_limit)
         self._lock = threading.Lock()
         self._bus = EventBus()
         self._thread: threading.Thread | None = None
         self._wake_event = threading.Event()
+        self._store = store
+        if store is not None:
+            self._restore_from_store()
 
     @property
     def event_bus(self) -> EventBus:
@@ -228,6 +238,43 @@ class JobManager:
     def list_history(self) -> list[Job]:
         with self._lock:
             return list(self._history)
+
+    def _persist(self, job: Job) -> None:
+        if self._store is None:
+            return
+        try:
+            self._store.write(job_to_snapshot(job))
+        except Exception as error:  # noqa: BLE001 - persistence must never break a job
+            _logger.warning("Failed to persist job %s: %s", job.id, error)
+
+    def _restore_from_store(self) -> None:
+        """Repopulate the in-memory deque from disk on startup.
+
+        Active jobs found on disk are left as-is (they died with the previous
+        process); only terminal jobs go into history.
+        """
+        assert self._store is not None
+        terminal = {JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED}
+        for snapshot in self._store.iter_all():
+            try:
+                job = _snapshot_to_job(snapshot)
+            except Exception as error:  # noqa: BLE001
+                _logger.warning("Skipping invalid job snapshot: %s", error)
+                continue
+            if job.status in terminal:
+                with self._lock:
+                    self._history.append(job)
+            else:
+                # Active jobs from a previous run cannot be safely resumed.
+                # Persist them as failed so the user sees the interruption.
+                job.status = JobStatus.FAILED
+                job.error = JobError(
+                    code="interrupted", message="Server restarted while job was running."
+                )
+                job.finished_at = job.finished_at or datetime.now(UTC)
+                with self._lock:
+                    self._history.appendleft(job)
+                self._store.write(job_to_snapshot(job))
 
     def get(self, job_id: str) -> Job:
         with self._lock:
@@ -265,6 +312,7 @@ class JobManager:
                 created_at=datetime.now(UTC),
             )
             self._current = job
+        self._persist(job)
         self._bus.publish(JobEvent(kind="queued", job_id=job.id, novel=novel, payload={"kind": kind}))
         request = _JobRequest(job=job, snapshot=snapshot, run=run, loop=loop)
         self._start_worker(request)
@@ -278,6 +326,7 @@ class JobManager:
                     return
                 job.status = JobStatus.RUNNING
                 job.started_at = datetime.now(UTC)
+            self._persist(job)
             self._bus.publish(
                 JobEvent(
                     kind="started",
@@ -344,6 +393,7 @@ class JobManager:
             if self._current and self._current.id == job.id:
                 self._current = None
             self._history.appendleft(job)
+        self._persist(job)
 
     def _finish_failed(self, job: Job, *, code: str, message: str) -> None:
         if job.status == JobStatus.CANCELLING:
@@ -364,6 +414,7 @@ class JobManager:
             if self._current and self._current.id == job.id:
                 self._current = None
             self._history.appendleft(job)
+        self._persist(job)
 
     # ----------------------------------------------------------------- cancel
 
@@ -380,9 +431,11 @@ class JobManager:
                 if self._current and self._current.id == job.id:
                     self._current = None
                 self._history.appendleft(job)
+            self._persist(job)
             return job
         job.status = JobStatus.CANCELLING
         job.cancel_event.set()
+        self._persist(job)
         self._bus.publish(JobEvent(kind="cancelling", job_id=job.id, novel=job.novel))
         return job
 

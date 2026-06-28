@@ -33,6 +33,7 @@ def client():
                     dist_dir=tmp_path / "dist",
                     drafts_dir=drafts,
                     history_root=translated,
+                    jobs_dir=tmp_path / "jobs",
                 )
             with TestClient(app) as test_client:
                 yield test_client, translated

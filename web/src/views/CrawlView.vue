@@ -21,6 +21,7 @@ const browser = ref<boolean>(false)
 const ignoreRobots = ref<boolean>(false)
 const overwrite = ref<boolean>(false)
 const workers = ref<number>(1)
+const maxChapters = ref<number | null>(null)
 const crawlError = ref<string | null>(null)
 const crawlJobId = ref<string | null>(null)
 
@@ -65,13 +66,17 @@ async function startCrawl() {
     return
   }
   try {
-    const result = await api.startCrawl({
+    const payload: Record<string, unknown> = {
       target,
       browser: browser.value,
       ignore_robots: ignoreRobots.value,
       overwrite: overwrite.value,
       workers: workers.value
-    })
+    }
+    if (maxChapters.value !== null && maxChapters.value > 0) {
+      payload.max_chapters = maxChapters.value
+    }
+    const result = await api.startCrawl(payload)
     crawlJobId.value = result.job_id
   } catch (err) {
     crawlError.value = (err as Error).message
@@ -219,6 +224,16 @@ function discardDraft() {
         <div>
           <label>Concurrency</label>
           <input v-model.number="workers" type="number" min="1" max="8" style="max-width: 6rem;" />
+        </div>
+        <div>
+          <label>Max chapters (0 = no limit)</label>
+          <input
+            v-model.number="maxChapters"
+            type="number"
+            min="0"
+            placeholder="unlimited"
+            style="max-width: 8rem;"
+          />
         </div>
       </div>
 

@@ -126,16 +126,35 @@ def run_crawl(
         ),
     )
 
-    crawler = NovelCrawler(
-        site_config,
-        respect_robots=not request.ignore_robots,
-    )
+    if use_browser:
+        from src.services.browser import BrowserFetcher
+
+        fetcher = BrowserFetcher(
+            user_agent=site_config.user_agent,
+            timeout_seconds=site_config.timeout_seconds,
+            delay_seconds=site_config.request_delay_seconds,
+            retry_attempts=site_config.retry_attempts,
+            retry_backoff_seconds=site_config.retry_backoff_seconds,
+            max_concurrency=workers,
+        )
+        crawler = NovelCrawler(
+            site_config,
+            respect_robots=not request.ignore_robots,
+            fetcher=fetcher,
+        )
+    else:
+        fetcher = None
+        crawler = NovelCrawler(
+            site_config,
+            respect_robots=not request.ignore_robots,
+        )
 
     def _crawl_progress(event) -> None:
         from src.services.crawler import CrawlProgress as _CP
 
         if not isinstance(event, _CP):
             return
+        
         _emit(
             progress_callback,
             ProgressEvent(
@@ -169,6 +188,9 @@ def run_crawl(
         raise ExternalServiceError(str(error)) from error
     except (FetchError, OSError, ValueError) as error:
         raise ApplicationValidationError(str(error)) from error
+    finally:
+        if fetcher is not None:
+            fetcher.close(suppress_errors=True)
 
     skipped = sum(1 for ch in result.chapters if ch.skipped)
     fetched = len(result.chapters) - skipped
