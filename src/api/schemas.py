@@ -225,6 +225,7 @@ class ConfigGenerateRequest(BaseModel):
     name: str | None = None
     provider: Literal["ollama", "gemini", "openrouter"] | None = None
     browser: bool | None = None
+    headed: bool | None = None
     no_cache: bool | None = None
     ignore_sample: bool | None = None
 

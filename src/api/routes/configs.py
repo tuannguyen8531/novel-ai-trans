@@ -150,12 +150,16 @@ async def post_generate_config(
             name=payload.name,
             provider=payload.provider,
             use_browser=payload.browser or False,
+            headed=payload.headed or False,
             no_cache=payload.no_cache or False,
             ignore_sample=payload.ignore_sample or False,
             progress_callback=progress_cb,
             cancel_event=cancel_event,
             drafts_dir=get_state().drafts_dir,
         )
+        # Update the job's novel label to the suggested config name so the
+        # Jobs list and the JobMonitor don't show "—".
+        job.novel = result.suggested_name
         emit_dict = {
             "draft_id": result.draft_id,
             "name": result.suggested_name,

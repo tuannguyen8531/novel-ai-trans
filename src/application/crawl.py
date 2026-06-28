@@ -254,6 +254,7 @@ class ConfigGenerationRequest:
     name: str | None = None
     provider: str | None = None
     use_browser: bool = False
+    headed: bool = False
     no_cache: bool = False
     ignore_sample: bool = False
 
@@ -272,6 +273,7 @@ def generate_config(
     name: str | None = None,
     provider: str | None = None,
     use_browser: bool = False,
+    headed: bool = False,
     no_cache: bool = False,
     ignore_sample: bool = False,
     progress_callback: Callable[[ProgressEvent], None] | None = None,
@@ -287,7 +289,9 @@ def generate_config(
     else:
         llm = get_llm()
 
-    generator = ConfigGenerator(llm, use_browser=use_browser)
+    # Headed mode forces a browser, same as the crawl workflow.
+    effective_browser = use_browser or headed
+    generator = ConfigGenerator(llm, use_browser=effective_browser, headed=headed)
     cache_dir = None if no_cache else RUNTIME_OUTPUT_ROOT / ".gen-cache"
     _check_cancel(cancel_event)
     _emit(progress_callback, ProgressEvent(kind="phase", message="Generating config", extra={"url": url}))

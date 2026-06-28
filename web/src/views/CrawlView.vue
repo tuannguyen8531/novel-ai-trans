@@ -45,12 +45,23 @@ const generateUrl = ref<string>('')
 const generateName = ref<string>('')
 const generateProvider = ref<string>('')
 const generateUseBrowser = ref<boolean>(false)
+const generateHeaded = ref<boolean>(false)
 const generateNoCache = ref<boolean>(false)
 const generateIgnoreSample = ref<boolean>(false)
 const generateError = ref<string | null>(null)
 const generateJobId = ref<string | null>(null)
 const generatedDraft = ref<DraftDetail | null>(null)
 const draftConfigText = ref<string>('')
+
+function selectGenerateBrowserMode(mode: 'headless' | 'headed') {
+  if (mode === 'headless') {
+    generateUseBrowser.value = true
+    generateHeaded.value = false
+  } else {
+    generateUseBrowser.value = false
+    generateHeaded.value = true
+  }
+}
 
 async function loadConfigs() {
   loadingConfigs.value = true
@@ -105,6 +116,7 @@ async function startGenerate() {
   const payload: Record<string, unknown> = {
     url: generateUrl.value.trim(),
     browser: generateUseBrowser.value,
+    headed: generateHeaded.value,
     no_cache: generateNoCache.value,
     ignore_sample: generateIgnoreSample.value
   }
@@ -313,12 +325,31 @@ function discardDraft() {
           </select>
         </div>
         <div>
-          <label>Generation options</label>
+          <label>Browser mode</label>
           <div class="check-row">
             <label class="check">
-              <input v-model="generateUseBrowser" type="checkbox" />
-              <span>Fetch pages with a headless browser</span>
+              <input
+                type="radio"
+                name="generate-browser-mode"
+                :checked="generateUseBrowser && !generateHeaded"
+                @change="selectGenerateBrowserMode('headless')"
+              />
+              <span>Headless browser (for JS challenges)</span>
             </label>
+            <label class="check">
+              <input
+                type="radio"
+                name="generate-browser-mode"
+                :checked="generateHeaded"
+                @change="selectGenerateBrowserMode('headed')"
+              />
+              <span>Headed browser (visible window, your real Chrome profile — for device-bound challenges)</span>
+            </label>
+          </div>
+        </div>
+        <div>
+          <label>Generation options</label>
+          <div class="check-row">
             <label class="check">
               <input v-model="generateNoCache" type="checkbox" />
               <span>Bypass the HTML cache</span>
