@@ -64,6 +64,8 @@ class SettingsPatch(BaseModel):
     ollama_model: str | None = None
     gemini_model: str | None = None
     openrouter_model: str | None = None
+    gemini_api_key: str | None = None
+    openrouter_api_key: str | None = None
 
 
 class ProviderInfo(BaseModel):
@@ -77,6 +79,11 @@ class ProvidersResponse(BaseModel):
     default_provider: str
 
 
+class ProviderModelsResponse(BaseModel):
+    provider: str
+    models: list[str]
+
+
 class ProviderCheckRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -87,6 +94,11 @@ class ProviderCheckResponse(BaseModel):
     provider: str
     ok: bool
     detail: str | None = None
+
+
+class SettingsPersistResponse(BaseModel):
+    path: str
+    changed_keys: list[str]
 
 
 # ---------------------------------------------------------------------------

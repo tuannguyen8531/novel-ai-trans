@@ -87,6 +87,10 @@ class Config:
 
     def __post_init__(self) -> None:
         """Validate configuration values."""
+        if self.fallback_provider and self.fallback_provider == self.llm_provider:
+            raise ValueError(
+                f"fallback_provider ({self.fallback_provider}) must differ from llm_provider"
+            )
         if not 0.0 <= self.translation_temperature <= 1.0:
             raise ValueError(f"translation_temperature must be 0-1, got {self.translation_temperature}")
         if self.chunk_overlap >= self.chunk_size:

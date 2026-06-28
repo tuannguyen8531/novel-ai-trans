@@ -32,5 +32,32 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
-  return { settings, error, loading, refresh, patch }
+  async function persist(): Promise<{ path: string; changed_keys: string[] } | null> {
+    loading.value = true
+    error.value = null
+    try {
+      return await api.persistSettings()
+    } catch (err) {
+      error.value = (err as Error).message
+      return null
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function patchAndPersist(patch: Partial<Settings>): Promise<{ path: string; changed_keys: string[] } | null> {
+    loading.value = true
+    error.value = null
+    try {
+      settings.value = await api.patchSettings(patch)
+      return await api.persistSettings()
+    } catch (err) {
+      error.value = (err as Error).message
+      return null
+    } finally {
+      loading.value = false
+    }
+  }
+
+  return { settings, error, loading, refresh, patch, persist, patchAndPersist }
 })

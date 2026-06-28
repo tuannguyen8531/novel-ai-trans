@@ -87,7 +87,16 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(patch)
     }),
+  persistSettings: () =>
+    request<{ path: string; changed_keys: string[] }>(
+      '/api/settings/persist',
+      { method: 'POST' }
+    ),
   listProviders: () => request<ProvidersResponse>('/api/providers'),
+  listProviderModels: (provider: string) =>
+    request<{ provider: string; models: string[] }>(
+      `/api/providers/${encodeURIComponent(provider)}/models`
+    ),
   checkProvider: (provider: string) =>
     request<{ provider: string; ok: boolean; detail: string | null }>(
       '/api/providers/check',
