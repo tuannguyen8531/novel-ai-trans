@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import threading
 import time
 from collections.abc import Coroutine
 from contextlib import suppress
 from dataclasses import dataclass, field
+from pathlib import Path
 from shutil import which
 from typing import Any, TypeVar
 
@@ -29,18 +31,39 @@ _SYSTEM_BROWSER_COMMANDS = (
     "chromium",
     "chromium-browser",
 )
+_CHALLENGE_TITLE_RE = re.compile(
+    r"<title[^>]*>\s*(?:just a moment|attention required)",
+    re.IGNORECASE,
+)
+_CHALLENGE_MARKERS = (
+    'id="challenge-running"',
+    "id='challenge-running'",
+    'id="cf-challenge-running"',
+    "id='cf-challenge-running'",
+    'id="cf-wrapper"',
+    "id='cf-wrapper'",
+    'id="challenge-form"',
+    "id='challenge-form'",
+)
+
+
+class BrowserChallengeError(FetchError):
+    """A browser page remained behind an anti-bot challenge."""
 
 
 @dataclass
 class BrowserFetcher:
     """Thread-safe sync facade over an async Playwright browser pool."""
 
-    user_agent: str
+    user_agent: str | None = None
     timeout_seconds: float = 30.0
     delay_seconds: float = 1.0
     retry_attempts: int = 3
     retry_backoff_seconds: float = 2.0
     max_concurrency: int = 1
+    profile_dir: Path | None = None
+    headless: bool = True
+    challenge_timeout_seconds: float = 30.0
     _last_request_at: float = field(default=0.0, init=False)
     _loop: asyncio.AbstractEventLoop | None = field(default=None, init=False)
     _loop_thread: threading.Thread | None = field(default=None, init=False)
@@ -103,21 +126,61 @@ class BrowserFetcher:
 
     async def _async_start(self) -> None:
         self._pw = await async_playwright().start()
-        self._browser = await self._launch_browser()
-        self._context = await self._browser.new_context(
-            user_agent=self.user_agent,
-            viewport={"width": 1920, "height": 1080},
-            locale="en-US",
-        )
+        context_options: dict[str, Any] = {
+            "viewport": {"width": 1920, "height": 1080},
+            "locale": "en-US",
+        }
+        if self.user_agent:
+            context_options["user_agent"] = self.user_agent
+
+        if self.profile_dir is not None:
+            self._context = await self._launch_persistent_context(context_options)
+        else:
+            self._browser = await self._launch_browser()
+            self._context = await self._browser.new_context(**context_options)
         self._context.set_default_timeout(int(self.timeout_seconds * 1000))
         self._semaphore = asyncio.Semaphore(self.max_concurrency)
         self._throttle_lock = asyncio.Lock()
+
+    async def _launch_persistent_context(
+        self,
+        context_options: dict[str, Any],
+    ) -> BrowserContext:
+        assert self._pw is not None
+        assert self.profile_dir is not None
+        self.profile_dir.mkdir(parents=True, exist_ok=True)
+        launch_options: dict[str, Any] = {
+            "headless": self.headless,
+            "args": ["--disable-blink-features=AutomationControlled"],
+            **context_options,
+        }
+        try:
+            return await self._pw.chromium.launch_persistent_context(
+                str(self.profile_dir),
+                **launch_options,
+            )
+        except PlaywrightError:
+            executable_path = _find_system_browser()
+            if executable_path is None:
+                raise
+            get_logger().warning(
+                "Playwright Chromium is unavailable. Falling back to system browser: %s",
+                executable_path,
+            )
+            return await self._pw.chromium.launch_persistent_context(
+                str(self.profile_dir),
+                executable_path=executable_path,
+                **launch_options,
+            )
 
     async def _launch_browser(self) -> Browser:
         assert self._pw is not None
         launch_args = ["--disable-blink-features=AutomationControlled"]
         try:
-            return await self._pw.chromium.launch(args=launch_args)
+            return await self._pw.chromium.launch(
+                headless=self.headless,
+                args=launch_args,
+            )
         except PlaywrightError:
             executable_path = _find_system_browser()
             if executable_path is None:
@@ -128,6 +191,7 @@ class BrowserFetcher:
             )
             return await self._pw.chromium.launch(
                 executable_path=executable_path,
+                headless=self.headless,
                 args=launch_args,
             )
 
@@ -229,6 +293,7 @@ class BrowserFetcher:
 
                         status = response.status
                         await page.wait_for_load_state("domcontentloaded", timeout=5000)
+                        body = await self._read_after_challenge(page, url)
                         if click_selectors:
                             before_count = await self._selector_count(page, wait_for_selector) if wait_for_selector else None
                             await self._click_selectors(page, click_selectors)
@@ -238,7 +303,7 @@ class BrowserFetcher:
                                     wait_for_selector,
                                     before_count,
                                 )
-                        body = await page.content()
+                            body = await self._read_after_challenge(page, url)
                         final_url = page.url
 
                         # Some sites return an error status but still render
@@ -253,6 +318,11 @@ class BrowserFetcher:
                             raise FetchError(f"HTTP {status} while fetching {url}")
 
                         break
+                    except BrowserChallengeError:
+                        # Waiting already gives JavaScript challenges time to
+                        # redirect. Reopening the same interactive challenge
+                        # only delays the actionable --headed error.
+                        raise
                     except FetchError:
                         raise
                     except Exception as error:
@@ -267,6 +337,40 @@ class BrowserFetcher:
                 )
             finally:
                 await page.close()
+
+    async def _read_after_challenge(self, page: Any, url: str) -> str:
+        deadline = time.monotonic() + max(0.0, self.challenge_timeout_seconds)
+        challenge_seen = False
+        while True:
+            try:
+                body = await page.content()
+            except Exception:
+                if not challenge_seen or time.monotonic() >= deadline:
+                    raise
+                await asyncio.sleep(min(0.5, max(0.0, deadline - time.monotonic())))
+                continue
+
+            if not _is_challenge_page(body):
+                if challenge_seen:
+                    with suppress(Exception):
+                        await page.wait_for_load_state("domcontentloaded", timeout=5000)
+                    get_logger().info("Browser challenge cleared: %s", url)
+                return body
+
+            if not challenge_seen:
+                challenge_seen = True
+                get_logger().warning(
+                    "Browser challenge detected; waiting up to %.0f seconds: %s",
+                    self.challenge_timeout_seconds,
+                    url,
+                )
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                mode_hint = (
+                    " This site may require headed browser mode; re-run the crawl with -h/--headed." if self.headless else ""
+                )
+                raise BrowserChallengeError(f"Browser challenge did not clear for {url}.{mode_hint}")
+            await asyncio.sleep(min(0.5, remaining))
 
     async def _click_selectors(self, page: Any, selectors: list[str]) -> None:
         for selector in selectors:
@@ -327,3 +431,19 @@ def _find_system_browser() -> str | None:
         if executable_path is not None:
             return executable_path
     return None
+
+
+def _is_challenge_page(html: str) -> bool:
+    lowered = html.lower()
+    if _CHALLENGE_TITLE_RE.search(html):
+        return True
+    if any(marker in lowered for marker in _CHALLENGE_MARKERS):
+        return True
+    return "cf-chl-" in lowered and any(
+        text in lowered
+        for text in (
+            "verify you are human",
+            "performing security verification",
+            "checking your browser",
+        )
+    )

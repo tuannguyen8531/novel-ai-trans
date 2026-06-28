@@ -6,6 +6,7 @@ import sys
 import time
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup
 
@@ -45,7 +46,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    crawl = subparsers.add_parser("crawl", help="Download a novel into text files.")
+    crawl = subparsers.add_parser(
+        "crawl",
+        help="Download a novel into text files.",
+        add_help=False,
+    )
     _add_crawl_arguments(crawl, target_help="Config path or novel name from configs/{novel}.json.")
 
     gen = subparsers.add_parser("generate", help="Use AI to generate a site config from a TOC URL.")
@@ -70,6 +75,7 @@ def build_short_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="crawl",
         description="Download chapters from public novel websites.",
+        add_help=False,
     )
     _add_crawl_arguments(parser, target_help="Config path or novel name from configs/{novel}.json.")
     return parser
@@ -103,6 +109,11 @@ def build_import_parser() -> argparse.ArgumentParser:
 
 
 def _add_crawl_arguments(parser: argparse.ArgumentParser, *, target_help: str) -> None:
+    parser.add_argument(
+        "--help",
+        action="help",
+        help="Show this help message and exit.",
+    )
     parser.add_argument("target", type=str, help=target_help)
     parser.add_argument(
         "--translated-output",
@@ -139,12 +150,19 @@ def _add_crawl_arguments(parser: argparse.ArgumentParser, *, target_help: str) -
         action="store_true",
         help="Re-download chapter files even if the shared chapter_N.txt already exists.",
     )
-    parser.add_argument(
+    browser_mode = parser.add_mutually_exclusive_group()
+    browser_mode.add_argument(
         "-b",
         "--browser",
         action="store_true",
         default=None,
-        help="Use headless browser for JS challenges. Default: USE_BROWSER env.",
+        help="Use an ephemeral headless browser. Default: USE_BROWSER env.",
+    )
+    browser_mode.add_argument(
+        "-h",
+        "--headed",
+        action="store_true",
+        help="Use a visible browser with a persistent per-domain profile.",
     )
     parser.add_argument(
         "-w",
@@ -294,7 +312,8 @@ def _crawl(args: argparse.Namespace) -> int:
         config_path = _resolve_config_path(args.target)
         site_config = SiteConfig.from_file(config_path)
 
-        use_browser = args.browser if args.browser is not None else config.use_browser
+        headed = getattr(args, "headed", False)
+        use_browser = True if headed else (args.browser if args.browser is not None else config.use_browser)
         if args.workers is None:
             args.workers = 1
         if args.workers < 1:
@@ -308,12 +327,18 @@ def _crawl(args: argparse.Namespace) -> int:
 
         if use_browser:
             with BrowserFetcher(
-                user_agent=site_config.user_agent,
+                # Preserve the old ephemeral/headless fingerprint for -b.
+                # Headed mode uses native Chrome identity with a reusable
+                # profile because challenge clearance can be device-bound.
+                user_agent=None if headed else site_config.user_agent,
                 timeout_seconds=site_config.timeout_seconds,
                 delay_seconds=site_config.request_delay_seconds,
                 retry_attempts=site_config.retry_attempts,
                 retry_backoff_seconds=site_config.retry_backoff_seconds,
                 max_concurrency=args.workers,
+                profile_dir=_browser_profile_dir(site_config.start_url) if headed else None,
+                headless=not headed,
+                challenge_timeout_seconds=120.0 if headed else 30.0,
             ) as fetcher:
                 return _crawl_with_fetcher(site_config, fetcher, args, max_chapters, share_root, started_at)
         else:
@@ -445,6 +470,14 @@ def _resolve_config_path(target: str) -> Path:
 
     checked = ", ".join(str(candidate) for candidate in candidates)
     raise ValueError(f"Config not found for '{target}'. Checked: {checked}")
+
+
+def _browser_profile_dir(start_url: str) -> Path:
+    hostname = urlparse(start_url).hostname
+    if not hostname:
+        raise ValueError(f"Could not determine browser profile domain from URL: {start_url}")
+    safe_hostname = "".join(character if character.isalnum() or character in ".-_" else "_" for character in hostname.lower())
+    return RUNTIME_OUTPUT_ROOT / "browser-profiles" / safe_hostname
 
 
 def _print_progress(progress: CrawlProgress) -> None:
