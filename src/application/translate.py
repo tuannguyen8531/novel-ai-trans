@@ -393,7 +393,7 @@ def run_translation(
     attempted: list[int] = []
     cancelled = False
 
-    for index, chapter_num in enumerate(untranslated, 1):
+    for _index, chapter_num in enumerate(untranslated, 1):
         if cancel_event is not None and cancel_event.is_set():
             cancelled = True
             break

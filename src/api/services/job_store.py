@@ -49,9 +49,7 @@ class JobStore:
         path = self._path(snapshot["id"])
         data = json.dumps(snapshot, ensure_ascii=False, indent=2) + "\n"
         with self._lock:
-            fd, tmp_name = tempfile.mkstemp(
-                prefix=f".{path.name}.", suffix=".tmp", dir=str(self._root)
-            )
+            fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(self._root))
             try:
                 with os.fdopen(fd, "w", encoding="utf-8") as handle:
                     handle.write(data)
@@ -140,16 +138,8 @@ def snapshot_to_job(snapshot: dict[str, Any]) -> Any:
         novel=snapshot.get("novel"),
         status=status,
         created_at=datetime.fromisoformat(snapshot["created_at"]),
-        started_at=(
-            datetime.fromisoformat(snapshot["started_at"])
-            if snapshot.get("started_at")
-            else None
-        ),
-        finished_at=(
-            datetime.fromisoformat(snapshot["finished_at"])
-            if snapshot.get("finished_at")
-            else None
-        ),
+        started_at=(datetime.fromisoformat(snapshot["started_at"]) if snapshot.get("started_at") else None),
+        finished_at=(datetime.fromisoformat(snapshot["finished_at"]) if snapshot.get("finished_at") else None),
         progress=dict(snapshot.get("progress") or {}),
         result=snapshot.get("result"),
         error=error,

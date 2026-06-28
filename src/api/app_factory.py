@@ -77,6 +77,7 @@ def create_app(
     removed = job_store.cleanup()
     if removed:
         import logging as _logging
+
         _logging.getLogger(__name__).info("Cleaned up %d expired job file(s)", removed)
 
     state = AppState(

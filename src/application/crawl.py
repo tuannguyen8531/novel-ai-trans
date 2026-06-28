@@ -543,9 +543,7 @@ def _browser_profile_dir(start_url: str) -> Path:
     hostname = urlparse(start_url).hostname
     if not hostname:
         raise ValueError(f"Could not determine browser profile domain from URL: {start_url}")
-    safe_hostname = "".join(
-        ch if ch.isalnum() or ch in ".-_" else "_" for ch in hostname.lower()
-    )
+    safe_hostname = "".join(ch if ch.isalnum() or ch in ".-_" else "_" for ch in hostname.lower())
     return RUNTIME_OUTPUT_ROOT / "browser-profiles" / safe_hostname
 
 

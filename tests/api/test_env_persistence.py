@@ -3,13 +3,9 @@
 from __future__ import annotations
 
 import re
-import tempfile
 from pathlib import Path
 
-import pytest
-
 from src.api.services.env_persistence import (
-    SECRET_FIELD_NAMES,
     config_to_env_dict,
     persist_config_to_env,
 )
@@ -81,12 +77,7 @@ def test_persist_updates_existing_keys_preserves_comments(tmp_path: Path):
     env_path = tmp_path / ".env"
     _write_env(
         env_path,
-        "# Top-level config\n"
-        "TRANSLATED_DIR=translated\n"
-        "TARGET_LANGUAGE=vi\n"
-        "\n"
-        "# Crawler section\n"
-        "MAX_CHAPTERS=0\n",
+        "# Top-level config\nTRANSLATED_DIR=translated\nTARGET_LANGUAGE=vi\n\n# Crawler section\nMAX_CHAPTERS=0\n",
     )
     config = Config(translated_dir="books", target_language="en", max_chapters=5)
     persist_config_to_env(config, env_path)
@@ -137,12 +128,10 @@ def test_persist_quotes_values_with_special_characters(tmp_path: Path):
     persist_config_to_env(config, env_path)
     content = _read(env_path)
     # The special characters must survive a roundtrip through the writer.
-    match = re.search(r'^TRANSLATED_DIR=(.+)$', content, re.MULTILINE)
+    match = re.search(r"^TRANSLATED_DIR=(.+)$", content, re.MULTILINE)
     assert match is not None
     assert match.group(1).startswith('"') and match.group(1).endswith('"')
     assert "quotes" in content
     # Round-trip parsing recovers the value (escape handling).
-    round_tripped = Config(
-        translated_dir=match.group(1)[1:-1].replace('\\"', '"').replace("\\\\", "\\")
-    )
+    round_tripped = Config(translated_dir=match.group(1)[1:-1].replace('\\"', '"').replace("\\\\", "\\"))
     assert round_tripped.translated_dir == config.translated_dir

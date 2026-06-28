@@ -8,11 +8,12 @@ so a crash mid-write can't corrupt the env file.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import re
 import tempfile
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 from src.config import Config
 
@@ -108,9 +109,7 @@ def _parse_existing_env(path: Path) -> tuple[list[tuple[str, str, str]], dict[st
             continue
         key, value = match.group(1), match.group(2)
         # Strip optional surrounding quotes.
-        if (value.startswith('"') and value.endswith('"')) or (
-            value.startswith("'") and value.endswith("'")
-        ):
+        if (value.startswith('"') and value.endswith('"')) or (value.startswith("'") and value.endswith("'")):
             value = value[1:-1]
         lines.append(("kv", key, value))
         parsed[key] = value
@@ -165,10 +164,8 @@ def persist_config_to_env(config: Config, path: Path) -> list[str]:
             handle.write(content)
         os.replace(tmp_name, path)
     except Exception:
-        try:
+        with contextlib.suppress(FileNotFoundError):
             os.unlink(tmp_name)
-        except FileNotFoundError:
-            pass
         raise
     return changed
 

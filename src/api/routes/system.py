@@ -22,7 +22,6 @@ from src.api.schemas import (
     SettingsResponse,
 )
 from src.api.services.env_persistence import (
-    SECRET_FIELD_NAMES,
     persist_config_to_env,
 )
 from src.api.services.providers import (

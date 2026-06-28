@@ -268,9 +268,7 @@ class JobManager:
                 # Active jobs from a previous run cannot be safely resumed.
                 # Persist them as failed so the user sees the interruption.
                 job.status = JobStatus.FAILED
-                job.error = JobError(
-                    code="interrupted", message="Server restarted while job was running."
-                )
+                job.error = JobError(code="interrupted", message="Server restarted while job was running.")
                 job.finished_at = job.finished_at or datetime.now(UTC)
                 with self._lock:
                     self._history.appendleft(job)
