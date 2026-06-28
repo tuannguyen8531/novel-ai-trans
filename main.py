@@ -28,6 +28,7 @@ COMMANDS = (
     "translate",
     "pack",
     "glossary",
+    "serve",
     "test",
 )
 
@@ -86,6 +87,11 @@ def main() -> int:
         from src.cli import test as test_module
 
         return test_module.test_main(sys.argv[2:])
+
+    if subcommand == "serve":
+        from src.api.__main__ import main as serve_main
+
+        return serve_main()
 
     print(f"Unknown command: {subcommand}", file=sys.stderr)
     return 2

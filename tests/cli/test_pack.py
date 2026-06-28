@@ -3,12 +3,8 @@ import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
-from src.cli.pack import (
+from src.services.packaging import (
     EPUBBuilder,
-    _get_default_package_dir,
-    _get_novel_root_dir,
-    _get_output_dir,
-    _package_file_stem,
     load_metadata,
     resolve_book_author,
     resolve_book_title,
@@ -17,48 +13,60 @@ from src.cli.pack import (
 
 
 def test_pack_output_dir_defaults_to_legacy_vietnamese_path():
-    with patch("src.cli.pack.config") as mock_config:
+    with patch("src.services.packaging.config") as mock_config:
         mock_config.translated_dir = ""
         mock_config.target_language = "vi"
+
+        from src.services.packaging import _get_output_dir
 
         assert _get_output_dir("my-novel") == Path("runtime/output") / "my-novel"
 
 
 def test_pack_output_dir_uses_target_specific_english_path():
-    with patch("src.cli.pack.config") as mock_config:
+    with patch("src.services.packaging.config") as mock_config:
         mock_config.translated_dir = ""
         mock_config.target_language = "vi"
+
+        from src.services.packaging import _get_output_dir
 
         assert _get_output_dir("my-novel", "en") == Path("runtime/output") / "en" / "my-novel"
 
 
 def test_pack_translated_dir_uses_target_specific_output_path():
-    with patch("src.cli.pack.config") as mock_config:
+    with patch("src.services.packaging.config") as mock_config:
         mock_config.translated_dir = "/translated"
         mock_config.target_language = "vi"
+
+        from src.services.packaging import _get_output_dir
 
         assert _get_output_dir("my-novel", "en") == Path("/translated") / "my-novel" / "output" / "en"
 
 
 def test_pack_default_package_dir_stays_outside_target_output_tree():
-    with patch("src.cli.pack.config") as mock_config:
+    with patch("src.services.packaging.config") as mock_config:
         mock_config.translated_dir = ""
         mock_config.target_language = "vi"
+
+        from src.services.packaging import _get_default_package_dir
 
         assert _get_default_package_dir("my-novel", "en") == Path("runtime/output")
 
 
 def test_pack_default_translated_package_dir_stays_outside_output_tree():
-    with patch("src.cli.pack.config") as mock_config:
+    with patch("src.services.packaging.config") as mock_config:
         mock_config.translated_dir = "/translated"
         mock_config.target_language = "vi"
+
+        from src.services.packaging import _get_default_package_dir
 
         assert _get_default_package_dir("my-novel", "en") == Path("/translated") / "my-novel"
 
 
 def test_pack_file_stem_includes_target_language():
-    with patch("src.cli.pack.config") as mock_config:
+    with patch("src.services.packaging.config") as mock_config:
         mock_config.target_language = "vi"
+
+        from src.services.packaging import _package_file_stem
 
         assert _package_file_stem("my-novel") == "my-novel.vi"
         assert _package_file_stem("my-novel", "en") == "my-novel.en"
@@ -68,14 +76,20 @@ def test_pack_file_stem_includes_target_language():
 
 
 def test_novel_root_dir_with_translated_dir():
-    with patch("src.cli.pack.config") as mock_config:
+    with patch("src.services.packaging.config") as mock_config:
         mock_config.translated_dir = "/translated"
+
+        from src.services.packaging import _get_novel_root_dir
+
         assert _get_novel_root_dir("my-novel") == Path("/translated") / "my-novel"
 
 
 def test_novel_root_dir_without_translated_dir():
-    with patch("src.cli.pack.config") as mock_config:
+    with patch("src.services.packaging.config") as mock_config:
         mock_config.translated_dir = ""
+
+        from src.services.packaging import _get_novel_root_dir
+
         assert _get_novel_root_dir("my-novel") == Path("runtime/input") / "my-novel"
 
 
@@ -88,7 +102,7 @@ def test_load_metadata_reads_json(tmp_path):
     novel_dir.mkdir()
     (novel_dir / "metadata.json").write_text(json.dumps(metadata), encoding="utf-8")
 
-    with patch("src.cli.pack.config") as mock_config:
+    with patch("src.services.packaging.config") as mock_config:
         mock_config.translated_dir = str(tmp_path)
         result = load_metadata("my-novel")
 
@@ -96,7 +110,7 @@ def test_load_metadata_reads_json(tmp_path):
 
 
 def test_load_metadata_returns_empty_dict_when_missing():
-    with patch("src.cli.pack.config") as mock_config:
+    with patch("src.services.packaging.config") as mock_config:
         mock_config.translated_dir = "/nonexistent"
         assert load_metadata("no-such-novel") == {}
 
@@ -106,7 +120,7 @@ def test_load_metadata_returns_empty_dict_on_invalid_json(tmp_path):
     novel_dir.mkdir()
     (novel_dir / "metadata.json").write_text("not json", encoding="utf-8")
 
-    with patch("src.cli.pack.config") as mock_config:
+    with patch("src.services.packaging.config") as mock_config:
         mock_config.translated_dir = str(tmp_path)
         assert load_metadata("my-novel") == {}
 

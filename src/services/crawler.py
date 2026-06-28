@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 import time
 from collections.abc import Callable
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
@@ -251,6 +252,7 @@ class NovelCrawler:
         share_root: Path | None = None,
         progress_callback: ProgressCallback | None = None,
         workers: int = 1,
+        cancel_event: threading.Event | None = None,
     ) -> CrawlResult:
         metadata, chapter_links = self.discover_chapters()
         if not chapter_links:
@@ -351,9 +353,14 @@ class NovelCrawler:
                 f"Stopped after {CONSECUTIVE_FAILURE_LIMIT} consecutive chapter failures. Progress was saved to manifest.json."
             )
 
+        def _is_cancelled() -> bool:
+            return cancel_event is not None and cancel_event.is_set()
+
         def _fill_pending(executor: ThreadPoolExecutor) -> None:
             nonlocal next_chapter
             while next_chapter < len(chapter_links):
+                if _is_cancelled():
+                    return
                 if len(pending) >= effective_workers:
                     return
                 if max_chapters is not None and fetched_count + len(pending) >= max_chapters:
@@ -393,6 +400,7 @@ class NovelCrawler:
                 pending[future] = (index, chapter_link)
 
         executor = ThreadPoolExecutor(max_workers=effective_workers)
+        cancelled = False
         try:
             _fill_pending(executor)
             while pending:
@@ -441,6 +449,9 @@ class NovelCrawler:
                         pending.pop(future, None)
                         if _record_chapter_outcome(index, success=True):
                             _raise_if_too_many_consecutive_failures()
+                if _is_cancelled():
+                    cancelled = True
+                    break
                 _fill_pending(executor)
         except KeyboardInterrupt:
             for future in pending:
@@ -495,15 +506,50 @@ class NovelCrawler:
         finally:
             executor.shutdown(wait=True)
 
+        if cancelled:
+            # Drain any futures that completed after the cancel check but
+            # before the executor shut down.
+            for future, (index, chapter_link) in list(pending.items()):
+                if not future.done() or future.cancelled():
+                    continue
+                try:
+                    result = future.result()
+                except Exception as error:
+                    errors.append(
+                        {
+                            "index": index,
+                            "url": chapter_link.url,
+                            "error": str(error),
+                        }
+                    )
+                else:
+                    results.append(result)
+                    fetched_count += 1
+            recorded_indexes = {result.index for result in results}
+            for index, (chapter_link, chapter_path) in attempted_chapters.items():
+                if index in recorded_indexes:
+                    continue
+                if self._is_existing_chapter(chapter_path):
+                    results.append(
+                        ChapterResult(
+                            index=index,
+                            title=chapter_link.title,
+                            source_url=chapter_link.url,
+                            path=str(chapter_path),
+                        )
+                    )
+                    fetched_count += 1
+
         # Sort results by index so output is deterministic regardless of
         # parallel execution order.
         results.sort(key=lambda r: r.index)
         errors.sort(key=lambda error: error["index"])
 
+        final_status = "cancelled" if cancelled else "completed"
         self._write_manifest(
             novel_dir / "manifest.json",
             generated_at=generated_at,
-            status="completed",
+            status=final_status,
             metadata=metadata,
             runtime_output_dir=novel_dir,
             chapter_output_dir=chapter_output_dir,
@@ -520,6 +566,7 @@ class NovelCrawler:
             output_dir=str(novel_dir),
             chapter_output_dir=str(chapter_output_dir),
             errors=list(errors),
+            cancelled=cancelled,
         )
 
     def _extract_metadata(self, soup: BeautifulSoup, source_url: str) -> NovelMetadata:

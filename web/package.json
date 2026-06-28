@@ -1,0 +1,23 @@
+{
+  "name": "novel-ai-trans-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "pinia": "^2.2.0",
+    "vue": "^3.5.0",
+    "vue-router": "^4.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.0",
+    "@vitejs/plugin-vue": "^6.0.0",
+    "typescript": "^5.5.0",
+    "vite": "^7.0.0",
+    "vue-tsc": "^2.1.0"
+  }
+}

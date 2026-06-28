@@ -1,30 +1,52 @@
 """Batch translate + glossary CLI commands.
 
-- `translate_main` runs the batch translation pipeline for a single novel.
-- `glossary_main` is the per-novel glossary manager (add, remove, characters,
-  relationships, validate, audit, …).
+- :func:`translate_main` runs the batch translation pipeline for a single
+  novel. It is a thin argparse adapter over :func:`src.application.translate.run_translation`.
+- :func:`glossary_main` is the per-novel glossary manager.
+
+The translation logic itself lives in :mod:`src.application.translate`. The
+helpers :func:`scan_chapters`, :func:`find_untranslated`, :func:`load_progress`,
+:func:`save_progress`, and :func:`translate_file` are re-exported here for
+backward compatibility with existing tests and external callers.
 """
 
 from __future__ import annotations
 
 import argparse
-import json
 import re
 import signal
 import sys
+import threading
 import time
 from pathlib import Path
 
-from src.config import config
+from src.application import config_context
+from src.application import translate as _app_translate
+from src.application.config_context import get_config  # legacy reference for patches
+from src.application.errors import ResourceNotFoundError as _ApplicationNotFoundError
+from src.application.paths import (
+    INPUT_DIR as _SHARED_INPUT_DIR,
+)
+from src.application.paths import (
+    OUTPUT_DIR as _SHARED_OUTPUT_DIR,
+)
+from src.application.paths import (
+    PROGRESS_DIR as _SHARED_PROGRESS_DIR,
+)
+from src.application.paths import (
+    REPORT_DIR as _SHARED_REPORT_DIR,
+)
+from src.application.progress import ProgressEvent
+from src.application.translate import (
+    TranslationRequest,
+    notify_translation_result,
+    run_translation,
+)
 from src.domain.target_language import (
     SUPPORTED_TARGET_LANGUAGES,
-    normalize_target_language,
     target_language_name,
 )
-from src.graph.builder import build_graph
-from src.models.state import initial_state
-from src.services.logger import log_error
-from src.services.notifier import format_run_footer, get_notifier
+from src.services.notifier import format_run_footer, get_notifier  # noqa: F401 - exposed for tests
 from src.utils.display import (
     DIM,
     GREEN,
@@ -34,78 +56,70 @@ from src.utils.display import (
     check_provider,
 )
 from src.utils.progress import ProgressTracker
-from src.utils.text import normalize_paragraph_spacing
 
-# ---------------------------------------------------------------------------
-# Paths & module state
-# ---------------------------------------------------------------------------
+# Re-exported helpers for tests and external callers.
+__all__ = [
+    "find_untranslated",
+    "glossary_main",
+    "load_progress",
+    "save_progress",
+    "scan_chapters",
+    "translate_file",
+    "translate_main",
+    "audit_glossary_outputs",
+    "INPUT_DIR",
+    "OUTPUT_DIR",
+    "PROGRESS_DIR",
+    "REPORT_DIR",
+]
 
-INPUT_DIR = Path("runtime/input")
-OUTPUT_DIR = Path("runtime/output")
-REPORT_DIR = Path("runtime/reports")
-PROGRESS_DIR = Path("runtime/progress")
+INPUT_DIR = _SHARED_INPUT_DIR
+OUTPUT_DIR = _SHARED_OUTPUT_DIR
+REPORT_DIR = _SHARED_REPORT_DIR
+PROGRESS_DIR = _SHARED_PROGRESS_DIR
 
 _shutdown_requested = False
+_cancel_event = threading.Event()
 _graph = None
 
 
 # ---------------------------------------------------------------------------
-# Shared helpers
+# Backward-compatible thin wrappers around the application helpers
 # ---------------------------------------------------------------------------
 
 
-def _signal_handler(signum, frame) -> None:
+def _signal_handler(signum, frame) -> None:  # noqa: ARG001
     global _shutdown_requested
     _shutdown_requested = True
+    _cancel_event.set()
     print(f"\n{YELLOW}⚠ Shutting down gracefully...{DIM}")
 
 
-# ---------------------------------------------------------------------------
-# Translator helpers
-# ---------------------------------------------------------------------------
-
-
 def _get_input_dir(novel_name: str) -> Path:
+    config = config_context.get_config()
     if config.translated_dir:
         return Path(config.translated_dir) / novel_name / "input"
     return INPUT_DIR / novel_name
 
 
-def _targeted_path(base_dir: Path, novel_name: str, target_language: str | None = None) -> Path:
-    target = normalize_target_language(target_language or config.target_language)
-    if target == "vi":
-        return base_dir / novel_name
-    return base_dir / target / novel_name
-
-
 def _get_output_dir(novel_name: str, target_language: str | None = None) -> Path:
-    target = normalize_target_language(target_language or config.target_language)
+    config = config_context.get_config()
+    target = _app_translate._normalize_target(target_language or config.target_language)
     if config.translated_dir:
         base_dir = Path(config.translated_dir) / novel_name / "output"
         return base_dir if target == "vi" else base_dir / target
-    return _targeted_path(OUTPUT_DIR, novel_name, target)
+    if target == "vi":
+        return OUTPUT_DIR / novel_name
+    return OUTPUT_DIR / target / novel_name
 
 
 def scan_chapters(novel_name: str) -> dict[int, Path]:
-    """Scan input directory for chapter files.
-
-    Returns dict of chapter_number -> file_path, sorted by chapter number.
-    """
-    novel_dir = _get_input_dir(novel_name)
-    if not novel_dir.exists():
-        print(f"{RED}✗ Input directory not found: {novel_dir}{RESET}")
+    """Backward-compatible wrapper around the application helper."""
+    try:
+        return _app_translate.scan_chapters(_get_input_dir(novel_name))
+    except _ApplicationNotFoundError as error:
+        print(f"{RED}✗ {error.message}{RESET}")
         sys.exit(1)
-
-    chapters = {}
-    pattern = re.compile(r"^chapter_(\d+)\.txt$")
-
-    for f in novel_dir.iterdir():
-        if f.is_file():
-            match = pattern.match(f.name)
-            if match:
-                chapters[int(match.group(1))] = f
-
-    return dict(sorted(chapters.items()))
 
 
 def find_untranslated(
@@ -114,52 +128,35 @@ def find_untranslated(
     force: bool = False,
     target_language: str | None = None,
 ) -> list[int]:
-    """Find chapters that exist in input but haven't been translated yet."""
-    if force:
-        return sorted(chapters.keys())
-
-    output_dir = _get_output_dir(novel_name, target_language)
-    translated = set()
-    if output_dir.exists():
-        for f in output_dir.iterdir():
-            match = re.match(r"^chapter_(\d+)\.txt$", f.name)
-            if match:
-                translated.add(int(match.group(1)))
-    return [ch for ch in chapters if ch not in translated]
+    """Backward-compatible wrapper around the application helper."""
+    config = config_context.get_config()
+    output_dir = _get_output_dir(novel_name, target_language or config.target_language)
+    return _app_translate.find_untranslated(output_dir, chapters, force=force)
 
 
 def _progress_path(novel_name: str, target_language: str | None = None) -> Path:
-    target = normalize_target_language(target_language or config.target_language)
+    config = get_config()
+    target = _app_translate._normalize_target(target_language or config.target_language)
     if target == "vi":
         return PROGRESS_DIR / f"{novel_name}.json"
     return PROGRESS_DIR / target / f"{novel_name}.json"
 
 
 def load_progress(novel_name: str, target_language: str | None = None) -> dict:
-    """Load chapter-level progress state."""
-    path = _progress_path(novel_name, target_language)
-    if not path.exists():
-        return {"completed": [], "failed": []}
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return {"completed": [], "failed": []}
+    return _app_translate.load_progress(_progress_path(novel_name, target_language))
 
 
 def save_progress(novel_name: str, progress: dict, target_language: str | None = None) -> None:
-    """Save chapter-level progress state."""
-    PROGRESS_DIR.mkdir(parents=True, exist_ok=True)
-    normalized = {
-        "completed": sorted(set(progress.get("completed", []))),
-        "failed": sorted(set(progress.get("failed", []))),
-    }
-    progress_path = _progress_path(novel_name, target_language)
-    progress_path.parent.mkdir(parents=True, exist_ok=True)
-    progress_path.write_text(json.dumps(normalized, ensure_ascii=False, indent=2), encoding="utf-8")
+    _app_translate.save_progress(_progress_path(novel_name, target_language), progress)
 
 
 def _report_path(novel_name: str, chapter_number: int, target_language: str | None = None) -> Path:
-    return _targeted_path(REPORT_DIR, novel_name, target_language) / f"chapter_{chapter_number:03d}.json"
+    config = get_config()
+    target = _app_translate._normalize_target(target_language or config.target_language)
+    base = REPORT_DIR
+    if target == "vi":
+        return base / novel_name / f"chapter_{chapter_number:03d}.json"
+    return base / target / novel_name / f"chapter_{chapter_number:03d}.json"
 
 
 def save_quality_report(
@@ -168,10 +165,7 @@ def save_quality_report(
     report: dict,
     target_language: str | None = None,
 ) -> None:
-    """Persist a chapter quality report."""
-    report_path = _report_path(novel_name, chapter_number, target_language)
-    report_path.parent.mkdir(parents=True, exist_ok=True)
-    report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    _app_translate.save_quality_report(_report_path(novel_name, chapter_number, target_language), report)
 
 
 def audit_glossary_outputs(
@@ -215,49 +209,24 @@ def translate_file(
     target_language: str = "vi",
     graph=None,
 ) -> tuple[bool, int, float, int]:
-    """Run the translation pipeline on a file. Returns (success, char_count, elapsed, new_terms_count)."""
-    source_text = input_path.read_text(encoding="utf-8")
-    if not source_text.strip():
-        return False, 0, 0, 0
-
-    if graph is None:
-        graph = build_graph()
-
-    start = time.time()
-
-    result = graph.invoke(
-        initial_state(
-            source_text=source_text,
-            source_language=language,
-            target_language=target_language,
-            novel_name=novel_name,
-            chapter_number=chapter_number,
-        )
-    )
-
-    elapsed = time.time() - start
-
+    """Backward-compatible wrapper that delegates to the application workflow."""
+    get_config()
     output_dir = _get_output_dir(novel_name, target_language)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    output_file = output_dir / f"chapter_{chapter_number:03d}.txt"
+    report_path = _report_path(novel_name, chapter_number, target_language)
+    if graph is None:
+        from src.graph.builder import build_graph
 
-    final_text = result.get("final_translation", "")
-    normalized_text = normalize_paragraph_spacing(final_text)
-    new_terms_count = len(result.get("new_terms", {}))
-    output_file.write_text(normalized_text, encoding="utf-8")
-
-    quality_report = {
-        "chapter": chapter_number,
-        "target_language": target_language,
-        "output_chars": len(normalized_text),
-        "elapsed_seconds": round(elapsed, 3),
-        "new_terms_count": new_terms_count,
-        "new_characters_count": len(result.get("new_characters", {}).get("entities", {})),
-        "chunks": result.get("quality_reports", []),
-    }
-    save_quality_report(novel_name, chapter_number, quality_report, target_language)
-
-    return True, len(normalized_text), elapsed, new_terms_count
+        graph = build_graph()
+    return _app_translate.translate_file(
+        input_path,
+        novel_name=novel_name,
+        chapter_number=chapter_number,
+        source_language=language,
+        target_language=target_language,
+        graph=graph,
+        output_dir=output_dir,
+        report_path=report_path,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -354,6 +323,8 @@ def glossary_main(argv: list[str] | None = None) -> None:
         return
 
     if args.command == "export":
+        import json
+
         print(json.dumps(load_glossary_data(args.novel), ensure_ascii=False, indent=2))
         return
 
@@ -438,9 +409,114 @@ def glossary_main(argv: list[str] | None = None) -> None:
 # ---------------------------------------------------------------------------
 
 
-def translate_main() -> None:
-    global _graph
+def _notify_translation(notifier, novel_name: str, outcome: str, reason: str, stats: dict, started_at: float = 0.0) -> None:
+    """Send a Telegram notification summarising the translation run outcome.
 
+    Backward-compatible thin wrapper around :func:`notify_translation_result`
+    from :mod:`src.application.translate`.
+    """
+    from dataclasses import dataclass
+
+    @dataclass
+    class _StubResult:
+        novel: str
+        total: int
+        success: int
+        failed: int
+        skipped: bool
+        dry_run: bool
+        cancelled: bool
+
+        @property
+        def started_at(self) -> float:
+            return started_at
+
+    if outcome == "skipped":
+        return
+    if outcome == "success":
+        cancelled = False
+    elif outcome == "interrupted":
+        cancelled = True
+    else:
+        cancelled = False
+    skipped = outcome == "skipped"
+    _StubResult(
+        novel=novel_name,
+        total=stats.get("total", 0),
+        success=stats.get("success", 0),
+        failed=stats.get("failed", 0),
+        skipped=skipped,
+        dry_run=False,
+        cancelled=cancelled,
+    )
+    # Build message inline to keep exact prior wording.
+    esc = notifier.escape
+    title = esc(novel_name) if novel_name else "novel"
+    if cancelled:
+        message = (
+            "Status: Success\n"
+            "Task: Translation\n"
+            f"Novel: {title}\n"
+            "Detail: Translation interrupted.\n"
+            f"Stats: Translated: {stats['success']}/{stats['total']}"
+        )
+    elif stats["failed"] > 0:
+        message = (
+            "Status: Failed\n"
+            "Task: Translation\n"
+            f"Novel: {title}\n"
+            "Detail: Translation finished with errors.\n"
+            f"Stats: Translated: {stats['success']}/{stats['total']} · Failed: {stats['failed']}"
+        )
+    else:
+        message = (
+            "Status: Success\n"
+            "Task: Translation\n"
+            f"Novel: {title}\n"
+            "Detail: Translation finished.\n"
+            f"Stats: Translated: {stats['success']}/{stats['total']}"
+        )
+    if outcome == "failed":
+        detail = esc(reason) if reason else "Translation failed."
+        message = f"Status: Failed\nTask: Translation\nNovel: {title}\nDetail: {detail}"
+    message += "\n" + format_run_footer(started_at)
+    notifier.send(message)
+
+
+def _print_progress_callback(event: ProgressEvent) -> None:
+    """Mirror :class:`ProgressEvent` updates onto the CLI's ProgressTracker."""
+    progress: ProgressTracker | None = getattr(_print_progress_callback, "_tracker", None)
+    if progress is None:
+        return
+    if event.kind == "chapter_started":
+        index = event.current
+        chapter = event.chapter or 0
+        size = event.extra.get("file_size", 0)
+        progress.start_chapter(index, chapter, size)
+    elif event.kind == "chapter_completed":
+        ok = event.extra.get("ok", False)
+        elapsed = event.extra.get("elapsed", 0.0)
+        chars = event.extra.get("chars_out", 0)
+        new_terms = event.extra.get("new_terms", 0)
+        progress.chapter_done(ok)
+        if ok:
+            terms_msg = f" [+ {new_terms} terms]" if new_terms > 0 else ""
+            chapter = event.chapter or 0
+            print(f"  {GREEN}✓ Ch.{chapter}{RESET} {DIM}→ {chars:,} chars · {elapsed:.1f}s{terms_msg}{RESET}")
+    elif event.kind == "chapter_failed":
+        progress.chapter_done(False)
+        chapter = event.chapter or 0
+        error = event.extra.get("error")
+        if error:
+            print(f"  {RED}✗ Ch.{chapter}: {error}{RESET}")
+    elif event.kind == "completed":
+        progress.print_summary()
+
+
+def translate_main() -> None:
+    global _shutdown_requested
+    _shutdown_requested = False
+    _cancel_event.clear()
     if len(sys.argv) > 1 and sys.argv[1] == "glossary":
         glossary_main(sys.argv[2:])
         return
@@ -471,7 +547,7 @@ Examples:
         "-t",
         "--target",
         choices=sorted(SUPPORTED_TARGET_LANGUAGES),
-        default=config.target_language,
+        default=get_config().target_language,
         help="Target language (default: vi)",
     )
     parser.add_argument(
@@ -548,185 +624,129 @@ Examples:
     )
 
     args = parser.parse_args()
+    config = get_config()
 
+    if args.provider:
+        config.llm_provider = args.provider
+    config.target_language = args.target
+    if args.review:
+        config.enable_review = True
+    if args.summary:
+        config.enable_summary = True
+    if args.verbose:
+        from src.services.logger import set_verbose
+
+        set_verbose(True)
+
+    started_at = time.time()
     novel_name = args.novel
     notifier = get_notifier()
-    started_at = time.time()
-    outcome = "skipped"
-    failure_reason = ""
-    stats = {"total": 0, "success": 0, "failed": 0}
 
     try:
-        if args.provider:
-            config.llm_provider = args.provider
-        config.target_language = args.target
-        if args.review:
-            config.enable_review = True
-        if args.summary:
-            config.enable_summary = True
-
-        if args.verbose:
-            from src.services.logger import set_verbose
-
-            set_verbose(True)
-
         chapters = scan_chapters(novel_name)
-        if not chapters:
-            input_dir = _get_input_dir(novel_name)
-            print(f"{RED}✗ No chapter files found in {input_dir}/{novel_name}/{RESET}")
-            print(f"  Expected format: {input_dir}/{novel_name}/chapter_1.txt{RESET}")
-            outcome = "failed"
-            failure_reason = "no input chapters"
-            sys.exit(1)
+    except SystemExit:
+        _notify_translation(
+            notifier,
+            novel_name,
+            "failed",
+            "No input chapters found.",
+            {"total": 0, "success": 0, "failed": 0},
+            started_at,
+        )
+        raise
+    if not chapters:
+        input_dir = _get_input_dir(novel_name)
+        print(f"{RED}✗ No chapter files found in {input_dir}{RESET}")
+        print(f"  Expected format: {input_dir}/chapter_1.txt{RESET}")
+        _notify_translation(
+            notifier,
+            novel_name,
+            "failed",
+            "No input chapters found.",
+            {"total": 0, "success": 0, "failed": 0},
+            started_at,
+        )
+        sys.exit(1)
 
-        untranslated = find_untranslated(novel_name, chapters, force=args.force, target_language=args.target)
+    total = len(chapters)
+    print(f"{DIM}📕 {novel_name}: {total} chapters found{RESET}")
 
-        if args.start_chapter > 0:
-            untranslated = [ch for ch in untranslated if ch >= args.start_chapter]
-        if args.end_chapter > 0:
-            untranslated = [ch for ch in untranslated if ch <= args.end_chapter]
+    language = args.lang
+    if not language:
+        from src.services.glossary import load_source_language
 
-        progress_state = load_progress(novel_name, args.target)
-        if args.failed_only:
-            failed = set(progress_state.get("failed", []))
-            untranslated = [ch for ch in untranslated if ch in failed]
-        elif args.resume:
-            completed = set(progress_state.get("completed", []))
-            untranslated = [ch for ch in untranslated if ch not in completed]
-
-        if args.limit > 0:
-            untranslated = untranslated[: args.limit]
-
-        if not untranslated:
-            print(f"{GREEN}✓ All {len(chapters)} chapters already translated.{RESET}")
-            outcome = "skipped"
-            return
-
-        if args.dry_run:
-            print(f"{DIM}📕 {novel_name}: {len(chapters)} chapters total, {len(untranslated)} would be translated{RESET}")
-            print(f"{DIM}   Chapters: {', '.join(str(c) for c in untranslated)}{RESET}")
-            outcome = "skipped"
-            return
-
-        if not check_provider(config):
-            outcome = "failed"
-            failure_reason = "LLM provider check failed"
-            sys.exit(1)
-
-        total = len(untranslated)
-        stats["total"] = total
-        print(f"{DIM}📕 {novel_name}: {len(chapters)} chapters found, {total} to translate{RESET}")
-        print(f"{DIM}   Chapters: {untranslated[0]}-{untranslated[-1]}{RESET}")
-        print()
-
-        language = args.lang
-        if not language:
-            from src.services.glossary import load_source_language
-
-            language = load_source_language(novel_name)
-            if language:
-                print(f"{DIM}🌐 Language: {language} (from glossary){RESET}")
-            else:
-                print(f"{DIM}🌐 Language: auto-detect{RESET}")
+        language = load_source_language(novel_name)
+        if language:
+            print(f"{DIM}🌐 Language: {language} (from glossary){RESET}")
         else:
-            print(f"{DIM}🌐 Language: {language} (specified){RESET}")
-        print(f"{DIM}🎯 Target: {target_language_name(args.target)} ({args.target}){RESET}")
-        print()
+            print(f"{DIM}🌐 Language: auto-detect{RESET}")
+    else:
+        print(f"{DIM}🌐 Language: {language} (specified){RESET}")
+    print(f"{DIM}🎯 Target: {target_language_name(args.target)} ({args.target}){RESET}")
+    print()
 
-        signal.signal(signal.SIGINT, _signal_handler)
+    signal.signal(signal.SIGINT, _signal_handler)
 
-        _graph = build_graph()
-        progress = ProgressTracker(total, novel_name)
-        outcome = "success"
+    # Pre-compute total for the ProgressTracker; the application workflow will
+    # update it via the callback we attach.
+    request = TranslationRequest(
+        novel=novel_name,
+        source_language=language,
+        target_language=args.target,
+        provider=args.provider,
+        enable_review=args.review,
+        enable_summary=args.summary,
+        start_chapter=args.start_chapter,
+        end_chapter=args.end_chapter,
+        force=args.force,
+        resume=args.resume,
+        failed_only=args.failed_only,
+        limit=args.limit,
+        dry_run=args.dry_run,
+    )
 
-        for index, chapter_num in enumerate(untranslated, 1):
-            if _shutdown_requested:
-                save_progress(novel_name, progress_state, args.target)
-                print(f"\n{YELLOW}⚠ Interrupted at chapter {chapter_num}. Progress saved.{RESET}")
-                outcome = "interrupted"
-                break
+    if not args.dry_run and not check_provider(config):
+        _notify_translation(
+            notifier,
+            novel_name,
+            "failed",
+            "LLM provider check failed.",
+            {"total": total, "success": 0, "failed": 0},
+            started_at,
+        )
+        sys.exit(1)
 
-            chapter_path = chapters[chapter_num]
-            file_size = len(chapter_path.read_text(encoding="utf-8"))
+    # Track progress locally so the terminal output remains consistent.
+    progress = ProgressTracker(total, novel_name)
+    callback = _print_progress_callback
+    callback._tracker = progress  # type: ignore[attr-defined]
 
-            progress.start_chapter(index, chapter_num, file_size)
-
-            try:
-                success, out_chars, elapsed, new_terms_count = translate_file(
-                    chapter_path, novel_name, chapter_num, language, args.target, graph=_graph
-                )
-                progress.chapter_done(success)
-                if success:
-                    stats["success"] += 1
-                    progress_state.setdefault("completed", []).append(chapter_num)
-                    progress_state["failed"] = [ch for ch in progress_state.get("failed", []) if ch != chapter_num]
-                    save_progress(novel_name, progress_state, args.target)
-                    terms_msg = f" [+ {new_terms_count} terms]" if new_terms_count > 0 else ""
-                    print(f"  {GREEN}✓ Ch.{chapter_num}{RESET} {DIM}→ {out_chars:,} chars · {elapsed:.1f}s{terms_msg}{RESET}")
-                else:
-                    stats["failed"] += 1
-                    progress_state.setdefault("failed", []).append(chapter_num)
-                    save_progress(novel_name, progress_state, args.target)
-            except Exception as e:
-                progress.chapter_done(False)
-                stats["failed"] += 1
-                progress_state.setdefault("failed", []).append(chapter_num)
-                save_progress(novel_name, progress_state, args.target)
-                log_error(f"Translation failed for chapter {chapter_num}", e, chapter=chapter_num, novel=novel_name)
-                print(f"  {RED}✗ Ch.{chapter_num}: {e}{RESET}")
-
-        progress.print_summary()
+    try:
+        result = run_translation(request, progress_callback=callback, cancel_event=_cancel_event)
     except KeyboardInterrupt:
-        if outcome not in ("skipped", "failed"):
-            outcome = "interrupted"
+        if _shutdown_requested:
+            print(f"\n{YELLOW}⚠ Interrupted. Progress saved.{RESET}")
         raise
     except SystemExit:
-        # outcome was set by the explicit "sys.exit" branches above
         raise
-    except Exception as e:
-        if outcome not in ("skipped", "failed"):
-            outcome = "failed"
-            failure_reason = str(e) or type(e).__name__
-        raise
-    finally:
-        _notify_translation(notifier, novel_name, outcome, failure_reason, stats, started_at)
-
-
-def _notify_translation(notifier, novel_name: str, outcome: str, reason: str, stats: dict, started_at: float = 0.0) -> None:
-    """Send a Telegram notification summarising the translation run outcome."""
-    if outcome == "skipped":
-        return
-    esc = notifier.escape
-    title = esc(novel_name) if novel_name else "novel"
-    if outcome == "success":
-        if stats["failed"] > 0:
-            message = (
-                "Status: Failed\n"
-                "Task: Translation\n"
-                f"Novel: {title}\n"
-                "Detail: Translation finished with errors.\n"
-                f"Stats: Translated: {stats['success']}/{stats['total']} · Failed: {stats['failed']}"
-            )
-        else:
-            message = (
-                "Status: Success\n"
-                "Task: Translation\n"
-                f"Novel: {title}\n"
-                "Detail: Translation finished.\n"
-                f"Stats: Translated: {stats['success']}/{stats['total']}"
-            )
-    elif outcome == "interrupted":
-        message = (
-            "Status: Success\n"
-            "Task: Translation\n"
-            f"Novel: {title}\n"
-            "Detail: Translation interrupted.\n"
-            f"Stats: Translated: {stats['success']}/{stats['total']}"
+    except Exception as error:
+        _notify_translation(
+            notifier,
+            novel_name,
+            "failed",
+            str(error) or type(error).__name__,
+            {"total": total, "success": 0, "failed": 0},
+            started_at,
         )
-    elif outcome == "failed":
-        detail = esc(reason) if reason else "Translation failed."
-        message = f"Status: Failed\nTask: Translation\nNovel: {title}\nDetail: {detail}"
-    else:
-        return
-    message += "\n" + format_run_footer(started_at)
-    notifier.send(message)
+        print(f"{RED}✗ {error}{RESET}")
+        sys.exit(1)
+
+    if result.dry_run:
+        print(f"{DIM}📕 {novel_name}: {len(chapters)} chapters total, {result.total} would be translated{RESET}")
+        print(f"{DIM}   Chapters: {', '.join(str(c) for c in result.chapters_attempted)}{RESET}")
+    elif result.skipped:
+        print(f"{GREEN}✓ All {len(chapters)} chapters already translated.{RESET}")
+    elif result.cancelled:
+        print(f"\n{YELLOW}⚠ Interrupted. Progress saved.{RESET}")
+
+    notify_translation_result(result, started_at=started_at)
