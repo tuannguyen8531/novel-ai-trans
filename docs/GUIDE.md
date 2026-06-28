@@ -104,8 +104,16 @@ uv run crawl example --fail-fast
 | `--ignore-robots` | Skip `robots.txt` check | off |
 | `--dry-run` | Only discover and print chapter links | off |
 | `--overwrite` | Re-download existing `chapter_N.txt` | off |
-| `-b, --browser` | Use headless browser for JS challenges | `USE_BROWSER` env |
+| `--help` | Show crawl command help | off |
+| `-b, --browser` | Use an ephemeral headless browser for JS challenges | `USE_BROWSER` env |
+| `-h, --headed` | Use a visible browser with a persistent per-domain profile | off |
 | `-w, --workers` | Concurrent chapter downloads | `1` |
+
+The two browser modes are intentionally separate and cannot be combined. `-b`
+uses a temporary profile on every run. `-h` reuses state per source domain under
+`runtime/crawler/browser-profiles/`. If a site fingerprints headless and headed
+sessions differently, use `-h` for the entire crawl instead of expecting its
+profile to unblock later `-b` runs.
 
 ### Generate a site config
 

@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 import asyncio
+import tempfile
 import threading
 import unittest
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from unittest.mock import patch
 
 from playwright.async_api import Error as PlaywrightError
 
-from src.services.browser import BrowserFetcher
+from src.services.browser import BrowserChallengeError, BrowserFetcher
 
 
 class FakeResponse:
@@ -56,6 +58,8 @@ class FakePage:
         return None
 
     async def content(self) -> str:
+        if self.context.content_sequence:
+            return self.context.content_sequence.pop(0)
         clicks = ",".join(self.clicked_selectors)
         return f"<html>{self.url} {clicks}</html>"
 
@@ -77,6 +81,7 @@ class FakeContext:
         self.lock = threading.Lock()
         self.closed = False
         self.timeout_ms: int | None = None
+        self.content_sequence: list[str] = []
 
     async def new_page(self) -> FakePage:
         page = FakePage(self)
@@ -110,9 +115,18 @@ class CloseFailingBrowser(FakeBrowser):
 class FakeChromium:
     def __init__(self, browser: FakeBrowser) -> None:
         self.browser = browser
+        self.persistent_launches: list[tuple[str, dict[str, object]]] = []
 
     async def launch(self, **kwargs: object) -> FakeBrowser:
         return self.browser
+
+    async def launch_persistent_context(
+        self,
+        user_data_dir: str,
+        **kwargs: object,
+    ) -> FakeContext:
+        self.persistent_launches.append((user_data_dir, kwargs))
+        return self.browser.context
 
 
 class FallbackChromium(FakeChromium):
@@ -223,6 +237,67 @@ class BrowserFetcherTest(unittest.TestCase):
             chromium.launch_kwargs[1]["executable_path"],
             "/usr/bin/google-chrome",
         )
+
+    def test_persistent_profile_uses_native_user_agent_and_headed_mode(self) -> None:
+        playwright = FakePlaywright()
+        starter = FakePlaywrightStarter(playwright)
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            profile_dir = Path(tempdir) / "example.test"
+            with (
+                patch("src.services.browser.async_playwright", return_value=starter),
+                BrowserFetcher(
+                    profile_dir=profile_dir,
+                    headless=False,
+                    delay_seconds=0,
+                ),
+            ):
+                pass
+
+        [(launched_profile, options)] = playwright.chromium.persistent_launches
+        self.assertEqual(launched_profile, str(profile_dir))
+        self.assertFalse(options["headless"])
+        self.assertNotIn("user_agent", options)
+        self.assertTrue(playwright.browser.context.closed)
+        self.assertTrue(playwright.stopped)
+
+    def test_waits_for_cloudflare_challenge_to_clear(self) -> None:
+        playwright = FakePlaywright()
+        playwright.browser.context.content_sequence = [
+            "<html><title>Just a moment...</title><div id='cf-wrapper'></div></html>",
+            "<html><title>Chapter 1</title><main>ready</main></html>",
+        ]
+        starter = FakePlaywrightStarter(playwright)
+
+        with (
+            patch("src.services.browser.async_playwright", return_value=starter),
+            BrowserFetcher(
+                delay_seconds=0,
+                retry_attempts=1,
+                challenge_timeout_seconds=0.05,
+            ) as fetcher,
+        ):
+            response = fetcher.fetch("https://example.test/chapter-1")
+
+        self.assertIn("Chapter 1", response.body)
+
+    def test_reports_persistent_cloudflare_challenge(self) -> None:
+        playwright = FakePlaywright()
+        playwright.browser.context.content_sequence = [
+            "<html><title>Just a moment...</title><div id='cf-wrapper'></div></html>",
+        ]
+        starter = FakePlaywrightStarter(playwright)
+
+        with (
+            patch("src.services.browser.async_playwright", return_value=starter),
+            BrowserFetcher(
+                delay_seconds=0,
+                retry_attempts=1,
+                challenge_timeout_seconds=0,
+            ) as fetcher,
+            self.assertRaisesRegex(BrowserChallengeError, "--headed"),
+        ):
+            fetcher.fetch("https://example.test/chapter-1")
 
     def test_close_error_does_not_mask_keyboard_interrupt(self) -> None:
         playwright = FakePlaywright()

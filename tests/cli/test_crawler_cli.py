@@ -11,6 +11,7 @@ from pathlib import Path
 
 from src.cli import crawl
 from src.cli.crawl import (
+    _browser_profile_dir,
     _resolve_config_path,
     build_import_parser,
     build_parser,
@@ -26,6 +27,21 @@ class CliTest(unittest.TestCase):
 
         self.assertEqual(args.target, "sfacg-760079")
         self.assertEqual(args.max_chapters, 5)
+
+    def test_short_parser_accepts_headed_browser(self) -> None:
+        args = build_short_parser().parse_args(["example", "-h"])
+
+        self.assertTrue(args.headed)
+
+    def test_browser_modes_are_mutually_exclusive(self) -> None:
+        with self.assertRaises(SystemExit):
+            build_short_parser().parse_args(["example", "-b", "-h"])
+
+    def test_browser_profile_is_scoped_by_domain(self) -> None:
+        self.assertEqual(
+            _browser_profile_dir("https://www.69shuba.com/book/84642/"),
+            Path("runtime/crawler/browser-profiles/www.69shuba.com"),
+        )
 
     def test_resolve_config_path_accepts_novel_name(self) -> None:
         self.assertEqual(_resolve_config_path("example"), Path("configs/example.json"))
@@ -96,6 +112,9 @@ class CliTest(unittest.TestCase):
             retry_attempts=unittest.mock.ANY,
             retry_backoff_seconds=unittest.mock.ANY,
             max_concurrency=4,
+            profile_dir=None,
+            headless=True,
+            challenge_timeout_seconds=30.0,
         )
 
     @unittest.mock.patch("src.cli.crawl.BrowserFetcher")
@@ -121,7 +140,41 @@ class CliTest(unittest.TestCase):
             retry_attempts=unittest.mock.ANY,
             retry_backoff_seconds=unittest.mock.ANY,
             max_concurrency=1,
+            profile_dir=None,
+            headless=True,
+            challenge_timeout_seconds=30.0,
         )
+
+    @unittest.mock.patch("src.cli.crawl.BrowserFetcher")
+    @unittest.mock.patch("src.cli.crawl._crawl_with_fetcher")
+    def test_headed_implies_browser_mode(self, mock_crawl_with_fetcher, mock_browser_fetcher) -> None:
+        import argparse
+
+        from src.cli.crawl import _crawl
+
+        args = argparse.Namespace(
+            target="example",
+            workers=None,
+            browser=None,
+            headed=True,
+            max_chapters=None,
+            translated_output=None,
+        )
+        _crawl(args)
+
+        self.assertEqual(args.workers, 1)
+        mock_browser_fetcher.assert_called_once_with(
+            user_agent=None,
+            timeout_seconds=unittest.mock.ANY,
+            delay_seconds=unittest.mock.ANY,
+            retry_attempts=unittest.mock.ANY,
+            retry_backoff_seconds=unittest.mock.ANY,
+            max_concurrency=1,
+            profile_dir=unittest.mock.ANY,
+            headless=False,
+            challenge_timeout_seconds=120.0,
+        )
+        mock_crawl_with_fetcher.assert_called_once()
 
     def test_logging_stderr_and_quiet_mode(self) -> None:
         setup_logging("info")
