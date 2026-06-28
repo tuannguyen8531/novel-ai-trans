@@ -48,6 +48,7 @@ pack      = "src.cli.pack:pack_main"
 glossary  = "src.cli.translate:glossary_main"
 serve     = "src.api.__main__:main"
 test      = "src.cli.test:test_main"
+build     = "scripts.build:main"
 
 [build-system]
 requires = ["hatchling"]
