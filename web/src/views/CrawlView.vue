@@ -18,8 +18,19 @@ const configMode = ref<'existing' | 'custom'>('existing')
 const selectedConfig = ref<string>('')
 const customTarget = ref<string>('')
 const browser = ref<boolean>(false)
+const headed = ref<boolean>(false)
 const ignoreRobots = ref<boolean>(false)
 const overwrite = ref<boolean>(false)
+
+function selectBrowserMode(mode: 'headless' | 'headed') {
+  if (mode === 'headless') {
+    browser.value = true
+    headed.value = false
+  } else {
+    browser.value = false
+    headed.value = true
+  }
+}
 const workers = ref<number>(1)
 const maxChapters = ref<number | null>(null)
 const crawlError = ref<string | null>(null)
@@ -69,6 +80,7 @@ async function startCrawl() {
     const payload: Record<string, unknown> = {
       target,
       browser: browser.value,
+      headed: headed.value,
       ignore_robots: ignoreRobots.value,
       overwrite: overwrite.value,
       workers: workers.value
@@ -204,12 +216,32 @@ function discardDraft() {
         </div>
 
         <div>
-          <label>Options</label>
+          <label>Browser mode</label>
           <div class="check-row">
             <label class="check">
-              <input v-model="browser" type="checkbox" />
-              <span>Use headless browser (for JS challenges)</span>
+              <input
+                type="radio"
+                name="browser-mode"
+                :checked="browser && !headed"
+                @change="selectBrowserMode('headless')"
+              />
+              <span>Headless browser (for JS challenges)</span>
             </label>
+            <label class="check">
+              <input
+                type="radio"
+                name="browser-mode"
+                :checked="headed"
+                @change="selectBrowserMode('headed')"
+              />
+              <span>Headed browser (visible window)</span>
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <label>Options</label>
+          <div class="check-row">
             <label class="check">
               <input v-model="ignoreRobots" type="checkbox" />
               <span>Ignore robots.txt (only when you have permission)</span>
@@ -222,18 +254,23 @@ function discardDraft() {
         </div>
 
         <div>
-          <label>Concurrency</label>
-          <input v-model.number="workers" type="number" min="1" max="8" style="max-width: 6rem;" />
-        </div>
-        <div>
-          <label>Max chapters (0 = no limit)</label>
-          <input
-            v-model.number="maxChapters"
-            type="number"
-            min="0"
-            placeholder="unlimited"
-            style="max-width: 8rem;"
-          />
+          <label>Concurrency &amp; limit</label>
+          <div class="row gap-2" style="align-items: center;">
+            <label class="row gap-1" style="flex: 0 0 auto;">
+              <span class="muted">Workers</span>
+              <input v-model.number="workers" type="number" min="1" max="8" style="max-width: 5rem;" />
+            </label>
+            <label class="row gap-1" style="flex: 0 0 auto;">
+              <span class="muted">Max chapters (0 = unlimited)</span>
+              <input
+                v-model.number="maxChapters"
+                type="number"
+                min="0"
+                placeholder="unlimited"
+                style="max-width: 8rem;"
+              />
+            </label>
+          </div>
         </div>
       </div>
 

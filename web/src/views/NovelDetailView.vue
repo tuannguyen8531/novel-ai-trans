@@ -110,7 +110,11 @@ function translatedChapters(forTarget: 'vi' | 'en'): NovelChapterStatus[] {
 }
 
 function chaptersForTarget(forTarget: 'vi' | 'en'): NovelChapterStatus[] {
-  return chapters.value.filter((status) => status.target === forTarget)
+  // Only translated chapters are selectable from the dropdown; untranslated
+  // ones are still listed in the chapter grid below for visibility.
+  return chapters.value.filter(
+    (status) => status.target === forTarget && status.has_translation
+  )
 }
 
 async function selectChapter(forTarget: 'vi' | 'en', event: Event) {
@@ -412,9 +416,8 @@ async function startPack() {
                   v-for="status in chaptersForTarget(target)"
                   :key="`${status.number}-${status.target}`"
                   :value="status.number"
-                  :disabled="!status.has_translation"
                 >
-                  Chapter {{ status.number }} — {{ status.has_translation ? 'Translated' : 'Not translated' }}
+                  Chapter {{ status.number }}
                 </option>
               </select>
             </section>

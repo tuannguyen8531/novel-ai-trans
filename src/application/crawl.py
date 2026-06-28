@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from threading import Event
+from urllib.parse import urlparse
 
 from src.application import config_context
 from src.application.errors import (
@@ -47,6 +48,7 @@ class CrawlRequest:
     ignore_robots: bool = False
     overwrite: bool = False
     use_browser: bool | None = None
+    headed: bool = False
     workers: int = 1
 
 
@@ -57,6 +59,7 @@ class CrawlResult:
     fetched: int
     skipped: int
     failed: int
+    total: int
     output_dir: str
     chapter_output_dir: str
     started_at: float
@@ -105,7 +108,15 @@ def run_crawl(
     started_at = time.time()
     config_path = _resolve_config_path(request.target)
     site_config = SiteConfig.from_file(config_path)
-    use_browser = request.use_browser if request.use_browser is not None else config.use_browser
+    # Headed mode forces a browser with the host's real Chrome identity and
+    # a reusable profile, so challenge clearance is device-bound. The
+    # headless path keeps the legacy ephemeral fingerprint.
+    if request.headed:
+        use_browser = True
+    elif request.use_browser is not None:
+        use_browser = request.use_browser
+    else:
+        use_browser = config.use_browser
     workers = request.workers or 1
     if workers < 1:
         raise ApplicationValidationError("Number of workers must be at least 1.")
@@ -122,20 +133,27 @@ def run_crawl(
             kind="phase",
             novel=site_config.name,
             message=f"Crawling {site_config.name}",
-            extra={"config": str(config_path), "browser": use_browser},
+            extra={"config": str(config_path), "browser": use_browser, "headed": request.headed},
         ),
     )
 
+    fetcher = None
     if use_browser:
         from src.services.browser import BrowserFetcher
 
         fetcher = BrowserFetcher(
-            user_agent=site_config.user_agent,
+            # Headed mode uses the host's real Chrome identity with a
+            # persistent profile; the headless path keeps the legacy
+            # ephemeral fingerprint.
+            user_agent=None if request.headed else site_config.user_agent,
             timeout_seconds=site_config.timeout_seconds,
             delay_seconds=site_config.request_delay_seconds,
             retry_attempts=site_config.retry_attempts,
             retry_backoff_seconds=site_config.retry_backoff_seconds,
             max_concurrency=workers,
+            profile_dir=_browser_profile_dir(site_config.start_url) if request.headed else None,
+            headless=not request.headed,
+            challenge_timeout_seconds=120.0 if request.headed else 30.0,
         )
         crawler = NovelCrawler(
             site_config,
@@ -143,7 +161,6 @@ def run_crawl(
             fetcher=fetcher,
         )
     else:
-        fetcher = None
         crawler = NovelCrawler(
             site_config,
             respect_robots=not request.ignore_robots,
@@ -154,7 +171,11 @@ def run_crawl(
 
         if not isinstance(event, _CP):
             return
-        
+
+        # Report every operation (skip, fetch, fail) so the progress bar
+        # advances uniformly. ``event.current`` is the chapter's index in
+        # the discovered list and ``event.total`` is the discovered set;
+        # both match the number of operations the user asked for.
         _emit(
             progress_callback,
             ProgressEvent(
@@ -195,13 +216,14 @@ def run_crawl(
     skipped = sum(1 for ch in result.chapters if ch.skipped)
     fetched = len(result.chapters) - skipped
     failed = len(result.errors)
+    total = len(result.chapters) + failed
     cancelled = result.cancelled
     _emit(
         progress_callback,
         ProgressEvent(
             kind="cancelled" if cancelled else "completed",
             novel=site_config.name,
-            current=fetched,
+            current=fetched + failed + skipped,
             total=fetched + failed + skipped,
             message=f"Fetched {fetched}, skipped {skipped}, failed {failed}",
         ),
@@ -212,6 +234,7 @@ def run_crawl(
         fetched=fetched,
         skipped=skipped,
         failed=failed,
+        total=total,
         output_dir=result.output_dir,
         chapter_output_dir=result.chapter_output_dir,
         started_at=started_at,
@@ -505,6 +528,21 @@ def import_epub_workflow(
 # ---------------------------------------------------------------------------
 # Helper to import ExternalServiceError if needed
 # ---------------------------------------------------------------------------
+
+
+def _browser_profile_dir(start_url: str) -> Path:
+    """Return a per-host persistent browser profile directory.
+
+    Anchored at the project root so the API server (which may run from a
+    different working directory than the CLI) finds the same location.
+    """
+    hostname = urlparse(start_url).hostname
+    if not hostname:
+        raise ValueError(f"Could not determine browser profile domain from URL: {start_url}")
+    safe_hostname = "".join(
+        ch if ch.isalnum() or ch in ".-_" else "_" for ch in hostname.lower()
+    )
+    return RUNTIME_OUTPUT_ROOT / "browser-profiles" / safe_hostname
 
 
 __all__ = [

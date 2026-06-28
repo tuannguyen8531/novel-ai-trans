@@ -55,7 +55,18 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     } catch (_) {
       // ignore parse errors
     }
-    const err = new Error(message) as Error & { code: string; status: number; details: Record<string, unknown> | null }
+    let displayMessage = message
+    if (code === 'validation_error' && details && Array.isArray(details.errors)) {
+      const fields = (details.errors as Array<{ loc?: unknown[]; msg?: string }>)
+        .map((entry) => {
+          const path = Array.isArray(entry.loc) ? entry.loc.filter((p) => p !== 'body').join('.') : ''
+          return path ? `${path}: ${entry.msg ?? 'invalid'}` : (entry.msg ?? 'invalid')
+        })
+      if (fields.length) {
+        displayMessage = `Request validation failed. ${fields.join('; ')}`
+      }
+    }
+    const err = new Error(displayMessage) as Error & { code: string; status: number; details: Record<string, unknown> | null }
     err.code = code
     err.status = response.status
     err.details = details

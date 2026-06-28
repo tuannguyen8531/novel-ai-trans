@@ -251,7 +251,7 @@ class CliTest(unittest.TestCase):
                     "Task: Crawl",
                     "Novel: demo-slug",
                     "Detail: Crawl finished with chapter errors.",
-                    "Stats: New: 1 · Skipped: 1 · Failed: 1",
+                    "Stats: New: 1/3 · Skipped: 1/3 · Failed: 1/3",
                     "Time: 2026-01-01 00:00",
                     "Runtime: 0s",
                 ]

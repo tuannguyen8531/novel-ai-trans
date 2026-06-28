@@ -403,15 +403,20 @@ def run_translation(
         except OSError:
             file_size = 0
 
+        # The progress bar advances when a chapter finishes, not when it
+        # starts. ``done_count`` reflects the work already completed before
+        # this chapter; the post-translation events bump it to include
+        # the current one.
+        done_count = success_count + len(failed_chapters)
         _emit(
             progress_callback,
             ProgressEvent(
                 kind="chapter_started",
                 novel=novel_name,
-                current=index,
+                current=done_count,
                 total=total,
                 chapter=chapter_num,
-                pct=round(index / total * 100, 2),
+                pct=round(done_count / total * 100, 2),
                 extra={"file_size": file_size},
             ),
         )
@@ -441,15 +446,17 @@ def run_translation(
                 chapter=chapter_num,
                 novel=novel_name,
             )
+            failed_chapters.append(chapter_num)
+            post_count = success_count + len(failed_chapters)
             _emit(
                 progress_callback,
                 ProgressEvent(
                     kind="chapter_failed",
                     novel=novel_name,
-                    current=index,
+                    current=post_count,
                     total=total,
                     chapter=chapter_num,
-                    pct=round(index / total * 100, 2),
+                    pct=round(post_count / total * 100, 2),
                     extra={"error": str(error)},
                 ),
             )
@@ -464,15 +471,16 @@ def run_translation(
             failed_chapters.append(chapter_num)
             progress_state.setdefault("failed", []).append(chapter_num)
         save_progress(progress_path, progress_state)
+        post_count = success_count + len(failed_chapters)
         _emit(
             progress_callback,
             ProgressEvent(
                 kind="chapter_completed" if ok else "chapter_failed",
                 novel=novel_name,
-                current=index,
+                current=post_count,
                 total=total,
                 chapter=chapter_num,
-                pct=round(index / total * 100, 2),
+                pct=round(post_count / total * 100, 2),
                 extra={
                     "ok": ok,
                     "elapsed": round(elapsed, 3),

@@ -42,6 +42,7 @@ async def post_crawl(
             ignore_robots=payload.ignore_robots or False,
             overwrite=payload.overwrite or False,
             use_browser=payload.browser,
+            headed=payload.headed or False,
             workers=payload.workers or 1,
         )
         result = run_crawl(request, progress_callback=progress_cb, cancel_event=cancel_event)

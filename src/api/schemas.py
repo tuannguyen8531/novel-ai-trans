@@ -192,6 +192,7 @@ class CrawlRequestPayload(BaseModel):
     ignore_robots: bool | None = None
     overwrite: bool | None = None
     browser: bool | None = None
+    headed: bool | None = None
     workers: int | None = Field(None, ge=1, le=32)
 
 
