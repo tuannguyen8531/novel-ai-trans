@@ -34,7 +34,7 @@ class _JsonLLM:
 
     def generate(self, system_prompt: str, user_prompt: str, call_type: str) -> str:
         self.call_types.append(call_type)
-        if call_type == "gen-config-toc":
+        if call_type == "gen_config_toc":
             return json.dumps(
                 {
                     "novel_title_selector": ".llm-title",
@@ -45,7 +45,7 @@ class _JsonLLM:
                     "toc_expand_selector": None,
                 }
             )
-        if call_type == "gen-config-chapter":
+        if call_type == "gen_config_chapter":
             return json.dumps(
                 {
                     "chapter_title_selector": ".llm-chapter-title",
@@ -312,7 +312,7 @@ class ConfigGeneratorTest(unittest.TestCase):
             self.assertEqual(result["chapter_link_selector"], ".llm-chapters a")
             self.assertEqual(result["chapter_content_selector"], ".llm-content")
             self.assertNotEqual(result["user_agent"], "test-ua/1.0")
-            self.assertEqual(llm.call_types, ["gen-config-toc", "gen-config-chapter"])
+            self.assertEqual(llm.call_types, ["gen_config_toc", "gen_config_chapter"])
 
 
 class SiteSampleFilesTest(unittest.TestCase):

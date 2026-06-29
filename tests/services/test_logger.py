@@ -44,18 +44,36 @@ def test_log_api_request_writes_separate_request_and_response_records(tmp_path, 
     first = json.loads(request_lines[0].split(" ", 2)[2])
     second = json.loads(response_lines[0].split(" ", 2)[2])
 
-    assert first["type"] == "request"
-    assert second["type"] == "response"
+    assert first["type"] == "translate"
+    assert second["type"] == "translate"
     assert first["provider"] == "gemini"
     assert second["provider"] == "gemini"
-    assert first["call_type"] == "translate"
-    assert second["call_type"] == "translate"
+    assert "call_type" not in first
+    assert "call_type" not in second
     assert first["call_id"] == "abc123"
     assert second["call_id"] == "abc123"
     assert first["request"] == {"foo": "bar"}
     assert second["response"] == {"ok": True}
     assert "response" not in first
     assert "request" not in second
+
+
+def test_log_type_is_normalized_to_snake_case(tmp_path, monkeypatch):
+    log_dir = tmp_path / "logs"
+    monkeypatch.setattr(logger_module, "LOG_DIR", log_dir)
+    monkeypatch.setattr(logger_module, "LOG_REQUEST_FILE", log_dir / "request.log")
+
+    logger_module.log_api_request_sent(
+        call_type="gen-config-toc-retry",
+        provider="ollama",
+        url="http://localhost/api/chat",
+        request_body={},
+    )
+
+    line = (log_dir / "request.log").read_text(encoding="utf-8").splitlines()[0]
+    entry = json.loads(line.split(" ", 2)[2])
+    assert entry["type"] == "gen_config_toc_retry"
+    assert "call_type" not in entry
 
 
 def test_log_ai_call_does_not_write_translation_log(tmp_path, monkeypatch):

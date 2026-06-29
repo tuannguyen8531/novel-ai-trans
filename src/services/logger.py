@@ -34,6 +34,11 @@ def _truncate(text: str, max_len: int = 200) -> str:
     return text[:max_len] + f"... ({len(text)} chars total)"
 
 
+def _normalize_call_type(call_type: str) -> str:
+    """Keep persisted LLM call types in snake_case."""
+    return call_type.strip().replace("-", "_")
+
+
 def log_api_request_sent(
     call_type: str,
     provider: str,
@@ -52,8 +57,7 @@ def log_api_request_sent(
     safe_body = _redact_secrets(request_body)
 
     entry = {
-        "type": "request",
-        "call_type": call_type,
+        "type": _normalize_call_type(call_type),
         "provider": provider,
         "call_id": call_id,
         "url": url,
@@ -83,8 +87,7 @@ def log_api_request_received(
     safe_response = _redact_secrets(response_body)
 
     entry = {
-        "type": "response",
-        "call_type": call_type,
+        "type": _normalize_call_type(call_type),
         "provider": provider,
         "call_id": call_id,
         "url": url,

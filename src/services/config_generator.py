@@ -343,7 +343,7 @@ class ConfigGenerator:
                     "remove_selectors": list(known.get("remove_selectors", [])),
                 }
             )
-            issues = self._validate_selectors(result, soup, f"gen-config-{phase}")
+            issues = self._validate_selectors(result, soup, f"gen_config_{phase}")
             if not issues:
                 print(f"✅ Reusing known {phase} selectors for this domain.")
                 return result
@@ -352,7 +352,7 @@ class ConfigGenerator:
         return self._ask_llm_with_retry(
             system=system_prompt,
             user=f"HTML:\n{clean_html}",
-            call_type=f"gen-config-{phase}",
+            call_type=f"gen_config_{phase}",
             soup=soup,
             retry_system=retry_prompt,
         )
@@ -564,7 +564,7 @@ class ConfigGenerator:
         if issues and max_retries > 0:
             print(f"⚠  Selector issues detected — retrying ({', '.join(issues)})")
             retry_user = f"Previous issues: {', '.join(issues)}\n\n{user}"
-            result = self._ask_llm(system=retry_system, user=retry_user, call_type=f"{call_type}-retry")
+            result = self._ask_llm(system=retry_system, user=retry_user, call_type=f"{call_type}_retry")
             issues = self._validate_selectors(result, soup, call_type)
             if issues:
                 print(f"⚠  Still has issues after retry: {', '.join(issues)}")
@@ -581,7 +581,7 @@ class ConfigGenerator:
         """Check that returned selectors actually match elements in the HTML."""
         issues: list[str] = []
 
-        if call_type.startswith("gen-config-toc"):
+        if call_type.startswith("gen_config_toc"):
             for key in ("chapter_link_selector", "novel_title_selector"):
                 selector = result.get(key)
                 if selector and not soup.select(selector):
@@ -589,7 +589,7 @@ class ConfigGenerator:
             selector = result.get("illustration_selector")
             if selector and not soup.select(selector):
                 issues.append("illustration_selector matches 0 elements")
-        elif call_type.startswith("gen-config-chapter"):
+        elif call_type.startswith("gen_config_chapter"):
             content_sel = result.get("chapter_content_selector")
             if content_sel and not soup.select(content_sel):
                 issues.append("chapter_content_selector matches 0 elements")
