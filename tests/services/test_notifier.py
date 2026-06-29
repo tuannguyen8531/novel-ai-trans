@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
-import httpx
+import httpx2 as httpx
 
 from src.services import notifier as notifier_module
 from src.services.notifier import (

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import httpx
+import httpx2 as httpx
 
 from src.api.application_config_context import config_context
 from src.api.errors import ExternalServiceError

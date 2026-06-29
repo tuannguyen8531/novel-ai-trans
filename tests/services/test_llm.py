@@ -80,7 +80,7 @@ class TestLLMService:
             provider_config = stack.enter_context(patch(provider_config_patch))
             for key, value in provider_config_attrs.items():
                 setattr(provider_config, key, value)
-            MockClient = stack.enter_context(patch("httpx.Client"))
+            MockClient = stack.enter_context(patch("src.services.llm.base.httpx.Client"))
             MockClient.return_value.post.return_value = mock_response
             stack.enter_context(patch("src.services.llm.base.log_api_request_sent", return_value="test-call-id"))
             stack.enter_context(patch("src.services.llm.base.log_api_request_received"))
@@ -101,7 +101,7 @@ class TestLLMService:
             mock_response.status_code = 200
             mock_response.json.return_value = {"message": {"content": "{}"}}
 
-            with patch("httpx.Client") as MockClient:
+            with patch("src.services.llm.base.httpx.Client") as MockClient:
                 MockClient.return_value.post.return_value = mock_response
                 with (
                     patch("src.services.llm.base.log_api_request_sent", return_value="test-call-id"),

@@ -15,7 +15,7 @@ def check_provider(config) -> bool:
     provider = config.llm_provider
 
     if provider == "ollama":
-        import httpx
+        import httpx2 as httpx
 
         try:
             resp = httpx.get(f"{config.ollama_base_url}/api/tags", timeout=5.0)

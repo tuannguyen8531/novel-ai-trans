@@ -14,7 +14,7 @@ import time
 from datetime import datetime
 from typing import Any
 
-import httpx
+import httpx2 as httpx
 
 from src.config import config
 from src.utils.logging import get_logger
