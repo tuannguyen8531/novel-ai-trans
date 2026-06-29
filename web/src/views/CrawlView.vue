@@ -343,7 +343,7 @@ function discardDraft() {
                 :checked="generateHeaded"
                 @change="selectGenerateBrowserMode('headed')"
               />
-              <span>Headed browser (visible window, your real Chrome profile — for device-bound challenges)</span>
+              <span>Headed browser (visible window)</span>
             </label>
           </div>
         </div>

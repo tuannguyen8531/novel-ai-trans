@@ -116,7 +116,7 @@ def run_crawl(
     elif request.use_browser is not None:
         use_browser = request.use_browser
     else:
-        use_browser = config.use_browser
+        use_browser = False
     workers = request.workers or 1
     if workers < 1:
         raise ApplicationValidationError("Number of workers must be at least 1.")
@@ -364,10 +364,9 @@ def validate_config(
 ) -> ConfigValidationResult:
     """Test selectors from a config against live HTML."""
 
-    config = config_context.get_config()
     config_path = _resolve_config_path(target)
     site_config = SiteConfig.from_file(config_path)
-    use_browser = use_browser if use_browser is not None else config.use_browser
+    use_browser = use_browser if use_browser is not None else False
     _check_cancel(cancel_event)
     _emit(progress_callback, ProgressEvent(kind="phase", message=f"Validating {site_config.name}"))
 

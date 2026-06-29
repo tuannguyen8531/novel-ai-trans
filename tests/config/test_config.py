@@ -19,13 +19,13 @@ class TestConfig:
             assert config.chunk_size == 1500
             assert config.enable_review is False
             assert config.enable_summary is False
+            assert config.telegram_enabled is False
 
     def test_from_env_defaults(self):
         with patch.dict(os.environ, {}, clear=True), patch("src.config.load_dotenv"):
             cfg = Config.from_env()
             assert cfg.translated_dir == "translated"
             assert cfg.max_chapters == 0
-            assert cfg.use_browser is False
 
     def test_from_env_reads_env_vars(self):
         env = {
@@ -35,6 +35,7 @@ class TestConfig:
             "TARGET_LANGUAGE": "en",
             "ENABLE_REVIEW": "true",
             "ENABLE_SUMMARY": "true",
+            "TELEGRAM_ENABLED": "true",
         }
         with patch.dict(os.environ, env, clear=True), patch("src.config.load_dotenv"):
             config = Config.from_env()
@@ -44,6 +45,7 @@ class TestConfig:
             assert config.chunk_size == 2000
             assert config.enable_review is True
             assert config.enable_summary is True
+            assert config.telegram_enabled is True
 
     def test_from_env_reads_crawler_settings(self):
         with (
@@ -52,7 +54,6 @@ class TestConfig:
                 {
                     "TRANSLATED_DIR": "/custom/translated",
                     "MAX_CHAPTERS": "50",
-                    "USE_BROWSER": "true",
                 },
                 clear=True,
             ),
@@ -61,7 +62,6 @@ class TestConfig:
             cfg = Config.from_env()
             assert cfg.translated_dir == "/custom/translated"
             assert cfg.max_chapters == 50
-            assert cfg.use_browser is True
 
     def test_translated_path_expands_user(self):
         with (

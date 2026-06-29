@@ -2,7 +2,7 @@
 Unified configuration for Novel AI Trans (crawler + translator).
 
 Loads settings from .env file. Merges:
-- Crawler settings: max_chapters, use_browser, share_dir (now translated_dir)
+- Crawler settings: max_chapters, share_dir (now translated_dir)
 - Translator settings: target_language, chunk_size, review_threshold, etc.
 - LLM provider settings: ollama, gemini, openrouter (+ optional fallback)
 - SiteConfig dataclass for per-site crawler configuration
@@ -39,7 +39,6 @@ class Config:
 
     # --- Crawler settings ---
     max_chapters: int = 0  # 0 = no limit
-    use_browser: bool = False
 
     # --- LLM Provider ---
     # Crawler uses llm_temperature/llm_max_tokens; translator uses translation_*.
@@ -69,21 +68,17 @@ class Config:
     enable_summary: bool = False
 
     # --- Telegram notifications ---
+    telegram_enabled: bool = False
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
     telegram_api_base: str = "https://api.telegram.org"
     telegram_parse_mode: str = "HTML"
-    telegram_disable_notification: bool = False
+    telegram_silent: bool = False
     telegram_timeout_seconds: float = 10.0
 
     @property
     def translated_path(self) -> Path:
         return Path(self.translated_dir).expanduser()
-
-    @property
-    def telegram_enabled(self) -> bool:
-        """Telegram notifications are on only when both token and chat_id are set."""
-        return bool(self.telegram_bot_token and self.telegram_chat_id)
 
     def __post_init__(self) -> None:
         """Validate configuration values."""
@@ -116,7 +111,6 @@ class Config:
         return cls(
             translated_dir=os.getenv("TRANSLATED_DIR", "translated"),
             max_chapters=int(os.getenv("MAX_CHAPTERS") or "0"),
-            use_browser=_bool("USE_BROWSER", "false"),
             llm_provider=os.getenv("LLM_PROVIDER", "ollama"),
             fallback_provider=os.getenv("FALLBACK_PROVIDER", ""),
             llm_temperature=float(os.getenv("LLM_TEMPERATURE") or "0.0"),
@@ -136,11 +130,12 @@ class Config:
             max_retries=int(os.getenv("MAX_RETRIES", "2")),
             enable_review=_bool("ENABLE_REVIEW", "false"),
             enable_summary=_bool("ENABLE_SUMMARY", "false"),
+            telegram_enabled=_bool("TELEGRAM_ENABLED", "false"),
             telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN", ""),
             telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID", ""),
             telegram_api_base=os.getenv("TELEGRAM_API_BASE", "https://api.telegram.org"),
             telegram_parse_mode=os.getenv("TELEGRAM_PARSE_MODE", "HTML"),
-            telegram_disable_notification=_bool("TELEGRAM_DISABLE_NOTIFICATION", "false"),
+            telegram_silent=_bool("TELEGRAM_SILENT", "false"),
             telegram_timeout_seconds=float(os.getenv("TELEGRAM_TIMEOUT_SECONDS") or "10.0"),
         )
 

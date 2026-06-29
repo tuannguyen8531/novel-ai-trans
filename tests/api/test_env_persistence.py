@@ -25,6 +25,7 @@ def test_config_to_env_dict_includes_nonempty_secrets():
         gemini_api_key="sk-test",
         openrouter_api_key="sk-or-test",
         telegram_bot_token="bot-token",
+        telegram_enabled=True,
         translation_temperature=0.42,
         chunk_size=2000,
     )
@@ -35,6 +36,7 @@ def test_config_to_env_dict_includes_nonempty_secrets():
     assert env["GEMINI_API_KEY"] == "sk-test"
     assert env["OPENROUTER_API_KEY"] == "sk-or-test"
     assert env["TELEGRAM_BOT_TOKEN"] == "bot-token"
+    assert env["TELEGRAM_ENABLED"] == "true"
 
 
 def test_config_to_env_dict_skips_empty_secrets():
@@ -135,3 +137,43 @@ def test_persist_quotes_values_with_special_characters(tmp_path: Path):
     # Round-trip parsing recovers the value (escape handling).
     round_tripped = Config(translated_dir=match.group(1)[1:-1].replace('\\"', '"').replace("\\\\", "\\"))
     assert round_tripped.translated_dir == config.translated_dir
+
+
+def test_persist_can_limit_writes_to_telegram_fields(tmp_path: Path):
+    env_path = tmp_path / ".env"
+    _write_env(env_path, "TARGET_LANGUAGE=vi\nTELEGRAM_ENABLED=false\n")
+    config = Config(target_language="en", telegram_enabled=True, telegram_silent=True)
+
+    changed = persist_config_to_env(
+        config,
+        env_path,
+        field_names={"telegram_enabled", "telegram_silent"},
+    )
+
+    content = _read(env_path)
+    assert "TARGET_LANGUAGE=vi" in content
+    assert "TELEGRAM_ENABLED=true" in content
+    assert "TELEGRAM_SILENT=true" in content
+    assert set(changed) == {"TELEGRAM_ENABLED", "TELEGRAM_SILENT"}
+
+
+def test_persist_can_limit_writes_to_provider_fields(tmp_path: Path):
+    env_path = tmp_path / ".env"
+    _write_env(env_path, "TARGET_LANGUAGE=vi\nLLM_PROVIDER=ollama\n")
+    config = Config(
+        target_language="en",
+        llm_provider="gemini",
+        gemini_api_key="new-key",
+    )
+
+    changed = persist_config_to_env(
+        config,
+        env_path,
+        field_names={"llm_provider", "gemini_api_key"},
+    )
+
+    content = _read(env_path)
+    assert "TARGET_LANGUAGE=vi" in content
+    assert "LLM_PROVIDER=gemini" in content
+    assert "GEMINI_API_KEY=new-key" in content
+    assert set(changed) == {"LLM_PROVIDER", "GEMINI_API_KEY"}

@@ -3,7 +3,6 @@ export interface Settings {
   target_language: string
   llm_provider: string
   fallback_provider: string
-  use_browser: boolean
   max_chapters: number
   chunk_size: number
   chunk_overlap: number
@@ -15,11 +14,41 @@ export interface Settings {
   translation_max_tokens: number
   gemini_api_key_configured: boolean
   openrouter_api_key_configured: boolean
+  telegram_enabled: boolean
   telegram_configured: boolean
+  telegram_api_base: string
+  telegram_parse_mode: '' | 'HTML'
+  telegram_silent: boolean
+  telegram_timeout_seconds: number
   ollama_base_url: string
   ollama_model: string
   gemini_model: string
   openrouter_model: string
+}
+
+export interface TelegramSettings {
+  telegram_enabled: boolean
+  telegram_api_base: string
+  telegram_parse_mode: '' | 'HTML'
+  telegram_silent: boolean
+  telegram_timeout_seconds: number
+}
+
+export interface ProviderSettings {
+  llm_provider: 'ollama' | 'gemini' | 'openrouter'
+  fallback_provider: '' | 'ollama' | 'gemini' | 'openrouter'
+  ollama_base_url: string
+  ollama_model: string
+  gemini_model: string
+  openrouter_model: string
+  gemini_api_key?: string
+  openrouter_api_key?: string
+}
+
+export interface ProviderCheckSettings {
+  ollama_base_url?: string
+  gemini_api_key?: string
+  openrouter_api_key?: string
 }
 
 export interface NovelSummary {

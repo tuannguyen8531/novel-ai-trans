@@ -24,7 +24,6 @@ class SettingsResponse(BaseModel):
     target_language: str
     llm_provider: str
     fallback_provider: str
-    use_browser: bool
     max_chapters: int
     chunk_size: int
     chunk_overlap: int
@@ -36,7 +35,12 @@ class SettingsResponse(BaseModel):
     translation_max_tokens: int
     gemini_api_key_configured: bool
     openrouter_api_key_configured: bool
+    telegram_enabled: bool
     telegram_configured: bool
+    telegram_api_base: str
+    telegram_parse_mode: str
+    telegram_silent: bool
+    telegram_timeout_seconds: float
     ollama_base_url: str
     ollama_model: str
     gemini_model: str
@@ -48,9 +52,6 @@ class SettingsPatch(BaseModel):
 
     translated_dir: str | None = None
     target_language: Literal["vi", "en"] | None = None
-    llm_provider: Literal["ollama", "gemini", "openrouter"] | None = None
-    fallback_provider: Literal["", "ollama", "gemini", "openrouter"] | None = None
-    use_browser: bool | None = None
     max_chapters: int | None = Field(None, ge=0)
     chunk_size: int | None = Field(None, ge=1)
     chunk_overlap: int | None = Field(None, ge=0)
@@ -60,10 +61,27 @@ class SettingsPatch(BaseModel):
     enable_summary: bool | None = None
     translation_temperature: float | None = Field(None, ge=0, le=1)
     translation_max_tokens: int | None = Field(None, ge=1)
-    ollama_base_url: str | None = None
-    ollama_model: str | None = None
-    gemini_model: str | None = None
-    openrouter_model: str | None = None
+
+
+class TelegramSettingsPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    telegram_enabled: bool
+    telegram_api_base: str = Field(min_length=1)
+    telegram_parse_mode: Literal["", "HTML"]
+    telegram_silent: bool
+    telegram_timeout_seconds: float = Field(gt=0)
+
+
+class ProviderSettingsPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    llm_provider: Literal["ollama", "gemini", "openrouter"]
+    fallback_provider: Literal["", "ollama", "gemini", "openrouter"]
+    ollama_base_url: str = Field(min_length=1)
+    ollama_model: str = Field(min_length=1)
+    gemini_model: str = Field(min_length=1)
+    openrouter_model: str = Field(min_length=1)
     gemini_api_key: str | None = None
     openrouter_api_key: str | None = None
 
@@ -88,6 +106,9 @@ class ProviderCheckRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     provider: str
+    ollama_base_url: str | None = None
+    gemini_api_key: str | None = None
+    openrouter_api_key: str | None = None
 
 
 class ProviderCheckResponse(BaseModel):

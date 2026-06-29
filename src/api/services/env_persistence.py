@@ -33,7 +33,6 @@ SECRET_FIELD_NAMES: frozenset[str] = frozenset(
 _FIELD_TO_ENV: dict[str, str] = {
     "translated_dir": "TRANSLATED_DIR",
     "max_chapters": "MAX_CHAPTERS",
-    "use_browser": "USE_BROWSER",
     "llm_provider": "LLM_PROVIDER",
     "fallback_provider": "FALLBACK_PROVIDER",
     "llm_temperature": "LLM_TEMPERATURE",
@@ -53,11 +52,12 @@ _FIELD_TO_ENV: dict[str, str] = {
     "max_retries": "MAX_RETRIES",
     "enable_review": "ENABLE_REVIEW",
     "enable_summary": "ENABLE_SUMMARY",
+    "telegram_enabled": "TELEGRAM_ENABLED",
     "telegram_bot_token": "TELEGRAM_BOT_TOKEN",
     "telegram_chat_id": "TELEGRAM_CHAT_ID",
     "telegram_api_base": "TELEGRAM_API_BASE",
     "telegram_parse_mode": "TELEGRAM_PARSE_MODE",
-    "telegram_disable_notification": "TELEGRAM_DISABLE_NOTIFICATION",
+    "telegram_silent": "TELEGRAM_SILENT",
     "telegram_timeout_seconds": "TELEGRAM_TIMEOUT_SECONDS",
 }
 
@@ -68,7 +68,7 @@ def _format_value(value: object) -> str:
     return str(value)
 
 
-def config_to_env_dict(config: Config) -> dict[str, str]:
+def config_to_env_dict(config: Config, *, field_names: set[str] | frozenset[str] | None = None) -> dict[str, str]:
     """Return *config*'s fields as env-var entries.
 
     Non-secret fields are always written. Secret fields (API keys, Telegram
@@ -78,6 +78,8 @@ def config_to_env_dict(config: Config) -> dict[str, str]:
     """
     env: dict[str, str] = {}
     for field_name, env_name in _FIELD_TO_ENV.items():
+        if field_names is not None and field_name not in field_names:
+            continue
         value = getattr(config, field_name)
         if field_name in SECRET_FIELD_NAMES and not value:
             continue
@@ -133,7 +135,12 @@ def _format_env_content(entries: Iterable[tuple[str, str, str]]) -> str:
     return "\n".join(rendered) + "\n"
 
 
-def persist_config_to_env(config: Config, path: Path) -> list[str]:
+def persist_config_to_env(
+    config: Config,
+    path: Path,
+    *,
+    field_names: set[str] | frozenset[str] | None = None,
+) -> list[str]:
     """Write *config*'s non-secret fields to *path*. Return the keys that
     changed (newly added or updated in place).
 
@@ -142,7 +149,7 @@ def persist_config_to_env(config: Config, path: Path) -> list[str]:
     written, but their existing values are preserved on disk.
     """
     lines, parsed = _parse_existing_env(path)
-    new_values = config_to_env_dict(config)
+    new_values = config_to_env_dict(config, field_names=field_names)
 
     changed: list[str] = []
     # Apply the updates in place while preserving line order.

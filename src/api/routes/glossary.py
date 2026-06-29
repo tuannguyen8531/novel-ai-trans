@@ -174,7 +174,7 @@ async def post_validate_glossary(
         return {"novel": name, "issues": issues}
 
     job = jobs.submit(
-        kind="glossary_validate",
+        kind="glossary",
         novel=name,
         snapshot=snapshot,
         loop=loop,
@@ -201,7 +201,7 @@ async def post_audit_glossary(
         return {"novel": name, "target": resolved_target, "issues": issues}
 
     job = jobs.submit(
-        kind="glossary_audit",
+        kind="audit",
         novel=name,
         snapshot=snapshot,
         loop=loop,

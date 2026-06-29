@@ -105,7 +105,7 @@ uv run crawl example --fail-fast
 | `--dry-run` | Only discover and print chapter links | off |
 | `--overwrite` | Re-download existing `chapter_N.txt` | off |
 | `--help` | Show crawl command help | off |
-| `-b, --browser` | Use an ephemeral headless browser for JS challenges | `USE_BROWSER` env |
+| `-b, --browser` | Use an ephemeral headless browser for JS challenges | off |
 | `-h, --headed` | Use a visible browser with a persistent per-domain profile | off |
 | `-w, --workers` | Concurrent chapter downloads | `1` |
 
@@ -421,12 +421,14 @@ Set Telegram env vars in `.env` to get a message when a crawl or translation run
 finishes (success, failure, or interruption with stats):
 
 ```env
+TELEGRAM_ENABLED=true
 TELEGRAM_BOT_TOKEN=123456:ABC...
 TELEGRAM_CHAT_ID=987654321
 ```
 
+All three values are required. Set `TELEGRAM_ENABLED=false` to disable notifications without removing credentials.
 `TELEGRAM_PARSE_MODE` defaults to `HTML` and messages are escaped accordingly.
-Set `TELEGRAM_DISABLE_NOTIFICATION=true` to send silently.
+Set `TELEGRAM_SILENT=true` to send without a notification sound.
 
 ## Troubleshooting
 

@@ -161,7 +161,7 @@ def _add_crawl_arguments(parser: argparse.ArgumentParser, *, target_help: str) -
         "--browser",
         action="store_true",
         default=None,
-        help="Use an ephemeral headless browser. Default: USE_BROWSER env.",
+        help="Use an ephemeral headless browser. Default: off.",
     )
     browser_mode.add_argument(
         "-h",
@@ -330,7 +330,7 @@ def _crawl(args: argparse.Namespace) -> int:
         site_config = SiteConfig.from_file(config_path)
 
         headed = getattr(args, "headed", False)
-        use_browser = True if headed else (args.browser if args.browser is not None else config.use_browser)
+        use_browser = True if headed else (args.browser if args.browser is not None else False)
         if args.workers is None:
             args.workers = 1
         if args.workers < 1:
@@ -603,7 +603,7 @@ def _validate(args: argparse.Namespace) -> int:
         config_path = _resolve_config_path(args.target)
         site_config = SiteConfig.from_file(config_path)
 
-        use_browser = args.browser if args.browser is not None else config.use_browser
+        use_browser = args.browser if args.browser is not None else False
 
         if use_browser:
             browser_fetcher = BrowserFetcher(

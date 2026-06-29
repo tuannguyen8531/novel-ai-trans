@@ -68,6 +68,11 @@ def test_settings_round_trip(client):
     assert "gemini_api_key_configured" in body
     assert "openrouter_api_key_configured" in body
     assert "telegram_configured" in body
+    assert "telegram_enabled" in body
+    assert "telegram_api_base" in body
+    assert "telegram_parse_mode" in body
+    assert "telegram_silent" in body
+    assert "telegram_timeout_seconds" in body
     assert body["target_language"] in {"vi", "en"}
 
     new_value = "en" if body["target_language"] == "vi" else "vi"

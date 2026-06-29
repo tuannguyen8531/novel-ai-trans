@@ -13,7 +13,10 @@ import type {
   NovelMetadataResponse,
   NovelSummary,
   ProvidersResponse,
-  Settings
+  ProviderCheckSettings,
+  ProviderSettings,
+  Settings,
+  TelegramSettings
 } from './types'
 
 const BASE = ''
@@ -92,18 +95,36 @@ export const api = {
       '/api/settings/persist',
       { method: 'POST' }
     ),
+  persistTelegramSettings: (settings: TelegramSettings) =>
+    request<{ path: string; changed_keys: string[] }>(
+      '/api/settings/telegram/persist',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings)
+      }
+    ),
+  persistProviderSettings: (settings: ProviderSettings) =>
+    request<{ path: string; changed_keys: string[] }>(
+      '/api/settings/providers/persist',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings)
+      }
+    ),
   listProviders: () => request<ProvidersResponse>('/api/providers'),
   listProviderModels: (provider: string) =>
     request<{ provider: string; models: string[] }>(
       `/api/providers/${encodeURIComponent(provider)}/models`
     ),
-  checkProvider: (provider: string) =>
+  checkProvider: (provider: string, settings: ProviderCheckSettings = {}) =>
     request<{ provider: string; ok: boolean; detail: string | null }>(
       '/api/providers/check',
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider })
+        body: JSON.stringify({ provider, ...settings })
       }
     ),
 

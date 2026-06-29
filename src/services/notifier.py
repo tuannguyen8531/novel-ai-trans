@@ -1,15 +1,15 @@
 """Telegram notification helper.
 
-Optional: if ``TELEGRAM_BOT_TOKEN`` and ``TELEGRAM_CHAT_ID`` are unset in the
-environment the notifier is a no-op, so callers can invoke ``send()``
-unconditionally without breaking the main flow. All network errors are
-swallowed and logged at warning level — notification failures must never
-crash a crawl or translation run.
+Notifications are enabled only when ``TELEGRAM_ENABLED`` is true and both
+``TELEGRAM_BOT_TOKEN`` and ``TELEGRAM_CHAT_ID`` are configured. Callers can
+invoke ``send()`` unconditionally; disabled notifications are a no-op. All
+network errors are swallowed and logged at warning level.
 """
 
 from __future__ import annotations
 
 import html
+import os
 import time
 from datetime import datetime
 from typing import Any
@@ -36,6 +36,29 @@ def format_run_footer(started_at: float) -> str:
     return f"Time: {timestamp}\nRuntime: {runtime}s"
 
 
+def send_run_notification(
+    *,
+    status: str,
+    task: str,
+    novel: str,
+    detail: str,
+    started_at: float,
+    stats: str | None = None,
+) -> bool:
+    """Send the shared plain-text completion message used by background jobs."""
+    notifier = get_notifier()
+    lines = [
+        f"Status: {status}",
+        f"Task: {task}",
+        f"Novel: {notifier.escape(novel or 'novel')}",
+        f"Detail: {notifier.escape(detail)}",
+    ]
+    if stats:
+        lines.append(f"Stats: {stats}")
+    lines.append(format_run_footer(started_at))
+    return notifier.send("\n".join(lines))
+
+
 class TelegramNotifier:
     """Send plain-text or HTML messages to a single Telegram chat."""
 
@@ -46,7 +69,7 @@ class TelegramNotifier:
         chat_id: str,
         api_base: str = "https://api.telegram.org",
         parse_mode: str = "HTML",
-        disable_notification: bool = False,
+        silent: bool = False,
         timeout_seconds: float = _DEFAULT_TIMEOUT_SECONDS,
         client: httpx.Client | None = None,
     ) -> None:
@@ -56,7 +79,7 @@ class TelegramNotifier:
         self._chat_id = chat_id
         self._api_base = api_base.rstrip("/")
         self._parse_mode = parse_mode or ""
-        self._disable_notification = disable_notification
+        self._silent = silent
         self._timeout_seconds = timeout_seconds
         self._client = client
 
@@ -72,6 +95,9 @@ class TelegramNotifier:
         """
         if not message:
             return False
+        if os.getenv("PYTEST_CURRENT_TEST") and self._client is None:
+            _logger.info("Telegram notification suppressed during pytest.")
+            return False
 
         url = f"{self._api_base}{_SEND_MESSAGE_PATH.format(token=self._bot_token)}"
         payload: dict[str, Any] = {
@@ -81,7 +107,7 @@ class TelegramNotifier:
         }
         if self._parse_mode:
             payload["parse_mode"] = self._parse_mode
-        effective_silent = self._disable_notification if silent is None else silent
+        effective_silent = self._silent if silent is None else silent
         if effective_silent:
             payload["disable_notification"] = True
 
@@ -140,13 +166,13 @@ def get_notifier() -> TelegramNotifier | _NullNotifier:
     cache_key = id(get_active_config()) if config.__class__.__name__ == "_ConfigProxy" else id(config)
     if _NOTIFIER is not None and cache_key == _NOTIFIER_CONFIG_ID:
         return _NOTIFIER
-    if config.telegram_enabled:
+    if config.telegram_enabled and config.telegram_bot_token and config.telegram_chat_id:
         _NOTIFIER = TelegramNotifier(
             bot_token=config.telegram_bot_token,
             chat_id=config.telegram_chat_id,
             api_base=config.telegram_api_base,
             parse_mode=config.telegram_parse_mode,
-            disable_notification=config.telegram_disable_notification,
+            silent=config.telegram_silent,
             timeout_seconds=config.telegram_timeout_seconds,
         )
     else:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import tempfile
+import time
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -19,6 +20,7 @@ from src.application.crawl import (
     import_epub_workflow,
     run_crawl,
 )
+from src.services.notifier import send_run_notification
 
 router = APIRouter(tags=["crawl"])
 
@@ -33,6 +35,7 @@ async def post_crawl(
     loop = asyncio.get_running_loop()
 
     def _run(job, emit, cancel_event):
+        started_at = time.time()
         progress_cb = build_progress_emitter(job, emit)
         request = CrawlRequest(
             target=payload.target,
@@ -45,7 +48,40 @@ async def post_crawl(
             headed=payload.headed or False,
             workers=payload.workers or 1,
         )
-        result = run_crawl(request, progress_callback=progress_cb, cancel_event=cancel_event)
+        try:
+            result = run_crawl(request, progress_callback=progress_cb, cancel_event=cancel_event)
+        except Exception as error:
+            interrupted = cancel_event.is_set()
+            send_run_notification(
+                status="Success" if interrupted else "Failed",
+                task="Crawl",
+                novel=payload.target,
+                detail="Crawl interrupted." if interrupted else (str(error) or type(error).__name__),
+                started_at=started_at,
+            )
+            raise
+
+        if result.cancelled:
+            status = "Success"
+            detail = "Crawl interrupted."
+        elif result.failed > 0:
+            status = "Failed"
+            detail = "Crawl finished with chapter errors."
+        else:
+            status = "Success"
+            detail = "Crawl finished."
+        send_run_notification(
+            status=status,
+            task="Crawl",
+            novel=result.novel,
+            detail=detail,
+            stats=(
+                f"New: {result.fetched}/{result.total} · "
+                f"Skipped: {result.skipped}/{result.total} · "
+                f"Failed: {result.failed}/{result.total}"
+            ),
+            started_at=result.started_at,
+        )
         return {
             "novel": result.novel,
             "title": result.title,

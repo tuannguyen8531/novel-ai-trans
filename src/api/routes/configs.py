@@ -177,7 +177,7 @@ async def post_generate_config(
         return emit_dict
 
     job = jobs.submit(
-        kind="config_generate",
+        kind="generate",
         novel=None,
         snapshot=snapshot,
         loop=loop,
@@ -218,7 +218,7 @@ async def post_validate_config(
         }
 
     job = jobs.submit(
-        kind="config_validate",
+        kind="validate",
         novel=None,
         snapshot=snapshot,
         loop=loop,

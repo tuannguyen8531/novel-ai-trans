@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import Literal
 
 from fastapi import APIRouter, Depends
@@ -16,6 +17,7 @@ from src.application.translate import (
     TranslationRequest,
     run_translation,
 )
+from src.services.notifier import send_run_notification
 
 router = APIRouter(tags=["translate"])
 
@@ -38,6 +40,7 @@ async def post_translate(
     loop = asyncio.get_running_loop()
 
     def _run(job, emit, cancel_event):
+        started_at = time.time()
         progress_cb = build_progress_emitter(job, emit)
         request = TranslationRequest(
             novel=payload.novel,
@@ -54,10 +57,45 @@ async def post_translate(
             limit=payload.limit or 0,
             dry_run=False,
         )
-        result = run_translation(
-            request,
-            progress_callback=progress_cb,
-            cancel_event=cancel_event,
+        try:
+            result = run_translation(
+                request,
+                progress_callback=progress_cb,
+                cancel_event=cancel_event,
+            )
+        except Exception as error:
+            interrupted = cancel_event.is_set()
+            send_run_notification(
+                status="Success" if interrupted else "Failed",
+                task="Translation",
+                novel=payload.novel,
+                detail="Translation interrupted." if interrupted else (str(error) or type(error).__name__),
+                started_at=started_at,
+            )
+            raise
+
+        if result.cancelled:
+            status = "Success"
+            detail = "Translation interrupted."
+        elif result.failed > 0:
+            status = "Failed"
+            detail = "Translation finished with errors."
+        elif result.skipped:
+            status = "Success"
+            detail = "No chapters needed translation."
+        else:
+            status = "Success"
+            detail = "Translation finished."
+        stats = f"Translated: {result.success}/{result.total}"
+        if result.failed > 0:
+            stats += f" · Failed: {result.failed}"
+        send_run_notification(
+            status=status,
+            task="Translation",
+            novel=result.novel,
+            detail=detail,
+            stats=stats,
+            started_at=result.started_at,
         )
         return {
             "novel": result.novel,

@@ -154,7 +154,6 @@ Settings are loaded from `.env`. Copy `.env.example` to `.env` and edit.
 | --- | --- | --- |
 | `TRANSLATED_DIR` | `translated` | Per-novel input, output, metadata, and package root |
 | `MAX_CHAPTERS` | `0` | Crawler chapter cap, `0` means unlimited |
-| `USE_BROWSER` | `false` | Default crawler browser mode |
 | `LLM_PROVIDER` | `ollama` | Primary provider: `ollama`, `gemini`, or `openrouter` |
 | `FALLBACK_PROVIDER` | empty | Optional fallback provider |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama endpoint |
@@ -170,6 +169,7 @@ Settings are loaded from `.env`. Copy `.env.example` to `.env` and edit.
 | `MAX_RETRIES` | `2` | Translation retry count |
 | `ENABLE_REVIEW` | `false` | Enable review by default |
 | `ENABLE_SUMMARY` | `false` | Enable summary by default |
+| `TELEGRAM_ENABLED` | `false` | Enable Telegram notifications for crawl and translation |
 | `TELEGRAM_BOT_TOKEN` | empty | Telegram bot token for notifications |
 | `TELEGRAM_CHAT_ID` | empty | Telegram chat id to notify |
 

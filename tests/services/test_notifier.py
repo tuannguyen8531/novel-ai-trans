@@ -18,6 +18,7 @@ from src.services.notifier import (
     format_run_footer,
     get_notifier,
     reset_notifier_cache,
+    send_run_notification,
 )
 
 
@@ -79,7 +80,7 @@ class TelegramNotifierTest(unittest.TestCase):
         n = TelegramNotifier(
             bot_token="T",
             chat_id="1",
-            disable_notification=True,
+            silent=True,
             client=client,  # type: ignore[arg-type]
         )
         n.send("hi", silent=False)
@@ -108,6 +109,12 @@ class TelegramNotifierTest(unittest.TestCase):
         self.assertFalse(n.send(""))
         self.assertEqual(client.calls, [])
 
+    def test_send_never_creates_real_client_during_pytest(self) -> None:
+        n = TelegramNotifier(bot_token="T", chat_id="1")
+        with patch.object(notifier_module.httpx, "Client") as client:
+            self.assertFalse(n.send("must stay local"))
+        client.assert_not_called()
+
     def test_escape_handles_html_chars(self) -> None:
         n = TelegramNotifier(bot_token="T", chat_id="1", client=_CaptureClient())  # type: ignore[arg-type]
         self.assertEqual(n.escape("<b>Tom & Jerry</b>"), "&lt;b&gt;Tom &amp; Jerry&lt;/b&gt;")
@@ -124,6 +131,34 @@ class TelegramNotifierTest(unittest.TestCase):
         n.send("hi")
         self.assertEqual(client.calls[0]["url"], "https://proxy.example.com/botT/sendMessage")
 
+    def test_background_job_notification_uses_plain_completion_format(self) -> None:
+        notifier = unittest.mock.Mock()
+        notifier.escape.side_effect = lambda text: text
+        notifier.send.return_value = True
+        with (
+            patch.object(notifier_module, "get_notifier", return_value=notifier),
+            patch.object(notifier_module, "format_run_footer", return_value="Time: now\nRuntime: 1s"),
+        ):
+            sent = send_run_notification(
+                status="Success",
+                task="Crawl",
+                novel="demo",
+                detail="Crawl finished.",
+                stats="New: 2/2 · Skipped: 0/2 · Failed: 0/2",
+                started_at=0,
+            )
+
+        self.assertTrue(sent)
+        notifier.send.assert_called_once_with(
+            "Status: Success\n"
+            "Task: Crawl\n"
+            "Novel: demo\n"
+            "Detail: Crawl finished.\n"
+            "Stats: New: 2/2 · Skipped: 0/2 · Failed: 0/2\n"
+            "Time: now\n"
+            "Runtime: 1s"
+        )
+
 
 class GetNotifierTest(unittest.TestCase):
     def setUp(self) -> None:
@@ -136,7 +171,7 @@ class GetNotifierTest(unittest.TestCase):
             telegram_chat_id="1",
             telegram_api_base="https://api.telegram.org",
             telegram_parse_mode="HTML",
-            telegram_disable_notification=False,
+            telegram_silent=False,
             telegram_timeout_seconds=5.0,
         )
         defaults.update(overrides)
@@ -197,11 +232,13 @@ class ConfigTelegramFieldsTest(unittest.TestCase):
         self.assertEqual(cfg.telegram_api_base, "https://api.telegram.org")
         self.assertEqual(cfg.telegram_parse_mode, "HTML")
 
-    def test_telegram_enabled_when_both_set(self) -> None:
+    def test_telegram_requires_switch_and_credentials(self) -> None:
         from src.config import Config
 
-        cfg = Config(telegram_bot_token="abc", telegram_chat_id="42")
-        self.assertTrue(cfg.telegram_enabled)
+        disabled = Config(telegram_bot_token="abc", telegram_chat_id="42")
+        enabled = Config(telegram_enabled=True, telegram_bot_token="abc", telegram_chat_id="42")
+        self.assertFalse(disabled.telegram_enabled)
+        self.assertTrue(enabled.telegram_enabled)
 
     def test_invalid_parse_mode_rejected(self) -> None:
         from src.config import Config

@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { api } from '@/api/client'
-import type { Settings } from '@/api/types'
+import type { ProviderSettings, Settings, TelegramSettings } from '@/api/types'
 
 export const useSettingsStore = defineStore('settings', () => {
   const settings = ref<Settings | null>(null)
@@ -45,12 +45,13 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
-  async function patchAndPersist(patch: Partial<Settings>): Promise<{ path: string; changed_keys: string[] } | null> {
+  async function persistTelegram(patch: TelegramSettings): Promise<{ path: string; changed_keys: string[] } | null> {
     loading.value = true
     error.value = null
     try {
-      settings.value = await api.patchSettings(patch)
-      return await api.persistSettings()
+      const result = await api.persistTelegramSettings(patch)
+      settings.value = await api.getSettings()
+      return result
     } catch (err) {
       error.value = (err as Error).message
       return null
@@ -59,5 +60,20 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
-  return { settings, error, loading, refresh, patch, persist, patchAndPersist }
+  async function persistProviders(patch: ProviderSettings): Promise<{ path: string; changed_keys: string[] } | null> {
+    loading.value = true
+    error.value = null
+    try {
+      const result = await api.persistProviderSettings(patch)
+      settings.value = await api.getSettings()
+      return result
+    } catch (err) {
+      error.value = (err as Error).message
+      return null
+    } finally {
+      loading.value = false
+    }
+  }
+
+  return { settings, error, loading, refresh, patch, persist, persistTelegram, persistProviders }
 })
