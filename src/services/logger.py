@@ -1,10 +1,10 @@
 """
 AI Call Logger — Logs every LLM invocation with full request/response details.
 
-Three log files:
-- logs/request.log   — API request JSON lines
-- logs/response.log  — API response JSON lines
-- logs/error.log     — Error log (structured error messages with stack traces)
+Three daily log files:
+- logs/YYYY-MM-DD/request.log   — API request JSON lines
+- logs/YYYY-MM-DD/response.log  — API response JSON lines
+- logs/YYYY-MM-DD/error.log     — Error log with stack traces
 """
 
 import json
@@ -14,9 +14,9 @@ from pathlib import Path
 from uuid import uuid4
 
 LOG_DIR = Path("logs")
-LOG_REQUEST_FILE = LOG_DIR / "request.log"
-LOG_RESPONSE_FILE = LOG_DIR / "response.log"
-LOG_ERROR_FILE = LOG_DIR / "error.log"
+LOG_REQUEST_NAME = "request.log"
+LOG_RESPONSE_NAME = "response.log"
+LOG_ERROR_NAME = "error.log"
 
 _verbose = False
 
@@ -39,6 +39,13 @@ def _normalize_call_type(call_type: str) -> str:
     return call_type.strip().replace("-", "_")
 
 
+def _daily_log_path(now: datetime, filename: str) -> Path:
+    """Return the log path for the local calendar day."""
+    daily_dir = LOG_DIR / now.strftime("%Y-%m-%d")
+    daily_dir.mkdir(parents=True, exist_ok=True)
+    return daily_dir / filename
+
+
 def log_api_request_sent(
     call_type: str,
     provider: str,
@@ -50,8 +57,8 @@ def log_api_request_sent(
 
     Returns a call_id to correlate with the response log.
     """
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now = datetime.now()
+    timestamp = now.strftime("%Y-%m-%d %H:%M:%S")
     call_id = uuid4().hex
 
     safe_body = _redact_secrets(request_body)
@@ -64,7 +71,7 @@ def log_api_request_sent(
         "request": safe_body,
         **kwargs,
     }
-    with open(LOG_REQUEST_FILE, "a", encoding="utf-8") as f:
+    with open(_daily_log_path(now, LOG_REQUEST_NAME), "a", encoding="utf-8") as f:
         f.write(f"{timestamp} {json.dumps(entry, ensure_ascii=False)}\n")
 
     return call_id
@@ -81,8 +88,8 @@ def log_api_request_received(
     **kwargs,
 ):
     """Log the HTTP response after it arrives."""
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now = datetime.now()
+    timestamp = now.strftime("%Y-%m-%d %H:%M:%S")
 
     safe_response = _redact_secrets(response_body)
 
@@ -96,7 +103,7 @@ def log_api_request_received(
         "response": safe_response,
         **kwargs,
     }
-    with open(LOG_RESPONSE_FILE, "a", encoding="utf-8") as f:
+    with open(_daily_log_path(now, LOG_RESPONSE_NAME), "a", encoding="utf-8") as f:
         f.write(f"{timestamp} {json.dumps(entry, ensure_ascii=False)}\n")
 
 
@@ -120,8 +127,8 @@ def _redact_secrets(data: dict) -> dict:
 
 def log_error(context: str, error: Exception | str, **kwargs):
     """Log an error to error.log with context."""
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now = datetime.now()
+    timestamp = now.strftime("%Y-%m-%d %H:%M:%S")
 
     error_msg = str(error)
     tb = None
@@ -130,7 +137,7 @@ def log_error(context: str, error: Exception | str, **kwargs):
 
     entry = {"context": context, "error": error_msg, "traceback": tb, **kwargs}
 
-    with open(LOG_ERROR_FILE, "a", encoding="utf-8") as f:
+    with open(_daily_log_path(now, LOG_ERROR_NAME), "a", encoding="utf-8") as f:
         f.write(f"{timestamp} {json.dumps(entry, ensure_ascii=False)}\n")
 
 

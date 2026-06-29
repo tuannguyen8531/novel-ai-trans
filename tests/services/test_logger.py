@@ -8,11 +8,13 @@ from src.services import logger as logger_module
 def test_log_api_request_writes_separate_request_and_response_records(tmp_path, monkeypatch):
     log_dir = tmp_path / "logs"
     monkeypatch.setattr(logger_module, "LOG_DIR", log_dir)
-    monkeypatch.setattr(logger_module, "LOG_REQUEST_FILE", log_dir / "request.log")
-    monkeypatch.setattr(logger_module, "LOG_RESPONSE_FILE", log_dir / "response.log")
     monkeypatch.setattr(logger_module, "_redact_secrets", lambda data: data)
     fixed_time = "2026-05-07 15:00:00"
-    dummy_now = type("DummyNow", (), {"strftime": staticmethod(lambda _fmt: fixed_time)})()
+
+    def _strftime(fmt):
+        return "2026-05-07" if fmt == "%Y-%m-%d" else fixed_time
+
+    dummy_now = type("DummyNow", (), {"strftime": staticmethod(_strftime)})()
     dummy_datetime = type("DummyDateTime", (), {"now": staticmethod(lambda: dummy_now)})()
     monkeypatch.setattr(logger_module, "datetime", dummy_datetime)
     monkeypatch.setattr(logger_module, "uuid4", type("DummyUUID4", (), {"hex": "abc123"}))
@@ -36,8 +38,9 @@ def test_log_api_request_writes_separate_request_and_response_records(tmp_path, 
         chunk_index=0,
     )
 
-    request_lines = (log_dir / "request.log").read_text(encoding="utf-8").splitlines()
-    response_lines = (log_dir / "response.log").read_text(encoding="utf-8").splitlines()
+    daily_dir = log_dir / "2026-05-07"
+    request_lines = (daily_dir / "request.log").read_text(encoding="utf-8").splitlines()
+    response_lines = (daily_dir / "response.log").read_text(encoding="utf-8").splitlines()
     assert len(request_lines) == 1
     assert len(response_lines) == 1
 
@@ -61,7 +64,6 @@ def test_log_api_request_writes_separate_request_and_response_records(tmp_path, 
 def test_log_type_is_normalized_to_snake_case(tmp_path, monkeypatch):
     log_dir = tmp_path / "logs"
     monkeypatch.setattr(logger_module, "LOG_DIR", log_dir)
-    monkeypatch.setattr(logger_module, "LOG_REQUEST_FILE", log_dir / "request.log")
 
     logger_module.log_api_request_sent(
         call_type="gen-config-toc-retry",
@@ -70,7 +72,9 @@ def test_log_type_is_normalized_to_snake_case(tmp_path, monkeypatch):
         request_body={},
     )
 
-    line = (log_dir / "request.log").read_text(encoding="utf-8").splitlines()[0]
+    request_files = list(log_dir.glob("*/request.log"))
+    assert len(request_files) == 1
+    line = request_files[0].read_text(encoding="utf-8").splitlines()[0]
     entry = json.loads(line.split(" ", 2)[2])
     assert entry["type"] == "gen_config_toc_retry"
     assert "call_type" not in entry
