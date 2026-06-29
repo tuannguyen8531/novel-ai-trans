@@ -13,7 +13,9 @@ from src.services.glossary import (
     load_glossary,
     load_glossary_data,
     load_source_language,
+    remove_character,
     remove_glossary_term,
+    remove_relationship,
     save_chapter_summary,
     save_character,
     save_character_pronoun,
@@ -21,6 +23,7 @@ from src.services.glossary import (
     save_glossary,
     save_relationship,
     save_source_language,
+    update_glossary_term,
     validate_glossary,
 )
 
@@ -70,6 +73,30 @@ class TestGlossary:
 
     def test_remove_missing_glossary_term(self):
         assert not remove_glossary_term("test-novel", "missing")
+
+    def test_update_glossary_term_renames_atomically(self):
+        save_glossary("test-novel", {"李白": "Lý Bạch"})
+
+        update_glossary_term("test-novel", "李白", "诗仙", "Thi Tiên")
+
+        assert load_glossary("test-novel") == {"诗仙": "Thi Tiên"}
+
+    def test_update_glossary_term_rejects_conflict_without_changes(self):
+        original = {"李白": "Lý Bạch", "杜甫": "Đỗ Phủ"}
+        save_glossary("test-novel", original)
+
+        try:
+            update_glossary_term("test-novel", "李白", "杜甫", "Thi Tiên")
+        except FileExistsError:
+            pass
+        else:
+            raise AssertionError("Expected conflicting rename to fail")
+
+        assert load_glossary("test-novel") == original
+
+        update_glossary_term("test-novel", "李白", "杜甫", "Thi Tiên", overwrite=True)
+
+        assert load_glossary("test-novel") == {"杜甫": "Thi Tiên"}
 
     def test_save_character_pronoun(self):
         save_characters_batch(
@@ -125,6 +152,28 @@ class TestGlossary:
         assert save_relationship("test-novel", "李白", "杜甫", "friend", since_chapter=2)
         assert load_glossary_data("test-novel")["edges"] == [["李白", "杜甫", "friend", 2]]
         assert not save_relationship("test-novel", "李白", "missing", "enemy")
+
+    def test_remove_relationship_and_character_references(self):
+        save_characters_batch(
+            "test-novel",
+            {
+                "李白": {"translated_name": "Lý Bạch", "role": "supporting"},
+                "杜甫": {"translated_name": "Đỗ Phủ", "role": "supporting"},
+            },
+            [["李白", "杜甫", "friend", 2]],
+            address_rules=[{"speaker": "李白", "listener": "杜甫", "self": "ta", "other": "huynh", "since": 2}],
+            chapter=2,
+        )
+
+        assert remove_relationship("test-novel", "李白", "杜甫")
+        assert load_glossary_data("test-novel")["edges"] == []
+
+        assert save_relationship("test-novel", "李白", "杜甫", "friend", since_chapter=2)
+        assert remove_character("test-novel", "李白")
+        data = load_glossary_data("test-novel")
+        assert "李白" not in data["entities"]
+        assert data["edges"] == []
+        assert data["address_rules"] == []
 
     def test_save_and_load_active_address_rules(self):
         save_characters_batch(

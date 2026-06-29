@@ -242,6 +242,19 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ original, translated })
     }),
+  updateTerm: (
+    name: string,
+    oldOriginal: string,
+    payload: { original: string; translated: string; overwrite?: boolean }
+  ) =>
+    request<GlossaryResponse>(
+      `/api/novels/${encodeURIComponent(name)}/glossary/terms/${encodeURIComponent(oldOriginal)}`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }
+    ),
   removeTerm: (name: string, original: string) =>
     request<GlossaryResponse>(
       `/api/novels/${encodeURIComponent(name)}/glossary/terms/${encodeURIComponent(original)}`,
@@ -264,15 +277,27 @@ export const api = {
         body: JSON.stringify(payload)
       }
     ),
+  removeCharacter: (name: string, original: string) =>
+    request<GlossaryResponse>(
+      `/api/novels/${encodeURIComponent(name)}/glossary/characters/${encodeURIComponent(original)}`,
+      { method: 'DELETE' }
+    ),
   addRelationship: (
     name: string,
-    payload: { from_char: string; to_char: string; relationship: string; since?: number }
+    payload: { from_char: string; to_char: string; relationship: string; since?: number | null }
   ) =>
     request<GlossaryResponse>(`/api/novels/${encodeURIComponent(name)}/glossary/relationships`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     }),
+  removeRelationship: (name: string, from_char: string, to_char: string) => {
+    const params = new URLSearchParams({ from_char, to_char })
+    return request<GlossaryResponse>(
+      `/api/novels/${encodeURIComponent(name)}/glossary/relationships?${params.toString()}`,
+      { method: 'DELETE' }
+    )
+  },
   validateGlossary: (name: string) =>
     request<{ job_id: string }>(`/api/novels/${encodeURIComponent(name)}/glossary/validate`, {
       method: 'POST'

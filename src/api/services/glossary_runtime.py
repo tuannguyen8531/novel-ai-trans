@@ -7,11 +7,19 @@ from collections.abc import Callable
 from pathlib import Path
 from threading import Event
 
+from src.application.errors import ResourceConflictError, ResourceNotFoundError
 from src.application.progress import ProgressEvent
 from src.domain.glossary import audit_term_usage, validate_glossary_data
 from src.services.glossary import (
     _resolve_glossary,
     remove_glossary_term,
+    update_glossary_term,
+)
+from src.services.glossary import (
+    remove_character as remove_character_impl,
+)
+from src.services.glossary import (
+    remove_relationship as remove_relationship_impl,
 )
 from src.services.glossary import (
     save_character as _save_character,
@@ -64,6 +72,39 @@ def remove_term(novel_root: Path, original: str) -> dict:
     return load_glossary(novel_root)
 
 
+def update_term(
+    novel_root: Path,
+    old_original: str,
+    new_original: str,
+    translated: str,
+    *,
+    overwrite: bool,
+) -> dict:
+    try:
+        update_glossary_term(
+            novel_root.name,
+            old_original,
+            new_original,
+            translated,
+            overwrite=overwrite,
+        )
+    except KeyError as error:
+        raise ResourceNotFoundError(f"Glossary term not found: {old_original}") from error
+    except FileExistsError as error:
+        raise ResourceConflictError(f"Glossary term already exists: {new_original}") from error
+    return load_glossary(novel_root)
+
+
+def remove_character(novel_root: Path, original: str) -> dict:
+    remove_character_impl(novel_root.name, original)
+    return load_glossary(novel_root)
+
+
+def remove_relationship(novel_root: Path, from_char: str, to_char: str) -> dict:
+    remove_relationship_impl(novel_root.name, from_char, to_char)
+    return load_glossary(novel_root)
+
+
 def save_character(
     novel_root: Path,
     original: str,
@@ -86,7 +127,8 @@ def save_relationship(
     from_char: str,
     to_char: str,
     relationship: str,
-    since: int | None,
+    since: int | None = None,
+    update_since: bool = False,
 ) -> dict:
     _save_relationship(
         novel_root.name,
@@ -94,6 +136,7 @@ def save_relationship(
         to_char,
         relationship,
         since_chapter=since,
+        update_since=update_since,
     )
     return load_glossary(novel_root)
 

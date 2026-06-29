@@ -713,6 +713,8 @@ def upsert_relationship(
     to_char: str,
     relationship: str,
     since_chapter: int | None = None,
+    *,
+    update_since: bool = False,
 ) -> dict:
     """Add or update one relationship edge, preserving the one-edge-per-pair rule."""
     data = normalize_glossary_data(data)
@@ -720,18 +722,21 @@ def upsert_relationship(
     from_char = resolve_character_ref(from_char, entities) or from_char
     to_char = resolve_character_ref(to_char, entities) or to_char
     relationship = relationship.strip().lower()
+    should_update_since = update_since or since_chapter is not None
     edges = [list(edge) for edge in data.get("edges", [])]
     for edge in edges:
         if len(edge) >= 3 and {edge[0], edge[1]} == {from_char, to_char}:
             edge[0] = from_char
             edge[1] = to_char
             edge[2] = relationship
-            if since_chapter is None:
-                return {**data, "edges": edges}
-            if len(edge) > 3:
-                edge[3] = since_chapter
-            else:
-                edge.append(since_chapter)
+            if should_update_since:
+                if since_chapter is None:
+                    if len(edge) > 3:
+                        edge.pop(3)
+                elif len(edge) > 3:
+                    edge[3] = since_chapter
+                else:
+                    edge.append(since_chapter)
             return {**data, "edges": edges}
 
     edge: list[str | int] = [from_char, to_char, relationship]

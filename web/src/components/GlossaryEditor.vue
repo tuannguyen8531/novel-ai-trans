@@ -123,6 +123,117 @@ async function removeTerm(original: string) {
   }
 }
 
+const editingTerm = ref<{ oldOriginal: string; original: string; translated: string } | null>(null)
+
+function startEditTerm(original: string, translated: string) {
+  editingTerm.value = { oldOriginal: original, original, translated }
+}
+
+function cancelEditTerm() {
+  editingTerm.value = null
+}
+
+async function saveEditTerm() {
+  if (!editingTerm.value || !editingTerm.value.original || !editingTerm.value.translated) return
+  const { oldOriginal, original, translated } = editingTerm.value
+  let overwrite = false
+
+  if (oldOriginal !== original && terms.value[original]) {
+    if (!confirm(`Term "${original}" already exists. Overwrite it?`)) {
+      return
+    }
+    overwrite = true
+  }
+
+  error.value = null
+  try {
+    data.value = await api.updateTerm(props.novel, oldOriginal, { original, translated, overwrite })
+    editingTerm.value = null
+  } catch (err) {
+    error.value = (err as Error).message
+  }
+}
+
+const editingCharacter = ref<{ original: string; translated_name: string; role: string } | null>(null)
+
+function startEditCharacter(original: string, translated_name: string, role: string) {
+  editingCharacter.value = { original, translated_name, role }
+}
+
+function cancelEditCharacter() {
+  editingCharacter.value = null
+}
+
+async function saveEditCharacter() {
+  if (!editingCharacter.value || !editingCharacter.value.original) return
+  const { original, translated_name, role } = editingCharacter.value
+  error.value = null
+  try {
+    data.value = await api.updateCharacter(
+      props.novel,
+      original,
+      {
+        translated_name: translated_name || undefined,
+        role: role || undefined
+      }
+    )
+    editingCharacter.value = null
+  } catch (err) {
+    error.value = (err as Error).message
+  }
+}
+
+const editingRelationship = ref<{ index: number; from: string; to: string; relationship: string; since: number | null } | null>(null)
+
+function startEditRelationship(index: number, edge: Edge) {
+  editingRelationship.value = {
+    index,
+    from: edge.from,
+    to: edge.to,
+    relationship: edge.relationship,
+    since: edge.since
+  }
+}
+
+function cancelEditRelationship() {
+  editingRelationship.value = null
+}
+
+async function saveEditRelationship() {
+  if (!editingRelationship.value) return
+  const { from, to, relationship, since } = editingRelationship.value
+  error.value = null
+  try {
+    data.value = await api.addRelationship(props.novel, {
+      from_char: from,
+      to_char: to,
+      relationship,
+      since: typeof since === 'number' ? since : null
+    })
+    editingRelationship.value = null
+  } catch (err) {
+    error.value = (err as Error).message
+  }
+}
+
+async function removeCharacter(original: string) {
+  if (!confirm(`Remove character "${original}"? This will also remove their relationships.`)) return
+  try {
+    data.value = await api.removeCharacter(props.novel, original)
+  } catch (err) {
+    error.value = (err as Error).message
+  }
+}
+
+async function removeRelationship(from_char: string, to_char: string) {
+  if (!confirm(`Remove relationship between "${from_char}" and "${to_char}"?`)) return
+  try {
+    data.value = await api.removeRelationship(props.novel, from_char, to_char)
+  } catch (err) {
+    error.value = (err as Error).message
+  }
+}
+
 async function saveCharacter() {
   if (!newCharacter.value.original) return
   try {
@@ -144,11 +255,12 @@ async function saveCharacter() {
 async function addRelationship() {
   if (!newRelationship.value.from || !newRelationship.value.to || !newRelationship.value.relationship) return
   try {
+    const sinceVal = newRelationship.value.since
     data.value = await api.addRelationship(props.novel, {
       from_char: newRelationship.value.from,
       to_char: newRelationship.value.to,
       relationship: newRelationship.value.relationship,
-      since: newRelationship.value.since ?? undefined
+      since: (typeof sinceVal !== 'number') ? undefined : sinceVal
     })
     newRelationship.value = { from: '', to: '', relationship: '', since: null }
     showAddRelationship.value = false
@@ -194,11 +306,30 @@ async function addRelationship() {
           </thead>
           <tbody>
             <tr v-for="[original, translated] in filteredTerms" :key="original">
-              <td class="gloss-original">{{ original }}</td>
-              <td>{{ translated }}</td>
-              <td class="actions">
-                <button class="secondary" type="button" @click="removeTerm(original)">Remove</button>
-              </td>
+              <template v-if="editingTerm && editingTerm.oldOriginal === original">
+                <td>
+                  <input v-model="editingTerm.original" class="inline-edit-input" />
+                </td>
+                <td>
+                  <input v-model="editingTerm.translated" class="inline-edit-input" />
+                </td>
+                <td class="actions">
+                  <div class="row gap-1">
+                    <button type="button" @click="saveEditTerm" :disabled="!editingTerm.original || !editingTerm.translated">Save</button>
+                    <button class="secondary" type="button" @click="cancelEditTerm">Cancel</button>
+                  </div>
+                </td>
+              </template>
+              <template v-else>
+                <td class="gloss-original">{{ original }}</td>
+                <td>{{ translated }}</td>
+                <td class="actions">
+                  <div class="row gap-1" style="display: inline-flex;">
+                    <button class="secondary" type="button" @click="startEditTerm(original, translated)">Edit</button>
+                    <button class="secondary" type="button" @click="removeTerm(original)">Remove</button>
+                  </div>
+                </td>
+              </template>
             </tr>
           </tbody>
         </table>
@@ -244,14 +375,45 @@ async function addRelationship() {
               <th>Translated</th>
               <th>Role</th>
               <th>Pronoun</th>
+              <th class="actions"></th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="[original, info] in filteredCharacters" :key="original">
-              <td class="gloss-original">{{ original }}</td>
-              <td>{{ info.translated_name ?? '—' }}</td>
-              <td>{{ info.role ?? '—' }}</td>
-              <td>{{ info.pronoun ?? '—' }}</td>
+              <template v-if="editingCharacter && editingCharacter.original === original">
+                <td class="gloss-original">{{ original }}</td>
+                <td>
+                  <input v-model="editingCharacter.translated_name" class="inline-edit-input" />
+                </td>
+                <td>
+                  <select v-model="editingCharacter.role" class="inline-edit-input">
+                    <option value="">(role unchanged)</option>
+                    <option value="protagonist">protagonist</option>
+                    <option value="antagonist">antagonist</option>
+                    <option value="supporting">supporting</option>
+                    <option value="minor">minor</option>
+                  </select>
+                </td>
+                <td>{{ info.pronoun ?? '—' }}</td>
+                <td class="actions">
+                  <div class="row gap-1">
+                    <button type="button" @click="saveEditCharacter">Save</button>
+                    <button class="secondary" type="button" @click="cancelEditCharacter">Cancel</button>
+                  </div>
+                </td>
+              </template>
+              <template v-else>
+                <td class="gloss-original">{{ original }}</td>
+                <td>{{ info.translated_name ?? '—' }}</td>
+                <td>{{ info.role ?? '—' }}</td>
+                <td>{{ info.pronoun ?? '—' }}</td>
+                <td class="actions">
+                  <div class="row gap-1" style="display: inline-flex;">
+                    <button class="secondary" type="button" @click="startEditCharacter(original, info.translated_name ?? '', info.role ?? '')">Edit</button>
+                    <button class="secondary" type="button" @click="removeCharacter(original)">Remove</button>
+                  </div>
+                </td>
+              </template>
             </tr>
           </tbody>
         </table>
@@ -305,15 +467,47 @@ async function addRelationship() {
               <th>To</th>
               <th>Relationship</th>
               <th>Since</th>
+              <th class="actions"></th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="(edge, index) in filteredEdges" :key="`${edge.from}-${edge.to}-${edge.relationship}-${index}`">
-              <td class="gloss-original">{{ edge.from }}</td>
-              <td class="arrow">→</td>
-              <td class="gloss-original">{{ edge.to }}</td>
-              <td>{{ edge.relationship }}</td>
-              <td>{{ edge.since ?? '—' }}</td>
+              <template v-if="editingRelationship && editingRelationship.index === index">
+                <td class="gloss-original">{{ edge.from }}</td>
+                <td class="arrow">→</td>
+                <td class="gloss-original">{{ edge.to }}</td>
+                <td>
+                  <input v-model="editingRelationship.relationship" class="inline-edit-input" />
+                </td>
+                <td>
+                  <input
+                    v-model.number="editingRelationship.since"
+                    type="number"
+                    min="0"
+                    class="inline-edit-input"
+                    style="max-width: 6rem;"
+                  />
+                </td>
+                <td class="actions">
+                  <div class="row gap-1">
+                    <button type="button" @click="saveEditRelationship" :disabled="!editingRelationship.relationship">Save</button>
+                    <button class="secondary" type="button" @click="cancelEditRelationship">Cancel</button>
+                  </div>
+                </td>
+              </template>
+              <template v-else>
+                <td class="gloss-original">{{ edge.from }}</td>
+                <td class="arrow">→</td>
+                <td class="gloss-original">{{ edge.to }}</td>
+                <td>{{ edge.relationship }}</td>
+                <td>{{ edge.since ?? '—' }}</td>
+                <td class="actions">
+                  <div class="row gap-1" style="display: inline-flex;">
+                    <button class="secondary" type="button" @click="startEditRelationship(index, edge)">Edit</button>
+                    <button class="secondary" type="button" @click="removeRelationship(edge.from, edge.to)">Remove</button>
+                  </div>
+                </td>
+              </template>
             </tr>
           </tbody>
         </table>
@@ -426,5 +620,11 @@ async function addRelationship() {
 .gloss-empty {
   padding: 1rem;
   text-align: center;
+}
+
+.inline-edit-input {
+  font-size: 0.85rem;
+  padding: 0.25rem 0.45rem;
+  background: var(--bg-elev-2);
 }
 </style>

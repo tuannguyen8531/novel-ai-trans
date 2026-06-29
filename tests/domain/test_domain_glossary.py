@@ -450,6 +450,20 @@ def test_upsert_relationship_preserves_since_when_not_supplied():
     assert result["edges"] == [["李明", "张伟", "rival", 1]]
 
 
+def test_upsert_relationship_removes_since_when_explicitly_null():
+    data = {
+        "entities": {
+            "李明": {"translated_name": "Lý Minh"},
+            "张伟": {"translated_name": "Trương Vĩ"},
+        },
+        "edges": [["李明", "张伟", "friend", 1]],
+    }
+
+    result = upsert_relationship(data, "李明", "张伟", "rival", since_chapter=None, update_since=True)
+
+    assert result["edges"] == [["李明", "张伟", "rival"]]
+
+
 def test_format_relationships_shorthand():
     entities = {
         "李明": {"translated_name": "Lý Minh", "role": "protagonist", "pronoun": "cậu"},

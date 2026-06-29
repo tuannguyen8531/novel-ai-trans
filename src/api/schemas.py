@@ -349,6 +349,14 @@ class GlossaryTermAdd(BaseModel):
     translated: str
 
 
+class GlossaryTermUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    original: str = Field(min_length=1)
+    translated: str = Field(min_length=1)
+    overwrite: bool = False
+
+
 class GlossaryCharacterUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

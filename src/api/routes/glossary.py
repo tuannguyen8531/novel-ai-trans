@@ -20,6 +20,7 @@ from src.api.schemas import (
     GlossaryResponse,
     GlossaryTermAdd,
     GlossaryTermsPut,
+    GlossaryTermUpdate,
     JobStartResponse,
 )
 from src.api.services.glossary_runtime import (
@@ -28,7 +29,14 @@ from src.api.services.glossary_runtime import (
     remove_term,
     save_term,
     save_terms,
+    update_term,
     validate_glossary,
+)
+from src.api.services.glossary_runtime import (
+    remove_character as remove_character_impl,
+)
+from src.api.services.glossary_runtime import (
+    remove_relationship as remove_relationship_impl,
 )
 from src.api.services.glossary_runtime import (
     save_character as save_character_impl,
@@ -104,6 +112,24 @@ def delete_term(
     return GlossaryResponse(novel=name, data=data)
 
 
+@router.patch("/novels/{name}/glossary/terms/{original}", response_model=GlossaryResponse)
+def patch_term(
+    name: str,
+    original: str,
+    payload: GlossaryTermUpdate,
+    _: Principal = Depends(authenticate),
+) -> GlossaryResponse:
+    novel_root = _validate_novel(name)
+    data = update_term(
+        novel_root,
+        original,
+        payload.original,
+        payload.translated,
+        overwrite=payload.overwrite,
+    )
+    return GlossaryResponse(novel=name, data=data)
+
+
 @router.get("/novels/{name}/glossary/characters", response_model=GlossaryCharactersResponse)
 def list_characters(
     name: str,
@@ -141,6 +167,17 @@ def update_character(
     return GlossaryResponse(novel=name, data=data)
 
 
+@router.delete("/novels/{name}/glossary/characters/{original}", response_model=GlossaryResponse)
+def delete_character(
+    name: str,
+    original: str,
+    _: Principal = Depends(authenticate),
+) -> GlossaryResponse:
+    novel_root = _validate_novel(name)
+    data = remove_character_impl(novel_root, original)
+    return GlossaryResponse(novel=name, data=data)
+
+
 @router.post("/novels/{name}/glossary/relationships", response_model=GlossaryResponse)
 def add_relationship(
     name: str,
@@ -154,7 +191,20 @@ def add_relationship(
         to_char=payload.to_char,
         relationship=payload.relationship,
         since=payload.since,
+        update_since="since" in payload.model_fields_set,
     )
+    return GlossaryResponse(novel=name, data=data)
+
+
+@router.delete("/novels/{name}/glossary/relationships", response_model=GlossaryResponse)
+def delete_relationship(
+    name: str,
+    from_char: str,
+    to_char: str,
+    _: Principal = Depends(authenticate),
+) -> GlossaryResponse:
+    novel_root = _validate_novel(name)
+    data = remove_relationship_impl(novel_root, from_char, to_char)
     return GlossaryResponse(novel=name, data=data)
 
 

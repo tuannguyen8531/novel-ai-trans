@@ -230,6 +230,75 @@ def remove_glossary_term(novel_name: str, original: str) -> bool:
     return removed
 
 
+def update_glossary_term(
+    novel_name: str,
+    old_original: str,
+    new_original: str,
+    translated: str,
+    *,
+    overwrite: bool = False,
+) -> None:
+    """Atomically update or rename a term without exposing partial state."""
+    path = _resolve_glossary(novel_name)
+
+    def updater(data: dict) -> dict:
+        terms = dict(data.get("terms", {}))
+        if old_original not in terms:
+            raise KeyError(old_original)
+        if new_original != old_original and new_original in terms and not overwrite:
+            raise FileExistsError(new_original)
+        terms[new_original] = translated
+        if new_original != old_original:
+            terms.pop(old_original)
+        return {**data, "terms": terms}
+
+    _merge_json_locked(path, updater)
+
+
+def remove_character(novel_name: str, original_name: str) -> bool:
+    """Remove a character entity. Returns True if the character existed."""
+    path = _resolve_glossary(novel_name)
+    removed = False
+
+    def updater(data: dict) -> dict:
+        nonlocal removed
+        entities = dict(data.get("entities", {}))
+        removed = original_name in entities
+        entities.pop(original_name, None)
+        # Also clean up any edges or address rules referencing this character!
+        edges = [
+            edge for edge in data.get("edges", []) if len(edge) >= 2 and edge[0] != original_name and edge[1] != original_name
+        ]
+        address_rules = [
+            rule
+            for rule in data.get("address_rules", [])
+            if rule.get("speaker") != original_name and rule.get("listener") != original_name
+        ]
+        return {**data, "entities": entities, "edges": edges, "address_rules": address_rules}
+
+    _merge_json_locked(path, updater)
+    return removed
+
+
+def remove_relationship(novel_name: str, from_char: str, to_char: str) -> bool:
+    """Remove a relationship edge between characters. Returns True if existed."""
+    path = _resolve_glossary(novel_name)
+    removed = False
+
+    def updater(data: dict) -> dict:
+        nonlocal removed
+        edges = []
+        for edge in data.get("edges", []):
+            if len(edge) >= 2 and {edge[0], edge[1]} == {from_char, to_char}:
+                removed = True
+                continue
+            edges.append(edge)
+        return {**data, "edges": edges}
+
+    _merge_json_locked(path, updater)
+    return removed
+
+
 def save_character_pronoun(novel_name: str, original_name: str, pronoun: str) -> bool:
     """Set a character pronoun. Returns True if the character existed."""
     path = _resolve_glossary(novel_name)
@@ -286,6 +355,8 @@ def save_relationship(
     to_char: str,
     relationship: str,
     since_chapter: int | None = None,
+    *,
+    update_since: bool = False,
 ) -> bool:
     """Add or update a relationship. Returns True when both characters exist."""
     path = _resolve_glossary(novel_name)
@@ -297,7 +368,14 @@ def save_relationship(
         if from_char not in entities or to_char not in entities:
             return data
         updated = True
-        return upsert_relationship(data, from_char, to_char, relationship, since_chapter=since_chapter)
+        return upsert_relationship(
+            data,
+            from_char,
+            to_char,
+            relationship,
+            since_chapter=since_chapter,
+            update_since=update_since,
+        )
 
     _merge_json_locked(path, updater)
     return updated
