@@ -9,7 +9,8 @@ Each subcommand lives in its own module under `src/cli/`:
   - src.cli.crawl        → crawl, generate, validate, import
   - src.cli.translate    → translate, translate glossary <subcmd>
   - src.cli.pack         → pack
-  - src.cli.test         → test (ruff + pytest)
+  - src.cli.test         → test (ruff + pyright + pytest)
+  - scripts.build        → build (web UI)
 
 Usage:
     python main.py --help
@@ -28,6 +29,7 @@ COMMANDS = (
     "translate",
     "pack",
     "glossary",
+    "build",
     "serve",
     "test",
 )
@@ -87,6 +89,11 @@ def main() -> int:
         from src.cli import test as test_module
 
         return test_module.test_main(sys.argv[2:])
+
+    if subcommand == "build":
+        from scripts.build import main as build_main
+
+        return build_main()
 
     if subcommand == "serve":
         from src.api.__main__ import main as serve_main

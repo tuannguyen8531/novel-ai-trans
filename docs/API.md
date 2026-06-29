@@ -832,7 +832,7 @@ especially for job reconnect, terminal events, forms, and glossary editing.
 
 ### Manual smoke test
 
-1. Start the API with uv run serve and check /api/health and /docs.
+1. Build the GUI with uv run build, then start the API with uv run serve and check /api/health and /docs.
 2. Start Vite and verify the /api proxy.
 3. Import an EPUB through the GUI.
 4. Translate a small chapter range and observe SSE progress.
@@ -840,12 +840,12 @@ especially for job reconnect, terminal events, forms, and glossary editing.
 6. Request cancellation and verify it stops before the next chapter.
 7. Edit a glossary term and verify the stored JSON.
 8. Pack EPUB and PDF and download both artifacts.
-9. Build web/dist and verify FastAPI serves direct and refreshed Vue routes.
+9. Verify FastAPI serves direct and refreshed Vue routes from web/dist.
 10. Stop every temporary server started for verification.
 
 ## Acceptance Criteria
 
-- One uv run serve command serves API and the built GUI.
+- `uv run build` builds the GUI; `uv run serve` serves the API and existing GUI build.
 - Existing crawl, generate, validate, import, translate, glossary, and pack CLI
   commands retain their behavior.
 - The GUI completes import -> translate -> pack without shell access.

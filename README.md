@@ -133,8 +133,9 @@ uv run import <book.epub>            # import an EPUB into the pipeline
 uv run translate <novel>             # batch translate chapters
 uv run glossary <command> <novel>    # manage per-novel glossary
 uv run pack <novel>                  # build EPUB / PDF
-uv run test                          # ruff + pytest
-uv run serve                         # build, then serve API + GUI
+uv run test                          # ruff + pyright + pytest
+uv run build                         # build the web UI
+uv run serve                         # start the API + built GUI server
 ```
 
 `main.py` also provides a single dispatcher for local use:
@@ -213,6 +214,7 @@ Run individual checks:
 ```bash
 uv run ruff check .
 uv run ruff format --check .
+uv run pyright
 uv run pytest tests/
 ```
 

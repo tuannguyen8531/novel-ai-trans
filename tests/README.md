@@ -38,5 +38,5 @@ highest-level layer that owns the behavior being asserted.
 Or, use the unified validation entry point from the project root:
 
 ```bash
-uv run python main.py test          # ruff lint + ruff format + pytest
+uv run python main.py test          # ruff lint + ruff format + pyright + pytest
 ```
