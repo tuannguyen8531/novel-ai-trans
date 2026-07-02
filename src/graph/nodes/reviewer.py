@@ -11,7 +11,6 @@ Scoring criteria:
 import json
 
 from src.config import config
-from src.domain.quality import has_blocking_issues, post_check_translation
 from src.domain.target_language import target_language_name
 from src.models.state import TranslationState
 from src.prompts import render_prompt
@@ -56,12 +55,11 @@ def reviewer_node(state: TranslationState) -> dict:
             total_chunks=total_chunks,
         )
 
-    post_issues = post_check_translation(chunk, translation, state.get("glossary", {}))
-    if post_issues:
-        issue_feedback = "Post-check issues: " + "; ".join(issue.message for issue in post_issues)
-        feedback = f"{feedback}\n{issue_feedback}" if feedback else issue_feedback
-        if has_blocking_issues(post_issues):
-            score = min(score, config.review_threshold - 0.1)
+    post_feedback = state.get("review_feedback", "")
+    if post_feedback:
+        feedback = f"{feedback}\n{post_feedback}" if feedback else post_feedback
+    if state.get("post_check_blocking", False):
+        score = min(score, config.review_threshold - 0.1)
 
     log_ai_call(
         "review",
@@ -72,11 +70,10 @@ def reviewer_node(state: TranslationState) -> dict:
         total_chunks=total_chunks,
         score=score,
         feedback=feedback,
-        post_check_issues=[issue.code for issue in post_issues],
+        post_check_issues=state.get("post_check_issues", []),
     )
 
     return {
         "review_score": score,
         "review_feedback": feedback,
-        "post_check_issues": [issue.code for issue in post_issues],
     }

@@ -29,6 +29,7 @@ class TestInitialState:
             "review_feedback",
             "retry_count",
             "post_check_issues",
+            "post_check_blocking",
             "quality_reports",
             "new_terms",
             "chapter_summary",
@@ -69,6 +70,7 @@ class TestInitialState:
         assert state["review_feedback"] == ""
         assert state["retry_count"] == 0
         assert state["post_check_issues"] == []
+        assert state["post_check_blocking"] is False
         assert state["quality_reports"] == []
         assert state["new_terms"] == {}
         assert state["chapter_summary"] == ""

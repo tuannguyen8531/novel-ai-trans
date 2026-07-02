@@ -35,6 +35,7 @@ class TranslationState(TypedDict):
     review_feedback: str  # What to improve
     retry_count: int  # Current retry count for this chunk
     post_check_issues: list[str]  # Deterministic quality issue codes
+    post_check_blocking: bool  # Whether deterministic checks require a retry/failure
     quality_reports: list[dict]  # Per-accepted-chunk quality records
 
     # --- Learning Output ---
@@ -72,6 +73,7 @@ def initial_state(
         review_feedback="",
         retry_count=0,
         post_check_issues=[],
+        post_check_blocking=False,
         quality_reports=[],
         new_terms={},
         new_characters={},

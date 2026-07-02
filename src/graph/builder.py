@@ -2,14 +2,17 @@
 Graph Builder — Assembles the LangGraph translation pipeline.
 
 Flow (with review):
-    START → detect → context → chunk → translate → review
+    START → detect → context → chunk → translate → quality → review
+    quality →|blocking issue| retry or fail
     review →|score OK or max retries| accept_chunk
     review →|score low| retry → translate
     accept_chunk →|more chunks| translate
     accept_chunk →|done| learn → END
 
 Flow (skip review):
-    START → detect → context → chunk → translate → accept_chunk
+    START → detect → context → chunk → translate → quality
+    quality →|clean| accept_chunk
+    quality →|blocking issue| retry or fail
     accept_chunk →|more chunks| translate
     accept_chunk →|done| learn → END
 """
@@ -22,9 +25,14 @@ from src.graph.nodes.chunker import chunker_node
 from src.graph.nodes.context import context_node
 from src.graph.nodes.detector import detector_node
 from src.graph.nodes.learner import learner_node
+from src.graph.nodes.quality import quality_node
 from src.graph.nodes.reviewer import reviewer_node
 from src.graph.nodes.translator import translator_node
 from src.models.state import TranslationState
+
+
+class TranslationQualityError(RuntimeError):
+    """Raised when deterministic quality checks still fail after retries."""
 
 
 def _after_review(state: TranslationState) -> str:
@@ -41,6 +49,21 @@ def _after_review(state: TranslationState) -> str:
     if score < config.review_threshold and retry_count < config.max_retries:
         return "retry"
     return "next"
+
+
+def _after_quality(state: TranslationState) -> str:
+    """Retry blocking deterministic failures, then reject instead of saving them."""
+    if not state.get("post_check_blocking", False):
+        return "next"
+    if state["retry_count"] < config.max_retries:
+        return "retry"
+    return "fail"
+
+
+def _reject_chunk(state: TranslationState) -> dict:
+    issue_codes = ", ".join(state.get("post_check_issues", [])) or "unknown_quality_failure"
+    feedback = state.get("review_feedback", "").strip() or "The translated chunk failed deterministic quality checks."
+    raise TranslationQualityError(f"Deterministic quality checks failed after retries: {feedback} [{issue_codes}]")
 
 
 def _accept_chunk(state: TranslationState) -> dict:
@@ -67,6 +90,7 @@ def _accept_chunk(state: TranslationState) -> dict:
         "retry_count": 0,
         "review_feedback": "",
         "post_check_issues": [],
+        "post_check_blocking": False,
         "quality_reports": quality_reports,
     }
 
@@ -105,7 +129,10 @@ def build_graph() -> CompiledStateGraph[
     graph.add_node("context", context_node)
     graph.add_node("chunk", chunker_node)
     graph.add_node("translate", translator_node)
+    graph.add_node("quality", quality_node)
     graph.add_node("accept_chunk", _accept_chunk)
+    graph.add_node("increment_retry", _increment_retry)
+    graph.add_node("reject_chunk", _reject_chunk)
     graph.add_node("learn", learner_node)
 
     # Wire edges: linear start
@@ -113,24 +140,25 @@ def build_graph() -> CompiledStateGraph[
     graph.add_edge("detect", "context")
     graph.add_edge("context", "chunk")
     graph.add_edge("chunk", "translate")
+    graph.add_edge("translate", "quality")
+
+    quality_next = "review" if enable_review else "accept_chunk"
+    graph.add_conditional_edges(
+        "quality",
+        _after_quality,
+        {"retry": "increment_retry", "fail": "reject_chunk", "next": quality_next},
+    )
+    graph.add_edge("increment_retry", "translate")
 
     if enable_review:
-        # With review: translate → review → retry or accept
+        # With review: mechanically clean translations receive the optional LLM review.
         graph.add_node("review", reviewer_node)
-        graph.add_node("increment_retry", _increment_retry)
-
-        graph.add_edge("translate", "review")
 
         graph.add_conditional_edges(
             "review",
             _after_review,
             {"retry": "increment_retry", "next": "accept_chunk"},
         )
-
-        graph.add_edge("increment_retry", "translate")
-    else:
-        # Skip review: translate → accept directly
-        graph.add_edge("translate", "accept_chunk")
 
     # After accepting: more chunks or learn
     graph.add_conditional_edges(

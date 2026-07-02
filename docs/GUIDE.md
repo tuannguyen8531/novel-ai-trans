@@ -309,8 +309,15 @@ Per-chapter quality reports are written to
 output char count, elapsed seconds, new terms/characters count, and chunk-level
 quality reports.
 
-Use `Ctrl+C` to interrupt gracefully — progress is saved and the run can be
-resumed with `--resume`.
+Token-free checks run on every translated chunk, even when `--review` is off.
+Blocking issues such as empty output, substantial untranslated source text,
+severe truncation, code fences, or missing illustration markers are retried up
+to `MAX_RETRIES`; if they still fail, the chapter is recorded as failed instead
+of saving a known-bad translation.
+
+Use `Ctrl+C` to stop gracefully. The chapter currently being processed finishes
+and is saved, then the run stops before starting the next chapter. Resume later
+with `--resume`.
 
 ## 3. Glossary
 
@@ -403,7 +410,8 @@ PDF output uses DejaVu Serif fonts for Vietnamese diacritics. On Linux install
 
 ## Review and summary steps
 
-Two optional, token-heavier steps in the translation workflow:
+The deterministic checks described above are always enabled. Two additional,
+token-heavier steps are optional:
 
 - **Review** (`--review` or `ENABLE_REVIEW=true`): a second pass scores each
   chunk against the source. Chunks below `REVIEW_THRESHOLD` (default `0.7`) are
@@ -412,8 +420,8 @@ Two optional, token-heavier steps in the translation workflow:
   summary stored in the glossary's `chapter_summaries`, used as extra context
   for later chapters.
 
-Both are off by default to keep cost down. Turn them on for higher-quality
-literary output, especially with cloud providers.
+The LLM review and summary calls are off by default to keep cost down. Turn them
+on for higher-quality literary output, especially with cloud providers.
 
 ## Notifications
 

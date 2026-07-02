@@ -446,7 +446,6 @@ def run_translation(
                 chapter=chapter_num,
                 novel=novel_name,
             )
-            failed_chapters.append(chapter_num)
             post_count = success_count + len(failed_chapters)
             _emit(
                 progress_callback,
@@ -460,6 +459,9 @@ def run_translation(
                     extra={"error": str(error)},
                 ),
             )
+            if cancel_event is not None and cancel_event.is_set():
+                cancelled = True
+                break
             continue
 
         attempted.append(chapter_num)
@@ -489,6 +491,9 @@ def run_translation(
                 },
             ),
         )
+        if cancel_event is not None and cancel_event.is_set():
+            cancelled = True
+            break
 
     _emit(
         progress_callback,

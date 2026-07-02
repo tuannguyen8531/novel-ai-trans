@@ -3,10 +3,13 @@
 import json
 import tempfile
 from pathlib import Path
+from threading import Event
 from unittest.mock import patch
 
 import pytest
 
+from src.application.progress import ProgressEvent
+from src.application.translate import TranslationRequest, run_translation
 from src.cli.translate import (
     find_untranslated,
     load_progress,
@@ -15,6 +18,7 @@ from src.cli.translate import (
     translate_file,
     translate_main,
 )
+from src.config import Config
 
 
 @pytest.fixture(autouse=True)
@@ -260,6 +264,60 @@ class TestQualityReport:
         assert report["new_terms_count"] == 1
         assert report["new_characters_count"] == 1
         assert report["chunks"][0]["score"] == 0.9
+
+
+class TestTranslationWorkflow:
+    def test_chapter_exception_is_counted_once(self, tmp_path):
+        translated_root = tmp_path / "translated"
+        input_dir = translated_root / "novel" / "input"
+        input_dir.mkdir(parents=True)
+        (input_dir / "chapter_1.txt").write_text("source", encoding="utf-8")
+        events: list[ProgressEvent] = []
+        config = Config(translated_dir=str(translated_root))
+
+        with (
+            patch("src.application.translate.config_context.get_config", return_value=config),
+            patch("src.application.translate._paths.PROGRESS_DIR", tmp_path / "progress"),
+            patch("src.application.translate._validate_provider"),
+            patch("src.application.translate.build_graph", return_value=object()),
+            patch("src.application.translate.translate_file", side_effect=RuntimeError("provider failed")),
+        ):
+            result = run_translation(TranslationRequest(novel="novel"), progress_callback=events.append)
+
+        assert result.total == 1
+        assert result.failed == 1
+        assert result.failures == [1]
+        assert result.chapters_attempted == [1]
+        failed_event = next(event for event in events if event.kind == "chapter_failed")
+        assert failed_event.current == 1
+        assert failed_event.pct == 100.0
+
+    def test_cancel_finishes_current_chapter_then_stops_before_the_next(self, tmp_path):
+        translated_root = tmp_path / "translated"
+        input_dir = translated_root / "novel" / "input"
+        input_dir.mkdir(parents=True)
+        (input_dir / "chapter_1.txt").write_text("source 1", encoding="utf-8")
+        (input_dir / "chapter_2.txt").write_text("source 2", encoding="utf-8")
+        config = Config(translated_dir=str(translated_root))
+        cancel_event = Event()
+
+        def finish_current_chapter(*_args, **_kwargs):
+            cancel_event.set()
+            return True, 10, 1.0, 0
+
+        with (
+            patch("src.application.translate.config_context.get_config", return_value=config),
+            patch("src.application.translate._paths.PROGRESS_DIR", tmp_path / "progress"),
+            patch("src.application.translate._validate_provider"),
+            patch("src.application.translate.build_graph", return_value=object()),
+            patch("src.application.translate.translate_file", side_effect=finish_current_chapter) as mocked_translate,
+        ):
+            result = run_translation(TranslationRequest(novel="novel"), cancel_event=cancel_event)
+
+        assert result.cancelled is True
+        assert result.success == 1
+        assert result.chapters_attempted == [1]
+        mocked_translate.assert_called_once()
 
 
 class TestGlossaryCli:

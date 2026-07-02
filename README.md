@@ -36,6 +36,8 @@ Website / EPUB
   dark-mode PDF support.
 - **Resume anytime** — chapter-level progress tracking, retry failed chapters,
   retranslate ranges.
+- **Token-free quality checks** on every translated chunk, with automatic retry
+  for empty, truncated, untranslated, or illustration-damaging output.
 - **Optional review and summary steps** when quality is worth the extra tokens.
 - **Telegram notifications** when a crawl or translation run finishes.
 
@@ -166,7 +168,7 @@ Settings are loaded from `.env`. Copy `.env.example` to `.env` and edit.
 | `CHUNK_SIZE` | `1500` | Translation chunk size |
 | `CHUNK_OVERLAP` | `100` | Context overlap between chunks |
 | `REVIEW_THRESHOLD` | `0.7` | Minimum review score before retry |
-| `MAX_RETRIES` | `2` | Translation retry count |
+| `MAX_RETRIES` | `2` | Quality and provider retry count |
 | `ENABLE_REVIEW` | `false` | Enable review by default |
 | `ENABLE_SUMMARY` | `false` | Enable summary by default |
 | `TELEGRAM_ENABLED` | `false` | Enable Telegram notifications for crawl and translation |
@@ -199,6 +201,7 @@ separate from source code.
 | Guide | Description |
 | --- | --- |
 | [docs/GUIDE.md](docs/GUIDE.md) | Full walkthrough: crawl, generate, import, translate, glossary, pack |
+| [docs/GUI.md](docs/GUI.md) | Web GUI and API: build, serve, local vs remote mode, pages, jobs |
 | [docs/PROVIDERS.md](docs/PROVIDERS.md) | Detailed provider setup (Ollama, Gemini, OpenRouter, fallback) |
 
 ## Development

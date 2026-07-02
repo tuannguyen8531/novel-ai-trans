@@ -1,5 +1,6 @@
 from unittest.mock import MagicMock, patch
 
+from src.graph.nodes.quality import quality_node
 from src.graph.nodes.reviewer import reviewer_node
 from src.models.state import initial_state
 
@@ -20,13 +21,14 @@ def test_reviewer_keeps_passing_score_when_post_check_is_clean():
 
     assert result["review_score"] == 0.9
     assert result["review_feedback"] == "Good"
-    assert result["post_check_issues"] == []
+    assert "post_check_issues" not in result
 
 
 def test_reviewer_forces_retry_on_blocking_post_check_issue():
     state = initial_state("张三走了", "chinese", "novel", 1)
     state["chunks"] = ["张三走了"]
     state["current_translation"] = "张三走了 rồi."
+    state.update(quality_node(state))
 
     llm = MagicMock()
     llm.generate.return_value = '{"score": 0.95, "feedback": "Good"}'
@@ -41,4 +43,16 @@ def test_reviewer_forces_retry_on_blocking_post_check_issue():
 
     assert result["review_score"] == 0.6
     assert "source-language characters" in result["review_feedback"]
-    assert result["post_check_issues"] == ["contains_source_language_chars"]
+    assert state["post_check_issues"] == ["contains_source_language_chars"]
+    assert "post_check_issues" not in result
+
+
+def test_quality_node_detects_empty_translation_without_calling_llm():
+    state = initial_state("source", "chinese", "novel", 1)
+    state["chunks"] = ["source"]
+    state["current_translation"] = ""
+
+    result = quality_node(state)
+
+    assert result["post_check_issues"] == ["translation_empty"]
+    assert result["post_check_blocking"] is True
