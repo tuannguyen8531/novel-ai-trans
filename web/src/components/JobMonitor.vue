@@ -106,22 +106,22 @@ async function cancel() {
       </div>
       <details v-if="localJob.result" style="margin-top: 0.5rem;">
         <summary class="muted">Result</summary>
-        <pre class="chapter-content">{{ JSON.stringify(localJob.result, null, 2) }}</pre>
+        <pre class="job-log-content">{{ JSON.stringify(localJob.result, null, 2) }}</pre>
       </details>
       <details v-if="localJob.error" style="margin-top: 0.5rem;">
         <summary class="error">Error</summary>
-        <pre class="chapter-content">{{ JSON.stringify(localJob.error, null, 2) }}</pre>
+        <pre class="job-log-content">{{ JSON.stringify(localJob.error, null, 2) }}</pre>
       </details>
       <details v-if="localJob.logs.length" style="margin-top: 0.5rem;">
         <summary class="muted">Logs ({{ localJob.logs.length }})</summary>
-        <pre class="chapter-content">{{ localJob.logs.join('\n') }}</pre>
+        <pre class="job-log-content">{{ localJob.logs.join('\n') }}</pre>
       </details>
     </div>
   </div>
 </template>
 
 <style scoped>
-.chapter-content {
+.job-log-content {
   background: var(--bg-elev-2);
   border-radius: var(--radius);
   padding: 0.5rem 0.75rem;

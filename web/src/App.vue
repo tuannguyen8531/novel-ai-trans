@@ -32,8 +32,8 @@ function applyApiKey() {
   <div class="layout">
     <aside class="sidebar">
       <div class="brand">
-        <span class="brand-mark">N·A·T</span>
-        <span class="brand-name">novel-ai-trans</span>
+        <img class="brand-icon" src="/icon.png" alt="" width="48" height="48" />
+        <span class="brand-name">Novel AI Translation</span>
       </div>
       <nav class="nav">
         <RouterLink to="/">Dashboard</RouterLink>
@@ -70,6 +70,12 @@ function applyApiKey() {
 }
 
 .sidebar {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  height: 100vh;
+  box-sizing: border-box;
+  overflow-y: auto;
   background: var(--bg-elev);
   border-right: 1px solid var(--border);
   padding: 1rem 0.75rem;
@@ -80,20 +86,22 @@ function applyApiKey() {
 .brand {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  align-items: center;
+  gap: 0.4rem;
   margin-bottom: 1rem;
 }
 
-.brand-mark {
-  font-weight: 700;
-  font-size: 0.85rem;
-  letter-spacing: 0.18em;
-  color: var(--accent);
+.brand-icon {
+  width: 48px;
+  height: 48px;
+  flex: 0 0 auto;
+  border-radius: 50%;
 }
 
 .brand-name {
   font-weight: 600;
   font-size: 0.95rem;
+  text-align: center;
 }
 
 .nav {

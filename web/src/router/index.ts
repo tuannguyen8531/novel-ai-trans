@@ -1,4 +1,25 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHistory, type RouteLocationNormalized } from 'vue-router'
+
+const APP_NAME = 'Novel AI Translation'
+
+const PAGE_TITLES: Record<string, string> = {
+  dashboard: 'Dashboard',
+  novels: 'Novels',
+  'novel-detail': 'Novel',
+  crawl: 'Crawl',
+  import: 'Import',
+  translate: 'Translate',
+  jobs: 'Jobs',
+  settings: 'Settings'
+}
+
+function pageTitle(route: RouteLocationNormalized): string {
+  const base = PAGE_TITLES[String(route.name ?? '')] ?? 'Page'
+  if (route.name === 'novel-detail') {
+    return base
+  }
+  return base
+}
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -18,4 +39,8 @@ export const router = createRouter({
     { path: '/settings', name: 'settings', component: () => import('@/views/SettingsView.vue') },
     { path: '/:pathMatch(.*)*', redirect: '/' }
   ]
+})
+
+router.afterEach((to) => {
+  document.title = `${pageTitle(to)} — ${APP_NAME}`
 })

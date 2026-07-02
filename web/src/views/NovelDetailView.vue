@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { onMounted, ref, computed } from 'vue'
+import { onMounted, ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useNovelsStore } from '@/stores/novels'
 import { api } from '@/api/client'
 import type { NovelChapterStatus } from '@/api/types'
 import GlossaryEditor from '@/components/GlossaryEditor.vue'
 import JobMonitor from '@/components/JobMonitor.vue'
+import placeholderCover from '@/assets/placeholder-cover.png'
 
 const props = defineProps<{ name: string }>()
 const route = useRoute()
@@ -37,6 +38,7 @@ const metaTranslatedVi = ref<string>('')
 const metaTranslatedEn = ref<string>('')
 const metaError = ref<string | null>(null)
 const showMetaForm = ref<boolean>(false)
+const coverBroken = ref<boolean>(false)
 
 const novelName = computed(() => props.name || String(route.params.name || ''))
 
@@ -70,6 +72,15 @@ async function loadMetadata() {
     metadataLoading.value = false
   }
 }
+
+watch(
+  [metaTitle, () => novels.detail?.title],
+  ([meta, detail]) => {
+    const original = meta.trim() || (detail ? String(detail) : '') || novelName.value
+    document.title = `${original} — Novel AI Translation`
+  },
+  { immediate: true }
+)
 
 async function saveMetadata() {
   metaError.value = null
@@ -155,6 +166,20 @@ const hasAnyMetadata = computed(() =>
   )
 )
 
+const coverSrc = computed(() => {
+  if (coverBroken.value) return placeholderCover
+  const url = metaIllustrationUrl.value.trim()
+  return url || placeholderCover
+})
+
+watch(metaIllustrationUrl, () => {
+  coverBroken.value = false
+})
+
+function onCoverError() {
+  coverBroken.value = true
+}
+
 async function downloadArtifact(name: string) {
   artifactError.value = null
   try {
@@ -204,24 +229,25 @@ async function startPack() {
     <div v-if="novels.error" class="card error">{{ novels.error }}</div>
     <div v-else-if="novels.detail" class="flex-col gap-3">
       <div class="card">
-        <h2>{{ novels.detail.title ?? novelName }}</h2>
-        <p class="muted">
-          <span v-if="novels.detail.author">by {{ novels.detail.author }} · </span>
-          <code>{{ novelName }}</code>
-        </p>
-        <div class="stats-row" style="margin-top: 0.5rem;">
-          <span><span class="muted">Total:</span> <strong>{{ novels.detail.total_input_chapters }}</strong></span>
-          <template v-for="t in novels.detail.targets" :key="t.target">
-            <span>
-              <span class="muted">{{ t.target.toUpperCase() }}:</span>&nbsp;
-              <strong>{{ t.completed }}<span class="muted">/{{ t.total }}</span></strong>
-              <span v-if="t.failed > 0" class="badge danger">{{ t.failed }} failed</span>
-            </span>
-          </template>
-          <span>
-            <span class="muted">Glossary:</span>
-            {{ novels.detail.glossary_terms }}<span class="muted"> terms,</span> {{ novels.detail.glossary_entities }}<span class="muted"> entities</span>
-          </span>
+        <div class="novel-cover-row">
+          <img class="novel-cover" :src="coverSrc" :alt="`Cover for ${novels.detail.title ?? novelName}`" @error="onCoverError" />
+          <div class="novel-cover-info">
+            <h2>{{ novels.detail.title ?? novelName }}</h2>
+            <p class="muted">
+              <span v-if="novels.detail.author">by {{ novels.detail.author }} · </span>
+              <code>{{ novelName }}</code>
+            </p>
+            <div class="stats-row">
+              <span><span class="muted">Total:</span> <strong>{{ novels.detail.total_input_chapters }}</strong></span>
+              <template v-for="t in novels.detail.targets" :key="t.target">
+                <span>
+                  <span class="muted">{{ t.target.toUpperCase() }}:</span>&nbsp;
+                  <strong>{{ t.completed }}<span class="muted">/{{ t.total }}</span></strong>
+                  <span v-if="t.failed > 0" class="badge danger">{{ t.failed }} failed</span>
+                </span>
+              </template>
+            </div>
+          </div>
         </div>
 
         <div class="meta-summary" v-if="metadata || metadataError">
@@ -241,9 +267,13 @@ async function startPack() {
             <span class="meta-label">Title (en)</span>
             <span>{{ metaTranslatedEn }}</span>
           </div>
-          <div class="meta-row" v-if="metaIllustrationUrl">
-            <span class="meta-label">Cover</span>
-            <span class="muted">{{ metaIllustrationUrl }}</span>
+          <div class="meta-row">
+            <span class="meta-label">Total</span>
+            <span>{{ novels.detail.total_input_chapters }} chapter{{ novels.detail.total_input_chapters === 1 ? '' : 's' }}</span>
+          </div>
+          <div class="meta-row">
+            <span class="meta-label">Slug</span>
+            <span><code>{{ novelName }}</code></span>
           </div>
           <p v-if="metadataError" class="error meta-empty">Failed to load metadata: {{ metadataError }}</p>
           <p v-else-if="!hasAnyMetadata" class="muted meta-empty">
@@ -565,6 +595,36 @@ async function startPack() {
   padding-top: 0.25rem;
 }
 
+.novel-cover-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.novel-cover {
+  width: 180px;
+  height: auto;
+  max-height: 270px;
+  object-fit: cover;
+  border-radius: var(--radius);
+  background: var(--bg-elev-2);
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.novel-cover-info {
+  flex: 1 1 18rem;
+  min-width: 0;
+  font-size: 1.1rem;
+}
+
+.novel-cover-info h2 {
+  margin-top: 0;
+  font-size: 1.6rem;
+}
+
 .pack-form {
   margin-top: 0.75rem;
   padding: 0.75rem;
@@ -618,12 +678,13 @@ async function startPack() {
 .chapter-content {
   background: var(--bg-elev-2);
   border-radius: var(--radius);
-  padding: 1rem;
+  padding: 1rem 1.25rem;
   max-height: 24rem;
   overflow: auto;
   white-space: pre-wrap;
-  font-family: ui-monospace, SFMono-Regular, monospace;
-  font-size: 0.85rem;
+  font-family: var(--font);
+  font-size: 1rem;
+  line-height: 1.6;
 }
 
 button.active {
