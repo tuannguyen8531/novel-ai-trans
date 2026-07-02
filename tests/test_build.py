@@ -3,7 +3,7 @@ from __future__ import annotations
 from subprocess import CompletedProcess
 from unittest.mock import patch
 
-from scripts import build
+from src.cli import build
 
 
 def test_build_only_runs_frontend_build():
