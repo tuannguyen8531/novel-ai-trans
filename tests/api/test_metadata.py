@@ -13,7 +13,7 @@ from starlette.testclient import TestClient
 
 from src.api.app_factory import create_app
 from src.application import config_context as _config_context
-from src.config import config as _global_config
+from src.config import Config
 
 
 @pytest.fixture()
@@ -30,19 +30,23 @@ def client():
             json.dumps({"title": "Old", "author": "Old Author"}),
             encoding="utf-8",
         )
-        snapshot = _global_config.clone(translated_dir=str(translated))
+        snapshot = Config(translated_dir=str(translated))
         original = _config_context.get_config()
         _config_context.set_default(snapshot)
         try:
-            with patch.dict(os.environ, {"API_HOST": "127.0.0.1", "CORS_ORIGINS": "http://localhost:5173"}):
+            with patch.dict(
+                os.environ,
+                {"API_HOST": "127.0.0.1", "CORS_ORIGINS": "http://localhost:5173"},
+                clear=True,
+            ):
                 app = create_app(
                     dist_dir=tmp_path / "dist",
                     drafts_dir=drafts,
                     history_root=translated,
                     jobs_dir=tmp_path / "jobs",
                 )
-            with TestClient(app) as test_client:
-                yield test_client, novel_dir
+                with TestClient(app) as test_client:
+                    yield test_client, novel_dir
         finally:
             _config_context.set_default(original)
 

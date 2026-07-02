@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import os
 from unittest.mock import patch
 
 from src.api import __main__ as api_main
 
 
 def test_serve_only_starts_uvicorn():
-    with patch.object(api_main.uvicorn, "run") as mocked_run:
+    with patch.dict(os.environ, {}, clear=True), patch.object(api_main.uvicorn, "run") as mocked_run:
         result = api_main.main()
 
     assert result == 0

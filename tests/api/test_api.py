@@ -17,7 +17,7 @@ from starlette.testclient import TestClient
 
 from src.api.app_factory import create_app
 from src.application import config_context as _config_context
-from src.config import config as _global_config
+from src.config import Config
 
 
 @pytest.fixture()
@@ -36,19 +36,19 @@ def client():
         }
         # Replace the in-process config snapshot with one pointing at the
         # temp dir for the duration of the test.
-        snapshot = _global_config.clone(translated_dir=str(translated))
+        snapshot = Config(translated_dir=str(translated))
         original_snapshot = _config_context.get_config()
         _config_context.set_default(snapshot)
         try:
-            with patch.dict(os.environ, env, clear=False):
+            with patch.dict(os.environ, env, clear=True):
                 app = create_app(
                     dist_dir=tmp_path / "dist",
                     drafts_dir=drafts,
                     history_root=translated,
                     jobs_dir=tmp_path / "jobs",
                 )
-            with TestClient(app) as test_client:
-                yield test_client
+                with TestClient(app) as test_client:
+                    yield test_client
         finally:
             _config_context.set_default(original_snapshot)
 
@@ -196,7 +196,7 @@ def test_concurrent_job_returns_409(client):
 
 def test_remote_mode_requires_key():
     env = {"API_HOST": "0.0.0.0", "API_SECRET_KEY": ""}
-    with patch.dict(os.environ, env, clear=False), pytest.raises(RuntimeError):
+    with patch.dict(os.environ, env, clear=True), pytest.raises(RuntimeError):
         from src.api.auth import require_secret_key_configured
 
         require_secret_key_configured()
@@ -212,7 +212,7 @@ def test_remote_mode_accepts_matching_bearer():
         "headers": [(b"authorization", b"Bearer secret-key")],
     }
     request = Request(scope)
-    with patch.dict(os.environ, {"API_HOST": "0.0.0.0", "API_SECRET_KEY": "secret-key"}, clear=False):
+    with patch.dict(os.environ, {"API_HOST": "0.0.0.0", "API_SECRET_KEY": "secret-key"}, clear=True):
         principal = authenticate(request)
         assert principal.authenticated is True
         assert principal.source == "bearer"
@@ -226,7 +226,7 @@ def test_remote_mode_rejects_missing_bearer():
 
     scope = {"type": "http", "headers": []}
     request = Request(scope)
-    with patch.dict(os.environ, {"API_HOST": "0.0.0.0", "API_SECRET_KEY": "secret-key"}, clear=False):
+    with patch.dict(os.environ, {"API_HOST": "0.0.0.0", "API_SECRET_KEY": "secret-key"}, clear=True):
         with pytest.raises(HTTPException) as exc:
             authenticate(request)
         assert exc.value.status_code == 401
