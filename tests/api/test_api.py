@@ -195,7 +195,8 @@ def test_concurrent_job_returns_409(client):
 
 
 def test_remote_mode_requires_key():
-    with patch.dict(os.environ, {"API_HOST": "0.0.0.0"}, clear=False), pytest.raises(RuntimeError):
+    env = {"API_HOST": "0.0.0.0", "API_SECRET_KEY": ""}
+    with patch.dict(os.environ, env, clear=False), pytest.raises(RuntimeError):
         from src.api.auth import require_secret_key_configured
 
         require_secret_key_configured()
