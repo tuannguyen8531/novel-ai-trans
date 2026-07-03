@@ -4,6 +4,7 @@ export interface Settings {
   llm_provider: string
   fallback_provider: string
   max_chapters: number
+  chunk_mode: 'chars' | 'tokens'
   chunk_size: number
   chunk_overlap: number
   review_threshold: number

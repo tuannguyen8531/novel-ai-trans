@@ -28,6 +28,7 @@ from src.application.errors import (
 )
 from src.application.progress import ProgressEvent
 from src.config import Config
+from src.domain.chunking import estimate_token_count
 from src.domain.target_language import normalize_target_language
 from src.graph.builder import build_graph
 from src.models.state import initial_state
@@ -399,9 +400,13 @@ def run_translation(
             break
         chapter_path = chapters[chapter_num]
         try:
-            file_size = len(chapter_path.read_text(encoding="utf-8"))
+            source_text = chapter_path.read_text(encoding="utf-8")
+            file_size = len(source_text)
+            source_size = estimate_token_count(source_text) if config.chunk_mode == "tokens" else file_size
         except OSError:
             file_size = 0
+            source_size = 0
+        size_unit = "tokens" if config.chunk_mode == "tokens" else "chars"
 
         # The progress bar advances when a chapter finishes, not when it
         # starts. ``done_count`` reflects the work already completed before
@@ -417,7 +422,7 @@ def run_translation(
                 total=total,
                 chapter=chapter_num,
                 pct=round(done_count / total * 100, 2),
-                extra={"file_size": file_size},
+                extra={"file_size": file_size, "source_size": source_size, "size_unit": size_unit},
             ),
         )
 
@@ -474,6 +479,15 @@ def run_translation(
             progress_state.setdefault("failed", []).append(chapter_num)
         save_progress(progress_path, progress_state)
         post_count = success_count + len(failed_chapters)
+        output_size = out_chars
+        output_unit = "chars"
+        if ok and config.chunk_mode == "tokens":
+            try:
+                output_text = (output_dir / f"chapter_{chapter_num:03d}.txt").read_text(encoding="utf-8")
+                output_size = estimate_token_count(output_text)
+                output_unit = "tokens"
+            except OSError:
+                pass
         _emit(
             progress_callback,
             ProgressEvent(
@@ -487,6 +501,8 @@ def run_translation(
                     "ok": ok,
                     "elapsed": round(elapsed, 3),
                     "chars_out": out_chars,
+                    "output_size": output_size,
+                    "size_unit": output_unit,
                     "new_terms": new_terms_count,
                 },
             ),

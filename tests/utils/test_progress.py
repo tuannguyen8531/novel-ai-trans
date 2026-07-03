@@ -25,6 +25,14 @@ class TestProgressTracker:
         assert tracker.success == 1
         assert tracker.failed == 0
 
+    def test_start_chapter_displays_configured_unit(self):
+        captured = io.StringIO()
+        with patch("sys.stdout", captured):
+            tracker = ProgressTracker(10, "test-novel")
+            tracker.start_chapter(1, 5, 1234, "tokens")
+
+        assert "1,234 tokens" in captured.getvalue()
+
     def test_chapter_done_increments_failed(self):
         tracker = ProgressTracker(10, "test-novel")
         tracker.start_chapter(1, 5)

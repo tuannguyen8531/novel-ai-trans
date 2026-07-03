@@ -13,6 +13,7 @@ def chunker_node(state: TranslationState) -> dict:
         state["source_text"],
         chunk_size=config.chunk_size,
         overlap=config.chunk_overlap,
+        mode=config.chunk_mode,
     )
 
     return {

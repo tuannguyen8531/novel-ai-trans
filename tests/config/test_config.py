@@ -1,6 +1,7 @@
 """Tests for configuration: unified Config + per-site SiteConfig."""
 
 import os
+from typing import Any, cast
 from unittest.mock import patch
 
 import pytest
@@ -16,6 +17,7 @@ class TestConfig:
             assert config.ollama_model == "qwen3:8b"
             assert config.translation_temperature == 0.3
             assert config.target_language == "vi"
+            assert config.chunk_mode == "chars"
             assert config.chunk_size == 1500
             assert config.enable_review is False
             assert config.enable_summary is False
@@ -31,6 +33,7 @@ class TestConfig:
         env = {
             "LLM_PROVIDER": "gemini",
             "GEMINI_API_KEY": "test-key",
+            "CHUNK_MODE": "tokens",
             "CHUNK_SIZE": "2000",
             "TARGET_LANGUAGE": "en",
             "ENABLE_REVIEW": "true",
@@ -42,6 +45,7 @@ class TestConfig:
             assert config.llm_provider == "gemini"
             assert config.gemini_api_key == "test-key"
             assert config.target_language == "en"
+            assert config.chunk_mode == "tokens"
             assert config.chunk_size == 2000
             assert config.enable_review is True
             assert config.enable_summary is True
@@ -101,6 +105,10 @@ class TestConfig:
             patch("src.config.load_dotenv"),
         ):
             assert Config.from_env().enable_summary is True
+
+    def test_rejects_unknown_chunk_mode(self):
+        with pytest.raises(ValueError, match="chunk_mode"):
+            Config(chunk_mode=cast(Any, "bytes"))
 
     def test_fallback_provider_default(self):
         with patch.dict(os.environ, {}, clear=True), patch("src.config.load_dotenv"):

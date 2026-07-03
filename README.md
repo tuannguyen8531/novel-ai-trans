@@ -165,8 +165,9 @@ Settings are loaded from `.env`. Copy `.env.example` to `.env` and edit.
 | `OPENROUTER_API_KEY` | empty | OpenRouter credential |
 | `OPENROUTER_MODEL` | `qwen/qwen3-8b` | OpenRouter model |
 | `TARGET_LANGUAGE` | `vi` | Default target: `vi` or `en` |
-| `CHUNK_SIZE` | `1500` | Translation chunk size |
-| `CHUNK_OVERLAP` | `100` | Context overlap between chunks |
+| `CHUNK_MODE` | `chars` | Chunk unit: `chars` or provider-neutral estimated `tokens` |
+| `CHUNK_SIZE` | `1500` | Translation chunk size in the selected unit |
+| `CHUNK_OVERLAP` | `100` | Context overlap in the selected unit |
 | `REVIEW_THRESHOLD` | `0.7` | Minimum review score before retry |
 | `MAX_RETRIES` | `2` | Quality and provider retry count |
 | `ENABLE_REVIEW` | `false` | Enable review by default |

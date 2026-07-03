@@ -196,7 +196,14 @@ async function saveTelegramSettings() {
           <input :value="settings.settings.translated_dir" @change="patchSetting('translated_dir', ($event.target as HTMLInputElement).value)" />
         </div>
         <div>
-          <label>Chunk size</label>
+          <label>Chunk mode</label>
+          <select :value="settings.settings.chunk_mode" @change="patchSetting('chunk_mode', ($event.target as HTMLSelectElement).value)">
+            <option value="chars">Characters</option>
+            <option value="tokens">Tokens (estimated)</option>
+          </select>
+        </div>
+        <div>
+          <label>Chunk size ({{ settings.settings.chunk_mode === 'tokens' ? 'tokens' : 'characters' }})</label>
           <input type="number" :value="settings.settings.chunk_size" @change="patchSetting('chunk_size', Number(($event.target as HTMLInputElement).value))" />
         </div>
         <div>

@@ -267,6 +267,36 @@ class TestQualityReport:
 
 
 class TestTranslationWorkflow:
+    def test_progress_sizes_follow_token_chunk_mode(self, tmp_path):
+        translated_root = tmp_path / "translated"
+        input_dir = translated_root / "novel" / "input"
+        input_dir.mkdir(parents=True)
+        (input_dir / "chapter_1.txt").write_text("甲乙丙丁", encoding="utf-8")
+        config = Config(translated_dir=str(translated_root), chunk_mode="tokens")
+        events: list[ProgressEvent] = []
+
+        def translate_success(*_args, output_dir, **_kwargs):
+            output_dir.mkdir(parents=True, exist_ok=True)
+            output = "abcdefgh"
+            (output_dir / "chapter_001.txt").write_text(output, encoding="utf-8")
+            return True, len(output), 1.0, 0
+
+        with (
+            patch("src.application.translate.config_context.get_config", return_value=config),
+            patch("src.application.translate._paths.PROGRESS_DIR", tmp_path / "progress"),
+            patch("src.application.translate._validate_provider"),
+            patch("src.application.translate.build_graph", return_value=object()),
+            patch("src.application.translate.translate_file", side_effect=translate_success),
+        ):
+            run_translation(TranslationRequest(novel="novel"), progress_callback=events.append)
+
+        started = next(event for event in events if event.kind == "chapter_started")
+        completed = next(event for event in events if event.kind == "chapter_completed")
+        assert started.extra["source_size"] == 4
+        assert started.extra["size_unit"] == "tokens"
+        assert completed.extra["output_size"] == 2
+        assert completed.extra["size_unit"] == "tokens"
+
     def test_chapter_exception_is_counted_once(self, tmp_path):
         translated_root = tmp_path / "translated"
         input_dir = translated_root / "novel" / "input"

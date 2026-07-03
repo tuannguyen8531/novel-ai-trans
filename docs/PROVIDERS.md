@@ -185,10 +185,14 @@ Two temperature/max-token pairs are used:
   `TRANSLATION_MAX_TOKENS` (default `4096`). Slightly higher temperature gives
   more natural prose; lower is more literal.
 
-Chunking is controlled by `CHUNK_SIZE` (default `1500` chars) and
-`CHUNK_OVERLAP` (default `100` chars). Larger chunks give the model more context
-but cost more tokens and increase the chance of truncation; overlap keeps
-context between chunks. `CHUNK_OVERLAP` must be less than `CHUNK_SIZE`.
+Chunking is controlled by `CHUNK_MODE` (`chars` by default), `CHUNK_SIZE`
+(default `1500`), and `CHUNK_OVERLAP` (default `100`). In `chars` mode, size
+and overlap use characters and preserve the legacy behaviour. In `tokens` mode,
+they use a deterministic local estimate: CJK and other non-whitespace
+characters count individually, while ASCII letters and digits are grouped in
+runs of up to four. This estimate is consistent and offline, but is not an
+exact model-specific token count. `CHUNK_OVERLAP` must be less than
+`CHUNK_SIZE` in either mode.
 
 Quality-control knobs:
 

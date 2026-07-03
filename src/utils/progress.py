@@ -25,16 +25,18 @@ class ProgressTracker:
         self.current_index = 0
         self.current_chapter = 0
         self.file_size = 0
+        self.size_unit = "chars"
         self.overall_start = time.time()
         self.success = 0
         self.failed = 0
         self._last_line = ""
 
-    def start_chapter(self, index: int, chapter_num: int, file_size: int = 0):
+    def start_chapter(self, index: int, chapter_num: int, file_size: int = 0, size_unit: str = "chars"):
         """Start tracking a new chapter."""
         self.current_index = index
         self.current_chapter = chapter_num
         self.file_size = file_size
+        self.size_unit = size_unit
         self._render()
 
     def chapter_done(self, success: bool):
@@ -50,7 +52,7 @@ class ProgressTracker:
         overall = time.time() - self.overall_start
         pct = self.current_index / self.total_chapters * 100 if self.total_chapters else 0
 
-        size_str = f"{self.file_size:,} chars" if self.file_size else ""
+        size_str = f"{self.file_size:,} {self.size_unit}" if self.file_size else ""
         line = (
             f"  {CYAN}[{self.current_index}/{self.total_chapters}]{RESET}"
             f" {pct:.0f}%"

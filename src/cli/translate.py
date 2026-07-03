@@ -491,18 +491,20 @@ def _print_progress_callback(event: ProgressEvent) -> None:
     if event.kind == "chapter_started":
         index = event.current
         chapter = event.chapter or 0
-        size = event.extra.get("file_size", 0)
-        progress.start_chapter(index, chapter, size)
+        size = event.extra.get("source_size", event.extra.get("file_size", 0))
+        size_unit = event.extra.get("size_unit", "chars")
+        progress.start_chapter(index, chapter, size, size_unit)
     elif event.kind == "chapter_completed":
         ok = event.extra.get("ok", False)
         elapsed = event.extra.get("elapsed", 0.0)
-        chars = event.extra.get("chars_out", 0)
+        output_size = event.extra.get("output_size", event.extra.get("chars_out", 0))
+        size_unit = event.extra.get("size_unit", "chars")
         new_terms = event.extra.get("new_terms", 0)
         progress.chapter_done(ok)
         if ok:
             terms_msg = f" [+ {new_terms} terms]" if new_terms > 0 else ""
             chapter = event.chapter or 0
-            print(f"  {GREEN}✓ Ch.{chapter}{RESET} {DIM}→ {chars:,} chars · {elapsed:.1f}s{terms_msg}{RESET}")
+            print(f"  {GREEN}✓ Ch.{chapter}{RESET} {DIM}→ {output_size:,} {size_unit} · {elapsed:.1f}s{terms_msg}{RESET}")
     elif event.kind == "chapter_failed":
         progress.chapter_done(False)
         chapter = event.chapter or 0
@@ -683,6 +685,8 @@ Examples:
     else:
         print(f"{DIM}🌐 Language: {language} (specified){RESET}")
     print(f"{DIM}🎯 Target: {target_language_name(args.target)} ({args.target}){RESET}")
+    chunk_unit = "tokens" if config.chunk_mode == "tokens" else "chars"
+    print(f"{DIM}📦 Chunking: {config.chunk_size:,} {chunk_unit} · overlap {config.chunk_overlap:,} {chunk_unit}{RESET}")
     print()
 
     signal.signal(signal.SIGINT, _signal_handler)

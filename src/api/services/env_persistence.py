@@ -46,6 +46,7 @@ _FIELD_TO_ENV: dict[str, str] = {
     "openrouter_api_key": "OPENROUTER_API_KEY",
     "openrouter_model": "OPENROUTER_MODEL",
     "target_language": "TARGET_LANGUAGE",
+    "chunk_mode": "CHUNK_MODE",
     "chunk_size": "CHUNK_SIZE",
     "chunk_overlap": "CHUNK_OVERLAP",
     "review_threshold": "REVIEW_THRESHOLD",
