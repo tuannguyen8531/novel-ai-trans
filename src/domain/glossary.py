@@ -559,6 +559,149 @@ def audit_term_usage(terms: dict[str, str], source_text: str, translated_text: s
     return issues
 
 
+_SENTENCE_ENDINGS = frozenset(".!?…")
+_SENTENCE_PREFIX_MARKS = frozenset("\"'“‘([{—-")
+
+
+def uppercase_first_cased(value: str) -> str:
+    """Uppercase only the first cased character without lowercasing the rest."""
+    for index, char in enumerate(value):
+        if char.lower() != char.upper():
+            return f"{value[:index]}{char.upper()}{value[index + 1 :]}"
+    return value
+
+
+def _is_sentence_start(text: str, position: int) -> bool:
+    index = position - 1
+    saw_newline = False
+    while index >= 0:
+        char = text[index]
+        if char.isspace():
+            saw_newline = saw_newline or char in "\r\n"
+            index -= 1
+            continue
+        if char in _SENTENCE_PREFIX_MARKS:
+            index -= 1
+            continue
+        break
+    return index < 0 or saw_newline or text[index] in _SENTENCE_ENDINGS
+
+
+def replace_glossary_value(
+    text: str,
+    old_value: str,
+    new_value: str,
+    *,
+    capitalize_sentence_start: bool,
+) -> tuple[str, int]:
+    """Replace an old rendered glossary value while respecting word boundaries."""
+    if not old_value or old_value == new_value:
+        return text, 0
+
+    old_variants = {old_value, uppercase_first_cased(old_value)}
+    choices = "|".join(re.escape(value) for value in sorted(old_variants, key=len, reverse=True))
+    left_boundary = r"(?<!\w)" if old_value[0].isalnum() else ""
+    right_boundary = r"(?!\w)" if old_value[-1].isalnum() else ""
+    pattern = re.compile(f"{left_boundary}(?:{choices}){right_boundary}")
+
+    replacements = 0
+
+    def replace(match: re.Match[str]) -> str:
+        nonlocal replacements
+        replacements += 1
+        if capitalize_sentence_start and _is_sentence_start(text, match.start()):
+            return uppercase_first_cased(new_value)
+        return new_value
+
+    return pattern.sub(replace, text), replacements
+
+
+def replace_glossary_values(
+    text: str,
+    replacements: list[dict],
+) -> tuple[str, dict[str, int]]:
+    """Replace multiple glossary values in a single pass to avoid substring collision and cascading.
+
+    replacements: list of dict with keys: 'kind' ('term' or 'character'), 'old', 'new'
+    Returns: (updated_text, dict mapping old_value -> replacements_count)
+    """
+    conflicts = find_glossary_replacement_conflicts(replacements)
+    if conflicts:
+        raise ValueError("Conflicting glossary replacement match variants")
+
+    mapping = {}
+    counts = {}
+
+    for item in replacements:
+        old_val = item["old"]
+        new_val = item["new"]
+        kind = item.get("kind", "term")
+        if not old_val or old_val == new_val:
+            continue
+
+        counts[old_val] = 0
+
+        # Add variants
+        mapping[old_val] = (new_val, kind, old_val)
+        # Only terms can be capitalized at sentence start
+        mapping[uppercase_first_cased(old_val)] = (new_val, kind, old_val)
+
+    if not mapping:
+        return text, counts
+
+    sorted_keys = sorted(mapping.keys(), key=len, reverse=True)
+    pattern = re.compile("|".join(re.escape(k) for k in sorted_keys))
+
+    def _has_boundary(text: str, start: int, end: int, key: str) -> bool:
+        left_match = (key[0].isalnum() or key[0] == "_") and start > 0 and (text[start - 1].isalnum() or text[start - 1] == "_")
+        right_match = (key[-1].isalnum() or key[-1] == "_") and end < len(text) and (text[end].isalnum() or text[end] == "_")
+        return not (left_match or right_match)
+
+    def replace(match: re.Match[str]) -> str:
+        matched_str = match.group(0)
+        start, end = match.span()
+        if not _has_boundary(text, start, end, matched_str):
+            return matched_str
+
+        new_val, kind, original_old = mapping[matched_str]
+        counts[original_old] += 1
+
+        if kind == "term" and _is_sentence_start(text, start):
+            return uppercase_first_cased(new_val)
+        return new_val
+
+    return pattern.sub(replace, text), counts
+
+
+def find_glossary_replacement_conflicts(replacements: list[dict]) -> dict[int, list[str]]:
+    """Return replacement indexes whose exact/capitalized match variants collide."""
+    claims: dict[str, list[int]] = {}
+    for index, item in enumerate(replacements):
+        old_value = str(item.get("old", ""))
+        new_value = str(item.get("new", ""))
+        if not old_value or old_value == new_value:
+            continue
+        for variant in {old_value, uppercase_first_cased(old_value)}:
+            claims.setdefault(variant, []).append(index)
+
+    conflicts: dict[int, set[str]] = {}
+    for indexes in claims.values():
+        signatures = {
+            (
+                str(replacements[index].get("old", "")),
+                str(replacements[index].get("new", "")),
+                str(replacements[index].get("kind", "term")),
+            )
+            for index in indexes
+        }
+        if len(signatures) <= 1:
+            continue
+        conflicting_news = {signature[1] for signature in signatures}
+        for index in indexes:
+            conflicts.setdefault(index, set()).update(conflicting_news)
+    return {index: sorted(values) for index, values in conflicts.items()}
+
+
 def format_recent_summaries(summaries: dict, current_chapter: int, max_count: int = 3) -> str:
     """Format the most recent chapter summaries before current_chapter."""
     parts = []
@@ -590,6 +733,20 @@ def find_name_in_text(name: str, source_text: str) -> bool:
         if _is_name_boundary(source_text, match.start() - 1) and _is_name_boundary(source_text, match.end()):
             return True
     return False
+
+
+def count_name_occurrences(name: str, text: str) -> int:
+    """Count occurrences of name in text with proper CJK/word boundaries."""
+    if not name or not text:
+        return 0
+    if CJK_RE.search(name):
+        return text.count(name)
+    escaped = re.escape(name)
+    count = 0
+    for match in re.finditer(escaped, text):
+        if _is_name_boundary(text, match.start() - 1) and _is_name_boundary(text, match.end()):
+            count += 1
+    return count
 
 
 def select_active_glossary_terms(terms: dict[str, str], source_text: str) -> dict[str, str]:

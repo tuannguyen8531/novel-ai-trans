@@ -354,11 +354,24 @@ Validate and audit:
 ```bash
 uv run glossary validate my-novel
 uv run glossary audit my-novel
+uv run glossary apply my-novel
+uv run glossary apply my-novel --write
+uv run glossary dismiss my-novel
+uv run glossary rollback my-novel BACKUP_ID
 ```
 
 `validate` checks the glossary JSON for structural issues. `audit` scans the
 translated output for obvious glossary-consistency problems (a term in the
 source rendered inconsistently in the target) and prints per-chapter issues.
+When a term translation or character `translated_name` changes, `apply`
+previews exact old-to-new replacements in existing translated chapters whose
+source contains that term/name. Add `--write` to update those chapter files
+atomically. Only exact, unambiguous chapter matches are written; missing,
+ambiguous, or conflicting matches remain pending for manual review. A successful
+write prints a backup ID that can be passed to `rollback`. Use `dismiss` only to
+discard pending replacements without changing chapter files. Terms are
+capitalized at sentence starts; character names preserve the casing stored in
+the glossary. Rebuild EPUB/PDF artifacts afterward.
 
 The translator automatically grows the glossary while translating — new terms
 and characters detected in each chapter are merged in and reused for later

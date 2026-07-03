@@ -269,6 +269,20 @@ def _check_cancel(cancel_event: Event | None) -> None:
         raise OperationCancelledError("Translation cancelled.")
 
 
+def novel_locked(func):
+    import functools
+
+    @functools.wraps(func)
+    def wrapper(request, *args, **kwargs):
+        from src.services.glossary import novel_lock
+
+        with novel_lock(request.novel):
+            return func(request, *args, **kwargs)
+
+    return wrapper
+
+
+@novel_locked
 def run_translation(
     request: TranslationRequest,
     *,

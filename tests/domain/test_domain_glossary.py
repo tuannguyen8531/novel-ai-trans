@@ -1,5 +1,8 @@
+import pytest
+
 from src.domain.glossary import (
     audit_term_usage,
+    find_glossary_replacement_conflicts,
     format_address_rules,
     format_glossary_for_prompt,
     format_recent_summaries,
@@ -8,6 +11,8 @@ from src.domain.glossary import (
     normalize_address_rules,
     normalize_character_edges,
     normalize_glossary_data,
+    replace_glossary_value,
+    replace_glossary_values,
     select_active_address_rules,
     select_active_character_context,
     select_active_glossary_terms,
@@ -116,6 +121,30 @@ def test_audit_term_usage_reports_missing_translation_and_source_leak():
         {"term": "李明", "expected": "Lý Minh", "issue": "missing_translation"},
         {"term": "李明", "expected": "Lý Minh", "issue": "source_term_leaked"},
     ]
+
+
+def test_replace_glossary_term_capitalizes_only_at_sentence_start():
+    updated, count = replace_glossary_value(
+        'Ma thuật cũ. "ma thuật" mới và ma thuật khác.',
+        "ma thuật",
+        "ma pháp AI",
+        capitalize_sentence_start=True,
+    )
+
+    assert count == 3
+    assert updated == 'Ma pháp AI cũ. "Ma pháp AI" mới và ma pháp AI khác.'
+
+
+def test_replace_character_name_keeps_configured_casing():
+    updated, count = replace_glossary_value(
+        "Lý Bạch gặp Lý Bạch.",
+        "Lý Bạch",
+        "lý thái bạch",
+        capitalize_sentence_start=False,
+    )
+
+    assert count == 2
+    assert updated == "lý thái bạch gặp lý thái bạch."
 
 
 def test_format_recent_summaries_keeps_recent_order():
@@ -530,3 +559,49 @@ def test_validate_glossary_data_bad_pronoun_examples():
         }
     )
     assert "pronoun_examples['李明'] must be a list" in issues
+
+
+def test_replace_glossary_values_handles_substring_collisions_and_cascading():
+    replacements = [
+        {"kind": "term", "old": "ma thuật đen", "new": "hắc ma pháp"},
+        {"kind": "term", "old": "ma thuật", "new": "ma pháp"},
+        {"kind": "term", "old": "A", "new": "B"},
+        {"kind": "term", "old": "B", "new": "C"},
+    ]
+
+    text = "Ma thuật đen và ma thuật. Cả A và B đều tốt."
+    updated, counts = replace_glossary_values(text, replacements)
+
+    # ma thuật đen -> hắc ma pháp (starts sentence, capitalized) -> Hắc ma pháp
+    # ma thuật -> ma pháp (not start of sentence) -> ma pháp
+    # A -> B (start of sentence, capitalized) -> B
+    # B -> C (not start of sentence) -> C
+    assert updated == "Hắc ma pháp và ma pháp. Cả B và C đều tốt."
+    assert counts == {"ma thuật đen": 1, "ma thuật": 1, "A": 1, "B": 1}
+
+
+def test_replace_glossary_values_character_retains_glossary_casing():
+    replacements = [
+        {"kind": "character", "old": "Lý Bạch", "new": "lý thái bạch"},
+        {"kind": "term", "old": "ma thuật", "new": "ma pháp"},
+    ]
+
+    text = "Lý Bạch nói ma thuật. ma thuật là của Lý Bạch."
+    updated, counts = replace_glossary_values(text, replacements)
+
+    # Lý Bạch -> lý thái bạch (retains lowercase from glossary, even at start of sentence)
+    # ma thuật -> ma pháp (capitalized at sentence start: Ma pháp)
+    assert updated == "lý thái bạch nói ma pháp. Ma pháp là của lý thái bạch."
+    assert counts == {"Lý Bạch": 2, "ma thuật": 2}
+
+
+def test_replace_glossary_values_rejects_capitalization_collisions():
+    replacements = [
+        {"kind": "term", "old": "ma thuật", "new": "ma pháp"},
+        {"kind": "term", "old": "Ma thuật", "new": "huyền thuật"},
+    ]
+
+    conflicts = find_glossary_replacement_conflicts(replacements)
+    assert conflicts == {0: ["huyền thuật", "ma pháp"], 1: ["huyền thuật", "ma pháp"]}
+    with pytest.raises(ValueError, match="Conflicting glossary replacement"):
+        replace_glossary_values("Ma thuật.", replacements)

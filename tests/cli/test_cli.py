@@ -354,8 +354,14 @@ class TestGlossaryCli:
     def setup_method(self):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.base = Path(self.temp_dir.name)
+        self.lock_patcher = patch("src.services.glossary.LOCK_DIR", self.base / "locks")
+        self.lock_patcher.start()
+        self.backup_patcher = patch("src.services.glossary.GLOSSARY_BACKUP_DIR", self.base / "backups")
+        self.backup_patcher.start()
 
     def teardown_method(self):
+        self.backup_patcher.stop()
+        self.lock_patcher.stop()
         self.temp_dir.cleanup()
 
     def test_glossary_add_and_list(self, capsys):
@@ -461,3 +467,78 @@ class TestGlossaryCli:
         assert data["edges"] == [["李白", "杜甫", "friend", 1]]
         assert "Glossary valid" in output
         assert "missing_translation" in output
+
+    def test_glossary_apply_dismiss_and_rollback(self, capsys):
+        glossary_dir = self.base / "glossary"
+        glossary_dir.mkdir(parents=True, exist_ok=True)
+
+        translated_root = self.base / "translated"
+        novel_root = translated_root / "my-novel"
+        (novel_root / "input").mkdir(parents=True)
+        (novel_root / "output").mkdir(parents=True)
+
+        (novel_root / "input" / "chapter_1.txt").write_text("魔法再次出现。魔法。", encoding="utf-8")
+        output_path = novel_root / "output" / "chapter_001.txt"
+        output_path.write_text('Ma thuật cũ. "ma thuật" mới.', encoding="utf-8")
+
+        config_patcher = patch("src.services.glossary.config")
+        mock_config = config_patcher.start()
+        mock_config.translated_dir = str(translated_root)
+        mock_config.target_language = "vi"
+
+        try:
+            with (
+                patch("src.services.glossary.GLOSSARY_DIR", glossary_dir),
+                patch("src.cli.translate.INPUT_DIR", novel_root / "input"),
+                patch("src.cli.translate.OUTPUT_DIR", novel_root / "output"),
+                _patch_config(translated_dir=str(translated_root), target_language="vi"),
+            ):
+                from src.services.glossary import (
+                    PENDING_REPLACEMENTS_KEY,
+                    load_glossary_data,
+                    save_glossary,
+                    update_glossary_term,
+                )
+
+                save_glossary("my-novel", {"魔法": "ma thuật"})
+                update_glossary_term("my-novel", "魔法", "魔法", "ma pháp", is_user_edit=True)
+
+                assert load_glossary_data("my-novel")[PENDING_REPLACEMENTS_KEY] != []
+
+                # Run apply preview
+                with patch("sys.argv", ["translate", "glossary", "apply", "my-novel"]):
+                    translate_main()
+
+                output = capsys.readouterr().out
+                assert "SAFE" in output
+                assert "ma thuật → ma pháp" in output
+                assert "2/2 occurrences" in output
+
+                # Run apply --write
+                with patch("sys.argv", ["translate", "glossary", "apply", "my-novel", "--write"]):
+                    translate_main()
+
+                output = capsys.readouterr().out
+                assert "APPLIED" in output
+                assert output_path.read_text(encoding="utf-8") == 'Ma pháp cũ. "Ma pháp" mới.'
+
+                manifests = list((self.base / "backups").rglob("manifest.json"))
+                assert len(manifests) == 1
+                backup_id = manifests[0].parent.name
+
+                # Dismiss command test
+                update_glossary_term("my-novel", "魔法", "魔法", "ma pháp siêu cấp", is_user_edit=True)
+                assert load_glossary_data("my-novel")[PENDING_REPLACEMENTS_KEY] != []
+
+                with patch("sys.argv", ["translate", "glossary", "dismiss", "my-novel"]):
+                    translate_main()
+
+                assert load_glossary_data("my-novel")[PENDING_REPLACEMENTS_KEY] == []
+
+                # Rollback command test
+                with patch("sys.argv", ["translate", "glossary", "rollback", "my-novel", backup_id]):
+                    translate_main()
+
+                assert output_path.read_text(encoding="utf-8") == 'Ma thuật cũ. "ma thuật" mới.'
+        finally:
+            config_patcher.stop()

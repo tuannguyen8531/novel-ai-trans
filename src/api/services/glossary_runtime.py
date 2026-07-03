@@ -58,12 +58,12 @@ def load_glossary(novel_root: Path) -> dict:
 
 
 def save_terms(novel_root: Path, terms: dict[str, str]) -> dict:
-    _save_glossary(novel_root.name, terms)
+    _save_glossary(novel_root.name, terms, is_user_edit=True)
     return load_glossary(novel_root)
 
 
 def save_term(novel_root: Path, original: str, translated: str) -> dict:
-    _save_glossary(novel_root.name, {original: translated})
+    _save_glossary(novel_root.name, {original: translated}, is_user_edit=True)
     return load_glossary(novel_root)
 
 
@@ -87,6 +87,7 @@ def update_term(
             new_original,
             translated,
             overwrite=overwrite,
+            is_user_edit=True,
         )
     except KeyError as error:
         raise ResourceNotFoundError(f"Glossary term not found: {old_original}") from error
@@ -117,6 +118,7 @@ def save_character(
         original,
         translated_name=translated_name,
         role=role,
+        is_user_edit=True,
     )
     return load_glossary(novel_root)
 
