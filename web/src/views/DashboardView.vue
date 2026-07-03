@@ -43,15 +43,15 @@ const totalTranslated = computed(() =>
         </div>
       </div>
       <div class="row gap-2" style="margin-top: 1rem;">
-        <RouterLink to="/crawl"><button>Crawl new novel</button></RouterLink>
+        <RouterLink to="/translate"><button>Translate</button></RouterLink>
         <RouterLink to="/import"><button class="secondary">Import EPUB</button></RouterLink>
-        <RouterLink to="/translate"><button class="secondary">Translate</button></RouterLink>
+        <RouterLink to="/crawl"><button class="secondary">Crawl new novel</button></RouterLink>
       </div>
     </div>
     <div class="card">
       <h2>Current job</h2>
       <JobMonitor v-if="jobs.current" :job="jobs.current" />
-      <p v-else class="muted">No active job. Start one from the Crawl, Import, or Translate pages.</p>
+      <p v-else class="muted">No active job. Start one from the Translate, Import, or Crawl pages.</p>
     </div>
   </section>
 </template>

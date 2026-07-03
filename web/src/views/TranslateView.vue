@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { onMounted, ref, computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { api } from '@/api/client'
 import { useNovelsStore } from '@/stores/novels'
 import JobMonitor from '@/components/JobMonitor.vue'
 
 const novels = useNovelsStore()
+const route = useRoute()
 
 const novel = ref<string>('')
 const target = ref<string>('vi')
@@ -22,6 +24,9 @@ const jobId = ref<string | null>(null)
 const error = ref<string | null>(null)
 
 onMounted(() => {
+  if (typeof route.query.novel === 'string') {
+    novel.value = route.query.novel
+  }
   novels.refresh()
 })
 
@@ -77,8 +82,13 @@ async function startTranslation() {
           </select>
         </div>
         <div>
-          <label>Source language (optional)</label>
-          <input v-model="source" placeholder="chinese / korean / japanese" />
+          <label>Source language</label>
+          <select v-model="source">
+            <option value="">Auto detect</option>
+            <option value="chinese">Chinese</option>
+            <option value="japanese">Japanese</option>
+            <option value="korean">Korean</option>
+          </select>
         </div>
         <div>
           <label>Provider override (optional)</label>

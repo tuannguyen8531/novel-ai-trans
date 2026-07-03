@@ -237,16 +237,6 @@ async function startPack() {
               <span v-if="novels.detail.author">by {{ novels.detail.author }} · </span>
               <code>{{ novelName }}</code>
             </p>
-            <div class="stats-row">
-              <span><span class="muted">Total:</span> <strong>{{ novels.detail.total_input_chapters }}</strong></span>
-              <template v-for="t in novels.detail.targets" :key="t.target">
-                <span>
-                  <span class="muted">{{ t.target.toUpperCase() }}:</span>&nbsp;
-                  <strong>{{ t.completed }}<span class="muted">/{{ t.total }}</span></strong>
-                  <span v-if="t.failed > 0" class="badge danger">{{ t.failed }} failed</span>
-                </span>
-              </template>
-            </div>
           </div>
         </div>
 
@@ -282,12 +272,11 @@ async function startPack() {
         </div>
         <div class="actions-row">
           <div class="row gap-2" style="align-items: center;">
-            <button type="button" class="secondary" @click="showPackForm = !showPackForm">
-              {{ showPackForm ? 'Hide pack options' : 'Pack options' }}
+            <button type="button" @click="router.push({ name: 'translate', query: { novel: novelName } })">
+              Translate
             </button>
-            <button type="button" class="secondary" @click="showMetaForm = !showMetaForm">
-              {{ showMetaForm ? 'Close metadata editor' : 'Edit metadata' }}
-            </button>
+            <button type="button" class="secondary" @click="showPackForm = !showPackForm">Pack</button>
+            <button type="button" class="secondary" @click="showMetaForm = !showMetaForm">Metadata</button>
           </div>
 
           <div v-if="showPackForm" class="pack-form">
@@ -492,14 +481,6 @@ async function startPack() {
 </template>
 
 <style scoped>
-.stats-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4rem 1.25rem;
-  font-size: 0.95rem;
-}
-
 .actions-row {
   margin: 1.25rem 0 1rem 0;
 }

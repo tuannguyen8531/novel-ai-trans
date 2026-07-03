@@ -157,14 +157,15 @@ limits; the FastAPI process itself does not terminate TLS.
 ### Dashboard
 
 Shows the count of novels, total input chapters, total translated chapters,
-and a live monitor for the active job (if any). Quick links jump to Crawl,
-Import, or Translate.
+and a live monitor for the active job (if any). Quick links jump to Translate,
+Import, or Crawl.
 
 ### Novels
 
-Lists every novel under `TRANSLATED_DIR`. Each row shows per-target input
-chapters, completed, failed, and a percentage. Click a row to open the
-detail view.
+Lists every novel under `TRANSLATED_DIR`. Each row shows its total input
+chapters and translation progress for the configured default target language.
+Use **Open** to view its details or **Delete** to permanently remove the novel
+directory after confirmation. Deletion is rejected while a job is active.
 
 ### Novel detail
 
@@ -181,7 +182,8 @@ The workhorse page. Tabs cover:
 
 Pack options are displayed above the tabs rather than as a fourth tab. They can
 start an EPUB, PDF, or combined pack job; title, author, target language, and
-dark-mode PDF can be overridden per job.
+dark-mode PDF can be overridden per job. The **Translate** action opens the
+Translate page with the current novel selected.
 
 ### Crawl
 
@@ -217,7 +219,7 @@ Mirrors the CLI flags:
 | Field | CLI flag | Notes |
 | --- | --- | --- |
 | Novel | `<novel>` | Required; novel name in `translated/` |
-| Source language | `--lang` | Detected from the glossary if blank |
+| Source language | `--lang` | Defaults to Auto detect; detected from the glossary when blank |
 | Target | `--target` | Defaults to `TARGET_LANGUAGE` |
 | Provider | `--provider` | Optional per-run override |
 | Start / end | `--start`, `--to` | Inclusive range |

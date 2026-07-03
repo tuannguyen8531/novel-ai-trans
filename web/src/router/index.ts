@@ -13,12 +13,8 @@ const PAGE_TITLES: Record<string, string> = {
   settings: 'Settings'
 }
 
-function pageTitle(route: RouteLocationNormalized): string {
-  const base = PAGE_TITLES[String(route.name ?? '')] ?? 'Page'
-  if (route.name === 'novel-detail') {
-    return base
-  }
-  return base
+export function pageTitle(route: RouteLocationNormalized): string {
+  return PAGE_TITLES[String(route.name ?? '')] ?? 'Page'
 }
 
 export const router = createRouter({

@@ -34,5 +34,13 @@ export const useNovelsStore = defineStore('novels', () => {
     }
   }
 
-  return { novels, detail, error, loading, refresh, load }
+  async function remove(name: string) {
+    await api.deleteNovel(name)
+    novels.value = novels.value.filter((novel) => novel.name !== name)
+    if (detail.value?.name === name) {
+      detail.value = null
+    }
+  }
+
+  return { novels, detail, error, loading, refresh, load, remove }
 })

@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { RouterView, RouterLink, useRoute } from 'vue-router'
 import { setAuthToken } from '@/api/client'
+import { pageTitle } from '@/router'
 
 const route = useRoute()
 const theme = ref<'dark' | 'light'>('dark')
 const apiKey = ref('')
 const authVersion = ref(0)
+const pageHeading = computed(() => pageTitle(route))
 
 onMounted(() => {
   const stored = localStorage.getItem('theme') as 'dark' | 'light' | null
@@ -38,9 +40,9 @@ function applyApiKey() {
       <nav class="nav">
         <RouterLink to="/">Dashboard</RouterLink>
         <RouterLink to="/novels">Novels</RouterLink>
-        <RouterLink to="/crawl">Crawl</RouterLink>
-        <RouterLink to="/import">Import</RouterLink>
         <RouterLink to="/translate">Translate</RouterLink>
+        <RouterLink to="/import">Import</RouterLink>
+        <RouterLink to="/crawl">Crawl</RouterLink>
         <RouterLink to="/jobs">Jobs</RouterLink>
         <RouterLink to="/settings">Settings</RouterLink>
       </nav>
@@ -55,7 +57,7 @@ function applyApiKey() {
     </aside>
     <main class="content">
       <header class="page-header">
-        <h1 class="page-title">{{ String(route.name ?? '') }}</h1>
+        <h1 class="page-title">{{ pageHeading }}</h1>
       </header>
       <RouterView :key="`${route.fullPath}:${authVersion}`" />
     </main>
