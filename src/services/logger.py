@@ -8,12 +8,13 @@ Three daily log files:
 """
 
 import json
+import sys
 import traceback
 from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
-LOG_DIR = Path("logs")
+LOG_DIR = Path(".pytest_cache/logs") if "pytest" in sys.modules else Path("logs")
 LOG_REQUEST_NAME = "request.log"
 LOG_RESPONSE_NAME = "response.log"
 LOG_ERROR_NAME = "error.log"
