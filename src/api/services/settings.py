@@ -16,6 +16,7 @@ def build_settings_response() -> SettingsResponse:
         llm_provider=config.llm_provider,
         fallback_provider=config.fallback_provider,
         max_chapters=config.max_chapters,
+        chunk_mode=config.chunk_mode,
         chunk_size=config.chunk_size,
         chunk_overlap=config.chunk_overlap,
         review_threshold=config.review_threshold,

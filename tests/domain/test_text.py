@@ -1,6 +1,8 @@
 """Tests for language detection and chunking domain rules."""
 
-from src.domain.chunking import split_into_chunks, split_sentences
+import pytest
+
+from src.domain.chunking import estimate_token_count, split_into_chunks, split_sentences
 from src.domain.language import detect_language_heuristic
 from src.utils.text import normalize_paragraph_spacing
 
@@ -83,6 +85,27 @@ class TestSplitIntoChunks:
         result = split_into_chunks(text, chunk_size=20, overlap=100)
 
         assert sum(chunk.count("[[ILLUSTRATION:001-001.jpg]]") for chunk in result) == 1
+
+    def test_token_estimate_handles_ascii_and_cjk(self):
+        assert estimate_token_count("abcdefgh") == 2
+        assert estimate_token_count("你好世界") == 4
+
+    def test_token_mode_respects_budget_for_long_sentences(self):
+        result = split_into_chunks("甲乙丙丁戊己庚辛", chunk_size=3, overlap=0, mode="tokens")
+
+        assert len(result) == 3
+        assert all(estimate_token_count(chunk) <= 3 for chunk in result)
+
+    def test_token_overlap_stays_within_chunk_budget(self):
+        result = split_into_chunks("甲乙丙。\n\n丁戊己。", chunk_size=5, overlap=2, mode="tokens")
+
+        assert len(result) == 2
+        assert all(estimate_token_count(chunk) <= 5 for chunk in result)
+        assert result[1].startswith("。")
+
+    def test_rejects_unknown_chunk_mode(self):
+        with pytest.raises(ValueError, match="Unsupported chunk mode"):
+            split_into_chunks("text", mode="bytes")
 
 
 class TestSplitSentences:

@@ -27,10 +27,12 @@ def test_config_to_env_dict_includes_nonempty_secrets():
         telegram_bot_token="bot-token",
         telegram_enabled=True,
         translation_temperature=0.42,
+        chunk_mode="tokens",
         chunk_size=2000,
     )
     env = config_to_env_dict(config)
     assert env["TRANSLATION_TEMPERATURE"] == "0.42"
+    assert env["CHUNK_MODE"] == "tokens"
     assert env["CHUNK_SIZE"] == "2000"
     # Non-empty secrets are persisted when the user has set them.
     assert env["GEMINI_API_KEY"] == "sk-test"

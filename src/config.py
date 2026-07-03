@@ -18,7 +18,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, cast
 
 from dotenv import load_dotenv
 
@@ -60,6 +60,7 @@ class Config:
 
     # --- Translator settings ---
     target_language: str = "vi"
+    chunk_mode: Literal["chars", "tokens"] = "chars"
     chunk_size: int = 1500
     chunk_overlap: int = 100
     review_threshold: float = 0.7
@@ -86,6 +87,8 @@ class Config:
             raise ValueError(f"fallback_provider ({self.fallback_provider}) must differ from llm_provider")
         if not 0.0 <= self.translation_temperature <= 1.0:
             raise ValueError(f"translation_temperature must be 0-1, got {self.translation_temperature}")
+        if self.chunk_mode not in ("chars", "tokens"):
+            raise ValueError(f"chunk_mode must be one of: chars, tokens; got {self.chunk_mode}")
         if self.chunk_overlap >= self.chunk_size:
             raise ValueError(f"chunk_overlap ({self.chunk_overlap}) must be less than chunk_size ({self.chunk_size})")
         if not 0.0 <= self.review_threshold <= 1.0:
@@ -124,6 +127,7 @@ class Config:
             openrouter_api_key=os.getenv("OPENROUTER_API_KEY", ""),
             openrouter_model=os.getenv("OPENROUTER_MODEL", "qwen/qwen3-8b"),
             target_language=os.getenv("TARGET_LANGUAGE", "vi").lower(),
+            chunk_mode=cast(Literal["chars", "tokens"], os.getenv("CHUNK_MODE", "chars").lower()),
             chunk_size=int(os.getenv("CHUNK_SIZE", "1500")),
             chunk_overlap=int(os.getenv("CHUNK_OVERLAP", "100")),
             review_threshold=float(os.getenv("REVIEW_THRESHOLD", "0.7")),

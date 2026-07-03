@@ -25,6 +25,7 @@ class SettingsResponse(BaseModel):
     llm_provider: str
     fallback_provider: str
     max_chapters: int
+    chunk_mode: Literal["chars", "tokens"]
     chunk_size: int
     chunk_overlap: int
     review_threshold: float
@@ -53,6 +54,7 @@ class SettingsPatch(BaseModel):
     translated_dir: str | None = None
     target_language: Literal["vi", "en"] | None = None
     max_chapters: int | None = Field(None, ge=0)
+    chunk_mode: Literal["chars", "tokens"] | None = None
     chunk_size: int | None = Field(None, ge=1)
     chunk_overlap: int | None = Field(None, ge=0)
     review_threshold: float | None = Field(None, ge=0, le=1)

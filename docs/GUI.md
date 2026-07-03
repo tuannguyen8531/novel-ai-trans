@@ -249,7 +249,8 @@ SSE stream is the live view.
 
 Three panels:
 
-- **General**: target language, chunk size, chunk overlap, review
+- **General**: target language, chunk mode (`Characters` or estimated `Tokens`),
+  chunk size, chunk overlap, review
   threshold, max retries, review / summary toggles. Changes are sent with
   `PATCH /api/settings`; the persist button calls `POST /api/settings/persist`
   and writes the in-memory values back to `.env` (non-secret fields only).
