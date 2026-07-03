@@ -68,18 +68,23 @@ class TestConfig:
             assert cfg.max_chapters == 50
 
     def test_translated_path_expands_user(self):
+        env = {
+            "TRANSLATED_DIR": "~/translated",
+        }
+        for k in ["USERPROFILE", "HOMEPATH", "HOMEDRIVE", "HOME"]:
+            if k in os.environ:
+                env[k] = os.environ[k]
+
         with (
             patch.dict(
                 os.environ,
-                {
-                    "TRANSLATED_DIR": "~/translated",
-                },
+                env,
                 clear=True,
             ),
             patch("src.config.load_dotenv"),
         ):
             cfg = Config.from_env()
-            assert str(cfg.translated_path).startswith("/")
+            assert cfg.translated_path.is_absolute()
 
     def test_enable_review_variants(self):
         variants_true = ["true", "True", "TRUE", "1", "yes", "YES"]
