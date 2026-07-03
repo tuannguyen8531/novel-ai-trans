@@ -5,17 +5,25 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
+from src.application.errors import ResourceConflictError
 from src.services.glossary import (
+    PENDING_REPLACEMENTS_KEY,
+    apply_pending_replacements,
     clean_glossary,
+    dismiss_pending_replacements,
     get_active_context,
     load_chapter_summaries_recent,
     load_chapter_summary,
     load_glossary,
     load_glossary_data,
     load_source_language,
+    novel_lock,
     remove_character,
     remove_glossary_term,
     remove_relationship,
+    rollback_glossary_replacement,
     save_chapter_summary,
     save_character,
     save_character_pronoun,
@@ -33,6 +41,8 @@ class TestGlossary:
         self.temp_dir = tempfile.TemporaryDirectory()
         self.patcher = patch("src.services.glossary.GLOSSARY_DIR", Path(self.temp_dir.name))
         self.patcher.start()
+        self.backup_patcher = patch("src.services.glossary.GLOSSARY_BACKUP_DIR", Path(self.temp_dir.name) / "backups")
+        self.backup_patcher.start()
         self.config_patcher = patch("src.services.glossary.config")
         self.mock_config = self.config_patcher.start()
         self.mock_config.translated_dir = ""
@@ -40,6 +50,7 @@ class TestGlossary:
 
     def teardown_method(self):
         self.patcher.stop()
+        self.backup_patcher.stop()
         self.config_patcher.stop()
         self.temp_dir.cleanup()
 
@@ -57,9 +68,27 @@ class TestGlossary:
 
     def test_merge_overrides_existing(self):
         save_glossary("test-novel", {"李白": "Lý Bạch"})
-        save_glossary("test-novel", {"李白": "Lý Bạch Mới"})
+        save_glossary("test-novel", {"李白": "Lý Bạch Mới"}, is_user_edit=True)
         result = load_glossary("test-novel")
         assert result["李白"] == "Lý Bạch Mới"
+        pending = load_glossary_data("test-novel")[PENDING_REPLACEMENTS_KEY]
+        assert pending == [
+            {
+                "kind": "term",
+                "sources": ["李白"],
+                "old": "Lý Bạch",
+                "new": "Lý Bạch Mới",
+            }
+        ]
+
+    def test_reverting_term_to_original_value_removes_pending_replacement(self):
+        save_glossary("test-novel", {"李白": "Lý Bạch"})
+        save_glossary("test-novel", {"李白": "Lý Thái Bạch"}, is_user_edit=True)
+        save_glossary("test-novel", {"李白": "Lý Bạch"}, is_user_edit=True)
+
+        data = load_glossary_data("test-novel")
+        assert data["terms"]["李白"] == "Lý Bạch"
+        assert data[PENDING_REPLACEMENTS_KEY] == []
 
     def test_load_nonexistent(self):
         result = load_glossary("nonexistent")
@@ -119,10 +148,59 @@ class TestGlossary:
             [],
         )
 
-        assert save_character("test-novel", "李白", translated_name="Lý Thái Bạch", role="supporting")
+        assert save_character(
+            "test-novel",
+            "李白",
+            translated_name="Lý Thái Bạch",
+            role="supporting",
+            is_user_edit=True,
+        )
         data = load_glossary_data("test-novel")
         assert data["entities"]["李白"]["translated_name"] == "Lý Thái Bạch"
         assert data["entities"]["李白"]["role"] == "supporting"
+        assert data[PENDING_REPLACEMENTS_KEY][0] == {
+            "kind": "character",
+            "sources": ["李白"],
+            "old": "Lý Bạch",
+            "new": "Lý Thái Bạch",
+        }
+
+    def test_reverting_character_name_removes_pending_replacement(self):
+        save_characters_batch(
+            "test-novel",
+            {"李白": {"translated_name": "Lý Bạch", "role": "minor", "pronoun": ""}},
+            [],
+        )
+        save_character("test-novel", "李白", translated_name="Lý Thái Bạch", is_user_edit=True)
+        save_character("test-novel", "李白", translated_name="Lý Bạch", is_user_edit=True)
+
+        data = load_glossary_data("test-novel")
+        assert data["entities"]["李白"]["translated_name"] == "Lý Bạch"
+        assert data[PENDING_REPLACEMENTS_KEY] == []
+
+    def test_apply_pending_replacements_previews_then_writes(self):
+        translated_root = Path(self.temp_dir.name) / "translated"
+        novel_root = translated_root / "test-novel"
+        (novel_root / "input").mkdir(parents=True)
+        (novel_root / "output").mkdir(parents=True)
+        (novel_root / "input" / "chapter_1.txt").write_text("魔法再次出现。魔法。", encoding="utf-8")
+        output_path = novel_root / "output" / "chapter_001.txt"
+        output_path.write_text('Ma thuật cũ. "ma thuật" mới.', encoding="utf-8")
+        self.mock_config.translated_dir = str(translated_root)
+
+        save_glossary("test-novel", {"魔法": "ma thuật"})
+        update_glossary_term("test-novel", "魔法", "魔法", "ma pháp", is_user_edit=True)
+
+        preview = apply_pending_replacements("test-novel")
+        assert preview["write"] is False
+        assert preview["changed_files"] == 1
+        assert preview["replacements"][0]["occurrences"] == 2
+        assert output_path.read_text(encoding="utf-8") == 'Ma thuật cũ. "ma thuật" mới.'
+
+        applied = apply_pending_replacements("test-novel", write=True)
+        assert applied["changed_files"] == 1
+        assert output_path.read_text(encoding="utf-8") == 'Ma pháp cũ. "Ma pháp" mới.'
+        assert load_glossary_data("test-novel")[PENDING_REPLACEMENTS_KEY] == []
 
     def test_save_character_accepts_legacy_name_vi_argument(self):
         save_characters_batch(
@@ -333,8 +411,14 @@ class TestGlossaryTranslatedDir:
 
         self.patcher_glossary_dir = patch("src.services.glossary.GLOSSARY_DIR", self.project_glossary)
         self.patcher_glossary_dir.start()
+        self.patcher_lock_dir = patch("src.services.glossary.LOCK_DIR", self.base / "locks")
+        self.patcher_lock_dir.start()
+        self.patcher_backup_dir = patch("src.services.glossary.GLOSSARY_BACKUP_DIR", self.base / "backups")
+        self.patcher_backup_dir.start()
 
     def teardown_method(self):
+        self.patcher_backup_dir.stop()
+        self.patcher_lock_dir.stop()
         self.patcher_glossary_dir.stop()
         self.temp_dir.cleanup()
 
@@ -415,3 +499,103 @@ class TestGlossaryTranslatedDir:
 
         translated_file = self.translated_glossary / "glossary.json"
         assert not translated_file.exists()
+
+    def test_apply_pending_replacements_creates_backup_and_supports_rollback(self):
+        translated_root = self.base / "translated"
+        novel_root = translated_root / "test-novel"
+        (novel_root / "input").mkdir(parents=True)
+        (novel_root / "output").mkdir(parents=True)
+        (novel_root / "input" / "chapter_1.txt").write_text("魔法再次出现。魔法。", encoding="utf-8")
+        output_path = novel_root / "output" / "chapter_001.txt"
+        output_path.write_text('Ma thuật cũ. "ma thuật" mới.', encoding="utf-8")
+
+        with patch("src.services.glossary.config") as mock_config:
+            mock_config.translated_dir = str(translated_root)
+            mock_config.target_language = "vi"
+
+            save_glossary("test-novel", {"魔法": "ma thuật"})
+            update_glossary_term("test-novel", "魔法", "魔法", "ma pháp", is_user_edit=True)
+
+            applied = apply_pending_replacements("test-novel", write=True)
+            assert applied["changed_files"] == 1
+            assert output_path.read_text(encoding="utf-8") == 'Ma pháp cũ. "Ma pháp" mới.'
+
+            # A later glossary edit must survive rollback. Its pending chain
+            # should point directly from the restored output to the latest value.
+            update_glossary_term("test-novel", "魔法", "魔法", "huyền thuật", is_user_edit=True)
+
+            backup_id = applied["backup_id"]
+            assert isinstance(backup_id, str)
+            manifests = list((self.base / "backups").rglob("manifest.json"))
+            assert len(manifests) == 1
+            assert manifests[0].parent.name == backup_id
+
+            # Rollback
+            rollback_glossary_replacement("test-novel", backup_id)
+            assert output_path.read_text(encoding="utf-8") == 'Ma thuật cũ. "ma thuật" mới.'
+            data = load_glossary_data("test-novel")
+            assert data["terms"]["魔法"] == "huyền thuật"
+            assert data[PENDING_REPLACEMENTS_KEY] == [
+                {
+                    "kind": "term",
+                    "sources": ["魔法"],
+                    "old": "ma thuật",
+                    "new": "huyền thuật",
+                }
+            ]
+
+    def test_apply_pending_replacements_novel_locking(self):
+        translated_root = self.base / "translated"
+        novel_root = translated_root / "test-novel"
+        (novel_root / "input").mkdir(parents=True)
+        (novel_root / "output").mkdir(parents=True)
+        (novel_root / "input" / "chapter_1.txt").write_text("魔法再次.", encoding="utf-8")
+        output_path = novel_root / "output" / "chapter_001.txt"
+        output_path.write_text("Ma thuật.", encoding="utf-8")
+
+        with patch("src.services.glossary.config") as mock_config:
+            mock_config.translated_dir = str(translated_root)
+            mock_config.target_language = "vi"
+
+            save_glossary("test-novel", {"魔法": "ma thuật"})
+            update_glossary_term("test-novel", "魔法", "魔法", "ma pháp", is_user_edit=True)
+
+            with novel_lock("test-novel"), pytest.raises(ResourceConflictError, match="locked"):
+                apply_pending_replacements("test-novel")
+
+    def test_apply_keeps_pending_when_output_is_missing(self):
+        translated_root = self.base / "translated"
+        novel_root = translated_root / "test-novel"
+        (novel_root / "input").mkdir(parents=True)
+        (novel_root / "input" / "chapter_1.txt").write_text("魔法再次.", encoding="utf-8")
+
+        with patch("src.services.glossary.config") as mock_config:
+            mock_config.translated_dir = str(translated_root)
+            mock_config.target_language = "vi"
+            save_glossary("test-novel", {"魔法": "ma thuật"})
+            update_glossary_term("test-novel", "魔法", "魔法", "ma pháp", is_user_edit=True)
+
+            result = apply_pending_replacements("test-novel", write=True)
+
+        assert result["changed_files"] == 0
+        assert result["replacements"][0]["status"] == "missing_output"
+        assert load_glossary_data("test-novel")[PENDING_REPLACEMENTS_KEY] != []
+
+    def test_dismiss_pending_replacements(self):
+        self.temp_dir_extra = tempfile.TemporaryDirectory()
+        patcher_glossary_dir = patch("src.services.glossary.GLOSSARY_DIR", Path(self.temp_dir_extra.name))
+        patcher_glossary_dir.start()
+
+        with patch("src.services.glossary.config") as mock_config:
+            mock_config.translated_dir = ""
+            mock_config.target_language = "vi"
+
+            save_glossary("test-novel", {"李白": "Lý Bạch"})
+            save_glossary("test-novel", {"李白": "Lý Bạch Mới"}, is_user_edit=True)
+            assert load_glossary_data("test-novel")[PENDING_REPLACEMENTS_KEY] != []
+
+            dismiss_pending_replacements("test-novel")
+            assert load_glossary_data("test-novel")[PENDING_REPLACEMENTS_KEY] == []
+
+        patcher_glossary_dir.stop()
+        self.temp_dir_extra.cleanup()

@@ -146,6 +146,29 @@ export interface GlossaryResponse {
   data: Record<string, unknown>
 }
 
+export interface GlossaryReplacementReport {
+  chapter: number
+  kind: 'term' | 'character'
+  sources: string[]
+  old: string
+  new: string
+  status: 'safe' | 'already_applied' | 'ambiguous' | 'conflict' | 'missing_output'
+  source_count: number
+  output_count: number
+  occurrences: number
+  conflict_news: string[]
+}
+
+export interface GlossaryApplyResponse {
+  novel: string
+  target: 'vi' | 'en'
+  write: boolean
+  conflicted: boolean
+  changed_files: number
+  backup_id: string | null
+  replacements: GlossaryReplacementReport[]
+}
+
 export interface NovelMetadataResponse {
   novel: string
   data: Record<string, unknown>

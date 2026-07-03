@@ -387,6 +387,25 @@ class GlossaryCharactersResponse(BaseModel):
     characters: list[GlossaryCharacterSummary]
 
 
+class GlossaryApplyRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    write: bool = False
+    target: Literal["vi", "en"] | None = None
+
+
+class GlossaryDismissRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    target: Literal["vi", "en"] | None = None
+
+
+class GlossaryRollbackRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    backup_id: str = Field(min_length=1)
+
+
 # ---------------------------------------------------------------------------
 # Generic error shape
 # ---------------------------------------------------------------------------

@@ -12,7 +12,10 @@ from src.application.progress import ProgressEvent
 from src.domain.glossary import audit_term_usage, validate_glossary_data
 from src.services.glossary import (
     _resolve_glossary,
+    apply_pending_replacements,
+    dismiss_pending_replacements,
     remove_glossary_term,
+    rollback_glossary_replacement,
     update_glossary_term,
 )
 from src.services.glossary import (
@@ -58,12 +61,12 @@ def load_glossary(novel_root: Path) -> dict:
 
 
 def save_terms(novel_root: Path, terms: dict[str, str]) -> dict:
-    _save_glossary(novel_root.name, terms)
+    _save_glossary(novel_root.name, terms, is_user_edit=True)
     return load_glossary(novel_root)
 
 
 def save_term(novel_root: Path, original: str, translated: str) -> dict:
-    _save_glossary(novel_root.name, {original: translated})
+    _save_glossary(novel_root.name, {original: translated}, is_user_edit=True)
     return load_glossary(novel_root)
 
 
@@ -87,6 +90,7 @@ def update_term(
             new_original,
             translated,
             overwrite=overwrite,
+            is_user_edit=True,
         )
     except KeyError as error:
         raise ResourceNotFoundError(f"Glossary term not found: {old_original}") from error
@@ -117,6 +121,7 @@ def save_character(
         original,
         translated_name=translated_name,
         role=role,
+        is_user_edit=True,
     )
     return load_glossary(novel_root)
 
@@ -205,3 +210,27 @@ def audit_glossary(
             ),
         )
     return issues
+
+
+def apply_replacements(
+    novel_root: Path,
+    *,
+    target: str | None = None,
+    write: bool = False,
+) -> dict:
+    return apply_pending_replacements(novel_root.name, target_language=target, write=write)
+
+
+def dismiss_replacements(
+    novel_root: Path,
+    *,
+    target: str | None = None,
+) -> None:
+    dismiss_pending_replacements(novel_root.name, target_language=target)
+
+
+def rollback_replacements(novel_root: Path, backup_id: str) -> None:
+    try:
+        rollback_glossary_replacement(novel_root.name, backup_id)
+    except FileNotFoundError as error:
+        raise ResourceNotFoundError(str(error)) from error

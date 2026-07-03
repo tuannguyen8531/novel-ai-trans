@@ -4,6 +4,7 @@ import type {
   ConfigSummary,
   DraftDetail,
   DraftSummary,
+  GlossaryApplyResponse,
   GlossaryResponse,
   HealthResponse,
   JobListResponse,
@@ -312,6 +313,24 @@ export const api = {
       { method: 'POST' }
     )
   },
+  applyGlossary: (name: string, payload: { write: boolean; target?: string }) =>
+    request<GlossaryApplyResponse>(`/api/novels/${encodeURIComponent(name)}/glossary/apply`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }),
+  dismissGlossary: (name: string, target?: string) =>
+    request<{ status: 'ok' }>(`/api/novels/${encodeURIComponent(name)}/glossary/dismiss`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target })
+    }),
+  rollbackGlossary: (name: string, backupId: string) =>
+    request<{ status: 'ok' }>(`/api/novels/${encodeURIComponent(name)}/glossary/rollback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ backup_id: backupId })
+    }),
 
   listJobs: () => request<JobListResponse>('/api/jobs'),
   getJob: (id: string) => request<JobModel>(`/api/jobs/${id}`),
