@@ -38,7 +38,22 @@ Character schema:
   Non-overlapping per-pair direct address/reference timelines in the target language.
 """
 
-import fcntl
+try:
+    import fcntl
+except ImportError:
+    fcntl = None
+
+# Platform-agnostic locking helper & constants
+_LOCK_SH = getattr(fcntl, "LOCK_SH", 0)
+_LOCK_EX = getattr(fcntl, "LOCK_EX", 0)
+_LOCK_UN = getattr(fcntl, "LOCK_UN", 0)
+
+
+def _flock(fd: int, op: int) -> None:
+    if fcntl is not None:
+        fcntl.flock(fd, op)
+
+
 import json
 import shutil
 from collections.abc import Callable
@@ -119,22 +134,22 @@ def _read_json_locked(path: Path) -> dict:
     if not path.exists():
         return {}
     with open(path, encoding="utf-8") as f:
-        fcntl.flock(f.fileno(), fcntl.LOCK_SH)
+        _flock(f.fileno(), _LOCK_SH)
         try:
             return json.load(f)
         finally:
-            fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+            _flock(f.fileno(), _LOCK_UN)
 
 
 def _write_json_locked(path: Path, data: dict):
     """Write JSON file with exclusive lock."""
     _ensure_dir(path)
     with open(path, "w", encoding="utf-8") as f:
-        fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+        _flock(f.fileno(), _LOCK_EX)
         try:
             json.dump(data, f, ensure_ascii=False, indent=2)
         finally:
-            fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+            _flock(f.fileno(), _LOCK_UN)
 
 
 def load_glossary_data(novel_name: str) -> dict:
@@ -153,7 +168,7 @@ def _merge_json_locked(path: Path, updater: Callable[[dict], dict]) -> dict:
     """
     _ensure_dir(path)
     with open(path, "a+", encoding="utf-8") as f:
-        fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+        _flock(f.fileno(), _LOCK_EX)
         try:
             f.seek(0)
             try:
@@ -165,7 +180,7 @@ def _merge_json_locked(path: Path, updater: Callable[[dict], dict]) -> dict:
             f.truncate()
             json.dump(new_data, f, ensure_ascii=False, indent=2)
         finally:
-            fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+            _flock(f.fileno(), _LOCK_UN)
 
     # Sync to share dir after successful write
     _sync_to_share(path, new_data)
