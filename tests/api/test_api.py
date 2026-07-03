@@ -384,3 +384,65 @@ def test_spa_fallback_rejects_paths_outside_dist(tmp_path):
     response = asyncio.run(fallback.endpoint("../secret.txt"))
 
     assert response.status_code == 404
+
+
+def test_apply_glossary_endpoint_success(client):
+    with (
+        patch("src.api.routes.glossary.apply_replacements") as mock_apply,
+        patch("src.api.routes.glossary._validate_novel"),
+    ):
+        mock_apply.return_value = {
+            "novel": "demo",
+            "target": "vi",
+            "write": True,
+            "conflicted": False,
+            "changed_files": 1,
+            "backup_id": "backup_123",
+            "replacements": [],
+        }
+
+        response = client.post(
+            "/api/novels/demo/glossary/apply",
+            json={"write": True, "target": "vi"},
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["write"] is True
+        assert body["changed_files"] == 1
+        assert body["backup_id"] == "backup_123"
+
+        mock_apply.assert_called_once()
+        assert mock_apply.call_args[1]["target"] == "vi"
+        assert mock_apply.call_args[1]["write"] is True
+
+
+def test_dismiss_glossary_endpoint_success(client):
+    with (
+        patch("src.api.routes.glossary.dismiss_replacements") as mock_dismiss,
+        patch("src.api.routes.glossary._validate_novel"),
+    ):
+        response = client.post(
+            "/api/novels/demo/glossary/dismiss",
+            json={"target": "en"},
+        )
+        assert response.status_code == 200
+        assert response.json() == {"status": "ok"}
+
+        mock_dismiss.assert_called_once()
+        assert mock_dismiss.call_args[1]["target"] == "en"
+
+
+def test_rollback_glossary_endpoint_success(client):
+    with (
+        patch("src.api.routes.glossary.rollback_replacements") as mock_rollback,
+        patch("src.api.routes.glossary._validate_novel"),
+    ):
+        response = client.post(
+            "/api/novels/demo/glossary/rollback",
+            json={"backup_id": "20260703T120000_000000Z_deadbeef"},
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {"status": "ok"}
+        mock_rollback.assert_called_once()
+        assert mock_rollback.call_args.args[1] == "20260703T120000_000000Z_deadbeef"

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { api } from '@/api/client'
-import type { GlossaryResponse } from '@/api/types'
+import type { GlossaryApplyResponse, GlossaryReplacementReport, GlossaryResponse } from '@/api/types'
 
 interface Edge {
   from: string
@@ -14,6 +14,7 @@ const props = defineProps<{ novel: string }>()
 
 const data = ref<GlossaryResponse | null>(null)
 const error = ref<string | null>(null)
+const actionMessage = ref<string | null>(null)
 const loading = ref(false)
 
 const termFilter = ref('')
@@ -268,11 +269,279 @@ async function addRelationship() {
     error.value = (err as Error).message
   }
 }
+
+// Staged glossary / pending replacements logic
+const pendingReplacements = computed<unknown[]>(() => {
+  if (!data.value || !data.value.data) return []
+  return (data.value.data._pending_replacements as unknown[]) ?? []
+})
+
+const showPreviewModal = ref(false)
+const previewLoading = ref(false)
+const previewData = ref<GlossaryApplyResponse | null>(null)
+const applyLoading = ref(false)
+const rollbackLoading = ref(false)
+const modalCard = ref<HTMLElement | null>(null)
+let previousFocus: HTMLElement | null = null
+
+const unresolvedCount = computed(() =>
+  previewData.value?.replacements.filter((replacement) =>
+    ['ambiguous', 'conflict', 'missing_output'].includes(replacement.status)
+  ).length ?? 0
+)
+
+async function handleDismiss() {
+  if (!confirm('Dismiss all pending glossary replacements? Glossary values and translated files will remain unchanged; only the pending-change notice will be cleared.')) return
+  loading.value = true
+  error.value = null
+  actionMessage.value = null
+  try {
+    await api.dismissGlossary(props.novel)
+    await load()
+  } catch (err) {
+    error.value = (err as Error).message
+  } finally {
+    loading.value = false
+  }
+}
+
+async function openPreview() {
+  showPreviewModal.value = true
+  previewLoading.value = true
+  previewData.value = null
+  error.value = null
+  actionMessage.value = null
+  try {
+    const res = await api.applyGlossary(props.novel, { write: false })
+    previewData.value = res
+  } catch (err) {
+    error.value = (err as Error).message
+    closePreview()
+  } finally {
+    previewLoading.value = false
+  }
+}
+
+async function handleApply() {
+  applyLoading.value = true
+  error.value = null
+  actionMessage.value = null
+  try {
+    const res = await api.applyGlossary(props.novel, { write: true })
+    previewData.value = res
+    await load()
+  } catch (err) {
+    error.value = (err as Error).message
+  } finally {
+    applyLoading.value = false
+  }
+}
+
+async function handleRollback() {
+  const backupId = previewData.value?.backup_id
+  if (!backupId || !confirm('Restore every translated chapter changed by this apply operation? Current glossary values will remain unchanged, and pending replacements will be restored.')) return
+  rollbackLoading.value = true
+  error.value = null
+  actionMessage.value = null
+  let restored = false
+  try {
+    await api.rollbackGlossary(props.novel, backupId)
+    await load()
+    restored = true
+  } catch (err) {
+    error.value = (err as Error).message
+  } finally {
+    rollbackLoading.value = false
+  }
+  if (restored) {
+    closePreview()
+    actionMessage.value = `Restored translated chapters from backup ${backupId}.`
+  }
+}
+
+function closePreview() {
+  if (applyLoading.value || rollbackLoading.value) return
+  showPreviewModal.value = false
+  previousFocus?.focus()
+  previousFocus = null
+}
+
+function handleModalKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') {
+    closePreview()
+    return
+  }
+  if (event.key !== 'Tab' || !modalCard.value) return
+  const focusable = Array.from(
+    modalCard.value.querySelectorAll<HTMLElement>('button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex="-1"])')
+  )
+  if (!focusable.length) {
+    event.preventDefault()
+    modalCard.value.focus()
+    return
+  }
+  const first = focusable[0]
+  const last = focusable[focusable.length - 1]
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault()
+    last.focus()
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault()
+    first.focus()
+  }
+}
+
+function getStatusClass(status: string) {
+  if (status === 'safe' || status === 'applied' || status === 'already_applied') return 'ok'
+  if (status === 'ambiguous' || status === 'missing_output') return 'warn'
+  if (status === 'conflict') return 'danger'
+  return ''
+}
+
+function statusLabel(replacement: GlossaryReplacementReport): string {
+  if (previewData.value?.write && replacement.status === 'safe') return 'APPLIED'
+  return replacement.status.toUpperCase()
+}
+
+// Lock background scrolling when modal is open
+watch(showPreviewModal, (isOpen) => {
+  if (isOpen) {
+    previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    document.body.style.overflow = 'hidden'
+    void nextTick(() => modalCard.value?.focus())
+  } else {
+    document.body.style.overflow = ''
+  }
+})
+
+watch([applyLoading, rollbackLoading], ([applying, rollingBack]) => {
+  if (applying || rollingBack) {
+    void nextTick(() => modalCard.value?.focus())
+  }
+})
+
+onUnmounted(() => {
+  document.body.style.overflow = ''
+})
 </script>
 
 <template>
   <div class="glossary">
     <p v-if="error" class="error">{{ error }}</p>
+    <p v-if="actionMessage" class="notice">{{ actionMessage }}</p>
+
+    <!-- Alert Banner for Pending Glossary Changes -->
+    <div v-if="pendingReplacements.length" class="pending-banner">
+      <div class="pending-banner-text">
+        <span>⚠️ You have <strong>{{ pendingReplacements.length }}</strong> pending glossary changes waiting to be applied to translated chapters.</span>
+      </div>
+      <div class="pending-banner-actions">
+        <button type="button" @click="openPreview" :disabled="loading">Preview & Apply</button>
+        <button type="button" class="secondary" @click="handleDismiss" :disabled="loading">Dismiss</button>
+      </div>
+    </div>
+
+    <!-- Modal Preview & Apply -->
+    <div v-if="showPreviewModal" class="modal-overlay">
+      <div
+        ref="modalCard"
+        class="modal-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="glossary-preview-title"
+        tabindex="-1"
+        @keydown="handleModalKeydown"
+      >
+        <header class="modal-header">
+          <h3 id="glossary-preview-title">Preview & Apply Glossary Changes</h3>
+          <button
+            type="button"
+            class="modal-close"
+            aria-label="Close glossary preview"
+            :disabled="applyLoading || rollbackLoading"
+            @click="closePreview"
+          >&times;</button>
+        </header>
+        <div class="modal-body">
+          <p v-if="error" class="error">{{ error }}</p>
+          <div v-if="previewLoading" class="preview-spinner">
+            <p>Scanning translated chapters...</p>
+          </div>
+          <div v-else-if="previewData">
+            <div class="preview-summary">
+              <p>
+                Novel: <strong>{{ previewData.novel }}</strong> | Target language: <strong>{{ previewData.target }}</strong>
+              </p>
+              <p>
+                Files to change: <strong>{{ previewData.changed_files }} file(s)</strong>
+              </p>
+              <p v-if="previewData.conflicted" class="error">
+                ⚠️ Conflict detected. You cannot overwrite the translation while conflicts exist.
+              </p>
+              <p v-else-if="previewData.write" class="notice">
+                Updated {{ previewData.changed_files }} file(s).
+                <template v-if="unresolvedCount">{{ unresolvedCount }} issue(s) remain pending.</template>
+              </p>
+              <p v-if="previewData.backup_id" class="muted">
+                Backup: <code>{{ previewData.backup_id }}</code>
+              </p>
+            </div>
+
+            <div v-if="previewData.replacements.length" class="preview-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Chapter</th>
+                    <th>Kind</th>
+                    <th>Original</th>
+                    <th>Old translation</th>
+                    <th>New translation</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(rep, idx) in previewData.replacements" :key="idx">
+                    <td>Ch.{{ rep.chapter }}</td>
+                    <td>{{ rep.kind }}</td>
+                    <td>{{ rep.sources.join('/') }}</td>
+                    <td>{{ rep.old }}</td>
+                    <td>{{ rep.new }}</td>
+                    <td>
+                      <span :class="['badge', getStatusClass(rep.status)]">
+                        {{ statusLabel(rep) }}
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p v-else class="muted">No matching translated chapter occurrences were found. The changes remain pending.</p>
+          </div>
+        </div>
+        <footer class="modal-footer">
+          <button
+            v-if="previewData?.backup_id"
+            type="button"
+            class="secondary"
+            :disabled="applyLoading || rollbackLoading"
+            @click="handleRollback"
+          >
+            {{ rollbackLoading ? 'Restoring...' : 'Rollback' }}
+          </button>
+          <button type="button" class="secondary" @click="closePreview" :disabled="applyLoading || rollbackLoading">
+            {{ previewData?.write ? 'Close' : 'Cancel' }}
+          </button>
+          <button
+            v-if="previewData && !previewLoading && !previewData.write"
+            type="button"
+            @click="handleApply"
+            :disabled="previewData.conflicted || applyLoading || previewData.changed_files === 0"
+          >
+            {{ applyLoading ? 'Applying...' : 'Confirm & Overwrite' }}
+          </button>
+        </footer>
+      </div>
+    </div>
 
     <!-- Terms -->
     <section class="gloss-section card">
@@ -626,5 +895,130 @@ async function addRelationship() {
   font-size: 0.85rem;
   padding: 0.25rem 0.45rem;
   background: var(--bg-elev-2);
+}
+
+/* Staged glossary alert banner */
+.pending-banner {
+  background: rgba(240, 184, 106, 0.1);
+  border: 1px solid var(--warn);
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+.pending-banner-text {
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.pending-banner-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* Modal and layout overlay */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.modal-card {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  width: 100%;
+  max-width: 44rem;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+}
+
+.modal-header {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-header h3 {
+  margin: 0;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: var(--fg-dim);
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.modal-close:hover {
+  color: var(--fg);
+}
+
+.modal-close:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.modal-body {
+  padding: 1.25rem;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.preview-summary {
+  margin-bottom: 1.25rem;
+  padding: 0.75rem 1rem;
+  background: var(--bg-elev-2);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+
+.preview-summary p {
+  margin: 0.25rem 0;
+}
+
+.preview-table-wrap {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  max-height: 25rem;
+  overflow: auto;
+}
+
+.preview-spinner {
+  padding: 3rem;
+  text-align: center;
+  color: var(--fg-dim);
+}
+
+.modal-footer {
+  padding: 1rem 1.25rem;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.notice {
+  color: var(--ok);
 }
 </style>

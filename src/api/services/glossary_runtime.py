@@ -12,7 +12,10 @@ from src.application.progress import ProgressEvent
 from src.domain.glossary import audit_term_usage, validate_glossary_data
 from src.services.glossary import (
     _resolve_glossary,
+    apply_pending_replacements,
+    dismiss_pending_replacements,
     remove_glossary_term,
+    rollback_glossary_replacement,
     update_glossary_term,
 )
 from src.services.glossary import (
@@ -207,3 +210,27 @@ def audit_glossary(
             ),
         )
     return issues
+
+
+def apply_replacements(
+    novel_root: Path,
+    *,
+    target: str | None = None,
+    write: bool = False,
+) -> dict:
+    return apply_pending_replacements(novel_root.name, target_language=target, write=write)
+
+
+def dismiss_replacements(
+    novel_root: Path,
+    *,
+    target: str | None = None,
+) -> None:
+    dismiss_pending_replacements(novel_root.name, target_language=target)
+
+
+def rollback_replacements(novel_root: Path, backup_id: str) -> None:
+    try:
+        rollback_glossary_replacement(novel_root.name, backup_id)
+    except FileNotFoundError as error:
+        raise ResourceNotFoundError(str(error)) from error

@@ -13,20 +13,26 @@ from src.api.auth import Principal, authenticate
 from src.api.dependencies import get_job_manager
 from src.api.jobs import JobManager, build_progress_emitter
 from src.api.schemas import (
+    GlossaryApplyRequest,
     GlossaryCharactersResponse,
     GlossaryCharacterSummary,
     GlossaryCharacterUpdate,
+    GlossaryDismissRequest,
     GlossaryRelationshipAdd,
     GlossaryResponse,
+    GlossaryRollbackRequest,
     GlossaryTermAdd,
     GlossaryTermsPut,
     GlossaryTermUpdate,
     JobStartResponse,
 )
 from src.api.services.glossary_runtime import (
+    apply_replacements,
     audit_glossary,
+    dismiss_replacements,
     load_glossary,
     remove_term,
+    rollback_replacements,
     save_term,
     save_terms,
     update_term,
@@ -258,3 +264,39 @@ async def post_audit_glossary(
         run=_run,
     )
     return JobStartResponse(job_id=job.id)
+
+
+@router.post("/novels/{name}/glossary/apply")
+def post_apply_glossary(
+    name: str,
+    payload: GlossaryApplyRequest,
+    _: Principal = Depends(authenticate),
+) -> dict:
+    novel_root = _validate_novel(name)
+    return apply_replacements(
+        novel_root,
+        target=payload.target,
+        write=payload.write,
+    )
+
+
+@router.post("/novels/{name}/glossary/dismiss")
+def post_dismiss_glossary(
+    name: str,
+    payload: GlossaryDismissRequest,
+    _: Principal = Depends(authenticate),
+) -> dict:
+    novel_root = _validate_novel(name)
+    dismiss_replacements(novel_root, target=payload.target)
+    return {"status": "ok"}
+
+
+@router.post("/novels/{name}/glossary/rollback")
+def post_rollback_glossary(
+    name: str,
+    payload: GlossaryRollbackRequest,
+    _: Principal = Depends(authenticate),
+) -> dict:
+    novel_root = _validate_novel(name)
+    rollback_replacements(novel_root, payload.backup_id)
+    return {"status": "ok"}

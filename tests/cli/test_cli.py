@@ -25,7 +25,10 @@ from src.config import Config
 def _patch_cli_paths():
     """Each test patches the application config_context default rather than
     the legacy module-level ``config`` global."""
-    yield
+    with patch("src.services.glossary.config") as mock_glossary_config:
+        mock_glossary_config.translated_dir = ""
+        mock_glossary_config.target_language = "vi"
+        yield
 
 
 def _patch_config(**attrs):

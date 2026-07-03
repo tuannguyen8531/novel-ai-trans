@@ -222,6 +222,54 @@ async function startPack() {
     packError.value = (err as Error).message
   }
 }
+
+// Comparison view (show original source content below translated content)
+const showSource = ref(false)
+const sourceContent = ref('')
+const sourceLoading = ref(false)
+const sourceError = ref<string | null>(null)
+let sourceRequestId = 0
+
+async function fetchSourceContent() {
+  if (!reading.value) return
+  const chapter = reading.value.chapter
+  const requestId = ++sourceRequestId
+  sourceLoading.value = true
+  sourceError.value = null
+  try {
+    const response = await api.getChapterContent(novelName.value, chapter, 'source')
+    if (requestId === sourceRequestId && reading.value?.chapter === chapter) {
+      sourceContent.value = response.content
+    }
+  } catch (err) {
+    if (requestId === sourceRequestId) {
+      sourceError.value = (err as Error).message
+    }
+  } finally {
+    if (requestId === sourceRequestId) {
+      sourceLoading.value = false
+    }
+  }
+}
+
+watch(() => reading.value?.chapter, async (newCh) => {
+  sourceRequestId += 1
+  sourceContent.value = ''
+  sourceError.value = null
+  sourceLoading.value = false
+  if (newCh && showSource.value) {
+    await fetchSourceContent()
+  }
+})
+
+watch(showSource, async (val) => {
+  if (val && !sourceContent.value && reading.value) {
+    await fetchSourceContent()
+  } else if (!val) {
+    sourceRequestId += 1
+    sourceLoading.value = false
+  }
+})
 </script>
 
 <template>
@@ -443,8 +491,23 @@ async function startPack() {
           </div>
 
           <div v-if="reading" class="chapter-reader">
-            <h4>Chapter {{ reading.chapter }} — {{ targetLabel(reading.target ?? 'vi') }} translation</h4>
+            <div class="row gap-3" style="justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap;">
+              <h4 style="margin: 0;">Chapter {{ reading.chapter }} — {{ targetLabel(reading.target ?? 'vi') }} translation</h4>
+              <label class="check" style="margin: 0; padding: 0.25rem 0.5rem; background: var(--bg-elev-2); border: 1px solid var(--border);">
+                <input v-model="showSource" type="checkbox" />
+                <span>Show original chapter</span>
+              </label>
+            </div>
             <pre class="chapter-content">{{ reading.content }}</pre>
+
+            <div v-if="showSource" class="source-comparison" style="margin-top: 1rem; border-top: 1px dashed var(--border); padding-top: 1rem;">
+              <h5 style="margin-top: 0; margin-bottom: 0.5rem;">Source Chapter</h5>
+              <div v-if="sourceLoading" class="preview-spinner" style="padding: 1.5rem; text-align: center; color: var(--fg-dim);">
+                <p>Loading original content...</p>
+              </div>
+              <p v-else-if="sourceError" class="error">Failed to load original chapter: {{ sourceError }}</p>
+              <pre v-else class="chapter-content source-content" style="background: var(--bg-elev-2); opacity: 0.85; border-left: 3px solid var(--accent);">{{ sourceContent || 'Original chapter is empty.' }}</pre>
+            </div>
           </div>
         </div>
 

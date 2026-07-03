@@ -41,6 +41,8 @@ class TestGlossary:
         self.temp_dir = tempfile.TemporaryDirectory()
         self.patcher = patch("src.services.glossary.GLOSSARY_DIR", Path(self.temp_dir.name))
         self.patcher.start()
+        self.backup_patcher = patch("src.services.glossary.GLOSSARY_BACKUP_DIR", Path(self.temp_dir.name) / "backups")
+        self.backup_patcher.start()
         self.config_patcher = patch("src.services.glossary.config")
         self.mock_config = self.config_patcher.start()
         self.mock_config.translated_dir = ""
@@ -48,6 +50,7 @@ class TestGlossary:
 
     def teardown_method(self):
         self.patcher.stop()
+        self.backup_patcher.stop()
         self.config_patcher.stop()
         self.temp_dir.cleanup()
 
