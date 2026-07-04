@@ -7,6 +7,7 @@ import type { NovelChapterStatus } from '@/api/types'
 import GlossaryEditor from '@/components/GlossaryEditor.vue'
 import JobMonitor from '@/components/JobMonitor.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import ChapterContent from '@/components/ChapterContent.vue'
 import placeholderCover from '@/assets/placeholder-cover.png'
 
 const props = defineProps<{ name: string }>()
@@ -775,7 +776,7 @@ function cancelDeleteChapter() {
               class="chapter-edit-area"
             ></textarea>
             <div v-else-if="inputViewLoading" class="chapter-content muted" style="text-align: center; padding: 2rem;">Loading…</div>
-            <pre v-else class="chapter-content">{{ inputReading.content || 'Empty chapter.' }}</pre>
+            <ChapterContent v-else :content="inputReading.content" :novel="novelName" />
           </div>
 
         </div>

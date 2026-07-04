@@ -155,6 +155,8 @@ export const api = {
     request<void>(`/api/novels/${encodeURIComponent(name)}/chapters/${chapter}`, {
       method: 'DELETE'
     }),
+  illustrationUrl: (name: string, filename: string): string =>
+    `${BASE}/api/novels/${encodeURIComponent(name)}/illustrations/${encodeURIComponent(filename)}`,
   listArtifacts: (name: string) =>
     request<ArtifactInfo[]>(`/api/novels/${encodeURIComponent(name)}/artifacts`),
   downloadArtifact: async (name: string, filename: string): Promise<Blob> => {

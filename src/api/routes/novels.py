@@ -450,6 +450,33 @@ def download_artifact(
     return FileResponse(artifact_path, filename=filename)
 
 
+@router.get("/novels/{name}/illustrations/{filename}")
+def get_illustration(
+    name: str,
+    filename: str,
+    _: Principal = Depends(authenticate),
+) -> FileResponse:
+    config = config_context.get_config()
+    root = resolve_translated_root(config.translated_dir)
+    if not is_valid_novel_slug(name):
+        raise ResourceNotFoundError(f"Invalid novel name: {name!r}")
+    novel_root = safe_novel_path(root, name)
+    if not novel_root.exists():
+        raise ResourceNotFoundError(f"Novel not found: {name}")
+    if "/" in filename or "\\" in filename or filename.startswith("."):
+        raise ResourceNotFoundError("Invalid illustration filename")
+    illustrations_dir = novel_root / "illustrations"
+    illustration_path = (illustrations_dir / filename).resolve()
+    try:
+        illustration_path.relative_to(illustrations_dir.resolve())
+    except ValueError as error:
+        raise ResourceNotFoundError("Illustration escapes illustrations directory") from error
+    _ALLOWED_IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif"}
+    if not illustration_path.is_file() or illustration_path.suffix.lower() not in _ALLOWED_IMAGE_SUFFIXES:
+        raise ResourceNotFoundError(f"Illustration not found: {filename}")
+    return FileResponse(illustration_path)
+
+
 def _list_artifacts(novel_root: Path) -> list[Path]:
     if not novel_root.exists():
         return []
