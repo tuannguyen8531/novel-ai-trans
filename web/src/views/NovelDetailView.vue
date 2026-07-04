@@ -6,6 +6,7 @@ import { api } from '@/api/client'
 import type { NovelChapterStatus } from '@/api/types'
 import GlossaryEditor from '@/components/GlossaryEditor.vue'
 import JobMonitor from '@/components/JobMonitor.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import placeholderCover from '@/assets/placeholder-cover.png'
 
 const props = defineProps<{ name: string }>()
@@ -56,12 +57,10 @@ const addChapterError = ref<string | null>(null)
 const addModalCard = ref<HTMLElement | null>(null)
 let addPreviousFocus: HTMLElement | null = null
 
-const showDeleteModal = ref(false)
-const deleteChapterNumber = ref<number | null>(null)
+const showDeleteDialog = ref(false)
 const deleteChapterSaving = ref(false)
-const deleteChapterError = ref<string | null>(null)
-const deleteModalCard = ref<HTMLElement | null>(null)
-let deletePreviousFocus: HTMLElement | null = null
+const inputViewMode = ref<'source' | 'vi' | 'en'>('source')
+const inputViewLoading = ref(false)
 
 const novelName = computed(() => props.name || String(route.params.name || ''))
 
@@ -93,6 +92,20 @@ function formatChapterNum(num: number): string {
 const lastInputChapter = computed(() => {
   const nums = inputChapterNumbers.value
   return nums.length > 0 ? Math.max(...nums) : 0
+})
+
+const inputChapterHasVi = computed(() => {
+  if (!inputReading.value) return false
+  return chapters.value.some(
+    (s) => s.number === inputReading.value!.chapter && s.target === 'vi' && s.has_translation
+  )
+})
+
+const inputChapterHasEn = computed(() => {
+  if (!inputReading.value) return false
+  return chapters.value.some(
+    (s) => s.number === inputReading.value!.chapter && s.target === 'en' && s.has_translation
+  )
 })
 
 watch(inputChapterNumbers, () => {
@@ -323,11 +336,32 @@ watch(showSource, async (val) => {
 
 async function openInputChapter(chapter: number) {
   inputError.value = null
+  inputViewMode.value = 'source'
   try {
     const response = await api.getChapterContent(novelName.value, chapter, 'source')
     inputReading.value = { chapter, content: response.content, editing: false, editContent: response.content }
   } catch (err) {
     inputError.value = (err as Error).message
+  }
+}
+
+async function changeInputView(mode: 'source' | 'vi' | 'en') {
+  if (!inputReading.value || inputViewLoading.value) return
+  inputViewMode.value = mode
+  inputViewLoading.value = true
+  inputError.value = null
+  try {
+    const view = mode === 'source' ? 'source' : 'translation'
+    const tgt = mode === 'source' ? undefined : mode
+    const response = await api.getChapterContent(novelName.value, inputReading.value.chapter, view, tgt)
+    inputReading.value.content = response.content
+    if (mode === 'source') {
+      inputReading.value.editContent = response.content
+    }
+  } catch (err) {
+    inputError.value = (err as Error).message
+  } finally {
+    inputViewLoading.value = false
   }
 }
 
@@ -437,73 +471,29 @@ async function confirmAddChapter() {
   }
 }
 
-function openDeleteModal() {
+function openDeleteDialog() {
   if (!inputReading.value) return
-  deleteChapterError.value = null
-  deleteChapterNumber.value = inputReading.value.chapter
-  showDeleteModal.value = true
+  showDeleteDialog.value = true
 }
-
-function closeDeleteModal() {
-  if (deleteChapterSaving.value) return
-  showDeleteModal.value = false
-  deletePreviousFocus?.focus()
-  deletePreviousFocus = null
-}
-
-function handleDeleteModalKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape') {
-    closeDeleteModal()
-    return
-  }
-  if (event.key !== 'Tab' || !deleteModalCard.value) return
-  const focusable = Array.from(
-    deleteModalCard.value.querySelectorAll<HTMLElement>(
-      'button:not(:disabled), [href], input:not(:disabled), [tabindex]:not([tabindex="-1"])'
-    )
-  )
-  if (!focusable.length) {
-    event.preventDefault()
-    deleteModalCard.value.focus()
-    return
-  }
-  const first = focusable[0]
-  const last = focusable[focusable.length - 1]
-  if (event.shiftKey && document.activeElement === first) {
-    event.preventDefault()
-    last.focus()
-  } else if (!event.shiftKey && document.activeElement === last) {
-    event.preventDefault()
-    first.focus()
-  }
-}
-
-watch(showDeleteModal, (isOpen) => {
-  if (isOpen) {
-    deletePreviousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    document.body.style.overflow = 'hidden'
-    void nextTick(() => deleteModalCard.value?.focus())
-  } else {
-    document.body.style.overflow = ''
-  }
-})
 
 async function confirmDeleteChapter() {
-  if (deleteChapterNumber.value === null) return
-  deleteChapterError.value = null
+  if (!inputReading.value) return
   deleteChapterSaving.value = true
   try {
-    await api.deleteChapter(novelName.value, deleteChapterNumber.value)
-    if (inputReading.value?.chapter === deleteChapterNumber.value) {
-      inputReading.value = null
-    }
+    await api.deleteChapter(novelName.value, inputReading.value.chapter)
+    inputReading.value = null
     chapters.value = await api.listChapters(novelName.value)
-    closeDeleteModal()
+    showDeleteDialog.value = false
   } catch (err) {
-    deleteChapterError.value = (err as Error).message
+    inputError.value = (err as Error).message
+    showDeleteDialog.value = false
   } finally {
     deleteChapterSaving.value = false
   }
+}
+
+function cancelDeleteChapter() {
+  showDeleteDialog.value = false
 }
 </script>
 
@@ -707,7 +697,7 @@ async function confirmDeleteChapter() {
           aria-labelledby="chapters-tab"
         >
           <div class="row gap-2" style="justify-content: space-between; align-items: center; flex-wrap: wrap;">
-            <h3 style="margin: 0;">Input Chapters</h3>
+            <h3 style="margin: 0;">Chapter List</h3>
             <div class="row gap-2" style="align-items: center;">
               <button
                 type="button"
@@ -721,7 +711,7 @@ async function confirmDeleteChapter() {
             </div>
           </div>
           <p v-if="inputError" class="error" style="margin-top: 0.5rem;">{{ inputError }}</p>
-          <p v-if="!inputChapterNumbers.length" class="muted" style="margin-top: 0.5rem;">No input chapters yet.</p>
+          <p v-if="!inputChapterNumbers.length" class="muted" style="margin-top: 0.5rem;">No chapters yet.</p>
           <div v-else class="input-chapter-container">
             <div class="input-chapter-list">
               <button
@@ -758,8 +748,18 @@ async function confirmDeleteChapter() {
               <h4 style="margin: 0;">Chapter {{ inputReading.chapter }}</h4>
               <div class="row gap-2" style="align-items: center;">
                 <template v-if="!inputReading.editing">
+                  <select
+                    class="input-view-select"
+                    :value="inputViewMode"
+                    :disabled="inputViewLoading"
+                    @change="changeInputView(($event.target as HTMLSelectElement).value as 'source' | 'vi' | 'en')"
+                  >
+                    <option value="source">Origin</option>
+                    <option value="vi" :disabled="!inputChapterHasVi">Vietnamese</option>
+                    <option value="en" :disabled="!inputChapterHasEn">English</option>
+                  </select>
                   <button type="button" class="secondary" @click="startEditInput">Edit</button>
-                  <button type="button" class="secondary danger" @click="openDeleteModal">Delete</button>
+                  <button type="button" class="secondary danger" @click="openDeleteDialog">Delete</button>
                 </template>
                 <template v-else>
                   <button type="button" :disabled="inputSaving" @click="saveInputChapter">
@@ -774,8 +774,10 @@ async function confirmDeleteChapter() {
               v-model="inputReading.editContent"
               class="chapter-edit-area"
             ></textarea>
+            <div v-else-if="inputViewLoading" class="chapter-content muted" style="text-align: center; padding: 2rem;">Loading…</div>
             <pre v-else class="chapter-content">{{ inputReading.content || 'Empty chapter.' }}</pre>
           </div>
+
         </div>
 
         <div
@@ -908,50 +910,16 @@ async function confirmDeleteChapter() {
       </div>
     </div>
 
-    <div v-if="showDeleteModal" class="modal-overlay">
-      <div
-        ref="deleteModalCard"
-        class="modal-card"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="delete-chapter-title"
-        tabindex="-1"
-        @keydown="handleDeleteModalKeydown"
-      >
-        <header class="modal-header">
-          <h3 id="delete-chapter-title">Delete Chapter</h3>
-          <button
-            type="button"
-            class="modal-close"
-            aria-label="Close"
-            :disabled="deleteChapterSaving"
-            @click="closeDeleteModal"
-          >&times;</button>
-        </header>
-        <div class="modal-body">
-          <p v-if="deleteChapterError" class="error">{{ deleteChapterError }}</p>
-          <div class="delete-warning">
-            <p><strong>Warning:</strong> You are about to delete <strong>Chapter {{ deleteChapterNumber }}</strong> from the input chapters.</p>
-            <p>This action will:</p>
-            <ul>
-              <li>Permanently delete the source chapter file</li>
-              <li>Not delete any translated chapters (they will become orphaned)</li>
-              <li>Cannot be undone</li>
-            </ul>
-            <p>Are you sure you want to continue?</p>
-          </div>
-        </div>
-        <footer class="modal-footer">
-          <button type="button" class="secondary" :disabled="deleteChapterSaving" @click="closeDeleteModal">Cancel</button>
-          <button
-            type="button"
-            class="danger"
-            :disabled="deleteChapterSaving"
-            @click="confirmDeleteChapter"
-          >{{ deleteChapterSaving ? 'Deleting...' : 'Delete' }}</button>
-        </footer>
-      </div>
-    </div>
+    <ConfirmDialog
+      :show="showDeleteDialog"
+      title="Delete Chapter"
+      :message="`Delete Chapter ${inputReading?.chapter}?\n\nThis permanently deletes the source chapter file. Translated chapters will not be deleted but may become orphaned. This cannot be undone.`"
+      confirm-label="Delete"
+      :danger="true"
+      :loading="deleteChapterSaving"
+      @confirm="confirmDeleteChapter"
+      @cancel="cancelDeleteChapter"
+    />
   </section>
 </template>
 
@@ -1267,10 +1235,12 @@ button.active {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 1rem;
 }
 
 .modal-header h3 {
   margin: 0;
+  flex: 1;
 }
 
 .modal-close {
@@ -1281,10 +1251,18 @@ button.active {
   cursor: pointer;
   padding: 0;
   line-height: 1;
+  width: 1.5rem;
+  height: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
-.modal-close:hover {
+.modal-close:hover:not(:disabled) {
   color: var(--fg);
+  background: var(--bg-elev-2);
+  border-radius: var(--radius);
 }
 
 .modal-close:disabled {
@@ -1328,23 +1306,19 @@ button.secondary.danger:hover:not(:disabled) {
   color: #fff;
 }
 
-.delete-warning {
-  background: var(--bg-elev-2);
+.input-view-select {
+  font-size: 0.875rem;
+  padding: 0.25rem 0.5rem;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 1rem;
+  background: var(--bg-elev);
+  color: var(--fg);
+  cursor: pointer;
+  height: 2rem;
 }
 
-.delete-warning p {
-  margin: 0.5rem 0;
-}
-
-.delete-warning ul {
-  margin: 0.5rem 0;
-  padding-left: 1.5rem;
-}
-
-.delete-warning li {
-  margin: 0.25rem 0;
+.input-view-select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 </style>

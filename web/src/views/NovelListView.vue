@@ -3,11 +3,14 @@ import { onMounted, computed, ref } from 'vue'
 import { useNovelsStore } from '@/stores/novels'
 import { useSettingsStore } from '@/stores/settings'
 import type { NovelSummary, NovelTargetProgress } from '@/api/types'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 
 const novels = useNovelsStore()
 const settings = useSettingsStore()
 const deletingNovel = ref<string | null>(null)
 const deleteError = ref<string | null>(null)
+const showDeleteDialog = ref(false)
+const novelToDelete = ref<NovelSummary | null>(null)
 
 onMounted(() => {
   void Promise.all([novels.refresh(), settings.refresh()])
@@ -20,22 +23,39 @@ function translatedProgress(novel: NovelSummary): NovelTargetProgress | undefine
   return novel.targets.find((progress) => progress.target === defaultTarget.value)
 }
 
-async function deleteNovel(novel: NovelSummary) {
-  const label = novel.title ? `"${novel.title}" (${novel.name})` : `"${novel.name}"`
-  if (!confirm(
-    `Delete ${label}?\n\nThis permanently removes all chapters, translations, glossary data, illustrations, and artifacts. This cannot be undone.`
-  )) return
+function deleteNovel(novel: NovelSummary) {
+  novelToDelete.value = novel
+  showDeleteDialog.value = true
+}
 
-  deletingNovel.value = novel.name
+async function confirmDelete() {
+  if (!novelToDelete.value) return
+  deletingNovel.value = novelToDelete.value.name
   deleteError.value = null
   try {
-    await novels.remove(novel.name)
+    await novels.remove(novelToDelete.value.name)
+    showDeleteDialog.value = false
   } catch (err) {
     deleteError.value = (err as Error).message
+    showDeleteDialog.value = false
   } finally {
     deletingNovel.value = null
+    novelToDelete.value = null
   }
 }
+
+function cancelDelete() {
+  showDeleteDialog.value = false
+  novelToDelete.value = null
+}
+
+const deleteMessage = computed(() => {
+  if (!novelToDelete.value) return ''
+  const label = novelToDelete.value.title
+    ? `"${novelToDelete.value.title}" (${novelToDelete.value.name})`
+    : `"${novelToDelete.value.name}"`
+  return `Delete ${label}?\n\nThis permanently removes all chapters, translations, glossary data, illustrations, and artifacts. This cannot be undone.`
+})
 </script>
 
 <template>
@@ -87,6 +107,17 @@ async function deleteNovel(novel: NovelSummary) {
       </table>
     </div>
     <p class="muted" style="margin-top: 0.5rem;">{{ totalNovels }} novels in your library.</p>
+
+    <ConfirmDialog
+      :show="showDeleteDialog"
+      title="Delete Novel"
+      :message="deleteMessage"
+      confirm-label="Delete"
+      :danger="true"
+      :loading="deletingNovel !== null"
+      @confirm="confirmDelete"
+      @cancel="cancelDelete"
+    />
   </section>
 </template>
 
