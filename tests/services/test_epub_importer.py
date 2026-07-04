@@ -132,6 +132,30 @@ class EpubImporterTest(unittest.TestCase):
         self.assertIn("Chapter 1: Start", chapter_one)
         self.assertIn("Hello world.", chapter_one)
 
+    def test_import_with_custom_source_url(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            epub_path = root / "demo.epub"
+            write_epub(
+                epub_path,
+                title="Demo EPUB Title",
+                author="Demo Author",
+                sections=[
+                    ("chapter-1.xhtml", "Chapter 1: Start", "Hello world."),
+                ],
+            )
+
+            result = import_epub(
+                epub_path,
+                root / "translated",
+                name="Military Training",
+                source_url="epub://my-custom-file.epub",
+            )
+            novel_dir = root / "translated" / "military-training"
+            metadata = json.loads((novel_dir / "metadata.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(metadata["source_url"], "epub://my-custom-file.epub")
+
     def test_import_defaults_output_slug_to_filename_not_epub_title(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             root = Path(tempdir)

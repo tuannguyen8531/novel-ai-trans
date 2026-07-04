@@ -482,6 +482,7 @@ class ImportRequest:
     name: str | None = None
     translated_output: Path | None = None
     keep_existing: bool = False
+    source_url: str | None = None
 
 
 @dataclass
@@ -512,6 +513,7 @@ def import_epub_workflow(
             share_root,
             name=request.name,
             keep_existing=request.keep_existing,
+            source_url=request.source_url,
         )
     except EpubImportError as error:
         raise ApplicationValidationError(str(error)) from error

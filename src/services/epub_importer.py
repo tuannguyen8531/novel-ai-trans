@@ -174,6 +174,7 @@ def import_epub(
     *,
     name: str | None = None,
     keep_existing: bool = False,
+    source_url: str | None = None,
 ) -> EpubImportResult:
     epub_path = resolve_epub_path(epub_path)
     book = read_epub_book(epub_path)
@@ -181,7 +182,8 @@ def import_epub(
     fallback_title = name or epub_path.stem
     title = normalize_whitespace(book.metadata.title or fallback_title)
     author = normalize_whitespace(book.metadata.author or "") or None
-    source_url = epub_path.resolve().as_uri()
+    if source_url is None:
+        source_url = epub_path.resolve().as_uri()
     fallback_slug = slugify(epub_path.stem, fallback="epub")
     novel_slug = slugify(name or epub_path.stem, fallback=fallback_slug)
     processed_chapters = select_processed_chapters(book.sections)
