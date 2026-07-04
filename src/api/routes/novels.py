@@ -16,6 +16,7 @@ from src.api.dependencies import get_state
 from src.api.errors import ApplicationValidationError, ResourceNotFoundError
 from src.api.schemas import (
     ArtifactInfoResponse,
+    ChapterContentPayload,
     ChapterContentResponse,
     NovelChapterStatus,
     NovelDetail,
@@ -271,6 +272,54 @@ def novel_chapter_content(
                 content=path.read_text(encoding="utf-8"),
             )
     raise ResourceNotFoundError(f"Translated chapter not found: chapter {number}")
+
+
+@router.put("/novels/{name}/chapters/{number}", response_model=ChapterContentResponse)
+def put_chapter_content(
+    name: str,
+    number: int,
+    payload: ChapterContentPayload,
+    _: Principal = Depends(authenticate),
+) -> ChapterContentResponse:
+    config = config_context.get_config()
+    root = resolve_translated_root(config.translated_dir)
+    if not is_valid_novel_slug(name):
+        raise ResourceNotFoundError(f"Invalid novel name: {name!r}")
+    novel_root = safe_novel_path(root, name)
+    if not novel_root.exists():
+        raise ResourceNotFoundError(f"Novel not found: {name}")
+    input_dir = _input_dir(novel_root)
+    input_dir.mkdir(parents=True, exist_ok=True)
+    path = input_dir / f"chapter_{number}.txt"
+    path.write_text(payload.content, encoding="utf-8")
+    return ChapterContentResponse(
+        novel=name,
+        chapter=number,
+        view="source",
+        target=None,
+        content=payload.content,
+    )
+
+
+@router.delete("/novels/{name}/chapters/{number}", status_code=204)
+def delete_chapter(
+    name: str,
+    number: int,
+    _: Principal = Depends(authenticate),
+) -> None:
+    config = config_context.get_config()
+    root = resolve_translated_root(config.translated_dir)
+    if not is_valid_novel_slug(name):
+        raise ResourceNotFoundError(f"Invalid novel name: {name!r}")
+    novel_root = safe_novel_path(root, name)
+    if not novel_root.exists():
+        raise ResourceNotFoundError(f"Novel not found: {name}")
+    input_dir = _input_dir(novel_root)
+    path = input_dir / f"chapter_{number}.txt"
+    if not path.exists():
+        raise ResourceNotFoundError(f"Input chapter not found: chapter {number}")
+    path.unlink()
+    return None
 
 
 @router.get("/novels/{name}/metadata", response_model=NovelMetadataResponse)

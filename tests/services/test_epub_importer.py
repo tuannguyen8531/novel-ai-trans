@@ -145,7 +145,7 @@ class EpubImporterTest(unittest.TestCase):
                 ],
             )
 
-            result = import_epub(
+            import_epub(
                 epub_path,
                 root / "translated",
                 name="Military Training",

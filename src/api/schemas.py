@@ -168,6 +168,12 @@ class ChapterContentResponse(BaseModel):
     content: str
 
 
+class ChapterContentPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    content: str
+
+
 class NovelMetadataResponse(BaseModel):
     novel: str
     data: dict[str, Any]

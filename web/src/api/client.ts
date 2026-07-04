@@ -145,6 +145,16 @@ export const api = {
       `/api/novels/${encodeURIComponent(name)}/chapters/${chapter}?${params.toString()}`
     )
   },
+  putChapterContent: (name: string, chapter: number, content: string) =>
+    request<ChapterContentResponse>(`/api/novels/${encodeURIComponent(name)}/chapters/${chapter}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content })
+    }),
+  deleteChapter: (name: string, chapter: number) =>
+    request<void>(`/api/novels/${encodeURIComponent(name)}/chapters/${chapter}`, {
+      method: 'DELETE'
+    }),
   listArtifacts: (name: string) =>
     request<ArtifactInfo[]>(`/api/novels/${encodeURIComponent(name)}/artifacts`),
   downloadArtifact: async (name: string, filename: string): Promise<Blob> => {
