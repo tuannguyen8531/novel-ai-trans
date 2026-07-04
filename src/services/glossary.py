@@ -53,8 +53,11 @@ from pathlib import Path
 
 try:
     import fcntl
+
+    msvcrt = None
 except ImportError:
     fcntl = None
+    import msvcrt
 
 from src.application.errors import ResourceConflictError
 from src.application.paths import GLOSSARY_BACKUP_DIR, LOCK_DIR
@@ -84,7 +87,22 @@ _LOCK_UN = getattr(fcntl, "LOCK_UN", 0)
 
 def _flock(fd: int, op: int) -> None:
     if fcntl is not None:
-        fcntl.flock(fd, op)
+        fcntl.flock(fd, op)  # type: ignore
+    elif msvcrt is not None:
+        # Only enforce non-blocking locks (like novel_lock) on Windows to prevent deadlocks
+        # on read/write of glossary JSON files which use blocking locks.
+        if op & 4:  # LOCK_NB
+            try:
+                os.lseek(fd, 0, os.SEEK_SET)
+                msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)  # type: ignore
+            except OSError as err:
+                raise BlockingIOError(err.strerror) from err
+        elif op & 8:  # LOCK_UN
+            try:
+                os.lseek(fd, 0, os.SEEK_SET)
+                msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)  # type: ignore
+            except OSError:
+                pass
 
 
 GLOSSARY_DIR = Path("runtime/glossary")
@@ -250,34 +268,48 @@ def _write_text_atomic(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, temp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
     try:
-        if path.exists():
-            os.fchmod(fd, stat.S_IMODE(path.stat().st_mode))
+        if path.exists() and hasattr(os, "fchmod"):
+            with contextlib.suppress(AttributeError):
+                os.fchmod(fd, stat.S_IMODE(path.stat().st_mode))  # type: ignore
         with os.fdopen(fd, "w", encoding="utf-8") as temp_file:
             temp_file.write(text)
             temp_file.flush()
             os.fsync(temp_file.fileno())
         os.replace(temp_name, path)
     except Exception:
+        with contextlib.suppress(OSError):
+            os.close(fd)
         Path(temp_name).unlink(missing_ok=True)
         raise
+
+
+_ACTIVE_LOCKS: set[str] = set()
 
 
 @contextlib.contextmanager
 def novel_lock(novel_name: str):
     """Acquire an exclusive lock on a novel to prevent concurrent modifications."""
-    LOCK_DIR.mkdir(parents=True, exist_ok=True)
-    lock_path = LOCK_DIR / f"{_novel_runtime_key(novel_name)}.lock"
-    with open(lock_path, "a") as f:
-        try:
-            _flock(f.fileno(), _LOCK_EX | _LOCK_NB)
-        except BlockingIOError as err:
-            raise ResourceConflictError(
-                f"Novel {novel_name!r} is currently locked by another translation or glossary apply operation."
-            ) from err
-        try:
-            yield
-        finally:
-            _flock(f.fileno(), _LOCK_UN)
+    if novel_name in _ACTIVE_LOCKS:
+        raise ResourceConflictError(
+            f"Novel {novel_name!r} is currently locked by another translation or glossary apply operation."
+        )
+    _ACTIVE_LOCKS.add(novel_name)
+    try:
+        LOCK_DIR.mkdir(parents=True, exist_ok=True)
+        lock_path = LOCK_DIR / f"{_novel_runtime_key(novel_name)}.lock"
+        with open(lock_path, "a") as f:
+            try:
+                _flock(f.fileno(), _LOCK_EX | _LOCK_NB)
+            except BlockingIOError as err:
+                raise ResourceConflictError(
+                    f"Novel {novel_name!r} is currently locked by another translation or glossary apply operation."
+                ) from err
+            try:
+                yield
+            finally:
+                _flock(f.fileno(), _LOCK_UN)
+    finally:
+        _ACTIVE_LOCKS.discard(novel_name)
 
 
 def _novel_runtime_key(novel_name: str) -> str:
