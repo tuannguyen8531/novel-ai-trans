@@ -3,9 +3,10 @@ import { onMounted, onUnmounted, ref, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useNovelsStore } from '@/stores/novels'
 import { api } from '@/api/client'
-import type { NovelChapterStatus } from '@/api/types'
+import type { NovelChapterStatus, ArtifactInfo } from '@/api/types'
 import GlossaryEditor from '@/components/GlossaryEditor.vue'
 import JobMonitor from '@/components/JobMonitor.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import placeholderCover from '@/assets/placeholder-cover.png'
 
 const props = defineProps<{ name: string }>()
@@ -63,6 +64,12 @@ const addChapterError = ref<string | null>(null)
 const addModalCard = ref<HTMLElement | null>(null)
 let addPreviousFocus: HTMLElement | null = null
 
+const showDeleteDialog = ref(false)
+const deleteChapterSaving = ref(false)
+const inputReading = ref<{ chapter: number; content: string; editing: boolean; editContent: string } | null>(null)
+const inputSaving = ref(false)
+const inputError = ref<string | null>(null)
+
 const novelName = computed(() => props.name || String(route.params.name || ''))
 
 const inputChapterNumbers = computed(() => {
@@ -115,10 +122,34 @@ watch(containerRef, (el) => {
   }
 })
 
+const artifactsList = ref<ArtifactInfo[]>([])
+const artifactsLoading = ref(false)
+
+async function loadArtifacts() {
+  artifactsLoading.value = true
+  artifactError.value = null
+  try {
+    artifactsList.value = await api.listArtifacts(novelName.value)
+  } catch (err) {
+    artifactError.value = (err as Error).message
+  } finally {
+    artifactsLoading.value = false
+  }
+}
+
+watch(tab, (newTab) => {
+  if (newTab === 'artifacts') {
+    void loadArtifacts()
+  }
+})
+
 onMounted(async () => {
   await novels.load(novelName.value)
   chapters.value = await api.listChapters(novelName.value)
   await loadMetadata()
+  if (tab.value === 'artifacts') {
+    await loadArtifacts()
+  }
   if (route.query.job) {
     jobId.value = String(route.query.job)
   }
@@ -224,6 +255,53 @@ async function downloadArtifact(name: string) {
   } catch (err) {
     artifactError.value = (err as Error).message
   }
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function formatDate(dateStr: string): string {
+  const date = new Date(dateStr)
+  const YYYY = date.getFullYear()
+  const MM = String(date.getMonth() + 1).padStart(2, '0')
+  const DD = String(date.getDate()).padStart(2, '0')
+  const HH = String(date.getHours()).padStart(2, '0')
+  const MIN = String(date.getMinutes()).padStart(2, '0')
+  const SS = String(date.getSeconds()).padStart(2, '0')
+  return `${YYYY}/${MM}/${DD} ${HH}:${MIN}:${SS}`
+}
+
+const showDeleteArtifactDialog = ref(false)
+const deleteArtifactName = ref<string | null>(null)
+const deleteArtifactSaving = ref(false)
+
+function confirmDeleteArtifact(name: string) {
+  deleteArtifactName.value = name
+  showDeleteArtifactDialog.value = true
+}
+
+async function handleDeleteArtifact() {
+  if (!deleteArtifactName.value) return
+  deleteArtifactSaving.value = true
+  artifactError.value = null
+  try {
+    await api.deleteArtifact(novelName.value, deleteArtifactName.value)
+    showDeleteArtifactDialog.value = false
+    await loadArtifacts()
+  } catch (err) {
+    artifactError.value = (err as Error).message
+  } finally {
+    deleteArtifactSaving.value = false
+    deleteArtifactName.value = null
+  }
+}
+
+function cancelDeleteArtifact() {
+  showDeleteArtifactDialog.value = false
+  deleteArtifactName.value = null
 }
 
 async function startPack() {
@@ -351,6 +429,67 @@ async function confirmAddChapter() {
   }
 }
 
+async function openInputChapter(chapter: number) {
+  inputError.value = null
+  try {
+    const response = await api.getChapterContent(novelName.value, chapter, 'source')
+    inputReading.value = { chapter, content: response.content, editing: false, editContent: response.content }
+  } catch (err) {
+    inputError.value = (err as Error).message
+  }
+}
+
+function startEditInput() {
+  if (!inputReading.value) return
+  inputReading.value.editContent = inputReading.value.content
+  inputReading.value.editing = true
+}
+
+function cancelEditInput() {
+  if (!inputReading.value) return
+  inputReading.value.editing = false
+  inputReading.value.editContent = inputReading.value.content
+}
+
+async function saveInputChapter() {
+  if (!inputReading.value) return
+  inputError.value = null
+  inputSaving.value = true
+  try {
+    const response = await api.putChapterContent(novelName.value, inputReading.value.chapter, inputReading.value.editContent)
+    inputReading.value.content = response.content
+    inputReading.value.editing = false
+  } catch (err) {
+    inputError.value = (err as Error).message
+  } finally {
+    inputSaving.value = false
+  }
+}
+
+function openDeleteDialog() {
+  if (!inputReading.value) return
+  showDeleteDialog.value = true
+}
+
+async function confirmDeleteChapter() {
+  if (!inputReading.value) return
+  showDeleteDialog.value = false
+  deleteChapterSaving.value = true
+  try {
+    await api.deleteChapter(novelName.value, inputReading.value.chapter)
+    inputReading.value = null
+    chapters.value = await api.listChapters(novelName.value)
+  } catch (err) {
+    inputError.value = (err as Error).message
+  } finally {
+    deleteChapterSaving.value = false
+  }
+}
+
+function cancelDeleteChapter() {
+  showDeleteDialog.value = false
+}
+
 </script>
 
 <template>
@@ -430,6 +569,8 @@ async function confirmAddChapter() {
             Chapters
           </button>
 
+
+
           <button
             id="glossary-tab"
             type="button"
@@ -508,6 +649,8 @@ async function confirmAddChapter() {
 
         </div>
 
+
+
         <div
           v-else-if="tab === 'glossary'"
           id="glossary-panel"
@@ -527,12 +670,27 @@ async function confirmAddChapter() {
         >
           <h3>Artifacts</h3>
           <p v-if="artifactError" class="error">{{ artifactError }}</p>
-          <p v-if="!novels.detail.artifacts.length" class="muted">No artifacts yet.</p>
-          <ul v-else>
-            <li v-for="name in novels.detail.artifacts" :key="name">
-              <button class="secondary" type="button" @click="downloadArtifact(name)">{{ name }}</button>
-            </li>
-          </ul>
+          <p v-if="!artifactsList.length" class="muted">No artifacts yet.</p>
+          <div v-else class="artifact-list">
+            <div v-for="artifact in artifactsList" :key="artifact.name" class="artifact-item">
+              <div class="artifact-info">
+                <div class="artifact-name">{{ artifact.name }}</div>
+                <div class="artifact-meta">
+                  <span class="artifact-badge">{{ artifact.format.toUpperCase() }}</span>
+                  <span class="artifact-badge">{{ artifact.target_language.toUpperCase() }}</span>
+                  <span class="muted">{{ artifact.chapter_count }} chapters</span>
+                  <span class="muted">—</span>
+                  <span class="muted">{{ formatFileSize(artifact.size) }}</span>
+                  <span class="muted">—</span>
+                  <span class="muted">{{ formatDate(artifact.created_at) }}</span>
+                </div>
+              </div>
+              <div class="artifact-actions">
+                <button class="secondary" type="button" @click="downloadArtifact(artifact.name)">Download</button>
+                <button class="secondary danger" type="button" @click="confirmDeleteArtifact(artifact.name)">Delete</button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -706,6 +864,28 @@ async function confirmAddChapter() {
         </footer>
       </div>
     </div>
+
+    <ConfirmDialog
+      :show="showDeleteDialog"
+      title="Delete Chapter"
+      :message="`Delete Chapter ${inputReading?.chapter} from the input chapters?\n\nThis permanently deletes the source chapter file. Translated chapters will not be deleted but may become orphaned. This cannot be undone.`"
+      confirm-label="Delete"
+      :danger="true"
+      :loading="deleteChapterSaving"
+      @confirm="confirmDeleteChapter"
+      @cancel="cancelDeleteChapter"
+    />
+
+    <ConfirmDialog
+      :show="showDeleteArtifactDialog"
+      title="Delete Artifact"
+      :message="`Delete artifact '${deleteArtifactName}'?\n\nThis permanently removes the exported file. This cannot be undone.`"
+      confirm-label="Delete"
+      :danger="true"
+      :loading="deleteArtifactSaving"
+      @confirm="handleDeleteArtifact"
+      @cancel="cancelDeleteArtifact"
+    />
 
   </section>
 </template>
@@ -1050,6 +1230,61 @@ button.secondary.danger {
 button.secondary.danger:hover:not(:disabled) {
   background: var(--danger, #dc3545);
   color: #fff;
+}
+
+.artifact-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.artifact-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.artifact-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.artifact-name {
+  font-weight: 500;
+  word-break: break-all;
+}
+
+.artifact-meta {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+}
+
+.artifact-badge {
+  padding: 0.15rem 0.4rem;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.artifact-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
 }
 
 </style>

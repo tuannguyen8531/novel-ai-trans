@@ -155,7 +155,22 @@ def image_media_type(path: Path) -> str:
 
 
 def find_serif_fonts() -> tuple[str, str]:
-    """Find DejaVuSerif fonts on the Linux system for Vietnamese support."""
+    """Find appropriate serif fonts supporting Vietnamese on Linux or Windows."""
+    import sys
+
+    if sys.platform == "win32":
+        windir = os.environ.get("SYSTEMROOT", "C:\\Windows")
+        win_font_dir = Path(windir) / "Fonts"
+        win_candidates = [
+            ("times.ttf", "timesbd.ttf"),
+            ("georgia.ttf", "georgiab.ttf"),
+        ]
+        for reg, bold in win_candidates:
+            reg_path = win_font_dir / reg
+            bold_path = win_font_dir / bold
+            if reg_path.exists() and bold_path.exists():
+                return str(reg_path), str(bold_path)
+
     font_dir = "/usr/share/fonts"
     candidates = [
         (

@@ -2,6 +2,9 @@
 import { onMounted, onUnmounted, computed, ref } from 'vue'
 import { useJobsStore } from '@/stores/jobs'
 import JobMonitor from '@/components/JobMonitor.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
+
+import { api } from '@/api/client'
 
 const jobs = useJobsStore()
 const selectedId = ref<string | null>(null)
@@ -66,14 +69,86 @@ function select(id: string) {
   selectedId.value = id
   jobs.follow(id)
 }
+
+const showDeleteDialog = ref(false)
+const deleteJobId = ref<string | null>(null)
+const deleteJobSaving = ref(false)
+
+function confirmDelete(id: string) {
+  deleteJobId.value = id
+  showDeleteDialog.value = true
+}
+
+function cancelDelete() {
+  showDeleteDialog.value = false
+  deleteJobId.value = null
+}
+
+async function handleDelete() {
+  if (!deleteJobId.value) return
+  deleteJobSaving.value = true
+  try {
+    await api.deleteJob(deleteJobId.value)
+    if (selectedId.value === deleteJobId.value) {
+      selectedId.value = null
+    }
+    showDeleteDialog.value = false
+    await jobs.refresh()
+  } catch (err) {
+    alert((err as Error).message)
+  } finally {
+    deleteJobSaving.value = false
+    deleteJobId.value = null
+  }
+}
+
+const hasInactiveJobs = computed(() => {
+  return rows.value.some((row) => ['completed', 'failed', 'cancelled'].includes(row.status))
+})
+
+const showClearDialog = ref(false)
+const clearSaving = ref(false)
+
+function confirmClearAll() {
+  showClearDialog.value = true
+}
+
+function cancelClearAll() {
+  showClearDialog.value = false
+}
+
+async function handleClearAll() {
+  clearSaving.value = true
+  try {
+    await api.clearJobs()
+    showClearDialog.value = false
+    await jobs.refresh()
+    if (selectedId.value && !rows.value.some((r) => r.id === selectedId.value)) {
+      selectedId.value = null
+    }
+  } catch (err) {
+    alert((err as Error).message)
+  } finally {
+    clearSaving.value = false
+  }
+}
 </script>
 
 <template>
   <section class="flex-col gap-3">
     <div class="card">
-      <div class="row" style="justify-content: space-between;">
+      <div class="row" style="justify-content: space-between; align-items: center;">
         <h2>Jobs</h2>
-        <button class="secondary" type="button" @click="jobs.refresh()">Refresh</button>
+        <div class="row gap-2">
+          <button
+            v-if="hasInactiveJobs"
+            class="secondary"
+            style="color: var(--danger);"
+            type="button"
+            @click="confirmClearAll"
+          >Delete All</button>
+          <button class="secondary" type="button" @click="jobs.refresh()">Refresh</button>
+        </div>
       </div>
       <table>
         <thead>
@@ -109,7 +184,16 @@ function select(id: string) {
             </td>
             <td class="muted">{{ new Date(row.created_at).toLocaleString() }}</td>
             <td>
-              <button class="secondary" type="button" @click="select(row.id)">Open</button>
+              <div class="row gap-2" style="align-items: center;">
+                <button class="secondary" type="button" @click="select(row.id)">Open</button>
+                <button
+                  v-if="['completed', 'failed', 'cancelled'].includes(row.status)"
+                  class="secondary"
+                  style="color: var(--danger);"
+                  type="button"
+                  @click="confirmDelete(row.id)"
+                >Delete</button>
+              </div>
             </td>
           </tr>
           <tr v-if="!rows.length">
@@ -122,5 +206,27 @@ function select(id: string) {
       <h3>Job {{ selectedId.slice(0, 8) }}</h3>
       <JobMonitor :job-id="selectedId" />
     </div>
+
+    <ConfirmDialog
+      :show="showDeleteDialog"
+      title="Delete Job"
+      :message="`Delete job '${deleteJobId?.slice(0, 8)}'?\n\nThis permanently removes the job logs and history. This cannot be undone.`"
+      confirm-label="Delete"
+      :danger="true"
+      :loading="deleteJobSaving"
+      @confirm="handleDelete"
+      @cancel="cancelDelete"
+    />
+
+    <ConfirmDialog
+      :show="showClearDialog"
+      title="Delete All Inactive Jobs"
+      message="Are you sure you want to delete all completed, failed, and cancelled jobs?\n\nThis permanently removes all their logs and history. This cannot be undone."
+      confirm-label="Delete All"
+      :danger="true"
+      :loading="clearSaving"
+      @confirm="handleClearAll"
+      @cancel="cancelClearAll"
+    />
   </section>
 </template>

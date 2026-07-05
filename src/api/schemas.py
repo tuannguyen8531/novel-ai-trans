@@ -245,6 +245,9 @@ class ArtifactInfoResponse(BaseModel):
     name: str
     format: str
     size: int
+    target_language: str
+    created_at: datetime
+    chapter_count: int
 
 
 # ---------------------------------------------------------------------------

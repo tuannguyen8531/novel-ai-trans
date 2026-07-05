@@ -169,6 +169,10 @@ export const api = {
     }
     return response.blob()
   },
+  deleteArtifact: (name: string, filename: string) =>
+    request<void>(`/api/novels/${encodeURIComponent(name)}/artifacts/${encodeURIComponent(filename)}`, {
+      method: 'DELETE'
+    }),
   deleteNovel: (name: string) =>
     request<void>(`/api/novels/${encodeURIComponent(name)}`, { method: 'DELETE' }),
   getTranslationProgress: (name: string, target?: string) => {
@@ -347,7 +351,11 @@ export const api = {
   listJobs: () => request<JobListResponse>('/api/jobs'),
   getJob: (id: string) => request<JobModel>(`/api/jobs/${id}`),
   cancelJob: (id: string) =>
-    request<JobModel>(`/api/jobs/${id}/cancel`, { method: 'POST' })
+    request<JobModel>(`/api/jobs/${id}/cancel`, { method: 'POST' }),
+  deleteJob: (id: string) =>
+    request<void>(`/api/jobs/${id}`, { method: 'DELETE' }),
+  clearJobs: () =>
+    request<void>('/api/jobs', { method: 'DELETE' })
 }
 
 export type ApiError = Error & { code: string; status: number; details: Record<string, unknown> | null }
