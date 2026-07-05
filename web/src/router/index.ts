@@ -6,6 +6,7 @@ const PAGE_TITLES: Record<string, string> = {
   dashboard: 'Dashboard',
   novels: 'Novels',
   'novel-detail': 'Novel',
+  'chapter-reader': 'Chapter',
   crawl: 'Crawl',
   import: 'Import',
   translate: 'Translate',
@@ -28,6 +29,15 @@ export const router = createRouter({
       component: () => import('@/views/NovelDetailView.vue'),
       props: true
     },
+    {
+      path: '/novels/:name/chapters/:chapter(\\d+)',
+      name: 'chapter-reader',
+      component: () => import('@/views/ChapterView.vue'),
+      props: (route) => ({
+        name: route.params.name,
+        chapter: Number(route.params.chapter)
+      })
+    },
     { path: '/crawl', name: 'crawl', component: () => import('@/views/CrawlView.vue') },
     { path: '/import', name: 'import', component: () => import('@/views/ImportView.vue') },
     { path: '/translate', name: 'translate', component: () => import('@/views/TranslateView.vue') },
@@ -36,6 +46,7 @@ export const router = createRouter({
     { path: '/:pathMatch(.*)*', redirect: '/' }
   ]
 })
+
 
 router.afterEach((to) => {
   document.title = `${pageTitle(to)} — ${APP_NAME}`

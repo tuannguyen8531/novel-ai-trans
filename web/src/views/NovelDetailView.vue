@@ -6,19 +6,15 @@ import { api } from '@/api/client'
 import type { NovelChapterStatus } from '@/api/types'
 import GlossaryEditor from '@/components/GlossaryEditor.vue'
 import JobMonitor from '@/components/JobMonitor.vue'
-import ConfirmDialog from '@/components/ConfirmDialog.vue'
-import ChapterContent from '@/components/ChapterContent.vue'
 import placeholderCover from '@/assets/placeholder-cover.png'
 
 const props = defineProps<{ name: string }>()
 const route = useRoute()
 const router = useRouter()
 const novels = useNovelsStore()
-const tab = ref<'chapters' | 'translated' | 'glossary' | 'artifacts'>('chapters')
+const tab = ref<'chapters' | 'glossary' | 'artifacts'>('chapters')
 const chapters = ref<NovelChapterStatus[]>([])
-const reading = ref<{ chapter: number; content: string; view: 'source' | 'translation'; target: 'vi' | 'en' } | null>(null)
 const target = ref<'vi' | 'en'>('vi')
-const selectedChapters = ref<Record<'vi' | 'en', string>>({ vi: '', en: '' })
 const jobId = ref<string | null>(null)
 
 const packFormats = ref<{ epub: boolean; pdf: boolean }>({ epub: true, pdf: true })
@@ -42,12 +38,21 @@ const metaError = ref<string | null>(null)
 const showMetaForm = ref<boolean>(false)
 const coverBroken = ref<boolean>(false)
 
-const inputReading = ref<{ chapter: number; content: string; editing: boolean; editContent: string } | null>(null)
-const inputSaving = ref(false)
-const inputError = ref<string | null>(null)
-
 const inputPage = ref(1)
-const inputPerPage = 100
+const containerWidth = ref(600)
+const containerRef = ref<HTMLElement | null>(null)
+let resizeObserver: ResizeObserver | null = null
+
+const columnsCount = computed(() => {
+  const width = containerWidth.value
+  const minWidth = 128 // 8rem * 16px
+  const gap = 6.4      // 0.4rem * 16px
+  const cols = Math.floor((width + gap) / (minWidth + gap))
+  return Math.max(1, cols)
+})
+
+const inputRows = 5
+const inputPerPage = computed(() => columnsCount.value * inputRows)
 const inputAscending = ref(true)
 
 const showAddModal = ref(false)
@@ -57,11 +62,6 @@ const addChapterSaving = ref(false)
 const addChapterError = ref<string | null>(null)
 const addModalCard = ref<HTMLElement | null>(null)
 let addPreviousFocus: HTMLElement | null = null
-
-const showDeleteDialog = ref(false)
-const deleteChapterSaving = ref(false)
-const inputViewMode = ref<'source' | 'vi' | 'en'>('source')
-const inputViewLoading = ref(false)
 
 const novelName = computed(() => props.name || String(route.params.name || ''))
 
@@ -74,11 +74,11 @@ const inputChapterNumbers = computed(() => {
   return inputAscending.value ? sorted : sorted.reverse()
 })
 
-const inputTotalPages = computed(() => Math.max(1, Math.ceil(inputChapterNumbers.value.length / inputPerPage)))
+const inputTotalPages = computed(() => Math.max(1, Math.ceil(inputChapterNumbers.value.length / inputPerPage.value)))
 
 const pagedInputChapters = computed(() => {
-  const start = (inputPage.value - 1) * inputPerPage
-  return inputChapterNumbers.value.slice(start, start + inputPerPage)
+  const start = (inputPage.value - 1) * inputPerPage.value
+  return inputChapterNumbers.value.slice(start, start + inputPerPage.value)
 })
 
 const chapterPadWidth = computed(() => {
@@ -95,23 +95,23 @@ const lastInputChapter = computed(() => {
   return nums.length > 0 ? Math.max(...nums) : 0
 })
 
-const inputChapterHasVi = computed(() => {
-  if (!inputReading.value) return false
-  return chapters.value.some(
-    (s) => s.number === inputReading.value!.chapter && s.target === 'vi' && s.has_translation
-  )
-})
-
-const inputChapterHasEn = computed(() => {
-  if (!inputReading.value) return false
-  return chapters.value.some(
-    (s) => s.number === inputReading.value!.chapter && s.target === 'en' && s.has_translation
-  )
-})
-
-watch(inputChapterNumbers, () => {
+watch([inputChapterNumbers, inputTotalPages], () => {
   if (inputPage.value > inputTotalPages.value) {
     inputPage.value = inputTotalPages.value
+  }
+})
+
+watch(containerRef, (el) => {
+  if (el) {
+    resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        containerWidth.value = entry.contentRect.width
+      }
+    })
+    resizeObserver.observe(el)
+  } else {
+    resizeObserver?.disconnect()
+    resizeObserver = null
   }
 })
 
@@ -182,40 +182,6 @@ async function saveMetadata() {
   }
 }
 
-async function openChapter(chapter: number, view: 'source' | 'translation', openTarget: 'vi' | 'en' = target.value) {
-  const response = await api.getChapterContent(novelName.value, chapter, view, openTarget)
-  reading.value = { chapter, content: response.content, view, target: openTarget }
-}
-
-function translatedChapters(forTarget: 'vi' | 'en'): NovelChapterStatus[] {
-  return chapters.value.filter(
-    (status) => status.target === forTarget && status.has_translation
-  )
-}
-
-function chaptersForTarget(forTarget: 'vi' | 'en'): NovelChapterStatus[] {
-  return chapters.value.filter(
-    (status) => status.target === forTarget && status.has_translation
-  )
-}
-
-async function selectChapter(forTarget: 'vi' | 'en', event: Event) {
-  const value = (event.target as HTMLSelectElement).value
-  selectedChapters.value[forTarget] = value
-  if (!value) return
-
-  const status = chaptersForTarget(forTarget).find((chapter) => chapter.number === Number(value))
-  if (status?.has_translation) {
-    await openChapter(status.number, 'translation', forTarget)
-  }
-}
-
-const totalChapters = computed(() => inputChapterNumbers.value.length)
-
-function targetLabel(forTarget: 'vi' | 'en'): string {
-  return forTarget === 'vi' ? 'Vietnamese (vi)' : 'English (en)'
-}
-
 function metaDisplayValue(current: string, fallback: string | null | undefined): string {
   return current.trim() || (fallback ? String(fallback) : '') || '—'
 }
@@ -283,115 +249,12 @@ async function startPack() {
     const result = await api.startPack(payload)
     jobId.value = result.job_id
     router.replace({ query: { job: result.job_id } })
+    showPackForm.value = false
   } catch (err) {
     packError.value = (err as Error).message
   }
 }
 
-const showSource = ref(false)
-const sourceContent = ref('')
-const sourceLoading = ref(false)
-const sourceError = ref<string | null>(null)
-let sourceRequestId = 0
-
-async function fetchSourceContent() {
-  if (!reading.value) return
-  const chapter = reading.value.chapter
-  const requestId = ++sourceRequestId
-  sourceLoading.value = true
-  sourceError.value = null
-  try {
-    const response = await api.getChapterContent(novelName.value, chapter, 'source')
-    if (requestId === sourceRequestId && reading.value?.chapter === chapter) {
-      sourceContent.value = response.content
-    }
-  } catch (err) {
-    if (requestId === sourceRequestId) {
-      sourceError.value = (err as Error).message
-    }
-  } finally {
-    if (requestId === sourceRequestId) {
-      sourceLoading.value = false
-    }
-  }
-}
-
-watch(() => reading.value?.chapter, async (newCh) => {
-  sourceRequestId += 1
-  sourceContent.value = ''
-  sourceError.value = null
-  sourceLoading.value = false
-  if (newCh && showSource.value) {
-    await fetchSourceContent()
-  }
-})
-
-watch(showSource, async (val) => {
-  if (val && !sourceContent.value && reading.value) {
-    await fetchSourceContent()
-  } else if (!val) {
-    sourceRequestId += 1
-    sourceLoading.value = false
-  }
-})
-
-async function openInputChapter(chapter: number) {
-  inputError.value = null
-  inputViewMode.value = 'source'
-  try {
-    const response = await api.getChapterContent(novelName.value, chapter, 'source')
-    inputReading.value = { chapter, content: response.content, editing: false, editContent: response.content }
-  } catch (err) {
-    inputError.value = (err as Error).message
-  }
-}
-
-async function changeInputView(mode: 'source' | 'vi' | 'en') {
-  if (!inputReading.value || inputViewLoading.value) return
-  inputViewMode.value = mode
-  inputViewLoading.value = true
-  inputError.value = null
-  try {
-    const view = mode === 'source' ? 'source' : 'translation'
-    const tgt = mode === 'source' ? undefined : mode
-    const response = await api.getChapterContent(novelName.value, inputReading.value.chapter, view, tgt)
-    inputReading.value.content = response.content
-    if (mode === 'source') {
-      inputReading.value.editContent = response.content
-    }
-  } catch (err) {
-    inputError.value = (err as Error).message
-  } finally {
-    inputViewLoading.value = false
-  }
-}
-
-function startEditInput() {
-  if (!inputReading.value) return
-  inputReading.value.editContent = inputReading.value.content
-  inputReading.value.editing = true
-}
-
-function cancelEditInput() {
-  if (!inputReading.value) return
-  inputReading.value.editing = false
-  inputReading.value.editContent = inputReading.value.content
-}
-
-async function saveInputChapter() {
-  if (!inputReading.value) return
-  inputError.value = null
-  inputSaving.value = true
-  try {
-    const response = await api.putChapterContent(novelName.value, inputReading.value.chapter, inputReading.value.editContent)
-    inputReading.value.content = response.content
-    inputReading.value.editing = false
-  } catch (err) {
-    inputError.value = (err as Error).message
-  } finally {
-    inputSaving.value = false
-  }
-}
 
 async function addNewChapter() {
   addChapterError.value = null
@@ -444,8 +307,25 @@ watch(showAddModal, (isOpen) => {
   }
 })
 
+watch(showPackForm, (isOpen) => {
+  if (isOpen) {
+    document.body.style.overflow = 'hidden'
+  } else if (!showAddModal.value && !showMetaForm.value) {
+    document.body.style.overflow = ''
+  }
+})
+
+watch(showMetaForm, (isOpen) => {
+  if (isOpen) {
+    document.body.style.overflow = 'hidden'
+  } else if (!showAddModal.value && !showPackForm.value) {
+    document.body.style.overflow = ''
+  }
+})
+
 onUnmounted(() => {
   document.body.style.overflow = ''
+  resizeObserver?.disconnect()
 })
 
 async function confirmAddChapter() {
@@ -456,15 +336,14 @@ async function confirmAddChapter() {
     await api.putChapterContent(novelName.value, addChapterNumber.value, addChapterContent.value)
     chapters.value = await api.listChapters(novelName.value)
     const newPage = Math.ceil(
-      inputChapterNumbers.value.indexOf(addChapterNumber.value) / inputPerPage + 1
+      inputChapterNumbers.value.indexOf(addChapterNumber.value) / inputPerPage.value + 1
     )
     if (newPage > 0) inputPage.value = newPage
     closeAddModal()
-    await openInputChapter(addChapterNumber.value)
-    if (inputReading.value) {
-      inputReading.value.editing = true
-      inputReading.value.editContent = addChapterContent.value
-    }
+    void router.push({
+      name: 'chapter-reader',
+      params: { name: novelName.value, chapter: addChapterNumber.value }
+    })
   } catch (err) {
     addChapterError.value = (err as Error).message
   } finally {
@@ -472,30 +351,6 @@ async function confirmAddChapter() {
   }
 }
 
-function openDeleteDialog() {
-  if (!inputReading.value) return
-  showDeleteDialog.value = true
-}
-
-async function confirmDeleteChapter() {
-  if (!inputReading.value) return
-  deleteChapterSaving.value = true
-  try {
-    await api.deleteChapter(novelName.value, inputReading.value.chapter)
-    inputReading.value = null
-    chapters.value = await api.listChapters(novelName.value)
-    showDeleteDialog.value = false
-  } catch (err) {
-    inputError.value = (err as Error).message
-    showDeleteDialog.value = false
-  } finally {
-    deleteChapterSaving.value = false
-  }
-}
-
-function cancelDeleteChapter() {
-  showDeleteDialog.value = false
-}
 </script>
 
 <template>
@@ -553,87 +408,6 @@ function cancelDeleteChapter() {
             <button type="button" class="secondary" @click="showMetaForm = !showMetaForm">Metadata</button>
           </div>
 
-          <div v-if="showPackForm" class="pack-form">
-            <div class="pack-target">
-              <label for="pack-target-language">Target language</label>
-              <select id="pack-target-language" v-model="target">
-                <option value="vi">Vietnamese (vi)</option>
-                <option value="en">English (en)</option>
-              </select>
-            </div>
-            <div>
-              <label>Output formats</label>
-              <div class="check-row">
-                <label class="check">
-                  <input v-model="packFormats.epub" type="checkbox" />
-                  <span>EPUB</span>
-                </label>
-                <label class="check">
-                  <input v-model="packFormats.pdf" type="checkbox" />
-                  <span>PDF</span>
-                </label>
-              </div>
-            </div>
-            <div v-if="packFormats.pdf">
-              <label>PDF options</label>
-              <div class="check-row">
-                <label class="check">
-                  <input v-model="packDarkMode" type="checkbox" />
-                  <span>Dark mode (dark background, light text)</span>
-                </label>
-              </div>
-            </div>
-            <div class="pack-meta">
-              <div>
-                <label>Custom title (optional)</label>
-                <input v-model="packTitle" placeholder="defaults to metadata title" />
-              </div>
-              <div>
-                <label>Custom author (optional)</label>
-                <input v-model="packAuthor" placeholder="defaults to metadata author" />
-              </div>
-            </div>
-            <div class="row gap-2" style="margin-top: 0.5rem;">
-              <button type="button" @click="startPack">Start pack</button>
-            </div>
-          <p v-if="packError" class="error" style="margin-top: 0.5rem;">{{ packError }}</p>
-        </div>
-
-        <div v-if="showMetaForm" class="pack-form" style="margin-top: 0.5rem;">
-          <p v-if="metadataLoading" class="muted">Loading metadata…</p>
-          <p v-else-if="metadataError" class="error">Failed to load metadata: {{ metadataError }}</p>
-          <p v-else-if="!metadata" class="muted">No metadata.json yet. Fill in the fields below and save to create one.</p>
-          <div>
-            <label>Original title</label>
-            <input v-model="metaTitle" placeholder="원제목 / タイトル / title" />
-          </div>
-          <div>
-            <label>Author</label>
-            <input v-model="metaAuthor" placeholder="author name" />
-          </div>
-          <div>
-            <label>Source URL</label>
-            <input v-model="metaSourceUrl" placeholder="https://..." />
-          </div>
-          <div>
-            <label>Cover image URL</label>
-            <input v-model="metaIllustrationUrl" placeholder="https://... (optional)" />
-          </div>
-          <div class="pack-meta">
-            <div>
-              <label>Translated title — vi</label>
-              <input v-model="metaTranslatedVi" placeholder="Tiêu đề tiếng Việt" />
-            </div>
-            <div>
-              <label>Translated title — en</label>
-              <input v-model="metaTranslatedEn" placeholder="English title" />
-            </div>
-          </div>
-          <div class="row gap-2" style="margin-top: 0.5rem;">
-            <button type="button" @click="saveMetadata">Save metadata</button>
-            <button class="secondary" type="button" @click="loadMetadata">Revert</button>
-          </div>
-          <p v-if="metaError" class="error" style="margin-top: 0.5rem;">{{ metaError }}</p>
         </div>
       </div>
 
@@ -655,17 +429,7 @@ function cancelDeleteChapter() {
           >
             Chapters
           </button>
-          <button
-            id="translated-tab"
-            type="button"
-            class="detail-tab"
-            role="tab"
-            :aria-selected="tab === 'translated'"
-            aria-controls="translated-panel"
-            @click="tab = 'translated'"
-          >
-            Translated
-          </button>
+
           <button
             id="glossary-tab"
             type="button"
@@ -711,17 +475,15 @@ function cancelDeleteChapter() {
               <button type="button" class="secondary" @click="addNewChapter">Add chapter</button>
             </div>
           </div>
-          <p v-if="inputError" class="error" style="margin-top: 0.5rem;">{{ inputError }}</p>
           <p v-if="!inputChapterNumbers.length" class="muted" style="margin-top: 0.5rem;">No chapters yet.</p>
-          <div v-else class="input-chapter-container">
+          <div v-else class="input-chapter-container" ref="containerRef">
             <div class="input-chapter-list">
               <button
                 v-for="num in pagedInputChapters"
                 :key="num"
                 type="button"
                 class="input-chapter-item"
-                :class="{ active: inputReading?.chapter === num }"
-                @click="openInputChapter(num)"
+                @click="router.push({ name: 'chapter-reader', params: { name: novelName, chapter: num } })"
               >
                 <span class="chapter-label">Chapter</span>
                 <span class="chapter-num">{{ formatChapterNum(num) }}</span>
@@ -744,99 +506,6 @@ function cancelDeleteChapter() {
             </div>
           </div>
 
-          <div v-if="inputReading" class="chapter-reader">
-            <div class="row gap-3" style="justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap;">
-              <h4 style="margin: 0;">Chapter {{ inputReading.chapter }}</h4>
-              <div class="row gap-2" style="align-items: center;">
-                <template v-if="!inputReading.editing">
-                  <select
-                    class="input-view-select"
-                    :value="inputViewMode"
-                    :disabled="inputViewLoading"
-                    @change="changeInputView(($event.target as HTMLSelectElement).value as 'source' | 'vi' | 'en')"
-                  >
-                    <option value="source">Origin</option>
-                    <option value="vi" :disabled="!inputChapterHasVi">Vietnamese</option>
-                    <option value="en" :disabled="!inputChapterHasEn">English</option>
-                  </select>
-                  <button type="button" class="secondary" @click="startEditInput">Edit</button>
-                  <button type="button" class="secondary danger" @click="openDeleteDialog">Delete</button>
-                </template>
-                <template v-else>
-                  <button type="button" :disabled="inputSaving" @click="saveInputChapter">
-                    {{ inputSaving ? 'Saving...' : 'Save' }}
-                  </button>
-                  <button type="button" class="secondary" :disabled="inputSaving" @click="cancelEditInput">Cancel</button>
-                </template>
-              </div>
-            </div>
-            <textarea
-              v-if="inputReading.editing"
-              v-model="inputReading.editContent"
-              class="chapter-edit-area"
-            ></textarea>
-            <div v-else-if="inputViewLoading" class="chapter-content muted" style="text-align: center; padding: 2rem;">Loading…</div>
-            <ChapterContent v-else :content="inputReading.content" :novel="novelName" />
-          </div>
-
-        </div>
-
-        <div
-          v-else-if="tab === 'translated'"
-          id="translated-panel"
-          class="detail-tab-panel chapter-browser"
-          role="tabpanel"
-          aria-labelledby="translated-tab"
-        >
-          <div class="chapter-language-grid">
-            <section v-for="target in (['vi', 'en'] as const)" :key="target" class="chapter-language-section">
-              <header class="chapter-section-header">
-                <h3>{{ targetLabel(target) }}</h3>
-                <span class="muted">
-                  {{ translatedChapters(target).length }} translated
-                  <template v-if="totalChapters">
-                    · {{ totalChapters }} total
-                  </template>
-                </span>
-              </header>
-
-              <label :for="`chapter-select-${target}`">Chapter</label>
-              <select
-                :id="`chapter-select-${target}`"
-                :value="selectedChapters[target]"
-                @change="selectChapter(target, $event)"
-              >
-                <option value="" disabled>Select a translated chapter</option>
-                <option
-                  v-for="status in chaptersForTarget(target)"
-                  :key="`${status.number}-${status.target}`"
-                  :value="status.number"
-                >
-                  Chapter {{ status.number }}
-                </option>
-              </select>
-            </section>
-          </div>
-
-          <div v-if="reading" class="chapter-reader">
-            <div class="row gap-3" style="justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap;">
-              <h4 style="margin: 0;">Chapter {{ reading.chapter }} — {{ targetLabel(reading.target ?? 'vi') }} translation</h4>
-              <label class="check" style="margin: 0; padding: 0.25rem 0.5rem; background: var(--bg-elev-2); border: 1px solid var(--border);">
-                <input v-model="showSource" type="checkbox" />
-                <span>Show original chapter</span>
-              </label>
-            </div>
-            <pre class="chapter-content">{{ reading.content }}</pre>
-
-            <div v-if="showSource" class="source-comparison" style="margin-top: 1rem; border-top: 1px dashed var(--border); padding-top: 1rem;">
-              <h5 style="margin-top: 0; margin-bottom: 0.5rem;">Source Chapter</h5>
-              <div v-if="sourceLoading" class="preview-spinner" style="padding: 1.5rem; text-align: center; color: var(--fg-dim);">
-                <p>Loading original content...</p>
-              </div>
-              <p v-else-if="sourceError" class="error">Failed to load original chapter: {{ sourceError }}</p>
-              <pre v-else class="chapter-content source-content" style="background: var(--bg-elev-2); opacity: 0.85; border-left: 3px solid var(--accent);">{{ sourceContent || 'Original chapter is empty.' }}</pre>
-            </div>
-          </div>
         </div>
 
         <div
@@ -866,7 +535,6 @@ function cancelDeleteChapter() {
           </ul>
         </div>
       </div>
-    </div>
     </div>
 
     <div v-if="showAddModal" class="modal-overlay">
@@ -911,16 +579,134 @@ function cancelDeleteChapter() {
       </div>
     </div>
 
-    <ConfirmDialog
-      :show="showDeleteDialog"
-      title="Delete Chapter"
-      :message="`Delete Chapter ${inputReading?.chapter}?\n\nThis permanently deletes the source chapter file. Translated chapters will not be deleted but may become orphaned. This cannot be undone.`"
-      confirm-label="Delete"
-      :danger="true"
-      :loading="deleteChapterSaving"
-      @confirm="confirmDeleteChapter"
-      @cancel="cancelDeleteChapter"
-    />
+    <!-- ── Pack Modal ── -->
+    <div v-if="showPackForm" class="modal-overlay">
+      <div
+        class="modal-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="pack-title"
+        tabindex="-1"
+      >
+        <header class="modal-header">
+          <h3 id="pack-title">Pack Novel</h3>
+          <button
+            type="button"
+            class="modal-close"
+            aria-label="Close"
+            @click="showPackForm = false"
+          >&times;</button>
+        </header>
+        <div class="modal-body">
+          <div class="pack-target">
+            <label for="pack-target-language">Target language</label>
+            <select id="pack-target-language" v-model="target" style="width: 100%;">
+              <option value="vi">Vietnamese (vi)</option>
+              <option value="en">English (en)</option>
+            </select>
+          </div>
+          <div style="margin-top: 0.75rem;">
+            <label>Output formats</label>
+            <div class="check-row">
+              <label class="check">
+                <input v-model="packFormats.epub" type="checkbox" />
+                <span>EPUB</span>
+              </label>
+              <label class="check">
+                <input v-model="packFormats.pdf" type="checkbox" />
+                <span>PDF</span>
+              </label>
+            </div>
+          </div>
+          <div v-if="packFormats.pdf" style="margin-top: 0.75rem;">
+            <label>PDF options</label>
+            <div class="check-row">
+              <label class="check">
+                <input v-model="packDarkMode" type="checkbox" />
+                <span>Dark mode (dark background, light text)</span>
+              </label>
+            </div>
+          </div>
+          <div class="pack-meta" style="margin-top: 0.75rem; display: flex; flex-direction: column; gap: 0.75rem;">
+            <div>
+              <label>Custom title (optional)</label>
+              <input v-model="packTitle" placeholder="defaults to metadata title" style="width: 100%;" />
+            </div>
+            <div>
+              <label>Custom author (optional)</label>
+              <input v-model="packAuthor" placeholder="defaults to metadata author" style="width: 100%;" />
+            </div>
+          </div>
+          <p v-if="packError" class="error" style="margin-top: 0.5rem;">{{ packError }}</p>
+        </div>
+        <footer class="modal-footer">
+          <button type="button" class="secondary" @click="showPackForm = false">Cancel</button>
+          <button type="button" @click="startPack">Start pack</button>
+        </footer>
+      </div>
+    </div>
+
+    <!-- ── Metadata Modal ── -->
+    <div v-if="showMetaForm" class="modal-overlay">
+      <div
+        class="modal-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="metadata-title"
+        tabindex="-1"
+      >
+        <header class="modal-header">
+          <h3 id="metadata-title">Edit Metadata</h3>
+          <button
+            type="button"
+            class="modal-close"
+            aria-label="Close"
+            @click="showMetaForm = false"
+          >&times;</button>
+        </header>
+        <div class="modal-body">
+          <p v-if="metadataLoading" class="muted">Loading metadata…</p>
+          <p v-else-if="metadataError" class="error">Failed to load metadata: {{ metadataError }}</p>
+          <p v-else-if="!metadata" class="muted">No metadata.json yet. Fill in the fields below and save to create one.</p>
+          
+          <div v-if="!metadataLoading" style="display: flex; flex-direction: column; gap: 0.75rem;">
+            <div>
+              <label>Original title</label>
+              <input v-model="metaTitle" placeholder="원제목 / タイトル / title" style="width: 100%;" />
+            </div>
+            <div>
+              <label>Author</label>
+              <input v-model="metaAuthor" placeholder="author name" style="width: 100%;" />
+            </div>
+            <div>
+              <label>Source URL</label>
+              <input v-model="metaSourceUrl" placeholder="https://..." style="width: 100%;" />
+            </div>
+            <div>
+              <label>Cover image URL</label>
+              <input v-model="metaIllustrationUrl" placeholder="https://... (optional)" style="width: 100%;" />
+            </div>
+            <div class="pack-meta" style="display: flex; flex-direction: column; gap: 0.75rem;">
+              <div>
+                <label>Translated title — vi</label>
+                <input v-model="metaTranslatedVi" placeholder="Tiêu đề tiếng Việt" style="width: 100%;" />
+              </div>
+              <div>
+                <label>Translated title — en</label>
+                <input v-model="metaTranslatedEn" placeholder="English title" style="width: 100%;" />
+              </div>
+            </div>
+          </div>
+          <p v-if="metaError" class="error" style="margin-top: 0.5rem;">{{ metaError }}</p>
+        </div>
+        <footer class="modal-footer">
+          <button class="secondary" type="button" @click="showMetaForm = false">Cancel</button>
+          <button class="secondary" type="button" @click="loadMetadata">Revert</button>
+          <button type="button" @click="saveMetadata">Save metadata</button>
+        </footer>
+      </div>
+    </div>
+
   </section>
 </template>
 
@@ -1071,46 +857,7 @@ function cancelDeleteChapter() {
   max-width: 14rem;
 }
 
-.chapter-section-header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 0.5rem;
-  flex-wrap: wrap;
-}
 
-.chapter-section-header h3 {
-  margin: 0;
-}
-
-.chapter-language-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
-}
-
-.chapter-reader {
-  margin-top: 1rem;
-  padding-top: 1rem;
-  border-top: 1px solid var(--border);
-}
-
-.chapter-reader h4 {
-  margin-top: 0;
-}
-
-.chapter-content {
-  background: var(--bg-elev-2);
-  border-radius: var(--radius);
-  padding: 1rem 1.25rem;
-  max-height: 24rem;
-  overflow: auto;
-  white-space: pre-wrap;
-  font-family: var(--font);
-  font-size: 1rem;
-  line-height: 1.6;
-}
 
 .chapter-edit-area {
   width: 100%;
@@ -1128,8 +875,9 @@ function cancelDeleteChapter() {
 }
 
 .input-chapter-list {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
+  grid-auto-rows: 2.1rem;
   gap: 0.4rem;
 }
 
@@ -1142,8 +890,8 @@ function cancelDeleteChapter() {
 }
 
 .input-chapter-container .input-chapter-list {
-  max-height: 18rem;
-  overflow-y: auto;
+  height: 12.1rem;
+  overflow: hidden;
 }
 
 .input-pagination {
@@ -1171,6 +919,7 @@ function cancelDeleteChapter() {
   cursor: pointer;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.5rem;
 }
 
@@ -1200,11 +949,7 @@ button.active {
   color: var(--accent);
 }
 
-@media (max-width: 700px) {
-  .chapter-language-grid {
-    grid-template-columns: 1fr;
-  }
-}
+
 
 .modal-overlay {
   position: fixed;
@@ -1307,19 +1052,4 @@ button.secondary.danger:hover:not(:disabled) {
   color: #fff;
 }
 
-.input-view-select {
-  font-size: 0.875rem;
-  padding: 0.25rem 0.5rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-elev);
-  color: var(--fg);
-  cursor: pointer;
-  height: 2rem;
-}
-
-.input-view-select:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
 </style>

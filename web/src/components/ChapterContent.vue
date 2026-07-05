@@ -114,6 +114,17 @@ onUnmounted(() => {
   display: contents;
 }
 
+.chapter-content {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  font-family: var(--font);
+  font-size: 1rem;
+  line-height: 1.7;
+  text-align: justify;
+}
+
 .chapter-content-segment {
   margin: 0;
   margin-bottom: 0;
