@@ -6,6 +6,11 @@ from dataclasses import dataclass
 from src.domain.illustrations import illustration_marker_counts
 
 SOURCE_CHAR_RE = re.compile(r"[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]")
+EXPLAINED_TERM_RE = re.compile(
+    r"(?:\(|（|\[|【|「|『|“|'|\")"
+    r"[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]{1,10}"
+    r"(?:\)|）|\]|】|」|』|”|'|\")"
+)
 CODE_FENCE_RE = re.compile(r"```")
 QUOTE_MARKS = ('"', "'", "“", "”", "‘", "’", "「", "」", "『", "』")
 
@@ -25,8 +30,9 @@ def _count_dialogue_lines(text: str) -> int:
 
 
 def _source_chars(text: str) -> list[str]:
-    """Return source-language characters still present in text."""
-    return SOURCE_CHAR_RE.findall(text)
+    """Return source-language characters still present in text, ignoring explained terminology in brackets."""
+    cleaned = EXPLAINED_TERM_RE.sub("", text)
+    return SOURCE_CHAR_RE.findall(cleaned)
 
 
 def post_check_translation(
