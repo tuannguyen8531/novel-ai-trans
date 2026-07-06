@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 
@@ -16,6 +17,7 @@ from src.api.dependencies import get_state
 from src.api.errors import ApplicationValidationError, ResourceNotFoundError
 from src.api.schemas import (
     ArtifactInfoResponse,
+    ChapterContentPayload,
     ChapterContentResponse,
     NovelChapterStatus,
     NovelDetail,
@@ -273,6 +275,54 @@ def novel_chapter_content(
     raise ResourceNotFoundError(f"Translated chapter not found: chapter {number}")
 
 
+@router.put("/novels/{name}/chapters/{number}", response_model=ChapterContentResponse)
+def put_chapter_content(
+    name: str,
+    number: int,
+    payload: ChapterContentPayload,
+    _: Principal = Depends(authenticate),
+) -> ChapterContentResponse:
+    config = config_context.get_config()
+    root = resolve_translated_root(config.translated_dir)
+    if not is_valid_novel_slug(name):
+        raise ResourceNotFoundError(f"Invalid novel name: {name!r}")
+    novel_root = safe_novel_path(root, name)
+    if not novel_root.exists():
+        raise ResourceNotFoundError(f"Novel not found: {name}")
+    input_dir = _input_dir(novel_root)
+    input_dir.mkdir(parents=True, exist_ok=True)
+    path = input_dir / f"chapter_{number}.txt"
+    path.write_text(payload.content, encoding="utf-8")
+    return ChapterContentResponse(
+        novel=name,
+        chapter=number,
+        view="source",
+        target=None,
+        content=payload.content,
+    )
+
+
+@router.delete("/novels/{name}/chapters/{number}", status_code=204)
+def delete_chapter(
+    name: str,
+    number: int,
+    _: Principal = Depends(authenticate),
+) -> None:
+    config = config_context.get_config()
+    root = resolve_translated_root(config.translated_dir)
+    if not is_valid_novel_slug(name):
+        raise ResourceNotFoundError(f"Invalid novel name: {name!r}")
+    novel_root = safe_novel_path(root, name)
+    if not novel_root.exists():
+        raise ResourceNotFoundError(f"Novel not found: {name}")
+    input_dir = _input_dir(novel_root)
+    path = input_dir / f"chapter_{number}.txt"
+    if not path.exists():
+        raise ResourceNotFoundError(f"Input chapter not found: chapter {number}")
+    path.unlink()
+    return None
+
+
 @router.get("/novels/{name}/metadata", response_model=NovelMetadataResponse)
 def get_novel_metadata(
     name: str,
@@ -366,14 +416,21 @@ def list_artifacts(
     if not novel_root.exists():
         raise ResourceNotFoundError(f"Novel not found: {name}")
     artifacts = _list_artifacts(novel_root)
-    return [
-        ArtifactInfoResponse(
-            name=path.name,
-            format=path.suffix.lstrip("."),
-            size=path.stat().st_size,
+    results: list[ArtifactInfoResponse] = []
+    for path in artifacts:
+        stat = path.stat()
+        target_language, chapter_count = _parse_artifact_info(novel_root, path)
+        results.append(
+            ArtifactInfoResponse(
+                name=path.name,
+                format=path.suffix.lstrip("."),
+                size=stat.st_size,
+                target_language=target_language,
+                created_at=datetime.fromtimestamp(stat.st_ctime, tz=timezone.utc),  # noqa: UP017
+                chapter_count=chapter_count,
+            )
         )
-        for path in artifacts
-    ]
+    return results
 
 
 @router.get("/novels/{name}/artifacts/{filename}")
@@ -401,7 +458,75 @@ def download_artifact(
     return FileResponse(artifact_path, filename=filename)
 
 
+@router.delete("/novels/{name}/artifacts/{filename}", status_code=204)
+def delete_artifact(
+    name: str,
+    filename: str,
+    _: Principal = Depends(authenticate),
+) -> None:
+    config = config_context.get_config()
+    root = resolve_translated_root(config.translated_dir)
+    if not is_valid_novel_slug(name):
+        raise ResourceNotFoundError(f"Invalid novel name: {name!r}")
+    novel_root = safe_novel_path(root, name)
+    if not novel_root.exists():
+        raise ResourceNotFoundError(f"Novel not found: {name}")
+    if "/" in filename or "\\" in filename or filename.startswith("."):
+        raise ResourceNotFoundError("Invalid artifact name")
+    artifact_path = (novel_root / filename).resolve()
+    try:
+        artifact_path.relative_to(novel_root.resolve())
+    except ValueError as error:
+        raise ResourceNotFoundError("Artifact escapes novel root") from error
+    if not artifact_path.is_file() or artifact_path.suffix.lower() not in {".epub", ".pdf"}:
+        raise ResourceNotFoundError(f"Artifact not found: {filename}")
+    artifact_path.unlink()
+    return None
+
+
+@router.get("/novels/{name}/illustrations/{filename}")
+def get_illustration(
+    name: str,
+    filename: str,
+    _: Principal = Depends(authenticate),
+) -> FileResponse:
+    config = config_context.get_config()
+    root = resolve_translated_root(config.translated_dir)
+    if not is_valid_novel_slug(name):
+        raise ResourceNotFoundError(f"Invalid novel name: {name!r}")
+    novel_root = safe_novel_path(root, name)
+    if not novel_root.exists():
+        raise ResourceNotFoundError(f"Novel not found: {name}")
+    if "/" in filename or "\\" in filename or filename.startswith("."):
+        raise ResourceNotFoundError("Invalid illustration filename")
+    illustrations_dir = novel_root / "illustrations"
+    illustration_path = (illustrations_dir / filename).resolve()
+    try:
+        illustration_path.relative_to(illustrations_dir.resolve())
+    except ValueError as error:
+        raise ResourceNotFoundError("Illustration escapes illustrations directory") from error
+    _ALLOWED_IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif"}
+    if not illustration_path.is_file() or illustration_path.suffix.lower() not in _ALLOWED_IMAGE_SUFFIXES:
+        raise ResourceNotFoundError(f"Illustration not found: {filename}")
+    return FileResponse(illustration_path)
+
+
 def _list_artifacts(novel_root: Path) -> list[Path]:
     if not novel_root.exists():
         return []
     return sorted(p for p in novel_root.iterdir() if p.is_file() and p.suffix.lower() in {".epub", ".pdf"})
+
+
+def _parse_artifact_info(novel_root: Path, artifact_path: Path) -> tuple[str, int]:
+    """Parse artifact filename to extract target language and count chapters.
+
+    Artifact filename format: {novel_name}.{target}.{format}
+    Example: my-novel.vi.epub -> target=vi, count chapters in output/
+    """
+    stem = artifact_path.stem
+    parts = stem.rsplit(".", 1)
+    target_language = parts[1] if len(parts) == 2 else "vi"
+
+    output_dir = _output_dir(novel_root, target_language)
+    chapter_count = len(_count_outputs(output_dir))
+    return target_language, chapter_count

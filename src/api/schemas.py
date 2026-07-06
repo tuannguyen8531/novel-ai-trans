@@ -168,6 +168,12 @@ class ChapterContentResponse(BaseModel):
     content: str
 
 
+class ChapterContentPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    content: str
+
+
 class NovelMetadataResponse(BaseModel):
     novel: str
     data: dict[str, Any]
@@ -239,6 +245,9 @@ class ArtifactInfoResponse(BaseModel):
     name: str
     format: str
     size: int
+    target_language: str
+    created_at: datetime
+    chapter_count: int
 
 
 # ---------------------------------------------------------------------------

@@ -134,13 +134,16 @@ async def post_import(
                 )
             tmp.write(chunk)
 
+    effective_name = name or (Path(file.filename).stem if file.filename else None)
+
     def _run(job, emit, cancel_event):
         progress_cb = build_progress_emitter(job, emit)
         try:
             request = ImportRequest(
                 epub_path=tmp_path,
-                name=name,
+                name=effective_name,
                 keep_existing=keep_existing,
+                source_url=f"epub://{file.filename}" if file.filename else None,
             )
             result = import_epub_workflow(
                 request,
@@ -161,7 +164,7 @@ async def post_import(
     try:
         job = jobs.submit(
             kind="import",
-            novel=name or file.filename,
+            novel=effective_name or file.filename,
             snapshot=snapshot,
             loop=loop,
             run=_run,

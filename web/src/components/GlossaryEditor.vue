@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import type { GlossaryApplyResponse, GlossaryReplacementReport, GlossaryResponse } from '@/api/types'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 
 interface Edge {
   from: string
@@ -28,6 +29,51 @@ const newRelationship = ref({ from: '', to: '', relationship: '', since: null as
 const showAddTerm = ref(false)
 const showAddCharacter = ref(false)
 const showAddRelationship = ref(false)
+
+const confirmDialog = ref<{
+  show: boolean
+  title: string
+  message: string
+  confirmLabel: string
+  danger: boolean
+  resolve: ((value: boolean) => void) | null
+}>({
+  show: false,
+  title: '',
+  message: '',
+  confirmLabel: 'Confirm',
+  danger: false,
+  resolve: null
+})
+
+function askConfirm(
+  title: string,
+  message: string,
+  options: { confirmLabel?: string; danger?: boolean } = {}
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    confirmDialog.value = {
+      show: true,
+      title,
+      message,
+      confirmLabel: options.confirmLabel ?? 'Confirm',
+      danger: options.danger ?? false,
+      resolve
+    }
+  })
+}
+
+function handleConfirmDialogConfirm() {
+  confirmDialog.value.resolve?.(true)
+  confirmDialog.value.show = false
+  confirmDialog.value.resolve = null
+}
+
+function handleConfirmDialogCancel() {
+  confirmDialog.value.resolve?.(false)
+  confirmDialog.value.show = false
+  confirmDialog.value.resolve = null
+}
 
 async function load() {
   loading.value = true
@@ -116,7 +162,7 @@ async function addTerm() {
 }
 
 async function removeTerm(original: string) {
-  if (!confirm(`Remove term "${original}"?`)) return
+  if (!await askConfirm('Remove Term', `Remove term "${original}"?`, { confirmLabel: 'Remove', danger: true })) return
   try {
     data.value = await api.removeTerm(props.novel, original)
   } catch (err) {
@@ -140,7 +186,7 @@ async function saveEditTerm() {
   let overwrite = false
 
   if (oldOriginal !== original && terms.value[original]) {
-    if (!confirm(`Term "${original}" already exists. Overwrite it?`)) {
+    if (!await askConfirm('Overwrite Term', `Term "${original}" already exists. Overwrite it?`, { confirmLabel: 'Overwrite', danger: true })) {
       return
     }
     overwrite = true
@@ -218,7 +264,7 @@ async function saveEditRelationship() {
 }
 
 async function removeCharacter(original: string) {
-  if (!confirm(`Remove character "${original}"? This will also remove their relationships.`)) return
+  if (!await askConfirm('Remove Character', `Remove character "${original}"? This will also remove their relationships.`, { confirmLabel: 'Remove', danger: true })) return
   try {
     data.value = await api.removeCharacter(props.novel, original)
   } catch (err) {
@@ -227,7 +273,7 @@ async function removeCharacter(original: string) {
 }
 
 async function removeRelationship(from_char: string, to_char: string) {
-  if (!confirm(`Remove relationship between "${from_char}" and "${to_char}"?`)) return
+  if (!await askConfirm('Remove Relationship', `Remove relationship between "${from_char}" and "${to_char}"?`, { confirmLabel: 'Remove', danger: true })) return
   try {
     data.value = await api.removeRelationship(props.novel, from_char, to_char)
   } catch (err) {
@@ -291,7 +337,7 @@ const unresolvedCount = computed(() =>
 )
 
 async function handleDismiss() {
-  if (!confirm('Dismiss all pending glossary replacements? Glossary values and translated files will remain unchanged; only the pending-change notice will be cleared.')) return
+  if (!await askConfirm('Dismiss Pending Replacements', 'Dismiss all pending glossary replacements? Glossary values and translated files will remain unchanged; only the pending-change notice will be cleared.', { confirmLabel: 'Dismiss' })) return
   loading.value = true
   error.value = null
   actionMessage.value = null
@@ -339,7 +385,7 @@ async function handleApply() {
 
 async function handleRollback() {
   const backupId = previewData.value?.backup_id
-  if (!backupId || !confirm('Restore every translated chapter changed by this apply operation? Current glossary values will remain unchanged, and pending replacements will be restored.')) return
+  if (!backupId || !await askConfirm('Rollback Glossary', 'Restore every translated chapter changed by this apply operation? Current glossary values will remain unchanged, and pending replacements will be restored.', { confirmLabel: 'Rollback' })) return
   rollbackLoading.value = true
   error.value = null
   actionMessage.value = null
@@ -785,6 +831,16 @@ onUnmounted(() => {
         </p>
       </div>
     </section>
+
+    <ConfirmDialog
+      :show="confirmDialog.show"
+      :title="confirmDialog.title"
+      :message="confirmDialog.message"
+      :confirm-label="confirmDialog.confirmLabel"
+      :danger="confirmDialog.danger"
+      @confirm="handleConfirmDialogConfirm"
+      @cancel="handleConfirmDialogCancel"
+    />
   </div>
 </template>
 
@@ -954,10 +1010,12 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 1rem;
 }
 
 .modal-header h3 {
   margin: 0;
+  flex: 1;
 }
 
 .modal-close {
@@ -968,10 +1026,18 @@ onUnmounted(() => {
   cursor: pointer;
   padding: 0;
   line-height: 1;
+  width: 1.5rem;
+  height: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
-.modal-close:hover {
+.modal-close:hover:not(:disabled) {
   color: var(--fg);
+  background: var(--bg-elev-2);
+  border-radius: var(--radius);
 }
 
 .modal-close:disabled {

@@ -73,7 +73,7 @@ export interface NovelDetail extends NovelSummary {
   glossary_terms: number
   glossary_entities: number
   glossary_edges: number
-  artifacts: string[]
+  artifacts: ArtifactInfo[]
 }
 
 export interface NovelChapterStatus {
@@ -139,6 +139,9 @@ export interface ArtifactInfo {
   name: string
   format: string
   size: number
+  target_language: string
+  created_at: string
+  chapter_count: number
 }
 
 export interface GlossaryResponse {

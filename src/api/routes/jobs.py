@@ -146,3 +146,31 @@ async def stream_events(
             jobs.event_bus.unsubscribe(subscriber)
 
     return EventSourceResponse(event_publisher(), ping=15, sep="\n")
+
+
+@router.delete("/jobs", status_code=204)
+def clear_inactive_jobs(
+    _: Principal = Depends(authenticate),
+    jobs: JobManager = Depends(get_job_manager),
+) -> None:
+    jobs.clear_inactive()
+
+
+@router.delete("/jobs/{job_id}", status_code=204)
+def delete_job(
+    job_id: str,
+    _: Principal = Depends(authenticate),
+    jobs: JobManager = Depends(get_job_manager),
+) -> None:
+    try:
+        jobs.delete(job_id)
+    except JobNotFoundError as error:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "not_found", "message": f"Job not found: {job_id}"},
+        ) from error
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "bad_request", "message": str(error)},
+        ) from error

@@ -9,9 +9,16 @@ const keepExisting = ref<boolean>(false)
 const jobId = ref<string | null>(null)
 const error = ref<string | null>(null)
 
+function slugFromFilename(filename: string): string {
+  return filename.replace(/\.epub$/i, '').toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/-{2,}/g, '-').replace(/^[-._]+|[-._]+$/g, '')
+}
+
 function onFileChange(event: Event) {
   const target = event.target as HTMLInputElement
   file.value = target.files && target.files.length > 0 ? target.files[0] : null
+  if (file.value && !name.value) {
+    name.value = slugFromFilename(file.value.name)
+  }
 }
 
 async function upload() {

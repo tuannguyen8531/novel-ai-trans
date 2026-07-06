@@ -437,6 +437,62 @@ class JobManager:
         self._bus.publish(JobEvent(kind="cancelling", job_id=job.id, novel=job.novel))
         return job
 
+    def delete(self, job_id: str) -> None:
+        with self._lock:
+            # Check if it's the current active/running job
+            if self._current and self._current.id == job_id:
+                if self._current.status in {JobStatus.QUEUED, JobStatus.RUNNING, JobStatus.CANCELLING}:
+                    raise ValueError("Cannot delete an active job.")
+                self._current = None
+                if self._store:
+                    self._store.delete(job_id)
+                return
+
+            # Check history
+            found_job = None
+            for job in self._history:
+                if job.id == job_id:
+                    if job.status in {JobStatus.QUEUED, JobStatus.RUNNING, JobStatus.CANCELLING}:
+                        raise ValueError("Cannot delete an active job.")
+                    found_job = job
+                    break
+
+            if found_job:
+                self._history.remove(found_job)
+                if self._store:
+                    self._store.delete(job_id)
+                return
+
+            # Try to find in store
+            if self._store:
+                snapshot = self._store.get(job_id)
+                if snapshot:
+                    if snapshot.get("status") in {JobStatus.QUEUED.value, JobStatus.RUNNING.value, JobStatus.CANCELLING.value}:
+                        raise ValueError("Cannot delete an active job.")
+                    self._store.delete(job_id)
+                    return
+
+            raise JobNotFoundError(job_id)
+
+    def clear_inactive(self) -> None:
+        with self._lock:
+            active_statuses = {JobStatus.QUEUED, JobStatus.RUNNING, JobStatus.CANCELLING}
+
+            # Filter memory history
+            new_history = deque([job for job in self._history if job.status in active_statuses], maxlen=self._history.maxlen)
+            self._history = new_history
+
+            # Clear current if it is finished
+            if self._current and self._current.status not in active_statuses:
+                self._current = None
+
+            # Filter disk store
+            if self._store:
+                for snapshot in list(self._store.iter_all()):
+                    status_val = snapshot.get("status")
+                    if status_val in {JobStatus.COMPLETED.value, JobStatus.FAILED.value, JobStatus.CANCELLED.value}:
+                        self._store.delete(snapshot["id"])
+
     def shutdown(self, timeout: float = 5.0) -> None:
         current = self.current
         if current and current.status in {JobStatus.QUEUED, JobStatus.RUNNING}:
