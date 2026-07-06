@@ -134,6 +134,8 @@ class NovelChapterStatus(BaseModel):
     has_source: bool
     has_translation: bool
     target: str | None = None
+    title: str | None = None
+    source_title: str | None = None
 
 
 class NovelTargetProgress(BaseModel):

@@ -200,6 +200,64 @@ def novel_detail(
     )
 
 
+def _get_chapter_title_on_fly(file_path: Path, fallback: str, keep_cjk: bool = True) -> str:
+    if not file_path.exists():
+        return fallback
+    try:
+        with open(file_path, encoding="utf-8") as f:
+            lines = []
+            for line in f:
+                stripped = line.strip()
+                if stripped.startswith("\ufeff"):
+                    stripped = stripped.lstrip("\ufeff")
+                if stripped:
+                    lines.append(stripped)
+                    if len(lines) >= 5:
+                        break
+        if not lines:
+            return fallback
+        header_lines = []
+        for idx, line in enumerate(lines[:5]):
+            if line.startswith("Chương ") or "Chương" in line or line.lower().startswith("chapter"):
+                header_lines.append((idx, line))
+            else:
+                break
+        title = header_lines[-1][1] if header_lines else lines[0]
+        if not title:
+            return fallback
+        replacements = {
+            "『": '"',
+            "』": '"',
+            "「": '"',
+            "」": '"',
+            "【": "[",
+            "】": "]",
+            "〖": "[",
+            "〗": "]",
+            "—": "-",
+            "–": "-",
+            "﹏": "~",
+        }
+        for orig, rep in replacements.items():
+            title = title.replace(orig, rep)
+        if not keep_cjk:
+            cjk_pattern = re.compile(
+                r"[\u4e00-\u9fff"
+                r"\u3040-\u309f"
+                r"\u30a0-\u30ff"
+                r"\uac00-\ud7af"
+                r"\u1100-\u11ff"
+                r"\u3130-\u318f"
+                r"\ufe30-\ufe4f"
+                r"]"
+            )
+            title = cjk_pattern.sub("", title)
+        title = re.sub(r" +", " ", title)
+        return title.strip()
+    except Exception:
+        return fallback
+
+
 @router.get("/novels/{name}/chapters", response_model=list[NovelChapterStatus])
 def novel_chapters(
     name: str,
@@ -219,14 +277,23 @@ def novel_chapters(
     }
     statuses: list[NovelChapterStatus] = []
     for number in sorted(sources):
+        source_path = input_dir / f"chapter_{number}.txt"
+        source_title = _get_chapter_title_on_fly(source_path, f"Chapter {number}")
         for target in SUPPORTED_TARGET_LANGUAGES:
             has_translation = number in outputs_by_target[target]
+            title = f"Chapter {number}"
+            if has_translation:
+                out_dir = _output_dir(novel_root, target)
+                out_path = out_dir / f"chapter_{number:03d}.txt"
+                title = _get_chapter_title_on_fly(out_path, f"Chapter {number}")
             statuses.append(
                 NovelChapterStatus(
                     number=number,
                     has_source=True,
                     has_translation=has_translation,
                     target=target,
+                    title=title,
+                    source_title=source_title,
                 )
             )
     return statuses

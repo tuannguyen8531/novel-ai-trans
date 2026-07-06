@@ -81,6 +81,8 @@ export interface NovelChapterStatus {
   has_source: boolean
   has_translation: boolean
   target: string | null
+  title?: string | null
+  source_title?: string | null
 }
 
 export interface ChapterContentResponse {

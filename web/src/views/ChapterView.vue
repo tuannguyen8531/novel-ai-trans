@@ -29,7 +29,27 @@ const deleteLoading = ref(false)
 
 const showMenu = ref(false)
 
+const showToc = ref(false)
+const tocLang = ref<'source' | 'vi' | 'en'>('source')
+let tocPreviousFocus: HTMLElement | null = null
+
 // ── Computed ──────────────────────────────────────────────────────────────────
+const filteredChapters = computed(() => {
+  if (tocLang.value === 'source') {
+    const uniqueMap = new Map<number, { number: number; source_title?: string | null; title?: string | null }>()
+    for (const c of chapters.value) {
+      if (c.has_source && !uniqueMap.has(c.number)) {
+        uniqueMap.set(c.number, { number: c.number, source_title: c.source_title, title: null })
+      }
+    }
+    return [...uniqueMap.values()].sort((a, b) => a.number - b.number)
+  } else {
+    return chapters.value
+      .filter((c) => c.target === tocLang.value && c.has_translation)
+      .sort((a, b) => a.number - b.number)
+  }
+})
+
 const chapterNumbers = computed(() => {
   const sources = new Set<number>()
   for (const s of chapters.value) {
@@ -220,6 +240,11 @@ function goBack() {
   void router.push({ name: 'novel-detail', params: { name: props.name } })
 }
 
+function selectChapter(chapterNumber: number) {
+  showToc.value = false
+  goTo(chapterNumber)
+}
+
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 onMounted(async () => {
   window.addEventListener('click', closeMenu)
@@ -229,7 +254,21 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.removeEventListener('click', closeMenu)
+  document.body.style.overflow = ''
 })
+
+watch(showToc, (isOpen) => {
+  if (isOpen) {
+    tocLang.value = viewMode.value
+    tocPreviousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    document.body.style.overflow = 'hidden'
+  } else {
+    document.body.style.overflow = ''
+    tocPreviousFocus?.focus()
+    tocPreviousFocus = null
+  }
+})
+
 
 // Reload when navigating between chapters (same component, different prop)
 watch(
@@ -261,7 +300,6 @@ watch(
         <span class="chapter-topbar-title">
           <span class="muted">{{ displayTitle }} /</span>
           {{ chapterLabel }} {{ chapter }}
-          <span v-if="chapterCount" class="muted"> of {{ chapterCount }}</span>
         </span>
       </div>
 
@@ -324,6 +362,36 @@ watch(
       </div>
     </div>
 
+    <!-- ── Prev / Next (Top) ── -->
+    <div class="chapter-nav">
+      <button
+        type="button"
+        class="secondary"
+        :disabled="prevChapter === null"
+        @click="prevChapter !== null && goTo(prevChapter)"
+      >
+        ← Previous
+      </button>
+
+      <button
+        type="button"
+        class="secondary"
+        title="Open Table of Contents"
+        @click="showToc = true"
+      >
+        {{ currentIndex + 1 }} / {{ chapterCount }}
+      </button>
+
+      <button
+        type="button"
+        class="secondary"
+        :disabled="nextChapter === null"
+        @click="nextChapter !== null && goTo(nextChapter)"
+      >
+        Next →
+      </button>
+    </div>
+
     <!-- ── Error ── -->
     <p v-if="error" class="error card">{{ error }}</p>
 
@@ -350,9 +418,14 @@ watch(
         ← Previous
       </button>
 
-      <span class="muted chapter-nav-pos">
+      <button
+        type="button"
+        class="secondary"
+        title="Open Table of Contents"
+        @click="showToc = true"
+      >
         {{ currentIndex + 1 }} / {{ chapterCount }}
-      </span>
+      </button>
 
       <button
         type="button"
@@ -362,6 +435,52 @@ watch(
       >
         Next →
       </button>
+    </div>
+
+    <!-- ── Table of Contents popup ── -->
+    <div v-if="showToc" class="modal-overlay" @click.self="showToc = false">
+      <div
+        class="modal-card toc-modal"
+        role="dialog"
+        aria-modal="true"
+        tabindex="-1"
+        @keydown.esc="showToc = false"
+      >
+        <header class="modal-header">
+          <h3>Table of Contents</h3>
+          <button
+            type="button"
+            class="modal-close"
+            aria-label="Close"
+            @click="showToc = false"
+          >&times;</button>
+        </header>
+        <div class="modal-body toc-body">
+          <div class="toc-controls">
+            <label for="toc-lang-select" style="font-weight: 600;">Language:</label>
+            <select id="toc-lang-select" v-model="tocLang" class="view-select">
+              <option value="source">Origin</option>
+              <option value="vi">Vietnamese</option>
+              <option value="en">English</option>
+            </select>
+          </div>
+          <div class="toc-list">
+            <div v-if="filteredChapters.length === 0" class="muted empty-toc">
+              No chapters available for this language.
+            </div>
+            <button
+              v-for="ch in filteredChapters"
+              :key="ch.number"
+              type="button"
+              class="toc-item"
+              :class="{ active: ch.number === props.chapter }"
+              @click="selectChapter(ch.number)"
+            >
+              {{ tocLang === 'source' ? ch.source_title : ch.title }}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- ── Delete confirmation ── -->
@@ -382,7 +501,7 @@ watch(
 .chapter-view {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
 /* ── Top bar ── */
@@ -528,7 +647,7 @@ watch(
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.5rem 0;
+  padding: 0.2rem 0;
 }
 
 .chapter-nav-pos {
@@ -556,5 +675,140 @@ button.secondary.danger {
 button.secondary.danger:hover:not(:disabled) {
   background: var(--danger, #dc3545);
   color: #fff;
+}
+
+/* ── Table of Contents Modal & Button Styles ── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.modal-card {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  width: 100%;
+  max-width: 32rem;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+}
+
+.toc-modal {
+  max-width: 36rem;
+}
+
+.modal-header {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.modal-header h3 {
+  margin: 0;
+  flex: 1;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: var(--fg-dim);
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  width: 1.5rem;
+  height: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.modal-close:hover:not(:disabled) {
+  color: var(--fg);
+  background: var(--bg-elev-2);
+  border-radius: var(--radius);
+}
+
+.modal-body {
+  padding: 1.25rem;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.toc-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-height: 70vh;
+}
+
+.toc-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.toc-list {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  flex: 1;
+}
+
+.toc-item {
+  padding: 0.65rem 1.25rem;
+  font-size: 0.9rem;
+  text-align: left;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+  border-radius: 0;
+  transition: background 0.15s ease;
+}
+
+.toc-item:last-child {
+  border-bottom: 0;
+}
+
+.toc-item:nth-child(odd) {
+  background: var(--bg-elev-2);
+}
+
+.toc-item:nth-child(even) {
+  background: var(--bg-elev);
+}
+
+.toc-item:hover:not(.active) {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.05));
+}
+
+.toc-item.active {
+  background: var(--primary, #007bff);
+  color: #fff;
+}
+
+.empty-toc {
+  text-align: center;
+  padding: 2.5rem 0;
+  font-size: 0.9rem;
 }
 </style>

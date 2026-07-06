@@ -221,7 +221,7 @@ async function handleClearAll() {
     <ConfirmDialog
       :show="showClearDialog"
       title="Delete All Inactive Jobs"
-      message="Are you sure you want to delete all completed, failed, and cancelled jobs?\n\nThis permanently removes all their logs and history. This cannot be undone."
+      :message="`Are you sure you want to delete all completed, failed, and cancelled jobs?\n\nThis permanently removes all their logs and history. This cannot be undone.`"
       confirm-label="Delete All"
       :danger="true"
       :loading="clearSaving"
