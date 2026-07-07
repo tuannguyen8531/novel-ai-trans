@@ -83,6 +83,8 @@ class Config:
 
     def __post_init__(self) -> None:
         """Validate configuration values."""
+        if not self.translated_dir or not self.translated_dir.strip():
+            raise ValueError("TRANSLATED_DIR configuration must not be empty.")
         if self.fallback_provider and self.fallback_provider == self.llm_provider:
             raise ValueError(f"fallback_provider ({self.fallback_provider}) must differ from llm_provider")
         if not 0.0 <= self.translation_temperature <= 1.0:

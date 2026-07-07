@@ -49,18 +49,15 @@ def _patch_config(**attrs):
 class TestScanChapters:
     def setup_method(self):
         self.temp_dir = tempfile.TemporaryDirectory()
-        self.patcher_input = patch("src.cli.translate.INPUT_DIR", Path(self.temp_dir.name))
-        self.patcher_input.start()
-        self.patcher_get = _patch_config(translated_dir="", target_language="vi")
+        self.patcher_get = _patch_config(translated_dir=self.temp_dir.name, target_language="vi")
         self.patcher_get.start()
 
     def teardown_method(self):
-        self.patcher_input.stop()
         self.patcher_get.stop()
         self.temp_dir.cleanup()
 
     def _create_chapter(self, novel: str, num: int, content: str = "test"):
-        path = Path(self.temp_dir.name) / novel / f"chapter_{num}.txt"
+        path = Path(self.temp_dir.name) / novel / "input" / f"chapter_{num}.txt"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
 
@@ -79,9 +76,9 @@ class TestScanChapters:
         assert list(chapters.keys()) == [1, 3, 5]
 
     def test_scan_ignores_non_chapter_files(self):
-        (Path(self.temp_dir.name) / "my-novel").mkdir(parents=True)
-        (Path(self.temp_dir.name) / "my-novel" / "notes.txt").write_text("ignore")
-        (Path(self.temp_dir.name) / "my-novel" / "chapter_1.txt").write_text("keep")
+        (Path(self.temp_dir.name) / "my-novel" / "input").mkdir(parents=True)
+        (Path(self.temp_dir.name) / "my-novel" / "input" / "notes.txt").write_text("ignore")
+        (Path(self.temp_dir.name) / "my-novel" / "input" / "chapter_1.txt").write_text("keep")
         chapters = scan_chapters("my-novel")
         assert list(chapters.keys()) == [1]
 
@@ -100,24 +97,24 @@ class TestFindUntranslated:
 
     def _create_input(self, novel: str, chapters: list[int]):
         for ch in chapters:
-            path = self.base / "input" / novel / f"chapter_{ch}.txt"
+            path = self.base / novel / "input" / f"chapter_{ch}.txt"
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("source", encoding="utf-8")
 
     def _create_output(self, novel: str, chapters: list[int]):
         for ch in chapters:
-            path = self.base / "output" / novel / f"chapter_{ch:03d}.txt"
+            path = self.base / novel / "output" / f"chapter_{ch:03d}.txt"
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("translated", encoding="utf-8")
 
     def test_all_untranslated(self):
         self._create_input("my-novel", [1, 2, 3])
         chapters = {
-            1: self.base / "input/my-novel/chapter_1.txt",
-            2: self.base / "input/my-novel/chapter_2.txt",
-            3: self.base / "input/my-novel/chapter_3.txt",
+            1: self.base / "my-novel/input/chapter_1.txt",
+            2: self.base / "my-novel/input/chapter_2.txt",
+            3: self.base / "my-novel/input/chapter_3.txt",
         }
-        with _patch_config(translated_dir="", target_language="vi"):
+        with _patch_config(translated_dir=str(self.base), target_language="vi"):
             result = find_untranslated("my-novel", chapters)
         assert result == [1, 2, 3]
 
@@ -125,40 +122,37 @@ class TestFindUntranslated:
         self._create_input("my-novel", [1, 2, 3])
         self._create_output("my-novel", [1])
         chapters = {
-            1: self.base / "input/my-novel/chapter_1.txt",
-            2: self.base / "input/my-novel/chapter_2.txt",
-            3: self.base / "input/my-novel/chapter_3.txt",
+            1: self.base / "my-novel/input/chapter_1.txt",
+            2: self.base / "my-novel/input/chapter_2.txt",
+            3: self.base / "my-novel/input/chapter_3.txt",
         }
-        with (
-            patch("src.cli.translate.OUTPUT_DIR", self.base / "output"),
-            _patch_config(translated_dir="", target_language="vi"),
-        ):
+        with _patch_config(translated_dir=str(self.base), target_language="vi"):
             result = find_untranslated("my-novel", chapters)
         assert result == [2, 3]
 
     def test_all_translated(self):
         self._create_input("my-novel", [1, 2])
         self._create_output("my-novel", [1, 2])
-        chapters = {1: self.base / "input/my-novel/chapter_1.txt", 2: self.base / "input/my-novel/chapter_2.txt"}
-        with (
-            patch("src.cli.translate.OUTPUT_DIR", self.base / "output"),
-            _patch_config(translated_dir="", target_language="vi"),
-        ):
+        chapters = {
+            1: self.base / "my-novel/input/chapter_1.txt",
+            2: self.base / "my-novel/input/chapter_2.txt",
+        }
+        with _patch_config(translated_dir=str(self.base), target_language="vi"):
             result = find_untranslated("my-novel", chapters)
         assert result == []
 
     def test_target_language_uses_separate_output_dir(self):
         self._create_input("my-novel", [1, 2])
         self._create_output("my-novel", [1])
-        en_output = self.base / "output" / "en" / "my-novel" / "chapter_002.txt"
+        en_output = self.base / "my-novel" / "output" / "en" / "chapter_002.txt"
         en_output.parent.mkdir(parents=True, exist_ok=True)
         en_output.write_text("translated", encoding="utf-8")
 
-        chapters = {1: self.base / "input/my-novel/chapter_1.txt", 2: self.base / "input/my-novel/chapter_2.txt"}
-        with (
-            patch("src.cli.translate.OUTPUT_DIR", self.base / "output"),
-            _patch_config(translated_dir="", target_language="vi"),
-        ):
+        chapters = {
+            1: self.base / "my-novel/input/chapter_1.txt",
+            2: self.base / "my-novel/input/chapter_2.txt",
+        }
+        with _patch_config(translated_dir=str(self.base), target_language="vi"):
             result = find_untranslated("my-novel", chapters, target_language="en")
 
         assert result == [1]
@@ -168,7 +162,7 @@ class TestDryRun:
     def setup_method(self):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.base = Path(self.temp_dir.name)
-        input_dir = self.base / "input" / "my-novel"
+        input_dir = self.base / "my-novel" / "input"
         input_dir.mkdir(parents=True)
         (input_dir / "chapter_1.txt").write_text("source", encoding="utf-8")
 
@@ -178,11 +172,7 @@ class TestDryRun:
     def test_dry_run_does_not_check_provider(self, capsys):
         with (
             patch("sys.argv", ["translate", "my-novel", "--dry-run"]),
-            patch("src.application.paths.INPUT_DIR", self.base / "input"),
-            patch("src.application.paths.OUTPUT_DIR", self.base / "output"),
-            patch("src.cli.translate.INPUT_DIR", self.base / "input"),
-            patch("src.cli.translate.OUTPUT_DIR", self.base / "output"),
-            _patch_config(translated_dir="", target_language="vi"),
+            _patch_config(translated_dir=str(self.base), target_language="vi"),
             patch("src.cli.translate.check_provider") as mock_check_provider,
         ):
             translate_main()
@@ -244,9 +234,9 @@ class TestQualityReport:
                 }
 
         with (
-            patch("src.cli.translate.OUTPUT_DIR", self.base / "output"),
+            tempfile.TemporaryDirectory() as translated_tmp,
             patch("src.cli.translate.REPORT_DIR", self.base / "reports"),
-            _patch_config(translated_dir="", target_language="vi"),
+            _patch_config(translated_dir=translated_tmp, target_language="vi"),
         ):
             success, out_chars, elapsed, new_terms_count = translate_file(
                 self.input_path,
@@ -402,12 +392,11 @@ class TestGlossaryCli:
             encoding="utf-8",
         )
 
-        input_dir = self.base / "input"
-        output_dir = self.base / "output"
-        (input_dir / "my-novel").mkdir(parents=True)
-        (output_dir / "my-novel").mkdir(parents=True)
-        (input_dir / "my-novel" / "chapter_1.txt").write_text("李白 đi chơi.", encoding="utf-8")
-        (output_dir / "my-novel" / "chapter_001.txt").write_text("李白 đi chơi.", encoding="utf-8")
+        novel_dir = self.base / "my-novel"
+        (novel_dir / "input").mkdir(parents=True)
+        (novel_dir / "output").mkdir(parents=True)
+        (novel_dir / "input" / "chapter_1.txt").write_text("李白 đi chơi.", encoding="utf-8")
+        (novel_dir / "output" / "chapter_001.txt").write_text("李白 đi chơi.", encoding="utf-8")
 
         with (
             patch(
@@ -456,9 +445,7 @@ class TestGlossaryCli:
         with (
             patch("sys.argv", ["translate", "glossary", "audit", "my-novel"]),
             patch("src.services.glossary.GLOSSARY_DIR", glossary_dir),
-            patch("src.cli.translate.INPUT_DIR", input_dir),
-            patch("src.cli.translate.OUTPUT_DIR", output_dir),
-            _patch_config(translated_dir="", target_language="vi"),
+            _patch_config(translated_dir=str(self.base), target_language="vi"),
             pytest.raises(SystemExit),
         ):
             translate_main()

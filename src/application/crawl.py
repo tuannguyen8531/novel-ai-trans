@@ -21,7 +21,7 @@ from src.application.errors import (
     PersistenceError,
     ResourceNotFoundError,
 )
-from src.application.paths import CONFIG_DIR, RUNTIME_OUTPUT_ROOT
+from src.application.paths import CONFIG_DIR, RUNTIME_DIR, RUNTIME_OUTPUT_ROOT
 from src.application.progress import ProgressEvent
 from src.config import SiteConfig
 from src.services.config_generator import ConfigGenerator
@@ -544,8 +544,8 @@ def _browser_profile_dir(start_url: str) -> Path:
     hostname = urlparse(start_url).hostname
     if not hostname:
         raise ValueError(f"Could not determine browser profile domain from URL: {start_url}")
-    safe_hostname = "".join(ch if ch.isalnum() or ch in ".-_" else "_" for ch in hostname.lower())
-    return RUNTIME_OUTPUT_ROOT / "browser-profiles" / safe_hostname
+    safe_hostname = "".join(character if character.isalnum() or character in ".-_" else "_" for character in hostname.lower())
+    return RUNTIME_DIR / "browser-profiles" / safe_hostname
 
 
 __all__ = [

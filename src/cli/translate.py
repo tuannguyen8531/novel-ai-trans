@@ -98,20 +98,14 @@ def _signal_handler(signum, frame) -> None:  # noqa: ARG001
 
 def _get_input_dir(novel_name: str) -> Path:
     config = config_context.get_config()
-    if config.translated_dir:
-        return Path(config.translated_dir) / novel_name / "input"
-    return INPUT_DIR / novel_name
+    return Path(config.translated_dir) / novel_name / "input"
 
 
 def _get_output_dir(novel_name: str, target_language: str | None = None) -> Path:
     config = config_context.get_config()
     target = _app_translate._normalize_target(target_language or config.target_language)
-    if config.translated_dir:
-        base_dir = Path(config.translated_dir) / novel_name / "output"
-        return base_dir if target == "vi" else base_dir / target
-    if target == "vi":
-        return OUTPUT_DIR / novel_name
-    return OUTPUT_DIR / target / novel_name
+    base_dir = Path(config.translated_dir) / novel_name / "output"
+    return base_dir if target == "vi" else base_dir / target
 
 
 def scan_chapters(novel_name: str) -> dict[int, Path]:

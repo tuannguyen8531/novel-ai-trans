@@ -31,25 +31,17 @@ from src.domain.target_language import normalize_target_language
 
 def _get_output_dir(novel_name: str, target_language: str | None = None) -> Path:
     target = normalize_target_language(target_language or config.target_language)
-    if config.translated_dir:
-        base_dir = Path(config.translated_dir) / novel_name / "output"
-        return base_dir if target == "vi" else base_dir / target
-    if target == "vi":
-        return Path("runtime/output") / novel_name
-    return Path("runtime/output") / target / novel_name
+    base_dir = Path(config.translated_dir) / novel_name / "output"
+    return base_dir if target == "vi" else base_dir / target
 
 
 def _get_default_package_dir(novel_name: str, target_language: str | None = None) -> Path:
     """Return the default directory where EPUB/PDF files are written."""
-    if config.translated_dir:
-        return Path(config.translated_dir) / novel_name
-    return Path("runtime/output")
+    return Path(config.translated_dir) / novel_name
 
 
 def _get_novel_root_dir(novel_name: str) -> Path:
-    if config.translated_dir:
-        return Path(config.translated_dir) / novel_name
-    return Path("runtime/input") / novel_name
+    return Path(config.translated_dir) / novel_name
 
 
 def _package_file_stem(novel_name: str, target_language: str | None = None) -> str:

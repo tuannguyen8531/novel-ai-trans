@@ -41,7 +41,7 @@ class CliTest(unittest.TestCase):
     def test_browser_profile_is_scoped_by_domain(self) -> None:
         self.assertEqual(
             _browser_profile_dir("https://www.69shuba.com/book/84642/"),
-            Path("runtime/crawler/browser-profiles/www.69shuba.com"),
+            Path("runtime/browser-profiles/www.69shuba.com"),
         )
 
     def test_resolve_config_path_accepts_novel_name(self) -> None:

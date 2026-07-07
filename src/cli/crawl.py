@@ -495,7 +495,7 @@ def _browser_profile_dir(start_url: str) -> Path:
     if not hostname:
         raise ValueError(f"Could not determine browser profile domain from URL: {start_url}")
     safe_hostname = "".join(character if character.isalnum() or character in ".-_" else "_" for character in hostname.lower())
-    return RUNTIME_OUTPUT_ROOT / "browser-profiles" / safe_hostname
+    return Path("runtime/browser-profiles") / safe_hostname
 
 
 def _print_progress(progress: CrawlProgress) -> None:

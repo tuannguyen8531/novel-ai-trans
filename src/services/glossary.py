@@ -1,7 +1,9 @@
 """
 Glossary Service — JSON-based per-novel glossary management.
 
-Each novel gets its own glossary file at glossary/{novel_name}.json.
+Each novel gets its own glossary file at
+{translated_dir}/{novel_name}/glossary.json (or glossary.{target}.json for
+non-Vietnamese targets).
 Structure:
 {
     "terms": {
@@ -21,9 +23,8 @@ Structure:
     }
 }
 
-If TRANSLATED_DIR is set, also checks {translated_dir}/{novel}/glossary.json
-or glossary.{target}.json as a fallback source. If found in the translated
-directory, copies to project glossary.
+When TRANSLATED_DIR is unavailable, glossary files fall back to the project
+runtime glossary directory.
 
 Character schema:
 - entities: dict of original_name -> {translated_name, role, pronoun, aliases?}
@@ -117,42 +118,22 @@ def _current_target_language() -> str:
 
 
 def _glossary_path(novel_name: str) -> Path:
-    """Get path to glossary file for a novel (always in project glossary/)."""
+    """Get path to glossary file for a novel (directly in config.translated_dir or fallback to GLOSSARY_DIR)."""
     target = _current_target_language()
+    if config.translated_dir:
+        novel_dir = Path(config.translated_dir) / novel_name
+        if target == "vi":
+            return novel_dir / "glossary.json"
+        return novel_dir / f"glossary.{target}.json"
+
     if target == "vi":
         return GLOSSARY_DIR / f"{novel_name}.json"
     return GLOSSARY_DIR / f"{novel_name}.{target}.json"
 
 
-def _share_glossary_path(novel_name: str) -> Path | None:
-    """Get path to glossary file in translated dir, if configured."""
-    if not config.translated_dir:
-        return None
-    target = _current_target_language()
-    if target == "vi":
-        return Path(config.translated_dir) / novel_name / "glossary.json"
-    return Path(config.translated_dir) / novel_name / f"glossary.{target}.json"
-
-
 def _resolve_glossary(novel_name: str) -> Path:
-    """Resolve glossary path with translated dir fallback.
-
-    Priority:
-    1. Project glossary/{novel_name}.json or glossary/{novel_name}.{target}.json
-    2. Translated dir {TRANSLATED_DIR}/{novel}/glossary*.json (copies to project if found)
-    3. Returns project path (will be created on first save)
-    """
-    project_path = _glossary_path(novel_name)
-    if project_path.exists():
-        return project_path
-
-    share_path = _share_glossary_path(novel_name)
-    if share_path and share_path.exists():
-        project_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(share_path, project_path)
-        return project_path
-
-    return project_path
+    """Resolve glossary path directly."""
+    return _glossary_path(novel_name)
 
 
 def _ensure_dir(path: Path | None = None):
@@ -194,8 +175,6 @@ def load_glossary_data(novel_name: str) -> dict:
 def _merge_json_locked(path: Path, updater: Callable[[dict], dict]) -> dict:
     """Atomically read-modify-write JSON with exclusive lock.
 
-    After writing to the project path, copies to share dir if configured.
-
     Args:
         path: File path
         updater: Function that takes existing data dict and returns updated dict
@@ -216,27 +195,7 @@ def _merge_json_locked(path: Path, updater: Callable[[dict], dict]) -> dict:
         finally:
             _flock(f.fileno(), _LOCK_UN)
 
-    # Sync to share dir after successful write
-    _sync_to_share(path, new_data)
-
     return new_data
-
-
-def _sync_to_share(project_path: Path, data: dict) -> None:
-    """Copy glossary data to translated dir if configured."""
-    if not config.translated_dir:
-        return
-
-    # Extract novel name from filename: "my-novel.json" or "my-novel.en.json".
-    target = _current_target_language()
-    suffix = f".{target}.json"
-    novel_name = project_path.name[: -len(suffix)] if target != "vi" and project_path.name.endswith(suffix) else project_path.stem
-    share_dir = Path(config.translated_dir) / novel_name
-    share_path = share_dir / "glossary.json" if target == "vi" else share_dir / f"glossary.{target}.json"
-
-    if not share_path.exists() or share_path.resolve() != project_path.resolve():
-        share_dir.mkdir(parents=True, exist_ok=True)
-        share_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def _queue_replacement(

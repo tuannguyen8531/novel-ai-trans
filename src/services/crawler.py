@@ -259,9 +259,9 @@ class NovelCrawler:
             raise FetchError("No chapter links found. Check chapter_link_selector.")
 
         novel_slug = slugify(self.config.name)
-        novel_dir = output_root / novel_slug
-        chapter_output_dir = share_root / novel_slug / "input" if share_root else novel_dir / "chapters"
-        novel_dir.mkdir(parents=True, exist_ok=True)
+        manifest_path = output_root / f"{novel_slug}.json"
+        chapter_output_dir = share_root / novel_slug / "input" if share_root else output_root / novel_slug / "chapters"
+        output_root.mkdir(parents=True, exist_ok=True)
         chapter_output_dir.mkdir(parents=True, exist_ok=True)
 
         results: list[ChapterResult] = []
@@ -269,16 +269,13 @@ class NovelCrawler:
         generated_at = datetime.now(UTC).isoformat()
         fetched_count = 0
 
-        self._write_metadata(novel_dir / "metadata.json", metadata)
-        if share_root:
-            self._write_metadata(chapter_output_dir.parent / "metadata.json", metadata)
-        self._write_json(novel_dir / "config.json", asdict(self.config))
+        self._write_metadata(chapter_output_dir.parent / "metadata.json", metadata)
         self._write_manifest(
-            novel_dir / "manifest.json",
+            manifest_path,
             generated_at=generated_at,
             status="running",
             metadata=metadata,
-            runtime_output_dir=novel_dir,
+            runtime_output_dir=output_root,
             chapter_output_dir=chapter_output_dir,
             chapter_links=chapter_links,
             results=results,
@@ -287,11 +284,11 @@ class NovelCrawler:
 
         def _write_running_manifest(*, status: str = "running") -> None:
             self._write_manifest(
-                novel_dir / "manifest.json",
+                manifest_path,
                 generated_at=generated_at,
                 status=status,
                 metadata=metadata,
-                runtime_output_dir=novel_dir,
+                runtime_output_dir=output_root,
                 chapter_output_dir=chapter_output_dir,
                 chapter_links=chapter_links,
                 results=results,
@@ -492,11 +489,11 @@ class NovelCrawler:
             results.sort(key=lambda r: r.index)
             errors.sort(key=lambda error: error["index"])
             self._write_manifest(
-                novel_dir / "manifest.json",
+                manifest_path,
                 generated_at=generated_at,
                 status="interrupted",
                 metadata=metadata,
-                runtime_output_dir=novel_dir,
+                runtime_output_dir=output_root,
                 chapter_output_dir=chapter_output_dir,
                 chapter_links=chapter_links,
                 results=results,
@@ -547,23 +544,21 @@ class NovelCrawler:
 
         final_status = "cancelled" if cancelled else "completed"
         self._write_manifest(
-            novel_dir / "manifest.json",
+            manifest_path,
             generated_at=generated_at,
             status=final_status,
             metadata=metadata,
-            runtime_output_dir=novel_dir,
+            runtime_output_dir=output_root,
             chapter_output_dir=chapter_output_dir,
             chapter_links=chapter_links,
             results=results,
             errors=errors,
         )
-        if share_root:
-            self._write_metadata(chapter_output_dir.parent / "metadata.json", metadata)
 
         return CrawlResult(
             metadata=metadata,
             chapters=results,
-            output_dir=str(novel_dir),
+            output_dir=str(output_root),
             chapter_output_dir=str(chapter_output_dir),
             errors=list(errors),
             cancelled=cancelled,

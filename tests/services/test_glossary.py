@@ -422,8 +422,9 @@ class TestGlossaryTranslatedDir:
         self.patcher_glossary_dir.stop()
         self.temp_dir.cleanup()
 
-    def test_load_from_translated_when_project_missing(self):
+    def test_load_from_translated(self):
         translated_file = self.translated_glossary / "glossary.json"
+        translated_file.parent.mkdir(parents=True, exist_ok=True)
         translated_file.write_text(json.dumps({"terms": {"李白": "Lý Bạch"}}), encoding="utf-8")
 
         with patch("src.services.glossary.config") as mock_config:
@@ -432,22 +433,7 @@ class TestGlossaryTranslatedDir:
             result = load_glossary("my-novel")
 
         assert result == {"李白": "Lý Bạch"}
-        assert (self.project_glossary / "my-novel.json").exists()
-
-    def test_project_glossary_takes_precedence_over_translated(self):
-        project_file = self.project_glossary / "my-novel.json"
-        project_file.parent.mkdir(parents=True, exist_ok=True)
-        project_file.write_text(json.dumps({"terms": {"杜甫": "Đỗ Phủ"}}), encoding="utf-8")
-
-        translated_file = self.translated_glossary / "glossary.json"
-        translated_file.write_text(json.dumps({"terms": {"李白": "Lý Bạch"}}), encoding="utf-8")
-
-        with patch("src.services.glossary.config") as mock_config:
-            mock_config.translated_dir = str(self.base / "translated")
-            mock_config.target_language = "vi"
-            result = load_glossary("my-novel")
-
-        assert result == {"杜甫": "Đỗ Phủ"}
+        assert not (self.project_glossary / "my-novel.json").exists()
 
     def test_no_translated_dir_uses_project_only(self):
         project_file = self.project_glossary / "my-novel.json"
@@ -577,9 +563,9 @@ class TestGlossaryTranslatedDir:
 
             result = apply_pending_replacements("test-novel", write=True)
 
-        assert result["changed_files"] == 0
-        assert result["replacements"][0]["status"] == "missing_output"
-        assert load_glossary_data("test-novel")[PENDING_REPLACEMENTS_KEY] != []
+            assert result["changed_files"] == 0
+            assert result["replacements"][0]["status"] == "missing_output"
+            assert load_glossary_data("test-novel")[PENDING_REPLACEMENTS_KEY] != []
 
     def test_dismiss_pending_replacements(self):
         self.temp_dir_extra = tempfile.TemporaryDirectory()

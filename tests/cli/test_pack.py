@@ -14,22 +14,22 @@ from src.services.packaging import (
 
 def test_pack_output_dir_defaults_to_legacy_vietnamese_path():
     with patch("src.services.packaging.config") as mock_config:
-        mock_config.translated_dir = ""
+        mock_config.translated_dir = "translated"
         mock_config.target_language = "vi"
 
         from src.services.packaging import _get_output_dir
 
-        assert _get_output_dir("my-novel") == Path("runtime/output") / "my-novel"
+        assert _get_output_dir("my-novel") == Path("translated") / "my-novel" / "output"
 
 
 def test_pack_output_dir_uses_target_specific_english_path():
     with patch("src.services.packaging.config") as mock_config:
-        mock_config.translated_dir = ""
+        mock_config.translated_dir = "translated"
         mock_config.target_language = "vi"
 
         from src.services.packaging import _get_output_dir
 
-        assert _get_output_dir("my-novel", "en") == Path("runtime/output") / "en" / "my-novel"
+        assert _get_output_dir("my-novel", "en") == Path("translated") / "my-novel" / "output" / "en"
 
 
 def test_pack_translated_dir_uses_target_specific_output_path():
@@ -44,12 +44,12 @@ def test_pack_translated_dir_uses_target_specific_output_path():
 
 def test_pack_default_package_dir_stays_outside_target_output_tree():
     with patch("src.services.packaging.config") as mock_config:
-        mock_config.translated_dir = ""
+        mock_config.translated_dir = "translated"
         mock_config.target_language = "vi"
 
         from src.services.packaging import _get_default_package_dir
 
-        assert _get_default_package_dir("my-novel", "en") == Path("runtime/output")
+        assert _get_default_package_dir("my-novel", "en") == Path("translated") / "my-novel"
 
 
 def test_pack_default_translated_package_dir_stays_outside_output_tree():
@@ -86,11 +86,11 @@ def test_novel_root_dir_with_translated_dir():
 
 def test_novel_root_dir_without_translated_dir():
     with patch("src.services.packaging.config") as mock_config:
-        mock_config.translated_dir = ""
+        mock_config.translated_dir = "translated"
 
         from src.services.packaging import _get_novel_root_dir
 
-        assert _get_novel_root_dir("my-novel") == Path("runtime/input") / "my-novel"
+        assert _get_novel_root_dir("my-novel") == Path("translated") / "my-novel"
 
 
 # --- load_metadata ---

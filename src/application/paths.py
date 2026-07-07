@@ -13,8 +13,8 @@ from pathlib import Path
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 RUNTIME_DIR = _PROJECT_ROOT / "runtime"
-INPUT_DIR = _PROJECT_ROOT / "runtime" / "input"
-OUTPUT_DIR = _PROJECT_ROOT / "runtime" / "output"
+INPUT_DIR = _PROJECT_ROOT / "translated" / "input"
+OUTPUT_DIR = _PROJECT_ROOT / "translated" / "output"
 PROGRESS_DIR = _PROJECT_ROOT / "runtime" / "progress"
 REPORT_DIR = _PROJECT_ROOT / "runtime" / "reports"
 RUNTIME_OUTPUT_ROOT = _PROJECT_ROOT / "runtime" / "crawler"

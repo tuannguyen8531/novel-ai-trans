@@ -480,18 +480,14 @@ class NovelCrawlerTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as output:
             output_path = Path(output)
             result = crawler.crawl(output_path / "runtime", share_root=output_path / "translated")
-            novel_dir = Path(result.output_dir)
             chapter_dir = Path(result.chapter_output_dir)
-            config_snapshot = novel_dir / "config.json"
             chapter_one = (chapter_dir / "chapter_1.txt").read_text(encoding="utf-8")
-            runtime_metadata = json.loads((novel_dir / "metadata.json").read_text(encoding="utf-8"))
             shared_metadata = json.loads((chapter_dir.parent / "metadata.json").read_text(encoding="utf-8"))
-            config_snapshot_exists = config_snapshot.is_file()
 
         self.assertEqual(result.metadata.title, "Demo Novel")
         self.assertEqual(result.metadata.author, "Demo Author")
         self.assertEqual(
-            runtime_metadata,
+            shared_metadata,
             {
                 "title": "Demo Novel",
                 "translated": {"en": None, "vi": None},
@@ -501,11 +497,9 @@ class NovelCrawlerTest(unittest.TestCase):
                 "site_name": "demo",
             },
         )
-        self.assertEqual(shared_metadata, runtime_metadata)
         self.assertEqual(len(result.chapters), 2)
         self.assertTrue(result.chapters[0].path.replace("\\", "/").endswith("demo/input/chapter_1.txt"))
         self.assertFalse(result.chapters[0].skipped)
-        self.assertTrue(config_snapshot_exists)
         self.assertTrue(chapter_one.startswith("Chapter 1: Start\n\n"))
         self.assertIn("Hello world.", chapter_one)
         self.assertNotIn("Buy now.", chapter_one)
@@ -524,9 +518,9 @@ class NovelCrawlerTest(unittest.TestCase):
             output_path = Path(output)
             result = crawler.crawl(output_path / "runtime", share_root=output_path / "translated")
 
-        self.assertEqual(result.metadata.title, "那年花开1981最新章节")
-        self.assertEqual(Path(result.output_dir).name, "flower-1981")
-        self.assertEqual(Path(result.chapter_output_dir).parent.name, "flower-1981")
+            self.assertEqual(result.metadata.title, "那年花开1981最新章节")
+            self.assertEqual(Path(result.chapter_output_dir).parent.name, "flower-1981")
+            self.assertTrue((Path(result.output_dir) / "flower-1981.json").is_file())
 
     def test_crawl_skips_existing_chapter_files_by_default(self) -> None:
         fake_client = FakeClient(demo_pages())
@@ -591,7 +585,7 @@ class NovelCrawlerTest(unittest.TestCase):
 
             def progress_callback(progress: CrawlProgress) -> None:
                 progress_events.append(progress)
-                manifest_path = output_path / "runtime" / "demo" / "manifest.json"
+                manifest_path = output_path / "runtime" / "demo.json"
                 manifest_snapshots.append(json.loads(manifest_path.read_text(encoding="utf-8")))
 
             crawler.crawl(
@@ -600,7 +594,7 @@ class NovelCrawlerTest(unittest.TestCase):
                 progress_callback=progress_callback,
             )
 
-            final_manifest = json.loads((output_path / "runtime" / "demo" / "manifest.json").read_text(encoding="utf-8"))
+            final_manifest = json.loads((output_path / "runtime" / "demo.json").read_text(encoding="utf-8"))
 
         self.assertEqual(
             [event.status for event in progress_events],
@@ -647,7 +641,7 @@ class NovelCrawlerTest(unittest.TestCase):
             progress_snapshots: list[tuple[str, int, int]] = []
 
             def progress_callback(progress: CrawlProgress) -> None:
-                manifest_path = output_path / "runtime" / "demo" / "manifest.json"
+                manifest_path = output_path / "runtime" / "demo.json"
                 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
                 progress_snapshots.append((progress.status, progress.current, manifest["completed_chapters"]))
 
@@ -749,7 +743,7 @@ class NovelCrawlerTest(unittest.TestCase):
                     share_root=Path(output) / "translated",
                     workers=1,
                 )
-            manifest = json.loads((Path(output) / "runtime" / "demo" / "manifest.json").read_text(encoding="utf-8"))
+            manifest = json.loads((Path(output) / "runtime" / "demo.json").read_text(encoding="utf-8"))
 
         self.assertEqual(
             client.calls,
@@ -787,7 +781,7 @@ class NovelCrawlerTest(unittest.TestCase):
                 cancel_event=cancel_event,
             )
             canceller.join(timeout=2)
-            manifest = json.loads((output_path / "runtime" / "demo" / "manifest.json").read_text(encoding="utf-8"))
+            manifest = json.loads((output_path / "runtime" / "demo.json").read_text(encoding="utf-8"))
             shared_metadata = json.loads((output_path / "translated" / "demo" / "metadata.json").read_text(encoding="utf-8"))
 
         self.assertTrue(result.cancelled)

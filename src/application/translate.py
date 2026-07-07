@@ -51,19 +51,13 @@ def get_config() -> Config:
 
 
 def _input_dir(config: Config, novel_name: str) -> Path:
-    if config.translated_dir:
-        return Path(config.translated_dir) / novel_name / "input"
-    return _paths.INPUT_DIR / novel_name
+    return Path(config.translated_dir) / novel_name / "input"
 
 
 def _output_dir(config: Config, novel_name: str, target_language: str | None = None) -> Path:
     target = normalize_target_language(target_language or config.target_language)
-    if config.translated_dir:
-        base = Path(config.translated_dir) / novel_name / "output"
-        return base if target == "vi" else base / target
-    if target == "vi":
-        return _paths.OUTPUT_DIR / novel_name
-    return _paths.OUTPUT_DIR / target / novel_name
+    base = Path(config.translated_dir) / novel_name / "output"
+    return base if target == "vi" else base / target
 
 
 def _progress_path(config: Config, novel_name: str, target_language: str | None = None) -> Path:
