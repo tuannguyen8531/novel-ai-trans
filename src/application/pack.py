@@ -106,7 +106,7 @@ def _output_dir(config: Config, novel_name: str, target_language: str | None = N
 
 
 def _default_package_dir(config: Config, novel_name: str) -> Path:
-    return Path(config.translated_dir) / novel_name
+    return Path(config.translated_dir) / novel_name / "artifacts"
 
 
 def _novel_root_dir(config: Config, novel_name: str) -> Path:

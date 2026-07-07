@@ -515,7 +515,10 @@ def download_artifact(
         raise ResourceNotFoundError(f"Novel not found: {name}")
     if "/" in filename or "\\" in filename or filename.startswith("."):
         raise ResourceNotFoundError("Invalid artifact name")
-    artifact_path = (novel_root / filename).resolve()
+    # Try the new "artifacts" subdirectory first, fallback to novel root
+    artifact_path = (novel_root / "artifacts" / filename).resolve()
+    if not artifact_path.is_file():
+        artifact_path = (novel_root / filename).resolve()
     try:
         artifact_path.relative_to(novel_root.resolve())
     except ValueError as error:
@@ -540,7 +543,10 @@ def delete_artifact(
         raise ResourceNotFoundError(f"Novel not found: {name}")
     if "/" in filename or "\\" in filename or filename.startswith("."):
         raise ResourceNotFoundError("Invalid artifact name")
-    artifact_path = (novel_root / filename).resolve()
+    # Try the new "artifacts" subdirectory first, fallback to novel root
+    artifact_path = (novel_root / "artifacts" / filename).resolve()
+    if not artifact_path.is_file():
+        artifact_path = (novel_root / filename).resolve()
     try:
         artifact_path.relative_to(novel_root.resolve())
     except ValueError as error:
@@ -581,7 +587,20 @@ def get_illustration(
 def _list_artifacts(novel_root: Path) -> list[Path]:
     if not novel_root.exists():
         return []
-    return sorted(p for p in novel_root.iterdir() if p.is_file() and p.suffix.lower() in {".epub", ".pdf"})
+    seen_names = set()
+    artifacts: list[Path] = []
+    # 1. Scan the new "artifacts" subdirectory first
+    artifacts_dir = novel_root / "artifacts"
+    if artifacts_dir.is_dir():
+        for p in artifacts_dir.iterdir():
+            if p.is_file() and p.suffix.lower() in {".epub", ".pdf"}:
+                artifacts.append(p)
+                seen_names.add(p.name)
+    # 2. Scan the novel root directory for backward compatibility
+    for p in novel_root.iterdir():
+        if p.is_file() and p.suffix.lower() in {".epub", ".pdf"} and p.name not in seen_names:
+            artifacts.append(p)
+    return sorted(artifacts, key=lambda p: p.name)
 
 
 def _parse_artifact_info(novel_root: Path, artifact_path: Path) -> tuple[str, int]:

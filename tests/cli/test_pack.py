@@ -49,7 +49,7 @@ def test_pack_default_package_dir_stays_outside_target_output_tree():
 
         from src.services.packaging import _get_default_package_dir
 
-        assert _get_default_package_dir("my-novel", "en") == Path("translated") / "my-novel"
+        assert _get_default_package_dir("my-novel", "en") == Path("translated") / "my-novel" / "artifacts"
 
 
 def test_pack_default_translated_package_dir_stays_outside_output_tree():
@@ -59,7 +59,7 @@ def test_pack_default_translated_package_dir_stays_outside_output_tree():
 
         from src.services.packaging import _get_default_package_dir
 
-        assert _get_default_package_dir("my-novel", "en") == Path("/translated") / "my-novel"
+        assert _get_default_package_dir("my-novel", "en") == Path("/translated") / "my-novel" / "artifacts"
 
 
 def test_pack_file_stem_includes_target_language():

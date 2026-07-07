@@ -37,7 +37,7 @@ def _get_output_dir(novel_name: str, target_language: str | None = None) -> Path
 
 def _get_default_package_dir(novel_name: str, target_language: str | None = None) -> Path:
     """Return the default directory where EPUB/PDF files are written."""
-    return Path(config.translated_dir) / novel_name
+    return Path(config.translated_dir) / novel_name / "artifacts"
 
 
 def _get_novel_root_dir(novel_name: str) -> Path:
