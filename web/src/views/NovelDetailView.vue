@@ -231,7 +231,11 @@ const hasAnyMetadata = computed(() =>
 const coverSrc = computed(() => {
   if (coverBroken.value) return placeholderCover
   const url = metaIllustrationUrl.value.trim()
-  return url || placeholderCover
+  if (!url) return placeholderCover
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
+    return url
+  }
+  return api.illustrationUrl(novelName.value, url)
 })
 
 watch(metaIllustrationUrl, () => {

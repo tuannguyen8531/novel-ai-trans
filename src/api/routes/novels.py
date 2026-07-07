@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
 
 from src.api.application_config_context import config_context
@@ -19,6 +19,7 @@ from src.api.schemas import (
     ArtifactInfoResponse,
     ChapterContentPayload,
     ChapterContentResponse,
+    CreateNovelPayload,
     NovelChapterStatus,
     NovelDetail,
     NovelMetadataPatch,
@@ -36,6 +37,56 @@ from src.application.paths import PROGRESS_DIR
 from src.domain.target_language import SUPPORTED_TARGET_LANGUAGES, normalize_target_language
 
 router = APIRouter(tags=["novels"])
+
+
+@router.post("/novels", status_code=status.HTTP_201_CREATED)
+def create_novel(
+    payload: CreateNovelPayload,
+    _: Principal = Depends(authenticate),
+) -> dict[str, str]:
+    if not is_valid_novel_slug(payload.name):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Invalid novel name. Only alphanumeric characters, '.', '_', "
+                "and '-' are allowed, and it must start with an alphanumeric character."
+            ),
+        )
+
+    config = config_context.get_config()
+    root = resolve_translated_root(config.translated_dir)
+    novel_root = safe_novel_path(root, payload.name)
+
+    if novel_root.exists():
+        raise HTTPException(
+            status_code=400,
+            detail=f"Novel directory '{payload.name}' already exists.",
+        )
+
+    try:
+        novel_root.mkdir(parents=True, exist_ok=True)
+        (novel_root / "input").mkdir(parents=True, exist_ok=True)
+        (novel_root / "output").mkdir(parents=True, exist_ok=True)
+        (novel_root / "artifacts").mkdir(parents=True, exist_ok=True)
+
+        metadata = {
+            "title": payload.title or None,
+            "author": payload.author or None,
+            "source_language": payload.source_language or None,
+            "translated": {"en": None, "vi": None},
+            "source_url": None,
+            "illustration_url": payload.illustration_url or None,
+            "site_name": None,
+        }
+        (novel_root / "metadata.json").write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception as error:
+        import shutil
+
+        shutil.rmtree(novel_root, ignore_errors=True)
+        raise HTTPException(status_code=500, detail=f"Failed to create novel: {error}") from error
+
+    return {"name": payload.name, "message": "Novel created successfully."}
+
 
 _CHAPTER_PATTERN = re.compile(r"^chapter_(\d+)\.txt$")
 

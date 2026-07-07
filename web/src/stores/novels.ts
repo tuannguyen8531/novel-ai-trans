@@ -42,5 +42,10 @@ export const useNovelsStore = defineStore('novels', () => {
     }
   }
 
-  return { novels, detail, error, loading, refresh, load, remove }
+  async function create(payload: { name: string; title?: string; author?: string; source_language?: string; illustration_url?: string }) {
+    await api.createNovel(payload)
+    await refresh()
+  }
+
+  return { novels, detail, error, loading, refresh, load, remove, create }
 })

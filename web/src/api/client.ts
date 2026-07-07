@@ -175,6 +175,12 @@ export const api = {
     }),
   deleteNovel: (name: string) =>
     request<void>(`/api/novels/${encodeURIComponent(name)}`, { method: 'DELETE' }),
+  createNovel: (payload: { name: string; title?: string; author?: string; source_language?: string; illustration_url?: string }) =>
+    request<{ name: string; message: string }>('/api/novels', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }),
   getTranslationProgress: (name: string, target?: string) => {
     const params = new URLSearchParams()
     if (target) params.set('target', target)

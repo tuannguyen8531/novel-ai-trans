@@ -180,7 +180,7 @@ def run_pack(
     book_title = request.title or resolve_book_title(metadata, target_normalized, request.novel)
     book_author = request.author if request.author != "AI Translator" else resolve_book_author(metadata, request.author)
 
-    cover_image = resolve_cover_image(metadata)
+    cover_image = resolve_cover_image(metadata, _novel_root_dir(config, request.novel))
     illustrations_dir = _novel_root_dir(config, request.novel) / "illustrations"
     downloaded_cover = cover_image is not None and str(cover_image).startswith(tempfile.gettempdir())
 

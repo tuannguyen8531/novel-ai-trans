@@ -129,6 +129,16 @@ class SettingsPersistResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+class CreateNovelPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(..., min_length=1, max_length=64)
+    title: str | None = None
+    author: str | None = None
+    source_language: str | None = "ko"
+    illustration_url: str | None = None
+
+
 class NovelChapterStatus(BaseModel):
     number: int
     has_source: bool

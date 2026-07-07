@@ -95,7 +95,7 @@ def resolve_book_author(metadata: dict, fallback_author: str) -> str:
     return author_text or fallback_author
 
 
-def resolve_cover_image(metadata: dict) -> Path | None:
+def resolve_cover_image(metadata: dict, novel_root: Path | None = None) -> Path | None:
     """Resolve cover image from metadata.
 
     Supports web URLs (downloaded to a temp file) and local file paths.
@@ -106,6 +106,17 @@ def resolve_cover_image(metadata: dict) -> Path | None:
 
     if not illustration_url.startswith(("http://", "https://")):
         local_path = Path(illustration_url)
+        if local_path.is_absolute() and local_path.exists():
+            return local_path
+        if novel_root is not None:
+            # Try in novel root directory
+            path_in_root = novel_root / local_path
+            if path_in_root.exists():
+                return path_in_root
+            # Try in illustrations subdirectory
+            path_in_illustrations = novel_root / "illustrations" / local_path
+            if path_in_illustrations.exists():
+                return path_in_illustrations
         return local_path if local_path.exists() else None
 
     try:
