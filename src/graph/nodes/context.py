@@ -10,6 +10,7 @@ For chapter summaries, only loads the last 3 chapters for conciseness.
 
 from pathlib import Path
 
+from src.config import config
 from src.domain.glossary import select_active_glossary_terms
 from src.models.state import TranslationState
 from src.services.glossary import (
@@ -51,6 +52,14 @@ def context_node(state: TranslationState) -> dict:
         lang_rules_file = RULES_DIR / f"{language}.md"
     if lang_rules_file.exists():
         rules_parts.append(lang_rules_file.read_text(encoding="utf-8"))
+
+    # Load novel-specific rules if they exist
+    if config.translated_dir:
+        novel_rules_file = Path(config.translated_dir) / novel_name / "rules.md"
+        if novel_rules_file.exists():
+            content = novel_rules_file.read_text(encoding="utf-8").strip()
+            if content:
+                rules_parts.append(content)
 
     rules = "\n\n".join(rules_parts)
 

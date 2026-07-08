@@ -24,6 +24,7 @@ from src.api.schemas import (
     NovelDetail,
     NovelMetadataPatch,
     NovelMetadataResponse,
+    NovelRulesPayload,
     NovelSummary,
     NovelTargetProgress,
 )
@@ -673,3 +674,48 @@ def _parse_artifact_info(novel_root: Path, artifact_path: Path) -> tuple[str, in
     output_dir = _output_dir(novel_root, target_language)
     chapter_count = len(_count_outputs(output_dir))
     return target_language, chapter_count
+
+
+@router.get("/novels/{name}/rules")
+def get_novel_rules(
+    name: str,
+    _: Principal = Depends(authenticate),
+) -> dict[str, str]:
+    config = config_context.get_config()
+    root = resolve_translated_root(config.translated_dir)
+    if not is_valid_novel_slug(name):
+        raise ResourceNotFoundError(f"Invalid novel name: {name!r}")
+    novel_root = safe_novel_path(root, name)
+    if not novel_root.exists():
+        raise ResourceNotFoundError(f"Novel not found: {name}")
+
+    rules_path = novel_root / "rules.md"
+    rules_content = ""
+    if rules_path.exists():
+        try:
+            rules_content = rules_path.read_text(encoding="utf-8")
+        except OSError as error:
+            raise HTTPException(status_code=500, detail=f"Failed to read rules: {error}") from error
+    return {"rules": rules_content}
+
+
+@router.put("/novels/{name}/rules")
+def put_novel_rules(
+    name: str,
+    payload: NovelRulesPayload,
+    _: Principal = Depends(authenticate),
+) -> dict[str, str]:
+    config = config_context.get_config()
+    root = resolve_translated_root(config.translated_dir)
+    if not is_valid_novel_slug(name):
+        raise ResourceNotFoundError(f"Invalid novel name: {name!r}")
+    novel_root = safe_novel_path(root, name)
+    if not novel_root.exists():
+        raise ResourceNotFoundError(f"Novel not found: {name}")
+
+    rules_path = novel_root / "rules.md"
+    try:
+        rules_path.write_text(payload.rules, encoding="utf-8")
+    except OSError as error:
+        raise HTTPException(status_code=500, detail=f"Failed to write rules: {error}") from error
+    return {"message": "Rules updated successfully."}

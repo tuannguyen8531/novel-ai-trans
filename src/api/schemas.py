@@ -203,6 +203,12 @@ class NovelMetadataPatch(BaseModel):
     translated: dict[str, str | None] | None = None
 
 
+class NovelRulesPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    rules: str
+
+
 # ---------------------------------------------------------------------------
 # Pipeline operations
 # ---------------------------------------------------------------------------

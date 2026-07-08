@@ -198,6 +198,14 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(patch)
     }),
+  getNovelRules: (name: string) =>
+    request<{ rules: string }>(`/api/novels/${encodeURIComponent(name)}/rules`),
+  saveNovelRules: (name: string, rules: string) =>
+    request<{ message: string }>(`/api/novels/${encodeURIComponent(name)}/rules`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rules })
+    }),
 
   listConfigs: () => request<ConfigSummary[]>('/api/configs'),
   getConfig: (name: string) => request<Record<string, unknown>>(`/api/configs/${encodeURIComponent(name)}`),
