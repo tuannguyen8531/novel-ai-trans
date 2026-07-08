@@ -69,10 +69,12 @@ def create_novel(
         (novel_root / "output").mkdir(parents=True, exist_ok=True)
         (novel_root / "artifacts").mkdir(parents=True, exist_ok=True)
 
+        from src.services.glossary import normalize_source_language
+
         metadata = {
             "title": payload.title or None,
             "author": payload.author or None,
-            "source_language": payload.source_language or None,
+            "source_language": normalize_source_language(payload.source_language) or None,
             "translated": {"en": None, "vi": None},
             "source_url": None,
             "illustration_url": payload.illustration_url or None,
@@ -473,6 +475,10 @@ def patch_novel_metadata(
     updates = payload.model_dump(exclude_none=True)
     if not updates:
         raise ApplicationValidationError("At least one metadata field must be provided.")
+    if "source_language" in updates:
+        from src.services.glossary import normalize_source_language
+
+        updates["source_language"] = normalize_source_language(updates["source_language"]) or None
     # Merge nested ``translated`` dict instead of replacing it so callers can
     # clear individual targets (e.g. {"vi": null}) without losing the others.
     if "translated" in updates and isinstance(updates["translated"], dict) and isinstance(current.get("translated"), dict):

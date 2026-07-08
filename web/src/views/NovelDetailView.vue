@@ -33,6 +33,7 @@ const metaTitle = ref<string>('')
 const metaAuthor = ref<string>('')
 const metaSourceUrl = ref<string>('')
 const metaIllustrationUrl = ref<string>('')
+const metaSourceLang = ref<string>('')
 const metaTranslatedVi = ref<string>('')
 const metaTranslatedEn = ref<string>('')
 const metaError = ref<string | null>(null)
@@ -166,6 +167,7 @@ async function loadMetadata() {
     metaAuthor.value = (inner.author as string) ?? ''
     metaSourceUrl.value = (inner.source_url as string) ?? ''
     metaIllustrationUrl.value = (inner.illustration_url as string) ?? ''
+    metaSourceLang.value = (inner.source_language as string) ?? ''
     const translated = (inner.translated as Record<string, string | null> | undefined) ?? {}
     metaTranslatedVi.value = translated.vi ?? ''
     metaTranslatedEn.value = translated.en ?? ''
@@ -192,7 +194,8 @@ async function saveMetadata() {
     title: metaTitle.value.trim(),
     author: metaAuthor.value.trim(),
     source_url: metaSourceUrl.value.trim(),
-    illustration_url: metaIllustrationUrl.value.trim()
+    illustration_url: metaIllustrationUrl.value.trim(),
+    source_language: metaSourceLang.value.trim() || null
   }
   const translated: Record<string, string | null> = {}
   const currentTranslated = (metadata.value?.translated as Record<string, string | null> | undefined) ?? {}
@@ -223,6 +226,7 @@ const hasAnyMetadata = computed(() =>
       metaAuthor.value.trim() ||
       metaSourceUrl.value.trim() ||
       metaIllustrationUrl.value.trim() ||
+      metaSourceLang.value.trim() ||
       metaTranslatedVi.value.trim() ||
       metaTranslatedEn.value.trim()
   )
@@ -520,6 +524,10 @@ function cancelDeleteChapter() {
           <div class="meta-row" v-if="metaAuthor || novels.detail?.author">
             <span class="meta-label">Author</span>
             <span>{{ metaDisplayValue(metaAuthor, novels.detail?.author) }}</span>
+          </div>
+          <div class="meta-row" v-if="metaSourceLang || novels.detail?.source_language">
+            <span class="meta-label">Language</span>
+            <span style="text-transform: capitalize;">{{ metaDisplayValue(metaSourceLang, novels.detail?.source_language) }}</span>
           </div>
           <div class="meta-row" v-if="metaTranslatedVi">
             <span class="meta-label">Title (vi)</span>
@@ -847,6 +855,15 @@ function cancelDeleteChapter() {
             <div>
               <label>Cover image URL</label>
               <input v-model="metaIllustrationUrl" placeholder="https://... (optional)" style="width: 100%;" />
+            </div>
+            <div>
+              <label>Source language</label>
+              <select v-model="metaSourceLang" style="width: 100%;">
+                <option value="">(Auto-detect)</option>
+                <option value="korean">Korean</option>
+                <option value="japanese">Japanese</option>
+                <option value="chinese">Chinese</option>
+              </select>
             </div>
             <div class="pack-meta" style="display: flex; flex-direction: column; gap: 0.75rem;">
               <div>

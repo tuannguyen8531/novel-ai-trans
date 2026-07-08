@@ -196,6 +196,7 @@ class NovelMetadataPatch(BaseModel):
 
     title: str | None = None
     author: str | None = None
+    source_language: str | None = None
     source_url: str | None = None
     illustration_url: str | None = None
     site_name: str | None = None

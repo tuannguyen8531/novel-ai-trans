@@ -750,25 +750,80 @@ def clean_glossary(novel_name: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
+def normalize_source_language(lang: str | None) -> str:
+    """Normalize language code to full canonical name (korean, chinese, japanese)."""
+    if not lang:
+        return ""
+    lang_lower = lang.lower().strip()
+    mapping = {
+        "ko": "korean",
+        "korean": "korean",
+        "zh": "chinese",
+        "chinese": "chinese",
+        "ja": "japanese",
+        "japanese": "japanese",
+    }
+    return mapping.get(lang_lower, lang_lower)
+
+
+def _metadata_path(novel_name: str) -> Path:
+    """Get path to metadata.json file for a novel."""
+    if config.translated_dir:
+        return Path(config.translated_dir) / novel_name / "metadata.json"
+    return GLOSSARY_DIR / f"{novel_name}.metadata.json"
+
+
 def load_source_language(novel_name: str) -> str:
     """Load detected source language for a novel. Returns empty string if not found."""
-    path = _resolve_glossary(novel_name)
-    data = _read_json_locked(path)
-    return data.get("source_language", "")
+    metadata_path = _metadata_path(novel_name)
+    source_lang = ""
+
+    if metadata_path.exists():
+        metadata = _read_json_locked(metadata_path)
+        source_lang = normalize_source_language(metadata.get("source_language", ""))
+
+    if not source_lang:
+        glossary_path = _resolve_glossary(novel_name)
+        if glossary_path.exists():
+            glossary = _read_json_locked(glossary_path)
+            raw_lang = glossary.get("source_language", "")
+            if raw_lang:
+                source_lang = normalize_source_language(raw_lang)
+                _merge_json_locked(
+                    metadata_path,
+                    lambda data: {
+                        **data,
+                        "source_language": source_lang,
+                    },
+                )
+                _merge_json_locked(
+                    glossary_path,
+                    lambda data: {k: v for k, v in data.items() if k != "source_language"},
+                )
+    return source_lang
 
 
 def save_source_language(novel_name: str, language: str):
     """Save detected source language for a novel (thread-safe)."""
     if not language:
         return
-    path = _resolve_glossary(novel_name)
+    normalized = normalize_source_language(language)
+
+    metadata_path = _metadata_path(novel_name)
     _merge_json_locked(
-        path,
+        metadata_path,
         lambda data: {
             **data,
-            "source_language": language,
+            "source_language": normalized,
         },
     )
+
+    glossary_path = _resolve_glossary(novel_name)
+    if glossary_path.exists():
+        _merge_json_locked(
+            glossary_path,
+            lambda data: {k: v for k, v in data.items() if k != "source_language"},
+        )
 
 
 # ---------------------------------------------------------------------------

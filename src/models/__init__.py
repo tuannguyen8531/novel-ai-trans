@@ -29,6 +29,7 @@ class NovelMetadata:
     site_name: str
     translated: dict[str, str | None] = field(default_factory=lambda: {"en": None, "vi": None})
     illustration_url: str | None = None
+    source_language: str | None = None
 
 
 @dataclass(frozen=True)
