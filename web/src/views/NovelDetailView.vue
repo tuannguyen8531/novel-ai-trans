@@ -13,7 +13,7 @@ const props = defineProps<{ name: string }>()
 const route = useRoute()
 const router = useRouter()
 const novels = useNovelsStore()
-const tab = ref<'chapters' | 'glossary' | 'artifacts'>('chapters')
+const tab = ref<'chapters' | 'glossary' | 'artifacts' | 'rules'>('chapters')
 const chapters = ref<NovelChapterStatus[]>([])
 const target = ref<'vi' | 'en'>('vi')
 const jobId = ref<string | null>(null)
@@ -33,11 +33,18 @@ const metaTitle = ref<string>('')
 const metaAuthor = ref<string>('')
 const metaSourceUrl = ref<string>('')
 const metaIllustrationUrl = ref<string>('')
+const metaSourceLang = ref<string>('')
 const metaTranslatedVi = ref<string>('')
 const metaTranslatedEn = ref<string>('')
 const metaError = ref<string | null>(null)
 const showMetaForm = ref<boolean>(false)
 const coverBroken = ref<boolean>(false)
+
+const novelRules = ref<string>('')
+const rulesLoading = ref<boolean>(false)
+const rulesSaving = ref<boolean>(false)
+const rulesError = ref<string | null>(null)
+const rulesSuccessMessage = ref<string | null>(null)
 
 const inputPage = ref(1)
 const containerWidth = ref(600)
@@ -140,6 +147,8 @@ async function loadArtifacts() {
 watch(tab, (newTab) => {
   if (newTab === 'artifacts') {
     void loadArtifacts()
+  } else if (newTab === 'rules') {
+    void loadNovelRules()
   }
 })
 
@@ -166,6 +175,7 @@ async function loadMetadata() {
     metaAuthor.value = (inner.author as string) ?? ''
     metaSourceUrl.value = (inner.source_url as string) ?? ''
     metaIllustrationUrl.value = (inner.illustration_url as string) ?? ''
+    metaSourceLang.value = (inner.source_language as string) ?? ''
     const translated = (inner.translated as Record<string, string | null> | undefined) ?? {}
     metaTranslatedVi.value = translated.vi ?? ''
     metaTranslatedEn.value = translated.en ?? ''
@@ -174,6 +184,39 @@ async function loadMetadata() {
     metadataError.value = (err as Error).message
   } finally {
     metadataLoading.value = false
+  }
+}
+
+async function loadNovelRules() {
+  rulesLoading.value = true
+  rulesError.value = null
+  rulesSuccessMessage.value = null
+  try {
+    const data = await api.getNovelRules(novelName.value)
+    novelRules.value = data.rules || ''
+  } catch (err) {
+    rulesError.value = (err as Error).message
+  } finally {
+    rulesLoading.value = false
+  }
+}
+
+async function saveNovelRules() {
+  rulesSaving.value = true
+  rulesError.value = null
+  rulesSuccessMessage.value = null
+  try {
+    await api.saveNovelRules(novelName.value, novelRules.value)
+    rulesSuccessMessage.value = 'Rules saved successfully.'
+    setTimeout(() => {
+      if (rulesSuccessMessage.value === 'Rules saved successfully.') {
+        rulesSuccessMessage.value = null
+      }
+    }, 3000)
+  } catch (err) {
+    rulesError.value = (err as Error).message
+  } finally {
+    rulesSaving.value = false
   }
 }
 
@@ -192,7 +235,8 @@ async function saveMetadata() {
     title: metaTitle.value.trim(),
     author: metaAuthor.value.trim(),
     source_url: metaSourceUrl.value.trim(),
-    illustration_url: metaIllustrationUrl.value.trim()
+    illustration_url: metaIllustrationUrl.value.trim(),
+    source_language: metaSourceLang.value.trim() || null
   }
   const translated: Record<string, string | null> = {}
   const currentTranslated = (metadata.value?.translated as Record<string, string | null> | undefined) ?? {}
@@ -223,6 +267,7 @@ const hasAnyMetadata = computed(() =>
       metaAuthor.value.trim() ||
       metaSourceUrl.value.trim() ||
       metaIllustrationUrl.value.trim() ||
+      metaSourceLang.value.trim() ||
       metaTranslatedVi.value.trim() ||
       metaTranslatedEn.value.trim()
   )
@@ -521,6 +566,10 @@ function cancelDeleteChapter() {
             <span class="meta-label">Author</span>
             <span>{{ metaDisplayValue(metaAuthor, novels.detail?.author) }}</span>
           </div>
+          <div class="meta-row" v-if="metaSourceLang || novels.detail?.source_language">
+            <span class="meta-label">Language</span>
+            <span style="text-transform: capitalize;">{{ metaDisplayValue(metaSourceLang, novels.detail?.source_language) }}</span>
+          </div>
           <div class="meta-row" v-if="metaTranslatedVi">
             <span class="meta-label">Title (vi)</span>
             <span>{{ metaTranslatedVi }}</span>
@@ -597,6 +646,17 @@ function cancelDeleteChapter() {
           >
             Artifacts
           </button>
+          <button
+            id="rules-tab"
+            type="button"
+            class="detail-tab"
+            role="tab"
+            :aria-selected="tab === 'rules'"
+            aria-controls="rules-panel"
+            @click="tab = 'rules'"
+          >
+            Rules
+          </button>
         </nav>
 
         <div
@@ -666,7 +726,7 @@ function cancelDeleteChapter() {
         </div>
 
         <div
-          v-else-if="novels.detail"
+          v-else-if="tab === 'artifacts' && novels.detail"
           id="artifacts-panel"
           class="detail-tab-panel"
           role="tabpanel"
@@ -693,6 +753,42 @@ function cancelDeleteChapter() {
                 <button class="secondary" type="button" @click="downloadArtifact(artifact.name)">Download</button>
                 <button class="secondary danger" type="button" @click="confirmDeleteArtifact(artifact.name)">Delete</button>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <div
+          v-else-if="tab === 'rules'"
+          id="rules-panel"
+          class="detail-tab-panel"
+          role="tabpanel"
+          aria-labelledby="rules-tab"
+        >
+          <div style="display: flex; flex-direction: column; gap: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+              <h3 style="margin: 0;">Novel Translation Rules</h3>
+              <button
+                type="button"
+                :disabled="rulesSaving || rulesLoading"
+                @click="saveNovelRules"
+              >
+                {{ rulesSaving ? 'Saving...' : 'Save Rules' }}
+              </button>
+            </div>
+            <p class="muted" style="margin: 0; font-size: 0.9rem;">
+              These instructions will be appended to the translation rules for this novel only. You can use Markdown.
+            </p>
+            <textarea
+              v-model="novelRules"
+              placeholder="e.g.
+- Xưng hô 'ta' - 'ngươi' giữa hai nhân vật chính.
+- Giữ nguyên tên chiêu thức bằng Hán-Việt."
+              style="width: 100%; min-height: 400px; font-family: monospace; padding: 0.75rem; border-radius: 4px; border: 1px solid var(--border-color); background-color: var(--bg-card); color: var(--text-color); resize: vertical;"
+              :disabled="rulesLoading"
+            ></textarea>
+            <div v-if="rulesError" class="error">{{ rulesError }}</div>
+            <div v-if="rulesSuccessMessage" class="success-message" style="color: var(--color-success, #4caf50); font-weight: bold;">
+              {{ rulesSuccessMessage }}
             </div>
           </div>
         </div>
@@ -847,6 +943,15 @@ function cancelDeleteChapter() {
             <div>
               <label>Cover image URL</label>
               <input v-model="metaIllustrationUrl" placeholder="https://... (optional)" style="width: 100%;" />
+            </div>
+            <div>
+              <label>Source language</label>
+              <select v-model="metaSourceLang" style="width: 100%;">
+                <option value="">(Auto-detect)</option>
+                <option value="korean">Korean</option>
+                <option value="japanese">Japanese</option>
+                <option value="chinese">Chinese</option>
+              </select>
             </div>
             <div class="pack-meta" style="display: flex; flex-direction: column; gap: 0.75rem;">
               <div>

@@ -11,4 +11,5 @@ def metadata_to_dict(metadata: NovelMetadata) -> dict[str, object]:
         "source_url": metadata.source_url,
         "illustration_url": metadata.illustration_url,
         "site_name": metadata.site_name,
+        "source_language": metadata.source_language,
     }

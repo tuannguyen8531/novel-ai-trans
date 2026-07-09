@@ -24,6 +24,7 @@ from src.api.schemas import (
     NovelDetail,
     NovelMetadataPatch,
     NovelMetadataResponse,
+    NovelRulesPayload,
     NovelSummary,
     NovelTargetProgress,
 )
@@ -69,10 +70,12 @@ def create_novel(
         (novel_root / "output").mkdir(parents=True, exist_ok=True)
         (novel_root / "artifacts").mkdir(parents=True, exist_ok=True)
 
+        from src.services.glossary import normalize_source_language
+
         metadata = {
             "title": payload.title or None,
             "author": payload.author or None,
-            "source_language": payload.source_language or None,
+            "source_language": normalize_source_language(payload.source_language) or None,
             "translated": {"en": None, "vi": None},
             "source_url": None,
             "illustration_url": payload.illustration_url or None,
@@ -471,6 +474,10 @@ def patch_novel_metadata(
         raise ResourceNotFoundError(f"Novel not found: {name}")
     current = _load_metadata(novel_root)
     updates = payload.model_dump(exclude_none=True)
+    if "source_language" in payload.model_fields_set:
+        from src.services.glossary import normalize_source_language
+
+        updates["source_language"] = normalize_source_language(payload.source_language) or None
     if not updates:
         raise ApplicationValidationError("At least one metadata field must be provided.")
     # Merge nested ``translated`` dict instead of replacing it so callers can
@@ -667,3 +674,48 @@ def _parse_artifact_info(novel_root: Path, artifact_path: Path) -> tuple[str, in
     output_dir = _output_dir(novel_root, target_language)
     chapter_count = len(_count_outputs(output_dir))
     return target_language, chapter_count
+
+
+@router.get("/novels/{name}/rules")
+def get_novel_rules(
+    name: str,
+    _: Principal = Depends(authenticate),
+) -> dict[str, str]:
+    config = config_context.get_config()
+    root = resolve_translated_root(config.translated_dir)
+    if not is_valid_novel_slug(name):
+        raise ResourceNotFoundError(f"Invalid novel name: {name!r}")
+    novel_root = safe_novel_path(root, name)
+    if not novel_root.exists():
+        raise ResourceNotFoundError(f"Novel not found: {name}")
+
+    rules_path = novel_root / "rules.md"
+    rules_content = ""
+    if rules_path.exists():
+        try:
+            rules_content = rules_path.read_text(encoding="utf-8")
+        except OSError as error:
+            raise HTTPException(status_code=500, detail=f"Failed to read rules: {error}") from error
+    return {"rules": rules_content}
+
+
+@router.put("/novels/{name}/rules")
+def put_novel_rules(
+    name: str,
+    payload: NovelRulesPayload,
+    _: Principal = Depends(authenticate),
+) -> dict[str, str]:
+    config = config_context.get_config()
+    root = resolve_translated_root(config.translated_dir)
+    if not is_valid_novel_slug(name):
+        raise ResourceNotFoundError(f"Invalid novel name: {name!r}")
+    novel_root = safe_novel_path(root, name)
+    if not novel_root.exists():
+        raise ResourceNotFoundError(f"Novel not found: {name}")
+
+    rules_path = novel_root / "rules.md"
+    try:
+        rules_path.write_text(payload.rules, encoding="utf-8")
+    except OSError as error:
+        raise HTTPException(status_code=500, detail=f"Failed to write rules: {error}") from error
+    return {"message": "Rules updated successfully."}

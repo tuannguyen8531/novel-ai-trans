@@ -495,6 +495,7 @@ class NovelCrawlerTest(unittest.TestCase):
                 "source_url": "https://public.example/novel",
                 "illustration_url": None,
                 "site_name": "demo",
+                "source_language": None,
             },
         )
         self.assertEqual(len(result.chapters), 2)
