@@ -350,6 +350,78 @@ def test_jobs_survive_restart(tmp_path):
     assert restored.result == {"ok": True}
 
 
+def test_job_progress_emitter_adds_console_log_lines():
+    from datetime import datetime
+
+    from src.api.events import JobEvent
+    from src.api.jobs import Job, JobStatus, build_progress_emitter
+    from src.application.progress import ProgressEvent
+
+    job = Job(
+        id="job-1",
+        kind="translate",
+        novel="demo",
+        status=JobStatus.RUNNING,
+        created_at=datetime.now(UTC),
+    )
+    events: list[JobEvent] = []
+
+    def emit(event: JobEvent) -> None:
+        events.append(event)
+        if event.kind == "log":
+            job.logs.append(str(event.payload["message"]))
+
+    callback = build_progress_emitter(job, emit)
+
+    callback(
+        ProgressEvent(
+            kind="chapter_completed",
+            novel="demo",
+            current=1,
+            total=2,
+            chapter=7,
+            extra={
+                "ok": True,
+                "elapsed": 1.234,
+                "output_size": 1234,
+                "size_unit": "chars",
+                "new_terms": 2,
+            },
+        )
+    )
+
+    assert [event.kind for event in events] == ["chapter_completed", "log"]
+    assert events[0].payload["chapter"] == 7
+    assert job.logs[-1] == "OK Ch.7 -> 1,234 chars - 1.2s [+ 2 terms]"
+
+
+def test_job_progress_log_events_are_not_duplicated():
+    from datetime import datetime
+
+    from src.api.events import JobEvent
+    from src.api.jobs import Job, JobStatus, build_progress_emitter
+    from src.application.progress import ProgressEvent
+
+    job = Job(
+        id="job-1",
+        kind="crawl",
+        novel="demo",
+        status=JobStatus.RUNNING,
+        created_at=datetime.now(UTC),
+    )
+    events: list[JobEvent] = []
+
+    def emit(event: JobEvent) -> None:
+        events.append(event)
+
+    callback = build_progress_emitter(job, emit)
+
+    callback(ProgressEvent(kind="log", novel="demo", message="Validation warning: missing title"))
+
+    assert [event.kind for event in events] == ["log"]
+    assert events[0].payload["message"] == "Validation warning: missing title"
+
+
 def test_config_save_rejects_traversal_draft_id(client, tmp_path):
     config_dir = tmp_path / "configs"
     payload = {

@@ -5,6 +5,7 @@ All providers inherit from this class and implement `_do_generate()`.
 Shared logic (HTTP client, retry, logging) lives here.
 """
 
+import logging
 import sys
 import threading
 import time
@@ -17,6 +18,9 @@ from src.services.logger import log_api_request_received, log_api_request_sent, 
 
 _SPINNER_CHARS = "⠋⠙⠹⠸⠼⠴⠦⠧"
 STRUCTURED_JSON_CALL_TYPES = {"learn", "review"}
+JOB_LOGGER_NAME = "novel_ai_trans.job"
+_job_logger = logging.getLogger(JOB_LOGGER_NAME)
+_job_logger.setLevel(logging.INFO)
 
 
 class _Spinner:
@@ -78,8 +82,13 @@ class BaseProvider(ABC):
 
         for attempt in range(max_retries + 1):
             try:
-                with _Spinner(f"Calling {self.provider_name} ({call_type})..."):
-                    return self._do_generate(system_prompt, user_prompt, call_type)
+                message = f"Calling {self.provider_name} ({call_type})..."
+                _job_logger.info(message)
+                started = time.monotonic()
+                with _Spinner(message):
+                    result = self._do_generate(system_prompt, user_prompt, call_type)
+                _job_logger.info("Done %s (%s) in %.1fs", self.provider_name, call_type, time.monotonic() - started)
+                return result
             except RuntimeError as e:
                 error_msg = str(e)
                 log_error(
@@ -98,6 +107,12 @@ class BaseProvider(ABC):
 
                 if is_retryable and attempt < max_retries:
                     delay = backoff_delays[attempt]
+                    _job_logger.info(
+                        "Rate limited - waiting %ss before retry (%s/%s)...",
+                        delay,
+                        attempt + 1,
+                        max_retries,
+                    )
                     print(f"  Rate limited — waiting {delay}s before retry ({attempt + 1}/{max_retries})...")
                     time.sleep(delay)
                     continue

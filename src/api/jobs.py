@@ -507,6 +507,61 @@ class JobManager:
 # ---------------------------------------------------------------------------
 
 
+def _format_console_progress(application_event: Any) -> str | None:
+    """Render progress events as terminal-like log lines for the web UI."""
+    kind = getattr(application_event, "kind", "")
+    message = getattr(application_event, "message", None)
+    current = getattr(application_event, "current", 0) or 0
+    total = getattr(application_event, "total", 0) or 0
+    chapter = getattr(application_event, "chapter", None)
+    extra = getattr(application_event, "extra", None) or {}
+
+    if kind == "log":
+        return None
+    if kind == "started":
+        return str(message) if message else None
+    if kind == "dry_run":
+        return str(message) if message else None
+    if kind == "skipped":
+        return "No chapters to translate."
+    if kind == "phase":
+        return str(message) if message else None
+    if kind == "chapter_started" and chapter is not None:
+        size = extra.get("source_size", extra.get("file_size", 0))
+        size_unit = extra.get("size_unit", "chars")
+        prefix = f"[{current}/{total}] " if total else ""
+        return f"{prefix}Ch.{chapter} start ({int(size):,} {size_unit})"
+    if kind == "chapter_completed" and chapter is not None:
+        output_size = extra.get("output_size", extra.get("chars_out", 0))
+        size_unit = extra.get("size_unit", "chars")
+        elapsed = float(extra.get("elapsed", 0.0) or 0.0)
+        new_terms = int(extra.get("new_terms", 0) or 0)
+        terms_msg = f" [+ {new_terms} terms]" if new_terms > 0 else ""
+        return f"OK Ch.{chapter} -> {int(output_size):,} {size_unit} - {elapsed:.1f}s{terms_msg}"
+    if kind == "chapter_failed":
+        error = extra.get("error")
+        label = f"Ch.{chapter}" if chapter is not None else "Chapter"
+        return f"FAIL {label}: {error or 'unknown error'}"
+    if kind == "chapter":
+        status = str(extra.get("status", "")).lower()
+        title = extra.get("title") or message or "chapter"
+        prefix = f"[{current}/{total}] " if total else ""
+        if status == "failed":
+            return f"{prefix}{title} (fail: {extra.get('error') or 'unknown error'})"
+        if status in {"fetched", "skipped"}:
+            return f"{prefix}{title}"
+        return f"{prefix}{title} ({status or kind})"
+    if kind == "chapter_loaded" and chapter is not None:
+        return str(message) if message else f"Reading chapter {chapter}"
+    if kind == "completed":
+        return str(message) if message else f"Completed {current}/{total}" if total else "Completed"
+    if kind == "completed_with_errors":
+        return f"Completed with errors {current}/{total}" if total else "Completed with errors"
+    if kind == "cancelled":
+        return str(message) if message else f"Cancelled {current}/{total}" if total else "Cancelled"
+    return str(message) if message else None
+
+
 def build_progress_emitter(
     job: Job,
     emit: Callable[[JobEvent], None],
@@ -515,6 +570,16 @@ def build_progress_emitter(
 
     def _callback(application_event: Any) -> None:
         emit(event_from_application(job.id, application_event))
+        console_line = _format_console_progress(application_event)
+        if console_line:
+            emit(
+                JobEvent(
+                    kind="log",
+                    job_id=job.id,
+                    novel=getattr(application_event, "novel", None),
+                    payload={"message": console_line, "level": "info", "source": "progress"},
+                )
+            )
 
     return _callback
 

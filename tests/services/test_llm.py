@@ -1,12 +1,13 @@
 """Tests for LLM service."""
 
+import logging
 from contextlib import ExitStack
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from src.services.llm import get_llm, reset_llm
-from src.services.llm.base import BaseProvider
+from src.services.llm.base import JOB_LOGGER_NAME, BaseProvider
 from src.services.llm.fallback import FallbackProvider
 from src.services.llm.ollama import OllamaProvider
 
@@ -90,6 +91,14 @@ class TestLLMService:
         with patch("src.services.llm.factory.config") as mock_config:
             result = self._mock_httpx_post(mock_config, "ollama", {"message": {"content": "translated text"}})
             assert result == "translated text"
+
+    def test_generate_logs_provider_call_for_job_ui(self, caplog):
+        caplog.set_level(logging.INFO, logger=JOB_LOGGER_NAME)
+        with patch("src.services.llm.factory.config") as mock_config:
+            result = self._mock_httpx_post(mock_config, "ollama", {"message": {"content": "translated text"}})
+
+        assert result == "translated text"
+        assert "Calling ollama (translate)..." in [record.getMessage() for record in caplog.records]
 
     def _ollama_payload_for_call(self, call_type: str) -> dict:
         with patch("src.services.llm.ollama.config") as mock_config:
