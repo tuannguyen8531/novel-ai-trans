@@ -474,12 +474,12 @@ def patch_novel_metadata(
         raise ResourceNotFoundError(f"Novel not found: {name}")
     current = _load_metadata(novel_root)
     updates = payload.model_dump(exclude_none=True)
-    if not updates:
-        raise ApplicationValidationError("At least one metadata field must be provided.")
-    if "source_language" in updates:
+    if "source_language" in payload.model_fields_set:
         from src.services.glossary import normalize_source_language
 
-        updates["source_language"] = normalize_source_language(updates["source_language"]) or None
+        updates["source_language"] = normalize_source_language(payload.source_language) or None
+    if not updates:
+        raise ApplicationValidationError("At least one metadata field must be provided.")
     # Merge nested ``translated`` dict instead of replacing it so callers can
     # clear individual targets (e.g. {"vi": null}) without losing the others.
     if "translated" in updates and isinstance(updates["translated"], dict) and isinstance(current.get("translated"), dict):

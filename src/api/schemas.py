@@ -135,7 +135,7 @@ class CreateNovelPayload(BaseModel):
     name: str = Field(..., min_length=1, max_length=64)
     title: str | None = None
     author: str | None = None
-    source_language: str | None = "ko"
+    source_language: str | None = None
     illustration_url: str | None = None
 
 

@@ -116,6 +116,28 @@ def test_patch_metadata_translated_set_and_clear(client):
     assert body["data"]["translated"] == {"en": "English Title"}
 
 
+def test_patch_metadata_source_language_set_and_clear(client):
+    test_client, novel_dir = client
+    response = test_client.patch(
+        "/api/novels/demo/metadata",
+        json={"source_language": "zh"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["data"]["source_language"] == "chinese"
+
+    response = test_client.patch(
+        "/api/novels/demo/metadata",
+        json={"source_language": None},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["data"]["source_language"] is None
+
+    on_disk = json.loads((novel_dir / "metadata.json").read_text(encoding="utf-8"))
+    assert on_disk["source_language"] is None
+
+
 def test_patch_metadata_creates_file_if_missing(client):
     test_client, novel_dir = client
     (novel_dir / "metadata.json").unlink()
