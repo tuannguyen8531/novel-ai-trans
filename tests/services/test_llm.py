@@ -4,6 +4,7 @@ import logging
 from contextlib import ExitStack
 from unittest.mock import MagicMock, patch
 
+import httpx2 as httpx
 import pytest
 
 from src.services.llm import get_llm, reset_llm
@@ -158,6 +159,32 @@ class TestLLMService:
             result = self._mock_httpx_post(mock_config, "openrouter", {"choices": [{"message": {"content": "translated"}}]})
             assert result == "translated"
 
+    def test_http_timeout_is_retried_then_wrapped(self):
+        with patch("src.services.llm.factory.config") as mock_config:
+            mock_config.llm_provider = "ollama"
+            mock_config.fallback_provider = "ollama"
+            reset_llm()
+            service = get_llm()
+            service_config = patch("src.services.llm.ollama.config")
+            with (
+                service_config as provider_config,
+                patch("src.services.llm.base.config") as base_config,
+                patch("src.services.llm.base.httpx.Client") as MockClient,
+                patch("src.services.llm.base.log_api_request_sent", return_value="test-call-id"),
+                patch("src.services.llm.base.log_error"),
+                patch("src.services.llm.base.time.sleep") as sleep,
+            ):
+                provider_config.ollama_base_url = "http://localhost:11434"
+                provider_config.ollama_model = "test-model"
+                base_config.max_retries = 2
+                MockClient.return_value.post.side_effect = httpx.TimeoutException("timed out")
+
+                with pytest.raises(RuntimeError, match=r"ollama API error \(translate\): TimeoutException"):
+                    service.generate("system", "user", "translate")
+
+                assert MockClient.return_value.post.call_count == 3
+                assert sleep.call_count == 2
+
     def test_check_response_error(self):
         with patch("src.services.llm.factory.config") as factory_config:
             factory_config.llm_provider = "ollama"
@@ -251,6 +278,23 @@ class TestFallbackProvider:
         result = wrapper.generate("sys", "user", "translate")
 
         assert result == "ok"
+
+    def test_fallback_on_timeout(self):
+        primary = MagicMock(spec=BaseProvider)
+        primary.provider_name = "gemini"
+        primary.temperature = 0.3
+        primary.max_tokens = 4096
+        primary.generate.side_effect = RuntimeError("gemini API error (translate): TimeoutException: request timed out")
+
+        fallback = MagicMock(spec=BaseProvider)
+        fallback.provider_name = "ollama"
+        fallback.generate.return_value = "ok"
+
+        wrapper = FallbackProvider(primary, fallback)
+        result = wrapper.generate("sys", "user", "translate")
+
+        assert result == "ok"
+        fallback.generate.assert_called_once_with("sys", "user", "translate")
 
     def test_no_fallback_on_config_error(self):
         """Config errors (missing API key) should not trigger fallback."""

@@ -37,6 +37,11 @@ class FallbackProvider(BaseProvider):
                 or "500" in error_msg
                 or "rate" in error_msg.lower()
                 or "internal" in error_msg.lower()
+                or "timeout" in error_msg.lower()
+                or "timed out" in error_msg.lower()
+                or "connect" in error_msg.lower()
+                or "connection" in error_msg.lower()
+                or "network" in error_msg.lower()
                 or "no candidates" in error_msg.lower()
                 or "blocked" in error_msg.lower()
                 or "PROHIBITED" in error_msg.upper()

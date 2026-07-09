@@ -21,6 +21,18 @@ STRUCTURED_JSON_CALL_TYPES = {"learn", "review"}
 JOB_LOGGER_NAME = "novel_ai_trans.job"
 _job_logger = logging.getLogger(JOB_LOGGER_NAME)
 _job_logger.setLevel(logging.INFO)
+_RETRYABLE_ERROR_MARKERS = (
+    "429",
+    "503",
+    "500",
+    "rate",
+    "internal",
+    "timeout",
+    "timed out",
+    "connect",
+    "connection",
+    "network",
+)
 
 
 class _Spinner:
@@ -89,36 +101,49 @@ class BaseProvider(ABC):
                     result = self._do_generate(system_prompt, user_prompt, call_type)
                 _job_logger.info("Done %s (%s) in %.1fs", self.provider_name, call_type, time.monotonic() - started)
                 return result
-            except RuntimeError as e:
-                error_msg = str(e)
+            except (RuntimeError, httpx.HTTPError) as e:
+                error_msg = self._format_generation_error(e)
                 log_error(
                     context=f"LLM API Error (provider: {self.provider_name}, type: {call_type})",
                     error=e,
                     attempt=attempt + 1,
                     max_retries=max_retries,
                 )
-                is_retryable = (
-                    "429" in error_msg
-                    or "503" in error_msg
-                    or "500" in error_msg
-                    or "rate" in error_msg.lower()
-                    or "internal" in error_msg.lower()
-                )
+                is_retryable = self._is_retryable_generation_error(e, error_msg)
 
                 if is_retryable and attempt < max_retries:
-                    delay = backoff_delays[attempt]
+                    delay = backoff_delays[min(attempt, len(backoff_delays) - 1)]
                     _job_logger.info(
-                        "Rate limited - waiting %ss before retry (%s/%s)...",
+                        "%s (%s) failed: %s. Retrying in %ss (%s/%s)...",
+                        self.provider_name,
+                        call_type,
+                        error_msg,
                         delay,
                         attempt + 1,
                         max_retries,
                     )
-                    print(f"  Rate limited — waiting {delay}s before retry ({attempt + 1}/{max_retries})...")
+                    print(f"  {self.provider_name} error — waiting {delay}s before retry ({attempt + 1}/{max_retries})...")
                     time.sleep(delay)
                     continue
+                if isinstance(e, httpx.HTTPError):
+                    raise RuntimeError(f"{self.provider_name} API error ({call_type}): {error_msg}") from e
                 raise
 
         raise RuntimeError(f"{self.provider_name} API error: exhausted retries without a response")
+
+    def _format_generation_error(self, error: RuntimeError | httpx.HTTPError) -> str:
+        message = str(error).strip()
+        if isinstance(error, httpx.TimeoutException):
+            return f"{type(error).__name__}: request timed out"
+        if isinstance(error, httpx.HTTPError):
+            return f"{type(error).__name__}: {message or 'request failed'}"
+        return message or type(error).__name__
+
+    def _is_retryable_generation_error(self, error: RuntimeError | httpx.HTTPError, error_msg: str) -> bool:
+        if isinstance(error, httpx.HTTPError):
+            return True
+        lowered = error_msg.lower()
+        return any(marker in lowered for marker in _RETRYABLE_ERROR_MARKERS)
 
     @abstractmethod
     def _do_generate(self, system_prompt: str, user_prompt: str, call_type: str) -> str:
