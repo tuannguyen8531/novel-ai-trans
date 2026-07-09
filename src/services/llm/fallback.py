@@ -1,10 +1,13 @@
 """Fallback provider — wraps primary + fallback, auto-switches on failure."""
 
-from src.services.llm.base import BaseProvider
+import logging
+
+from src.services.llm.base import JOB_LOGGER_NAME, BaseProvider
 from src.services.logger import log_error
 
 ANSI_RESET = "\033[0m"
 ANSI_YELLOW = "\033[33m"
+_job_logger = logging.getLogger(JOB_LOGGER_NAME)
 
 
 class FallbackProvider(BaseProvider):
@@ -34,6 +37,11 @@ class FallbackProvider(BaseProvider):
                 or "500" in error_msg
                 or "rate" in error_msg.lower()
                 or "internal" in error_msg.lower()
+                or "timeout" in error_msg.lower()
+                or "timed out" in error_msg.lower()
+                or "connect" in error_msg.lower()
+                or "connection" in error_msg.lower()
+                or "network" in error_msg.lower()
                 or "no candidates" in error_msg.lower()
                 or "blocked" in error_msg.lower()
                 or "PROHIBITED" in error_msg.upper()
@@ -41,6 +49,8 @@ class FallbackProvider(BaseProvider):
             )
 
             if is_fallback_worthy:
+                _job_logger.info("%s failed: %s", self._primary.provider_name, error_msg[:100])
+                _job_logger.info("Falling back to %s...", self._fallback.provider_name)
                 print(f"  {ANSI_YELLOW}⚠ {self._primary.provider_name} failed: {error_msg[:100]}{ANSI_RESET}")
                 print(f"  {ANSI_YELLOW}  Falling back to {self._fallback.provider_name}...{ANSI_RESET}")
                 log_error(

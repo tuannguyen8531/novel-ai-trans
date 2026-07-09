@@ -14,6 +14,7 @@ export const useJobsStore = defineStore('jobs', () => {
   const error = ref<string | null>(null)
   const loading = ref(false)
   let activeStream: SseClient | null = null
+  let activeStreamJobId: string | null = null
   let pollTimer: number | null = null
 
   function isActive(job: JobModel | null): job is JobModel {
@@ -83,16 +84,21 @@ export const useJobsStore = defineStore('jobs', () => {
     }
   }
 
-  function closeStream() {
+  function closeStream(jobId?: string | null) {
+    if (jobId && activeStreamJobId && jobId !== activeStreamJobId) return
     if (activeStream) {
       activeStream.close()
       activeStream = null
     }
+    activeStreamJobId = null
   }
 
   function follow(jobId: string) {
+    if (activeStream && activeStreamJobId === jobId) return
     closeStream()
+    activeStreamJobId = jobId
     refresh().then(() => {
+      if (activeStreamJobId !== jobId) return
       const job = findJob(jobId)
       if (job) {
         for (const [key, value] of Object.entries(job.progress)) {
@@ -113,6 +119,13 @@ export const useJobsStore = defineStore('jobs', () => {
               if (evt.event === 'snapshot' && existing) {
                 Object.assign(existing, d)
               }
+              if (evt.event === 'log' && existing) {
+                const message = typeof d.message === 'string' ? d.message : ''
+                if (message) {
+                  existing.logs = [...existing.logs, message].slice(-500)
+                  existing.progress = { ...existing.progress, message }
+                }
+              }
               if (typeof d.current === 'number' && typeof d.total === 'number') {
                 if (existing) {
                   existing.progress = { ...existing.progress, ...d }
@@ -125,7 +138,7 @@ export const useJobsStore = defineStore('jobs', () => {
                   if (d.error && typeof d.error === 'object') existing.error = d.error as JobModel['error']
                 }
                 void refresh()
-                closeStream()
+                closeStream(jobId)
               }
             }
           } catch (_) {
@@ -133,6 +146,10 @@ export const useJobsStore = defineStore('jobs', () => {
           }
         },
         onClose: () => {
+          if (activeStreamJobId === jobId) {
+            activeStream = null
+            activeStreamJobId = null
+          }
           refresh()
         }
       }, { token: getAuthToken() })

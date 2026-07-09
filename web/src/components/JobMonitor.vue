@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
 import { useJobsStore } from '@/stores/jobs'
 import type { JobModel } from '@/api/types'
 
@@ -7,6 +7,7 @@ const props = defineProps<{ job?: JobModel; jobId?: string }>()
 const jobs = useJobsStore()
 const localJob = ref<JobModel | null>(props.job ?? null)
 const error = ref<string | null>(null)
+const consoleLog = ref<HTMLElement | null>(null)
 
 const followId = computed(() => props.jobId ?? props.job?.id ?? null)
 
@@ -16,15 +17,19 @@ function findLocal(id: string): JobModel | null {
   return jobs.history.find((j) => j.id === id) ?? null
 }
 
-onMounted(() => {
-  if (followId.value) {
-    jobs.follow(followId.value)
-  }
+onUnmounted(() => {
+  jobs.closeStream(followId.value)
 })
 
-onUnmounted(() => {
-  jobs.closeStream()
-})
+watch(
+  followId,
+  (id) => {
+    if (id) {
+      jobs.follow(id)
+    }
+  },
+  { immediate: true }
+)
 
 watch(
   () => props.job,
@@ -45,6 +50,16 @@ watch(
     }
   },
   { deep: true }
+)
+
+watch(
+  () => localJob.value?.logs.length ?? 0,
+  async () => {
+    await nextTick()
+    if (consoleLog.value) {
+      consoleLog.value.scrollTop = consoleLog.value.scrollHeight
+    }
+  }
 )
 
 const progress = computed(() => {
@@ -112,9 +127,9 @@ async function cancel() {
         <summary class="error">Error</summary>
         <pre class="job-log-content">{{ JSON.stringify(localJob.error, null, 2) }}</pre>
       </details>
-      <details v-if="localJob.logs.length" style="margin-top: 0.5rem;">
-        <summary class="muted">Logs ({{ localJob.logs.length }})</summary>
-        <pre class="job-log-content">{{ localJob.logs.join('\n') }}</pre>
+      <details v-if="localJob.logs.length" open style="margin-top: 0.5rem;">
+        <summary class="muted">Console ({{ localJob.logs.length }})</summary>
+        <pre ref="consoleLog" class="job-log-content job-console-content">{{ localJob.logs.join('\n') }}</pre>
       </details>
     </div>
   </div>
@@ -130,5 +145,11 @@ async function cancel() {
   overflow: auto;
   font-family: ui-monospace, SFMono-Regular, monospace;
   font-size: 0.8rem;
+}
+
+.job-console-content {
+  line-height: 1.35;
+  height: calc(7 * 1.35em + 1rem);
+  max-height: none;
 }
 </style>

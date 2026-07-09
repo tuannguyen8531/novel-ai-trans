@@ -121,6 +121,7 @@ async def stream_events(
                     if job.error
                     else None
                 ),
+                "logs": list(job.logs),
             }
             yield {"event": "snapshot", "data": json.dumps(payload, default=str, ensure_ascii=False)}
             if job.status in terminal:

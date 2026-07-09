@@ -67,7 +67,6 @@ function progressFor(row: { progress: Record<string, unknown>; status: string })
 
 function select(id: string) {
   selectedId.value = id
-  jobs.follow(id)
 }
 
 const showDeleteDialog = ref(false)

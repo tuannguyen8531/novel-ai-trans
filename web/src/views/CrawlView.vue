@@ -125,7 +125,6 @@ async function startGenerate() {
   try {
     const result = await api.generateConfig(payload)
     generateJobId.value = result.job_id
-    jobs.follow(result.job_id)
   } catch (err) {
     generateError.value = (err as Error).message
   }
