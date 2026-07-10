@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -25,37 +24,13 @@ from src.api.schemas import (
     GlossaryTermUpdate,
     JobStartResponse,
 )
-from src.api.services.glossary import (
-    apply_replacements,
-    audit_glossary,
-    dismiss_replacements,
-    load_glossary,
-    remove_term,
-    rollback_replacements,
-    save_term,
-    save_terms,
-    update_term,
-    validate_glossary,
-)
-from src.api.services.glossary import (
-    remove_character as remove_character_impl,
-)
-from src.api.services.glossary import (
-    remove_relationship as remove_relationship_impl,
-)
-from src.api.services.glossary import (
-    save_character as save_character_impl,
-)
-from src.api.services.glossary import (
-    save_relationship as save_relationship_impl,
-)
 from src.application import config as app_config
-from src.application import novels
+from src.application import glossary, novels
 
 router = APIRouter(tags=["glossary"])
 
 
-def _validate_novel(name: str) -> Path:
+def _validate_novel(name: str) -> None:
     config = app_config.get_config()
     root = novels.resolve_root(config.translated_dir)
     if not novels.is_valid_slug(name):
@@ -69,7 +44,6 @@ def _validate_novel(name: str) -> Path:
             status_code=404,
             detail={"code": "not_found", "message": f"Novel not found: {name}"},
         )
-    return novel_root
 
 
 @router.get("/novels/{name}/glossary", response_model=GlossaryResponse)
@@ -77,8 +51,8 @@ def get_glossary(
     name: str,
     _: Principal = Depends(authenticate),
 ) -> GlossaryResponse:
-    novel_root = _validate_novel(name)
-    return GlossaryResponse(novel=name, data=load_glossary(novel_root))
+    _validate_novel(name)
+    return GlossaryResponse(novel=name, data=glossary.load_glossary(name))
 
 
 @router.put("/novels/{name}/glossary/terms", response_model=GlossaryResponse)
@@ -87,8 +61,8 @@ def put_terms(
     payload: GlossaryTermsPut,
     _: Principal = Depends(authenticate),
 ) -> GlossaryResponse:
-    novel_root = _validate_novel(name)
-    data = save_terms(novel_root, payload.terms)
+    _validate_novel(name)
+    data = glossary.save_terms(name, payload.terms)
     return GlossaryResponse(novel=name, data=data)
 
 
@@ -98,8 +72,8 @@ def post_term(
     payload: GlossaryTermAdd,
     _: Principal = Depends(authenticate),
 ) -> GlossaryResponse:
-    novel_root = _validate_novel(name)
-    data = save_term(novel_root, payload.original, payload.translated)
+    _validate_novel(name)
+    data = glossary.save_term(name, payload.original, payload.translated)
     return GlossaryResponse(novel=name, data=data)
 
 
@@ -109,8 +83,8 @@ def delete_term(
     original: str,
     _: Principal = Depends(authenticate),
 ) -> GlossaryResponse:
-    novel_root = _validate_novel(name)
-    data = remove_term(novel_root, original)
+    _validate_novel(name)
+    data = glossary.remove_term(name, original)
     return GlossaryResponse(novel=name, data=data)
 
 
@@ -121,9 +95,9 @@ def patch_term(
     payload: GlossaryTermUpdate,
     _: Principal = Depends(authenticate),
 ) -> GlossaryResponse:
-    novel_root = _validate_novel(name)
-    data = update_term(
-        novel_root,
+    _validate_novel(name)
+    data = glossary.update_term(
+        name,
         original,
         payload.original,
         payload.translated,
@@ -137,8 +111,8 @@ def list_characters(
     name: str,
     _: Principal = Depends(authenticate),
 ) -> GlossaryCharactersResponse:
-    novel_root = _validate_novel(name)
-    data = load_glossary(novel_root)
+    _validate_novel(name)
+    data = glossary.load_glossary(name)
     entities = data.get("entities", {}) if isinstance(data, dict) else {}
     characters = [
         GlossaryCharacterSummary(
@@ -159,9 +133,9 @@ def update_character(
     payload: GlossaryCharacterUpdate,
     _: Principal = Depends(authenticate),
 ) -> GlossaryResponse:
-    novel_root = _validate_novel(name)
-    data = save_character_impl(
-        novel_root,
+    _validate_novel(name)
+    data = glossary.save_character(
+        name,
         original,
         translated_name=payload.translated_name or "",
         role=payload.role or "",
@@ -175,8 +149,8 @@ def delete_character(
     original: str,
     _: Principal = Depends(authenticate),
 ) -> GlossaryResponse:
-    novel_root = _validate_novel(name)
-    data = remove_character_impl(novel_root, original)
+    _validate_novel(name)
+    data = glossary.remove_character(name, original)
     return GlossaryResponse(novel=name, data=data)
 
 
@@ -186,9 +160,9 @@ def add_relationship(
     payload: GlossaryRelationshipAdd,
     _: Principal = Depends(authenticate),
 ) -> GlossaryResponse:
-    novel_root = _validate_novel(name)
-    data = save_relationship_impl(
-        novel_root,
+    _validate_novel(name)
+    data = glossary.save_relationship(
+        name,
         from_char=payload.from_char,
         to_char=payload.to_char,
         relationship=payload.relationship,
@@ -205,8 +179,8 @@ def delete_relationship(
     to_char: str,
     _: Principal = Depends(authenticate),
 ) -> GlossaryResponse:
-    novel_root = _validate_novel(name)
-    data = remove_relationship_impl(novel_root, from_char, to_char)
+    _validate_novel(name)
+    data = glossary.remove_relationship(name, from_char, to_char)
     return GlossaryResponse(novel=name, data=data)
 
 
@@ -216,13 +190,13 @@ async def post_validate_glossary(
     _: Principal = Depends(authenticate),
     jobs: JobManager = Depends(get_job_manager),
 ) -> JobStartResponse:
-    novel_root = _validate_novel(name)
+    _validate_novel(name)
     snapshot = app_config.get_config().clone()
     loop = asyncio.get_running_loop()
 
     def _run(job, emit, cancel_event):
         progress_cb = build_progress_emitter(job, emit)
-        issues = validate_glossary(novel_root, progress_callback=progress_cb, cancel_event=cancel_event)
+        issues = glossary.validate_glossary(name, progress_callback=progress_cb, cancel_event=cancel_event)
         return {"novel": name, "issues": issues}
 
     job = jobs.submit(
@@ -242,14 +216,19 @@ async def post_audit_glossary(
     _: Principal = Depends(authenticate),
     jobs: JobManager = Depends(get_job_manager),
 ) -> JobStartResponse:
-    novel_root = _validate_novel(name)
+    _validate_novel(name)
     snapshot = app_config.get_config().clone(target_language=target)
     loop = asyncio.get_running_loop()
     resolved_target = target or snapshot.target_language
 
     def _run(job, emit, cancel_event):
         progress_cb = build_progress_emitter(job, emit)
-        issues = audit_glossary(novel_root, target=resolved_target, progress_callback=progress_cb, cancel_event=cancel_event)
+        issues = glossary.audit_glossary(
+            name,
+            target=resolved_target,
+            progress_callback=progress_cb,
+            cancel_event=cancel_event,
+        )
         return {"novel": name, "target": resolved_target, "issues": issues}
 
     job = jobs.submit(
@@ -268,10 +247,10 @@ def post_apply_glossary(
     payload: GlossaryApplyRequest,
     _: Principal = Depends(authenticate),
 ) -> dict:
-    novel_root = _validate_novel(name)
-    return apply_replacements(
-        novel_root,
-        target=payload.target,
+    _validate_novel(name)
+    return glossary.apply_pending_replacements(
+        name,
+        target_language=payload.target,
         write=payload.write,
     )
 
@@ -282,8 +261,8 @@ def post_dismiss_glossary(
     payload: GlossaryDismissRequest,
     _: Principal = Depends(authenticate),
 ) -> dict:
-    novel_root = _validate_novel(name)
-    dismiss_replacements(novel_root, target=payload.target)
+    _validate_novel(name)
+    glossary.dismiss_pending_replacements(name, target_language=payload.target)
     return {"status": "ok"}
 
 
@@ -293,6 +272,6 @@ def post_rollback_glossary(
     payload: GlossaryRollbackRequest,
     _: Principal = Depends(authenticate),
 ) -> dict:
-    novel_root = _validate_novel(name)
-    rollback_replacements(novel_root, payload.backup_id)
+    _validate_novel(name)
+    glossary.rollback_replacements(name, payload.backup_id)
     return {"status": "ok"}

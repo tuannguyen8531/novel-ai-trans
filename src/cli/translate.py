@@ -13,7 +13,6 @@ backward compatibility with existing tests and external callers.
 from __future__ import annotations
 
 import argparse
-import re
 import signal
 import sys
 import threading
@@ -22,9 +21,9 @@ from pathlib import Path
 
 from src import paths as _paths
 from src.application import config as app_config
+from src.application import glossary as app_glossary
 from src.application import translate as _app_translate
 from src.application.config import get_config  # legacy reference for patches
-from src.application.errors import ResourceConflictError as _ApplicationConflictError
 from src.application.errors import ResourceNotFoundError as _ApplicationNotFoundError
 from src.application.progress import ProgressEvent
 from src.application.translate import (
@@ -32,6 +31,7 @@ from src.application.translate import (
     notify_translation_result,
     run_translation,
 )
+from src.cli.glossary import glossary_main
 from src.domain.language import (
     SUPPORTED_TARGET_LANGUAGES,
     target_language_name,
@@ -149,31 +149,7 @@ def audit_glossary_outputs(
     target_language: str | None = None,
 ) -> list[dict]:
     """Audit translated chapters for obvious glossary consistency problems."""
-    from src.domain.glossary import audit_term_usage
-
-    issues: list[dict] = []
-    source_dir = _get_input_dir(novel_name)
-    output_dir = _get_output_dir(novel_name, target_language)
-    if not source_dir.exists() or not output_dir.exists():
-        return issues
-
-    for source_path in sorted(source_dir.glob("chapter_*.txt")):
-        match = re.match(r"^chapter_(\d+)\.txt$", source_path.name)
-        if not match:
-            continue
-        chapter = int(match.group(1))
-        output_path = output_dir / f"chapter_{chapter:03d}.txt"
-        if not output_path.exists():
-            output_path = output_dir / source_path.name
-        if not output_path.exists():
-            continue
-
-        source_text = source_path.read_text(encoding="utf-8")
-        translated_text = output_path.read_text(encoding="utf-8")
-        for issue in audit_term_usage(terms, source_text, translated_text):
-            issues.append({"chapter": chapter, **issue})
-
-    return issues
+    return app_glossary.audit_terms(novel_name, terms, target=target_language)
 
 
 def translate_file(
@@ -202,285 +178,6 @@ def translate_file(
         output_dir=output_dir,
         report_path=report_path,
     )
-
-
-# ---------------------------------------------------------------------------
-# Glossary command
-# ---------------------------------------------------------------------------
-
-
-def glossary_main(argv: list[str] | None = None) -> None:
-    """Manage per-novel glossary data."""
-    from src.application.glossary import (
-        apply_pending_replacements,
-        dismiss_pending_replacements,
-        rollback_glossary_replacement,
-    )
-    from src.services.glossary import (
-        clean_glossary,
-        load_glossary_data,
-        remove_glossary_term,
-        save_character,
-        save_character_pronoun,
-        save_glossary,
-        save_relationship,
-        validate_glossary,
-    )
-
-    parser = argparse.ArgumentParser(description="Manage novel glossary data")
-    public_commands = "{list,add,remove,export,characters,pronoun,character,relationship,validate,audit,apply,dismiss,rollback}"
-    subparsers = parser.add_subparsers(dest="command", required=True, metavar=public_commands)
-
-    list_parser = subparsers.add_parser("list", help="List glossary terms")
-    list_parser.add_argument("novel")
-
-    add_parser = subparsers.add_parser("add", help="Add or update a glossary term")
-    add_parser.add_argument("novel")
-    add_parser.add_argument("original")
-    add_parser.add_argument("translated")
-
-    remove_parser = subparsers.add_parser("remove", help="Remove a glossary term")
-    remove_parser.add_argument("novel")
-    remove_parser.add_argument("original")
-
-    export_parser = subparsers.add_parser("export", help="Print full glossary JSON")
-    export_parser.add_argument("novel")
-
-    character_parser = subparsers.add_parser("characters", help="List character memory")
-    character_parser.add_argument("novel")
-
-    pronoun_parser = subparsers.add_parser("pronoun", help="Set a character pronoun")
-    pronoun_parser.add_argument("novel")
-    pronoun_parser.add_argument("original")
-    pronoun_parser.add_argument("pronoun")
-
-    character_edit_parser = subparsers.add_parser("character", help="Update a character name or role")
-    character_edit_parser.add_argument("novel")
-    character_edit_parser.add_argument("original")
-    character_edit_parser.add_argument("--translated-name", default="", help="Target-language character name")
-    character_edit_parser.add_argument("--name-vi", default="", help=argparse.SUPPRESS)
-    character_edit_parser.add_argument("--role", default="", help="Character role")
-
-    relationship_parser = subparsers.add_parser("relationship", help="Add or update a character relationship")
-    relationship_parser.add_argument("novel")
-    relationship_parser.add_argument("from_char")
-    relationship_parser.add_argument("to_char")
-    relationship_parser.add_argument("relationship")
-    relationship_parser.add_argument("--since", type=int, default=None, help="Chapter where this relationship starts")
-
-    validate_parser = subparsers.add_parser("validate", help="Validate glossary JSON")
-    validate_parser.add_argument("novel")
-
-    clean_parser = subparsers.add_parser("clean", help=argparse.SUPPRESS)
-    clean_parser.add_argument("novel")
-    subparsers._choices_actions = [action for action in subparsers._choices_actions if action.dest != "clean"]
-
-    audit_parser = subparsers.add_parser("audit", help="Audit translated output against glossary terms")
-    audit_parser.add_argument("novel")
-
-    apply_parser = subparsers.add_parser("apply", help="Apply edited terms and character names to existing output")
-    apply_parser.add_argument("novel")
-    apply_parser.add_argument("--target", choices=sorted(SUPPORTED_TARGET_LANGUAGES), default=None)
-    apply_parser.add_argument("--write", action="store_true", help="Write changes; default is preview only")
-
-    dismiss_parser = subparsers.add_parser("dismiss", help="Dismiss all pending glossary replacements")
-    dismiss_parser.add_argument("novel")
-    dismiss_parser.add_argument("--target", choices=sorted(SUPPORTED_TARGET_LANGUAGES), default=None)
-
-    rollback_parser = subparsers.add_parser("rollback", help="Rollback a previous glossary replacement backup")
-    rollback_parser.add_argument("novel")
-    rollback_parser.add_argument("backup_id", help="Backup id reported by glossary apply --write")
-
-    args = parser.parse_args(argv)
-
-    if args.command == "list":
-        terms = load_glossary_data(args.novel).get("terms", {})
-        if not terms:
-            print(f"{DIM}No glossary terms for {args.novel}.{RESET}")
-            return
-        for original, translated in sorted(terms.items()):
-            print(f"{original}\t{translated}")
-        return
-
-    if args.command == "add":
-        save_glossary(args.novel, {args.original: args.translated}, is_user_edit=True)
-        print(f"{GREEN}✓ Added glossary term:{RESET} {args.original} → {args.translated}")
-        return
-
-    if args.command == "remove":
-        removed = remove_glossary_term(args.novel, args.original)
-        if removed:
-            print(f"{GREEN}✓ Removed glossary term:{RESET} {args.original}")
-        else:
-            print(f"{YELLOW}Term not found:{RESET} {args.original}")
-        return
-
-    if args.command == "export":
-        import json
-
-        print(json.dumps(load_glossary_data(args.novel), ensure_ascii=False, indent=2))
-        return
-
-    if args.command == "characters":
-        entities = load_glossary_data(args.novel).get("entities", {})
-        if not entities:
-            print(f"{DIM}No characters for {args.novel}.{RESET}")
-            return
-        for original, info in sorted(entities.items()):
-            translated_name = info.get("translated_name") or info.get("name_vi", "")
-            role = info.get("role", "")
-            pronoun = info.get("pronoun", "")
-            print(f"{original}\t{translated_name}\t{role}\t{pronoun}")
-        return
-
-    if args.command == "pronoun":
-        updated = save_character_pronoun(args.novel, args.original, args.pronoun)
-        if updated:
-            print(f"{GREEN}✓ Updated pronoun:{RESET} {args.original} → {args.pronoun}")
-        else:
-            print(f"{YELLOW}Character not found:{RESET} {args.original}")
-        return
-
-    if args.command == "character":
-        translated_name = args.translated_name or args.name_vi
-        if not translated_name and not args.role:
-            print(f"{YELLOW}Nothing to update. Use --translated-name and/or --role.{RESET}")
-            return
-        updated = save_character(
-            args.novel,
-            args.original,
-            translated_name=translated_name,
-            role=args.role,
-            is_user_edit=True,
-        )
-        if updated:
-            print(f"{GREEN}✓ Updated character:{RESET} {args.original}")
-        else:
-            print(f"{YELLOW}Character not found:{RESET} {args.original}")
-        return
-
-    if args.command == "relationship":
-        updated = save_relationship(
-            args.novel,
-            args.from_char,
-            args.to_char,
-            args.relationship,
-            since_chapter=args.since,
-        )
-        if updated:
-            print(f"{GREEN}✓ Updated relationship:{RESET} {args.from_char} → {args.to_char} ({args.relationship})")
-        else:
-            print(f"{YELLOW}Relationship not updated; both characters must exist.{RESET}")
-        return
-
-    if args.command == "validate":
-        issues = validate_glossary(args.novel)
-        if not issues:
-            print(f"{GREEN}✓ Glossary valid:{RESET} {args.novel}")
-            return
-        for issue in issues:
-            print(f"{RED}✗ {issue}{RESET}")
-        sys.exit(1)
-
-    if args.command == "clean":
-        stats = clean_glossary(args.novel)
-        print(
-            f"{GREEN}✓ Cleaned glossary:{RESET} {args.novel} "
-            f"{DIM}entities={stats['entities']} edges={stats['edges_before']}→{stats['edges_after']} "
-            f"address_rules={stats['address_rules_before']}→{stats['address_rules_after']} "
-            f"pronoun_examples_removed={stats['pronoun_examples_removed']}{RESET}"
-        )
-        return
-
-    if args.command == "audit":
-        terms = load_glossary_data(args.novel).get("terms", {})
-        issues = audit_glossary_outputs(args.novel, terms)
-        if not issues:
-            print(f"{GREEN}✓ No glossary audit issues found:{RESET} {args.novel}")
-            return
-        for issue in issues:
-            print(f"{RED}✗ Ch.{issue['chapter']} {issue['issue']}:{RESET} {issue['term']} → {issue['expected']}")
-        sys.exit(1)
-
-    if args.command == "apply":
-        try:
-            result = apply_pending_replacements(
-                args.novel,
-                target_language=args.target,
-                write=args.write,
-            )
-        except _ApplicationConflictError as err:
-            print(f"{RED}✗ Lock acquisition failed: {err}{RESET}")
-            sys.exit(1)
-
-        replacements = result["replacements"]
-        if not replacements:
-            print(f"{DIM}No pending glossary replacements:{RESET} {args.novel}")
-            return
-
-        did_write = result["write"]
-        for report in sorted(replacements, key=lambda x: (x["chapter"], x["old"])):
-            status = report["status"].upper()
-            chapter = f"Ch.{report['chapter']}"
-            term = "/".join(report["sources"])
-            old = report["old"]
-            new = report["new"]
-
-            if status == "SAFE":
-                color = GREEN if did_write else YELLOW
-                label = "APPLIED   " if did_write else "SAFE      "
-                print(
-                    f"{color}{label} {chapter:<6} {term}  {old} → {new}  "
-                    f"{report['occurrences']}/{report['source_count']} occurrences{RESET}"
-                )
-            elif status == "ALREADY_APPLIED":
-                print(f"{DIM}APPLIED    {chapter:<6} {term}  {old} → {new}  already applied{RESET}")
-            elif status == "AMBIGUOUS":
-                print(
-                    f"{YELLOW}AMBIGUOUS {chapter:<6} {term}  "
-                    f"source={report['source_count']}, output={report['output_count']}{RESET}"
-                )
-            elif status == "CONFLICT":
-                news_str = " / ".join(report.get("conflict_news", [new]))
-                print(f"{RED}CONFLICT  {chapter:<6} {term}  {old} → {news_str}{RESET}")
-            elif status == "MISSING_OUTPUT":
-                print(f"{YELLOW}MISSING   {chapter:<6} {term}  translated chapter not found{RESET}")
-
-        if result["conflicted"]:
-            print(f"\n{RED}✗ Conflict(s) detected. Cannot write replacements.{RESET}")
-            if args.write:
-                sys.exit(1)
-
-        print(f"\n{DIM}{result['changed_files']} output file(s) {'updated' if did_write else 'would be updated'}.{RESET}")
-        if result.get("backup_id"):
-            print(f"{DIM}Backup: {result['backup_id']}{RESET}")
-        if not args.write and result["changed_files"] and not result["conflicted"]:
-            print(f"{DIM}Run again with --write to apply these changes.{RESET}")
-        return
-
-    if args.command == "dismiss":
-        try:
-            dismiss_pending_replacements(args.novel, target_language=args.target)
-            print(f"{GREEN}✓ Dismissed all pending replacements for:{RESET} {args.novel}")
-        except _ApplicationConflictError as err:
-            print(f"{RED}✗ Lock acquisition failed: {err}{RESET}")
-            sys.exit(1)
-        return
-
-    if args.command == "rollback":
-        try:
-            rollback_glossary_replacement(args.novel, args.backup_id)
-            print(
-                f"{GREEN}✓ Successfully rolled back replacements for:{RESET} "
-                f"{args.novel} {DIM}from backup {args.backup_id}{RESET}"
-            )
-        except FileNotFoundError as err:
-            print(f"{RED}✗ Rollback failed: {err}{RESET}")
-            sys.exit(1)
-        except _ApplicationConflictError as err:
-            print(f"{RED}✗ Lock acquisition failed: {err}{RESET}")
-            sys.exit(1)
-        return
 
 
 # ---------------------------------------------------------------------------

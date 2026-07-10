@@ -6,20 +6,30 @@ import json
 import re
 import secrets
 import shutil
-from contextlib import contextmanager
+from collections.abc import Callable
+from contextlib import contextmanager, suppress
 from datetime import UTC, datetime
 from pathlib import Path
+from threading import Event
 
 from src import paths as _paths
-from src.application.errors import ResourceConflictError
+from src.application import config as app_config
+from src.application.errors import (
+    OperationCancelledError,
+    ResourceConflictError,
+    ResourceNotFoundError,
+)
+from src.application.progress import ProgressEvent
 from src.config import active_config_scope, config
 from src.domain.characters import count_name_occurrences
 from src.domain.glossary import (
     PENDING_REPLACEMENTS_KEY,
+    audit_term_usage,
     find_glossary_replacement_conflicts,
     merge_pending_replacements,
     replace_glossary_values,
     uppercase_first_cased,
+    validate_glossary_data,
 )
 from src.domain.language import normalize_target_language
 from src.services import glossary as glossary_service
@@ -27,6 +37,193 @@ from src.utils import files as file_utils
 
 GLOSSARY_BACKUP_DIR = _paths.GLOSSARY_BACKUP_DIR
 _BACKUP_ID_PATTERN = re.compile(r"^\d{8}T\d{6}_\d{6}Z_[0-9a-f]{8}$")
+
+
+def _emit(callback: Callable[[ProgressEvent], None] | None, event: ProgressEvent) -> None:
+    if callback is not None:
+        with suppress(Exception):
+            callback(event)
+
+
+def _check_cancel(event: Event | None) -> None:
+    if event is not None and event.is_set():
+        raise OperationCancelledError("Glossary operation cancelled.")
+
+
+def load_glossary(novel_name: str) -> dict:
+    """Load the active glossary document for a novel."""
+    return glossary_service.load_glossary_data(novel_name)
+
+
+def save_terms(novel_name: str, terms: dict[str, str]) -> dict:
+    glossary_service.save_glossary(novel_name, terms, is_user_edit=True)
+    return load_glossary(novel_name)
+
+
+def save_term(novel_name: str, original: str, translated: str) -> dict:
+    return save_terms(novel_name, {original: translated})
+
+
+def remove_term(novel_name: str, original: str) -> dict:
+    glossary_service.remove_glossary_term(novel_name, original)
+    return load_glossary(novel_name)
+
+
+def update_term(
+    novel_name: str,
+    old_original: str,
+    new_original: str,
+    translated: str,
+    *,
+    overwrite: bool,
+) -> dict:
+    try:
+        glossary_service.update_glossary_term(
+            novel_name,
+            old_original,
+            new_original,
+            translated,
+            overwrite=overwrite,
+            is_user_edit=True,
+        )
+    except KeyError as error:
+        raise ResourceNotFoundError(f"Glossary term not found: {old_original}") from error
+    except FileExistsError as error:
+        raise ResourceConflictError(f"Glossary term already exists: {new_original}") from error
+    return load_glossary(novel_name)
+
+
+def remove_character(novel_name: str, original: str) -> dict:
+    glossary_service.remove_character(novel_name, original)
+    return load_glossary(novel_name)
+
+
+def remove_relationship(novel_name: str, from_char: str, to_char: str) -> dict:
+    glossary_service.remove_relationship(novel_name, from_char, to_char)
+    return load_glossary(novel_name)
+
+
+def save_character(
+    novel_name: str,
+    original: str,
+    *,
+    translated_name: str,
+    role: str,
+) -> dict:
+    glossary_service.save_character(
+        novel_name,
+        original,
+        translated_name=translated_name,
+        role=role,
+        is_user_edit=True,
+    )
+    return load_glossary(novel_name)
+
+
+def save_character_pronoun(novel_name: str, original: str, pronoun: str) -> bool:
+    return glossary_service.save_character_pronoun(novel_name, original, pronoun)
+
+
+def save_relationship(
+    novel_name: str,
+    *,
+    from_char: str,
+    to_char: str,
+    relationship: str,
+    since: int | None = None,
+    update_since: bool = False,
+) -> dict:
+    glossary_service.save_relationship(
+        novel_name,
+        from_char,
+        to_char,
+        relationship,
+        since_chapter=since,
+        update_since=update_since,
+    )
+    return load_glossary(novel_name)
+
+
+def clean_glossary(novel_name: str) -> dict:
+    return glossary_service.clean_glossary(novel_name)
+
+
+def validate_glossary(
+    novel_name: str,
+    *,
+    progress_callback: Callable[[ProgressEvent], None] | None = None,
+    cancel_event: Event | None = None,
+) -> list[str]:
+    _check_cancel(cancel_event)
+    _emit(progress_callback, ProgressEvent(kind="phase", novel=novel_name, message="Validating glossary"))
+    issues = validate_glossary_data(load_glossary(novel_name))
+    _check_cancel(cancel_event)
+    return issues
+
+
+def audit_glossary(
+    novel_name: str,
+    *,
+    target: str | None = None,
+    progress_callback: Callable[[ProgressEvent], None] | None = None,
+    cancel_event: Event | None = None,
+) -> list[dict]:
+    terms = load_glossary(novel_name).get("terms", {})
+    return audit_terms(
+        novel_name,
+        terms,
+        target=target,
+        progress_callback=progress_callback,
+        cancel_event=cancel_event,
+    )
+
+
+def audit_terms(
+    novel_name: str,
+    terms: dict[str, str],
+    *,
+    target: str | None = None,
+    progress_callback: Callable[[ProgressEvent], None] | None = None,
+    cancel_event: Event | None = None,
+) -> list[dict]:
+    """Audit translated chapters against an explicit set of terms."""
+    novel_root = _paths.novel_root_dir(app_config.get_config(), novel_name)
+    chapters = sorted(_paths.novel_input_dir_from_root(novel_root).glob("chapter_*.txt"))
+    output_dir = _paths.novel_output_dir_from_root(novel_root, target or "vi")
+    if not output_dir.exists():
+        return []
+
+    issues: list[dict] = []
+    total = len(chapters)
+    for index, source_path in enumerate(chapters, 1):
+        _check_cancel(cancel_event)
+        try:
+            chapter_number = int(source_path.stem.split("_")[-1])
+        except ValueError:
+            continue
+        output_path = output_dir / f"chapter_{chapter_number:03d}.txt"
+        if not output_path.exists():
+            output_path = output_dir / source_path.name
+        if not output_path.exists():
+            continue
+        try:
+            source_text = source_path.read_text(encoding="utf-8")
+            translated_text = output_path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        issues.extend({"chapter": chapter_number, **issue} for issue in audit_term_usage(terms, source_text, translated_text))
+        _emit(
+            progress_callback,
+            ProgressEvent(
+                kind="progress",
+                novel=novel_name,
+                current=index,
+                total=total,
+                chapter=chapter_number,
+                pct=round(index / total * 100, 2) if total else None,
+            ),
+        )
+    return issues
 
 
 @contextmanager
@@ -296,6 +493,14 @@ def rollback_glossary_replacement(novel_name: str, backup_id: str) -> None:
             }
 
         file_utils.merge_json_locked(glossary_path, restore_pending)
+
+
+def rollback_replacements(novel_name: str, backup_id: str) -> None:
+    """Rollback a replacement while exposing application-level errors."""
+    try:
+        rollback_glossary_replacement(novel_name, backup_id)
+    except FileNotFoundError as error:
+        raise ResourceNotFoundError(str(error)) from error
 
 
 def dismiss_pending_replacements(novel_name: str, *, target_language: str | None = None) -> None:
