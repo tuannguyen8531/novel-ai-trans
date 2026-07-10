@@ -21,7 +21,6 @@ from src.services.glossary import (
     load_chapter_summary,
     load_glossary,
     load_glossary_data,
-    load_source_language,
     novel_lock,
     remove_character,
     remove_glossary_term,
@@ -32,7 +31,6 @@ from src.services.glossary import (
     save_characters_batch,
     save_glossary,
     save_relationship,
-    save_source_language,
     update_glossary_term,
     validate_glossary,
 )
@@ -342,20 +340,6 @@ class TestGlossary:
         second_idx = result.index("Chapter 2")
         third_idx = result.index("Chapter 3")
         assert first_idx < second_idx < third_idx
-
-    def test_save_and_load_source_language(self):
-        save_source_language("test-novel", "chinese")
-        result = load_source_language("test-novel")
-        assert result == "chinese"
-
-    def test_load_source_language_nonexistent(self):
-        result = load_source_language("nonexistent")
-        assert result == ""
-
-    def test_save_empty_language_skips(self):
-        save_source_language("test-novel", "")
-        result = load_source_language("test-novel")
-        assert result == ""
 
     def test_target_language_uses_separate_glossary_file(self):
         self.mock_config.target_language = "vi"

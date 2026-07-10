@@ -36,6 +36,7 @@ from src.api.services.novel_paths import (
 )
 from src.application import paths as _paths
 from src.application.paths import PROGRESS_DIR
+from src.domain.language import normalize_source_language
 from src.domain.target_language import SUPPORTED_TARGET_LANGUAGES, normalize_target_language
 
 router = APIRouter(tags=["novels"])
@@ -74,8 +75,6 @@ def create_novel(
         _paths.novel_input_dir_from_root(novel_root).mkdir(parents=True, exist_ok=True)
         _paths.novel_output_dir_from_root(novel_root, "vi").mkdir(parents=True, exist_ok=True)
         _paths.novel_artifact_dir_from_root(novel_root).mkdir(parents=True, exist_ok=True)
-
-        from src.services.glossary import normalize_source_language
 
         metadata = {
             "title": payload.title or None,
@@ -471,8 +470,6 @@ def patch_novel_metadata(
     current = _load_metadata(novel_root)
     updates = payload.model_dump(exclude_none=True)
     if "source_language" in payload.model_fields_set:
-        from src.services.glossary import normalize_source_language
-
         updates["source_language"] = normalize_source_language(payload.source_language) or None
     if not updates:
         raise ApplicationValidationError("At least one metadata field must be provided.")

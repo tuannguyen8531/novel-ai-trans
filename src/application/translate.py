@@ -33,6 +33,7 @@ from src.domain.target_language import normalize_target_language
 from src.graph.builder import build_graph
 from src.models.state import initial_state
 from src.services.logger import log_error
+from src.services.metadata import load_source_language
 from src.services.notifier import get_notifier
 from src.utils.text import normalize_paragraph_spacing
 
@@ -359,8 +360,6 @@ def run_translation(
 
     source_language = request.source_language
     if not source_language:
-        from src.services.glossary import load_source_language
-
         source_language = load_source_language(novel_name)
     if not source_language:
         source_language = ""

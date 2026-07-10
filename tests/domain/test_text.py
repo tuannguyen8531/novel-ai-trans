@@ -3,8 +3,15 @@
 import pytest
 
 from src.domain.chunking import estimate_token_count, split_into_chunks, split_sentences
-from src.domain.language import detect_language_heuristic
+from src.domain.language import detect_language_heuristic, normalize_source_language
 from src.utils.text import normalize_paragraph_spacing
+
+
+def test_normalize_source_language_aliases() -> None:
+    assert normalize_source_language(" zh ") == "chinese"
+    assert normalize_source_language("KO") == "korean"
+    assert normalize_source_language("japanese") == "japanese"
+    assert normalize_source_language(None) == ""
 
 
 class TestDetectLanguageHeuristic:

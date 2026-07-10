@@ -21,10 +21,10 @@ from src.services.glossary import (
     save_chapter_summary,
     save_characters_batch,
     save_glossary,
-    save_source_language,
 )
 from src.services.llm import get_llm
 from src.services.logger import log_ai_call, log_error
+from src.services.metadata import save_source_language
 from src.utils.json import parse_json_object
 
 KINSHIP_TERMS = {

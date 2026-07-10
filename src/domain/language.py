@@ -3,6 +3,22 @@
 import unicodedata
 
 
+def normalize_source_language(language: str | None) -> str:
+    """Normalize a source-language code to its canonical name."""
+    if not language:
+        return ""
+    normalized = language.lower().strip()
+    aliases = {
+        "ko": "korean",
+        "korean": "korean",
+        "zh": "chinese",
+        "chinese": "chinese",
+        "ja": "japanese",
+        "japanese": "japanese",
+    }
+    return aliases.get(normalized, normalized)
+
+
 def detect_language_heuristic(text: str) -> str:
     """
     Detect language based on Unicode character ranges.

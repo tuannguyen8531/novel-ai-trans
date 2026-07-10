@@ -754,11 +754,11 @@ Examples:
 
     language = args.lang
     if not language:
-        from src.services.glossary import load_source_language
+        from src.services.metadata import load_source_language
 
         language = load_source_language(novel_name)
         if language:
-            print(f"{DIM}🌐 Language: {language} (from glossary){RESET}")
+            print(f"{DIM}🌐 Language: {language} (from metadata){RESET}")
         else:
             print(f"{DIM}🌐 Language: auto-detect{RESET}")
     else:

@@ -9,9 +9,9 @@ Saves detected language to glossary immediately.
 from src.domain.language import detect_language_heuristic
 from src.models.state import TranslationState
 from src.prompts import render_prompt
-from src.services.glossary import save_source_language
 from src.services.llm import get_llm
 from src.services.logger import log_ai_call
+from src.services.metadata import save_source_language
 
 
 def detector_node(state: TranslationState) -> dict:

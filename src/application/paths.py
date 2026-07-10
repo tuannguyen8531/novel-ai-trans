@@ -47,6 +47,22 @@ def novel_artifact_dir_from_root(novel_root: Path) -> Path:
     return novel_root / "artifacts"
 
 
+def novel_glossary_path(
+    config: Any,
+    novel_name: str,
+    target_language: str | None = None,
+    *,
+    fallback_root: Path | None = None,
+) -> Path:
+    target = normalize_target_language(target_language or config.target_language)
+    if config.translated_dir:
+        novel_root = novel_root_dir(config, novel_name)
+        return novel_root / ("glossary.json" if target == "vi" else f"glossary.{target}.json")
+
+    root = fallback_root or GLOSSARY_DIR
+    return root / (f"{novel_name}.json" if target == "vi" else f"{novel_name}.{target}.json")
+
+
 def novel_input_dir(config: Any, novel_name: str) -> Path:
     return novel_input_dir_from_root(novel_root_dir(config, novel_name))
 
@@ -116,6 +132,7 @@ __all__ = [
     "novel_input_dir_from_root",
     "novel_output_dir_from_root",
     "novel_artifact_dir_from_root",
+    "novel_glossary_path",
     "novel_input_dir",
     "novel_output_dir",
     "novel_artifact_dir",

@@ -17,8 +17,8 @@ from src.services.glossary import (
     get_active_context,
     load_chapter_summaries_recent,
     load_glossary,
-    load_source_language,
 )
+from src.services.metadata import load_source_language
 
 RULES_DIR = Path("rules")
 MAX_RECENT_SUMMARIES = 3  # Only keep context from last 3 chapters
@@ -32,11 +32,11 @@ def context_node(state: TranslationState) -> dict:
     chapter_number = state["chapter_number"]
     source_text = state.get("source_text", "")
 
-    # 0. Load source language from glossary if not specified by user
+    # 0. Load source language from metadata if not specified by user
     if not language:
         language = load_source_language(novel_name)
         if language:
-            print(f"  🌐 Loaded source language from glossary: {language}")
+            print(f"  🌐 Loaded source language from metadata: {language}")
 
     # 1. Load translation rules (common + language-specific)
     rules_parts = []
