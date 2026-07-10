@@ -7,14 +7,15 @@ from collections.abc import Callable
 from pathlib import Path
 from threading import Event
 
+from src.application import paths as _paths
 from src.application.errors import ResourceConflictError, ResourceNotFoundError
 from src.application.progress import ProgressEvent
 from src.domain.glossary import audit_term_usage, validate_glossary_data
 from src.services.glossary import (
-    _resolve_glossary,
     apply_pending_replacements,
     dismiss_pending_replacements,
     remove_glossary_term,
+    resolve_glossary_path,
     rollback_glossary_replacement,
     update_glossary_term,
 )
@@ -51,7 +52,7 @@ def _check_cancel(event: Event | None) -> None:
 
 
 def load_glossary(novel_root: Path) -> dict:
-    path = _resolve_glossary(novel_root.name)
+    path = resolve_glossary_path(novel_root.name)
     if not path.exists():
         return {"terms": {}, "entities": {}, "edges": []}
     try:
@@ -170,9 +171,9 @@ def audit_glossary(
 
     data = load_glossary(novel_root)
     terms = data.get("terms", {})
-    chapters = sorted((novel_root / "input").glob("chapter_*.txt"))
+    chapters = sorted(_paths.novel_input_dir_from_root(novel_root).glob("chapter_*.txt"))
     target = target or "vi"
-    out_dir = novel_root / "output" if target == "vi" else novel_root / "output" / target
+    out_dir = _paths.novel_output_dir_from_root(novel_root, target)
     if not out_dir.exists():
         return []
     total = len(chapters)

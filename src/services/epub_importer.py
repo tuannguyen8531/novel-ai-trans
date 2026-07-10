@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import html
-import json
 import posixpath
 import re
 import zipfile
@@ -14,6 +13,7 @@ from xml.etree import ElementTree
 from src.models import ChapterResult, NovelMetadata
 from src.services.metadata import metadata_to_dict
 from src.utils.chapters import detect_chapter_number, is_obvious_non_chapter_title
+from src.utils.files import write_bytes_atomic, write_json_atomic, write_text_atomic
 from src.utils.text import slugify
 
 CONTAINER_PATH = "META-INF/container.xml"
@@ -471,25 +471,6 @@ def illustration_filename(chapter_number: int, chapter_image_number: int, source
     if suffix not in {".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"}:
         suffix = ".img"
     return f"{chapter_number:03d}-{chapter_image_number:03d}{suffix}"
-
-
-def write_json_atomic(path: Path, data: object) -> None:
-    temp_path = path.with_suffix(path.suffix + ".tmp")
-    content = json.dumps(data, ensure_ascii=False, indent=2) + "\n"
-    temp_path.write_text(content, encoding="utf-8")
-    temp_path.replace(path)
-
-
-def write_text_atomic(path: Path, text: str) -> None:
-    temp_path = path.with_suffix(path.suffix + ".tmp")
-    temp_path.write_text(text, encoding="utf-8")
-    temp_path.replace(path)
-
-
-def write_bytes_atomic(path: Path, data: bytes) -> None:
-    temp_path = path.with_suffix(path.suffix + ".tmp")
-    temp_path.write_bytes(data)
-    temp_path.replace(path)
 
 
 def decode_bytes(raw: bytes) -> str:

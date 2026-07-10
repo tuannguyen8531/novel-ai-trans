@@ -26,6 +26,7 @@ from src.models import (
 from src.services.http import FetchError, FetchResponse, HttpClient
 from src.services.metadata import metadata_to_dict
 from src.utils.chapters import detect_chapter_number, select_likely_chapters
+from src.utils.files import write_text_atomic
 from src.utils.text import html_to_plain_text, normalize_text, slugify
 
 ProgressCallback = Callable[[CrawlProgress], None]
@@ -306,7 +307,7 @@ class NovelCrawler:
                 path=str(chapter_path),
             )
             title, body, final_url = self._fetch_chapter(chapter_link)
-            self._write_text_atomic(chapter_path, self._chapter_text(title, body))
+            write_text_atomic(chapter_path, self._chapter_text(title, body))
             return ChapterResult(
                 index=index,
                 title=title,
@@ -733,12 +734,6 @@ class NovelCrawler:
     @staticmethod
     def _is_existing_chapter(path: Path) -> bool:
         return path.is_file() and path.stat().st_size > 0
-
-    @staticmethod
-    def _write_text_atomic(path: Path, text: str) -> None:
-        temp_path = path.with_suffix(path.suffix + ".tmp")
-        temp_path.write_text(text, encoding="utf-8")
-        temp_path.replace(path)
 
     @staticmethod
     def _report_progress(

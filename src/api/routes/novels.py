@@ -323,8 +323,7 @@ def novel_chapters(
     input_dir = _paths.novel_input_dir_from_root(novel_root)
     sources = _list_chapters(input_dir)
     outputs_by_target: dict[str, set[int]] = {
-        target: _count_outputs(_paths.novel_output_dir_from_root(novel_root, target))
-        for target in SUPPORTED_TARGET_LANGUAGES
+        target: _count_outputs(_paths.novel_output_dir_from_root(novel_root, target)) for target in SUPPORTED_TARGET_LANGUAGES
     }
     statuses: list[NovelChapterStatus] = []
     for number in sorted(sources):

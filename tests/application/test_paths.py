@@ -16,6 +16,4 @@ def test_novel_directories_from_root() -> None:
 
 def test_translation_progress_path_for_target(tmp_path: Path) -> None:
     assert paths.translation_progress_path_for_target("demo", "vi", progress_root=tmp_path) == tmp_path / "demo.json"
-    assert paths.translation_progress_path_for_target("demo", "en", progress_root=tmp_path) == (
-        tmp_path / "en" / "demo.json"
-    )
+    assert paths.translation_progress_path_for_target("demo", "en", progress_root=tmp_path) == (tmp_path / "en" / "demo.json")
