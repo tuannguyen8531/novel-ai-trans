@@ -8,7 +8,6 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends
 
-from src.api.application_config_context import config_context
 from src.api.auth import Principal, authenticate
 from src.api.dependencies import get_state
 from src.api.errors import ExternalServiceError
@@ -32,6 +31,7 @@ from src.api.services.providers import (
     list_providers,
 )
 from src.api.services.settings import apply_settings_patch, build_settings_response
+from src.application import config_context
 
 router = APIRouter(tags=["settings"])
 _logger = logging.getLogger(__name__)

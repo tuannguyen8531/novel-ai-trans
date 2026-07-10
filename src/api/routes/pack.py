@@ -6,11 +6,11 @@ import asyncio
 
 from fastapi import APIRouter, Depends
 
-from src.api.application_config_context import config_context
 from src.api.auth import Principal, authenticate
 from src.api.dependencies import get_job_manager
 from src.api.jobs import JobManager, build_progress_emitter
 from src.api.schemas import JobStartResponse, PackRequestPayload
+from src.application import config_context
 from src.application.pack import PackRequest, run_pack
 
 router = APIRouter(tags=["pack"])

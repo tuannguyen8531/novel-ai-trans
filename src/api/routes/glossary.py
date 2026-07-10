@@ -8,7 +8,6 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from src.api.application_config_context import config_context
 from src.api.auth import Principal, authenticate
 from src.api.dependencies import get_job_manager
 from src.api.jobs import JobManager, build_progress_emitter
@@ -55,6 +54,7 @@ from src.api.services.novel_paths import (
     resolve_translated_root,
     safe_novel_path,
 )
+from src.application import config_context
 
 router = APIRouter(tags=["glossary"])
 

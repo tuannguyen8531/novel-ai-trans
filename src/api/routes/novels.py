@@ -11,7 +11,6 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
 
-from src.api.application_config_context import config_context
 from src.api.auth import Principal, authenticate
 from src.api.dependencies import get_state
 from src.api.errors import ApplicationValidationError, ResourceNotFoundError
@@ -34,6 +33,7 @@ from src.api.services.novel_paths import (
     resolve_translated_root,
     safe_novel_path,
 )
+from src.application import config_context
 from src.application import paths as _paths
 from src.application.paths import PROGRESS_DIR
 from src.domain.language import SUPPORTED_TARGET_LANGUAGES, normalize_source_language, normalize_target_language

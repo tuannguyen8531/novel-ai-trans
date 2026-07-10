@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import httpx2 as httpx
 
-from src.api.application_config_context import config_context
 from src.api.errors import ExternalServiceError
 from src.api.schemas import (
     ProviderCheckResponse,
@@ -12,6 +11,7 @@ from src.api.schemas import (
     ProviderModelsResponse,
     ProvidersResponse,
 )
+from src.application import config_context
 
 
 def list_providers() -> ProvidersResponse:

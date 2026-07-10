@@ -11,7 +11,6 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from src.api.application_config_context import config_context
 from src.api.auth import Principal, authenticate
 from src.api.dependencies import get_job_manager, get_state
 from src.api.errors import ApplicationValidationError as _ApiValidationError
@@ -26,6 +25,7 @@ from src.api.schemas import (
     DraftSummary,
     JobStartResponse,
 )
+from src.application import config_context
 from src.application.crawl import (
     ConfigGenerationResult,
     ConfigValidationResult,
