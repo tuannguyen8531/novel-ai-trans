@@ -13,12 +13,12 @@ from src.domain.glossary import (
     normalize_address_rules,
     normalize_character_edges,
 )
-from src.domain.target_language import target_language_name
+from src.domain.language import target_language_name
 from src.domain.terms import filter_extracted_terms
 from src.models.state import TranslationState
 from src.prompts import render_prompt
+from src.services.chapter_memory import save_chapter_summary
 from src.services.glossary import (
-    save_chapter_summary,
     save_characters_batch,
     save_glossary,
 )

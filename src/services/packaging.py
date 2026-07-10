@@ -23,7 +23,7 @@ from fpdf import FPDF
 from src.application import paths as _paths
 from src.config import config
 from src.domain.illustrations import parse_illustration_marker
-from src.domain.target_language import normalize_target_language
+from src.domain.language import normalize_target_language
 
 # ---------------------------------------------------------------------------
 # Path helpers

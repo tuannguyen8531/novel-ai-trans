@@ -32,7 +32,7 @@ from src.application.translate import (
     notify_translation_result,
     run_translation,
 )
-from src.domain.target_language import (
+from src.domain.language import (
     SUPPORTED_TARGET_LANGUAGES,
     target_language_name,
 )

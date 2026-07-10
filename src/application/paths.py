@@ -11,7 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from src.domain.target_language import normalize_target_language
+from src.domain.language import normalize_target_language
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 

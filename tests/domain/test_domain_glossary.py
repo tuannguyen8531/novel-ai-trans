@@ -6,7 +6,6 @@ from src.domain.glossary import (
     find_glossary_replacement_conflicts,
     format_address_rules,
     format_glossary_for_prompt,
-    format_recent_summaries,
     format_relationships_shorthand,
     merge_character_context,
     merge_pending_replacements,
@@ -197,12 +196,6 @@ def test_replace_character_name_keeps_configured_casing():
 
     assert count == 2
     assert updated == "lý thái bạch gặp lý thái bạch."
-
-
-def test_format_recent_summaries_keeps_recent_order():
-    summaries = {"1": "First", "2": "Second", "3": "Third", "4": "Fourth"}
-    result = format_recent_summaries(summaries, current_chapter=5, max_count=3)
-    assert result == "Chapter 2: Second\n\nChapter 3: Third\n\nChapter 4: Fourth"
 
 
 def test_select_active_character_context_excludes_first_degree_neighbors():

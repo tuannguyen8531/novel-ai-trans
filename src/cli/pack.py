@@ -18,7 +18,7 @@ from src.application.pack import (
     run_pack,
 )
 from src.application.progress import ProgressEvent
-from src.domain.target_language import SUPPORTED_TARGET_LANGUAGES
+from src.domain.language import SUPPORTED_TARGET_LANGUAGES
 from src.services.packaging import package_file_stem
 from src.utils.display import GREEN, RED, RESET, YELLOW
 

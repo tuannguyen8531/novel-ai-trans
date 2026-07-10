@@ -27,7 +27,7 @@ from src.application.errors import (
     ResourceNotFoundError,
 )
 from src.application.progress import ProgressEvent
-from src.domain.target_language import normalize_target_language
+from src.domain.language import normalize_target_language
 from src.services.packaging import (  # type: ignore[attr-defined]
     EPUBBuilder,
     NovelPDF,

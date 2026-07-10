@@ -750,21 +750,6 @@ def find_glossary_replacement_conflicts(replacements: list[dict]) -> dict[int, l
     return {index: sorted(values) for index, values in conflicts.items()}
 
 
-def format_recent_summaries(summaries: dict, current_chapter: int, max_count: int = 3) -> str:
-    """Format the most recent chapter summaries before current_chapter."""
-    parts = []
-    for ch in range(current_chapter - 1, max(0, current_chapter - 1 - max_count), -1):
-        summary = summaries.get(str(ch), "")
-        if summary:
-            parts.append(f"Chapter {ch}: {summary}")
-
-    if not parts:
-        return ""
-
-    parts.reverse()
-    return "\n\n".join(parts)
-
-
 def _is_name_boundary(text: str, pos: int) -> bool:
     """Check if position is a valid CJK/word boundary, not inside a longer word."""
     if pos < 0 or pos >= len(text):

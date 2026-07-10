@@ -19,7 +19,7 @@ from src.domain.glossary import (
     replace_glossary_values,
     uppercase_first_cased,
 )
-from src.domain.target_language import normalize_target_language
+from src.domain.language import normalize_target_language
 from src.services import glossary as glossary_service
 from src.utils import files as file_utils
 

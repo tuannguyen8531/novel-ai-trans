@@ -11,7 +11,7 @@ Scoring criteria:
 import json
 
 from src.config import config
-from src.domain.target_language import target_language_name
+from src.domain.language import target_language_name
 from src.models.state import TranslationState
 from src.prompts import render_prompt
 from src.services.llm import get_llm

@@ -3,7 +3,13 @@
 import pytest
 
 from src.domain.chunking import estimate_token_count, split_into_chunks, split_sentences
-from src.domain.language import detect_language_heuristic, normalize_source_language
+from src.domain.language import (
+    SUPPORTED_TARGET_LANGUAGES,
+    detect_language_heuristic,
+    normalize_source_language,
+    normalize_target_language,
+    target_language_name,
+)
 from src.utils.text import normalize_paragraph_spacing
 
 
@@ -12,6 +18,18 @@ def test_normalize_source_language_aliases() -> None:
     assert normalize_source_language("KO") == "korean"
     assert normalize_source_language("japanese") == "japanese"
     assert normalize_source_language(None) == ""
+
+
+def test_target_language_helpers() -> None:
+    assert SUPPORTED_TARGET_LANGUAGES == {"vi": "Vietnamese", "en": "English"}
+    assert normalize_target_language(None) == "vi"
+    assert normalize_target_language(" EN ") == "en"
+    assert target_language_name("en") == "English"
+
+
+def test_normalize_target_language_rejects_unsupported_code() -> None:
+    with pytest.raises(ValueError, match="Unsupported target language"):
+        normalize_target_language("ja")
 
 
 class TestDetectLanguageHeuristic:

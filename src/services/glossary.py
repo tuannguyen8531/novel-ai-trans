@@ -39,6 +39,7 @@ Character schema:
 """
 
 import hashlib
+from collections.abc import Callable
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -47,7 +48,6 @@ from src.application.errors import ResourceConflictError
 from src.config import config
 from src.domain import glossary as glossary_domain
 from src.domain.glossary import (
-    format_recent_summaries,
     get_character_translated_name,
     merge_character_context,
     normalize_character_info,
@@ -58,7 +58,7 @@ from src.domain.glossary import (
     upsert_relationship,
     validate_glossary_data,
 )
-from src.domain.target_language import normalize_target_language
+from src.domain.language import normalize_target_language
 from src.utils import files as file_utils
 
 _read_json_locked = file_utils.read_json_locked
@@ -100,6 +100,11 @@ def resolve_glossary_path(novel_name: str) -> Path:
 def load_glossary_data(novel_name: str) -> dict:
     """Load the full glossary JSON data for a novel."""
     return _read_json_locked(_glossary_path(novel_name))
+
+
+def update_glossary_data(novel_name: str, updater: Callable[[dict], dict]) -> dict:
+    """Atomically update the full glossary document for a novel."""
+    return _merge_json_locked(_glossary_path(novel_name), updater)
 
 
 _ACTIVE_LOCKS: set[str] = set()
@@ -385,49 +390,6 @@ def clean_glossary(novel_name: str) -> dict:
 
     _merge_json_locked(path, updater)
     return stats
-
-
-# ---------------------------------------------------------------------------
-# Chapter summaries
-# ---------------------------------------------------------------------------
-
-
-def load_chapter_summary(novel_name: str, chapter_number: int) -> str:
-    """Load summary for a specific chapter. Returns empty string if not found."""
-    path = _glossary_path(novel_name)
-    data = _read_json_locked(path)
-    summaries = data.get("chapter_summaries", {})
-    return summaries.get(str(chapter_number), "")
-
-
-def load_chapter_summaries_recent(
-    novel_name: str,
-    current_chapter: int,
-    max_count: int = 3,
-) -> str:
-    """
-    Load the most recent chapter summaries (up to max_count).
-
-    For chapter 10 with max_count=3, loads summaries for chapters 9, 8, 7.
-    Returns a formatted string ready for inclusion in prompts.
-    """
-    path = _glossary_path(novel_name)
-    data = _read_json_locked(path)
-    summaries = data.get("chapter_summaries", {})
-
-    return format_recent_summaries(summaries, current_chapter, max_count=max_count)
-
-
-def save_chapter_summary(novel_name: str, chapter_number: int, summary: str):
-    """Save a chapter summary (thread-safe)."""
-    path = _glossary_path(novel_name)
-    _merge_json_locked(
-        path,
-        lambda data: {
-            **data,
-            "chapter_summaries": {**data.get("chapter_summaries", {}), str(chapter_number): summary},
-        },
-    )
 
 
 # ---------------------------------------------------------------------------

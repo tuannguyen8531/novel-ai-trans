@@ -17,15 +17,12 @@ from src.domain.glossary import PENDING_REPLACEMENTS_KEY
 from src.services.glossary import (
     clean_glossary,
     get_active_context,
-    load_chapter_summaries_recent,
-    load_chapter_summary,
     load_glossary,
     load_glossary_data,
     novel_lock,
     remove_character,
     remove_glossary_term,
     remove_relationship,
-    save_chapter_summary,
     save_character,
     save_character_pronoun,
     save_characters_batch,
@@ -310,36 +307,6 @@ class TestGlossary:
         save_glossary("test-novel", {"李白": "Lý Bạch"})
 
         assert validate_glossary("test-novel") == []
-
-    def test_save_and_load_chapter_summary(self):
-        save_chapter_summary("test-novel", 1, "Chapter 1 summary")
-        result = load_chapter_summary("test-novel", 1)
-        assert result == "Chapter 1 summary"
-
-    def test_load_nonexistent_summary(self):
-        result = load_chapter_summary("nonexistent", 1)
-        assert result == ""
-
-    def test_load_recent_summaries(self):
-        for i in range(1, 6):
-            save_chapter_summary("test-novel", i, f"Summary {i}")
-
-        result = load_chapter_summaries_recent("test-novel", 6, max_count=3)
-        assert "Chapter 3" in result
-        assert "Chapter 4" in result
-        assert "Chapter 5" in result
-        assert "Chapter 2" not in result
-
-    def test_recent_summaries_order(self):
-        save_chapter_summary("test-novel", 1, "First")
-        save_chapter_summary("test-novel", 2, "Second")
-        save_chapter_summary("test-novel", 3, "Third")
-
-        result = load_chapter_summaries_recent("test-novel", 4, max_count=3)
-        first_idx = result.index("Chapter 1")
-        second_idx = result.index("Chapter 2")
-        third_idx = result.index("Chapter 3")
-        assert first_idx < second_idx < third_idx
 
     def test_target_language_uses_separate_glossary_file(self):
         self.mock_config.target_language = "vi"

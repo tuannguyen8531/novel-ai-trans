@@ -36,8 +36,7 @@ from src.api.services.novel_paths import (
 )
 from src.application import paths as _paths
 from src.application.paths import PROGRESS_DIR
-from src.domain.language import normalize_source_language
-from src.domain.target_language import SUPPORTED_TARGET_LANGUAGES, normalize_target_language
+from src.domain.language import SUPPORTED_TARGET_LANGUAGES, normalize_source_language, normalize_target_language
 
 router = APIRouter(tags=["novels"])
 

@@ -29,7 +29,7 @@ from src.application.errors import (
 from src.application.progress import ProgressEvent
 from src.config import Config
 from src.domain.chunking import estimate_token_count
-from src.domain.target_language import normalize_target_language
+from src.domain.language import normalize_target_language
 from src.graph.builder import build_graph
 from src.models.state import initial_state
 from src.services.logger import log_error
