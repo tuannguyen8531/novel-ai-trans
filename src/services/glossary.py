@@ -43,8 +43,7 @@ from collections.abc import Callable
 from contextlib import contextmanager
 from pathlib import Path
 
-from src.application import paths as _paths
-from src.application.errors import ResourceConflictError
+from src import paths as _paths
 from src.config import config
 from src.domain import glossary as glossary_domain
 from src.domain.glossary import (
@@ -67,6 +66,10 @@ _merge_json_locked = file_utils.merge_json_locked
 GLOSSARY_DIR = _paths.GLOSSARY_DIR
 LOCK_DIR = _paths.LOCK_DIR
 PENDING_REPLACEMENTS_KEY = glossary_domain.PENDING_REPLACEMENTS_KEY
+
+
+class GlossaryLockError(RuntimeError):
+    """Raised when a novel glossary lock cannot be acquired."""
 
 
 def current_target_language() -> str:
@@ -114,9 +117,7 @@ _ACTIVE_LOCKS: set[str] = set()
 def novel_lock(novel_name: str):
     """Acquire an exclusive lock on a novel to prevent concurrent modifications."""
     if novel_name in _ACTIVE_LOCKS:
-        raise ResourceConflictError(
-            f"Novel {novel_name!r} is currently locked by another translation or glossary apply operation."
-        )
+        raise GlossaryLockError(f"Novel {novel_name!r} is currently locked by another translation or glossary apply operation.")
     _ACTIVE_LOCKS.add(novel_name)
     try:
         LOCK_DIR.mkdir(parents=True, exist_ok=True)
@@ -125,7 +126,7 @@ def novel_lock(novel_name: str):
             with file_utils.exclusive_file_lock(lock_path, blocking=False):
                 yield
         except BlockingIOError as err:
-            raise ResourceConflictError(
+            raise GlossaryLockError(
                 f"Novel {novel_name!r} is currently locked by another translation or glossary apply operation."
             ) from err
     finally:

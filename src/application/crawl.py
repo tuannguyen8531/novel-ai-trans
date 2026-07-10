@@ -21,9 +21,9 @@ from src.application.errors import (
     PersistenceError,
     ResourceNotFoundError,
 )
-from src.application.paths import CONFIG_DIR, RUNTIME_DIR, RUNTIME_OUTPUT_ROOT
 from src.application.progress import ProgressEvent
 from src.config import SiteConfig
+from src.paths import CONFIG_DIR, RUNTIME_DIR, RUNTIME_OUTPUT_ROOT
 from src.services.configs import ConfigGenerator
 from src.services.crawler import ConsecutiveFailureError, NovelCrawler
 from src.services.http import FetchError

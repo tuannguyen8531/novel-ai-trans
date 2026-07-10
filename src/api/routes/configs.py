@@ -36,8 +36,8 @@ from src.application.crawl import (
 from src.application.crawl import (
     validate_config as application_validate_config,
 )
-from src.application.paths import CONFIG_DIR as _CONFIG_DIR
 from src.config import SiteConfig
+from src.paths import CONFIG_DIR as _CONFIG_DIR
 
 _current_app = None  # type: ignore[var-annotated]
 

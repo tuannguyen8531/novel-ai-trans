@@ -1,9 +1,8 @@
-"""Default path roots shared by the application layer and CLI.
+"""Default path roots shared across application, service, API, and CLI layers.
 
-The application workflow uses these constants so the legacy default locations
-(``runtime/input`` and ``runtime/output``) can be exercised in tests and
-overridden by future deployments. Paths are anchored at the project root so
-they stay valid regardless of the caller's current working directory.
+These constants preserve the default runtime locations while allowing callers
+to override roots in tests and deployments. Paths are anchored at the project
+root so they stay valid regardless of the caller's current working directory.
 """
 
 from __future__ import annotations
@@ -13,7 +12,7 @@ from typing import Any
 
 from src.domain.language import normalize_target_language
 
-_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 RUNTIME_DIR = _PROJECT_ROOT / "runtime"
 INPUT_DIR = _PROJECT_ROOT / "translated" / "input"

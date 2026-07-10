@@ -15,6 +15,7 @@ from src.application.glossary import (
 )
 from src.domain.glossary import PENDING_REPLACEMENTS_KEY
 from src.services.glossary import (
+    GlossaryLockError,
     clean_glossary,
     get_active_context,
     load_glossary,
@@ -505,8 +506,11 @@ class TestGlossaryTranslatedDir:
             save_glossary("test-novel", {"魔法": "ma thuật"})
             update_glossary_term("test-novel", "魔法", "魔法", "ma pháp", is_user_edit=True)
 
-            with novel_lock("test-novel"), pytest.raises(ResourceConflictError, match="locked"):
-                apply_pending_replacements("test-novel")
+            with novel_lock("test-novel"):
+                with pytest.raises(GlossaryLockError, match="locked"), novel_lock("test-novel"):
+                    pass
+                with pytest.raises(ResourceConflictError, match="locked"):
+                    apply_pending_replacements("test-novel")
 
     def test_apply_keeps_pending_when_output_is_missing(self):
         translated_root = self.base / "translated"

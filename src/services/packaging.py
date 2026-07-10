@@ -20,7 +20,7 @@ from urllib.request import Request, urlopen
 
 from fpdf import FPDF
 
-from src.application import paths as _paths
+from src import paths as _paths
 from src.config import config
 from src.domain.illustrations import parse_illustration_marker
 from src.domain.language import normalize_target_language

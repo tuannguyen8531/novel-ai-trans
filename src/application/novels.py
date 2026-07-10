@@ -10,15 +10,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 
-from src.application import paths
+from src import paths
 from src.application.errors import (
     ApplicationValidationError,
     PersistenceError,
     ResourceConflictError,
     ResourceNotFoundError,
 )
-from src.application.paths import DEFAULT_TRANSLATED_ROOT, PROGRESS_DIR
 from src.domain.language import SUPPORTED_TARGET_LANGUAGES, normalize_source_language, normalize_target_language
+from src.paths import DEFAULT_TRANSLATED_ROOT, PROGRESS_DIR
 from src.services import chapters
 
 SLUG_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")

@@ -18,8 +18,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from threading import Event
 
+from src import paths as _paths
 from src.application import config as app_config
-from src.application import paths as _paths
 from src.application.errors import (
     ApplicationValidationError,
     OperationCancelledError,
@@ -225,7 +225,7 @@ def novel_locked(func):
 
     @functools.wraps(func)
     def wrapper(request, *args, **kwargs):
-        from src.services.glossary import novel_lock
+        from src.application.glossary import novel_lock
 
         with novel_lock(request.novel):
             return func(request, *args, **kwargs)

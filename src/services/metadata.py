@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from src.application import paths as _paths
+from src import paths as _paths
 from src.config import config
 from src.domain.language import normalize_source_language
 from src.models import NovelMetadata

@@ -2,7 +2,15 @@
 
 from pathlib import Path
 
-from src.application import paths
+from src import paths
+
+
+def test_default_roots_are_anchored_at_project_root() -> None:
+    project_root = Path(__file__).resolve().parents[1]
+
+    assert project_root / "translated" == paths.DEFAULT_TRANSLATED_ROOT
+    assert project_root / "runtime" == paths.RUNTIME_DIR
+    assert project_root / "configs" == paths.CONFIG_DIR
 
 
 def test_novel_directories_from_root() -> None:

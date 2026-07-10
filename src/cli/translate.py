@@ -20,8 +20,8 @@ import threading
 import time
 from pathlib import Path
 
+from src import paths as _paths
 from src.application import config as app_config
-from src.application import paths as _paths
 from src.application import translate as _app_translate
 from src.application.config import get_config  # legacy reference for patches
 from src.application.errors import ResourceConflictError as _ApplicationConflictError

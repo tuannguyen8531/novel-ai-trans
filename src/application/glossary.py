@@ -6,10 +6,12 @@ import json
 import re
 import secrets
 import shutil
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
-from src.application import paths as _paths
+from src import paths as _paths
+from src.application.errors import ResourceConflictError
 from src.config import active_config_scope, config
 from src.domain.glossary import (
     PENDING_REPLACEMENTS_KEY,
@@ -27,6 +29,16 @@ GLOSSARY_BACKUP_DIR = _paths.GLOSSARY_BACKUP_DIR
 _BACKUP_ID_PATTERN = re.compile(r"^\d{8}T\d{6}_\d{6}Z_[0-9a-f]{8}$")
 
 
+@contextmanager
+def novel_lock(novel_name: str):
+    """Map a service lock failure to the application error contract."""
+    try:
+        with glossary_service.novel_lock(novel_name):
+            yield
+    except glossary_service.GlossaryLockError as error:
+        raise ResourceConflictError(str(error)) from error
+
+
 def apply_pending_replacements(
     novel_name: str,
     *,
@@ -40,7 +52,7 @@ def apply_pending_replacements(
         with active_config_scope(config.clone(target_language=target)):
             return apply_pending_replacements(novel_name, write=write)
 
-    with glossary_service.novel_lock(novel_name):
+    with novel_lock(novel_name):
         data = glossary_service.load_glossary_data(novel_name)
         pending = [dict(item) for item in data.get(PENDING_REPLACEMENTS_KEY, []) if isinstance(item, dict)]
         if not pending:
@@ -261,7 +273,7 @@ def rollback_glossary_replacement(novel_name: str, backup_id: str) -> None:
 
     novel_root = glossary_service.translated_novel_root(novel_name).resolve()
 
-    with glossary_service.novel_lock(novel_name):
+    with novel_lock(novel_name):
         for rel_file_path in manifest.get("files", []):
             backup_file_path = (backup_dir / rel_file_path).resolve()
             target_file_path = (novel_root / rel_file_path).resolve()
@@ -295,7 +307,7 @@ def dismiss_pending_replacements(novel_name: str, *, target_language: str | None
             dismiss_pending_replacements(novel_name)
         return
     glossary_path = glossary_service.resolve_glossary_path(novel_name)
-    with glossary_service.novel_lock(novel_name):
+    with novel_lock(novel_name):
         file_utils.merge_json_locked(
             glossary_path,
             lambda current: {**current, PENDING_REPLACEMENTS_KEY: []},

@@ -7,7 +7,7 @@ from collections.abc import Callable
 from pathlib import Path
 from threading import Event
 
-from src.application import paths as _paths
+from src import paths as _paths
 from src.application.errors import ResourceConflictError, ResourceNotFoundError
 from src.application.glossary import (
     apply_pending_replacements,
