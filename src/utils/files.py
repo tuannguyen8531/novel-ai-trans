@@ -9,7 +9,7 @@ import tempfile
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager, suppress
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol, cast
 
 try:
     import fcntl
@@ -19,25 +19,47 @@ except ImportError:
     fcntl = None
     import msvcrt
 
+
+class FcntlModule(Protocol):
+    LOCK_EX: int
+    LOCK_SH: int
+    LOCK_NB: int
+    LOCK_UN: int
+
+    def flock(self, fd: int, operation: int, /) -> None: ...
+
+
+class MsvcrtModule(Protocol):
+    LK_NBLCK: int
+    LK_LOCK: int
+    LK_UNLCK: int
+
+    def locking(self, fd: int, mode: int, nbytes: int, /) -> None: ...
+
+
+fchmod: Callable[[int, int], None] | None = getattr(os, "fchmod", None)
+
 JsonObject = dict[str, Any]
 
 
 def _lock_file(fd: int, *, exclusive: bool, nonblocking: bool = False) -> None:
     if fcntl is not None:
-        operation = fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH
+        _fcntl = cast(FcntlModule, fcntl)
+        operation = _fcntl.LOCK_EX if exclusive else _fcntl.LOCK_SH
         if nonblocking:
-            operation |= fcntl.LOCK_NB
-        fcntl.flock(fd, operation)
+            operation |= _fcntl.LOCK_NB
+        _fcntl.flock(fd, operation)
         return
     if msvcrt is None:
         return
 
+    _msvcrt = cast(MsvcrtModule, msvcrt)
     if os.fstat(fd).st_size == 0:
         os.write(fd, b"\0")
     os.lseek(fd, 0, os.SEEK_SET)
-    mode = msvcrt.LK_NBLCK if nonblocking else msvcrt.LK_LOCK  # type: ignore[attr-defined]
+    mode = _msvcrt.LK_NBLCK if nonblocking else _msvcrt.LK_LOCK
     try:
-        msvcrt.locking(fd, mode, 1)  # type: ignore[attr-defined]
+        _msvcrt.locking(fd, mode, 1)
     except OSError as error:
         if nonblocking:
             raise BlockingIOError(error.strerror) from error
@@ -46,14 +68,16 @@ def _lock_file(fd: int, *, exclusive: bool, nonblocking: bool = False) -> None:
 
 def _unlock_file(fd: int) -> None:
     if fcntl is not None:
-        fcntl.flock(fd, fcntl.LOCK_UN)
+        _fcntl = cast(FcntlModule, fcntl)
+        _fcntl.flock(fd, _fcntl.LOCK_UN)
         return
     if msvcrt is None:
         return
 
+    _msvcrt = cast(MsvcrtModule, msvcrt)
     try:
         os.lseek(fd, 0, os.SEEK_SET)
-        msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)  # type: ignore[attr-defined]
+        _msvcrt.locking(fd, _msvcrt.LK_UNLCK, 1)
     except OSError:
         pass
 
@@ -105,9 +129,9 @@ def merge_json_locked(path: Path, updater: Callable[[JsonObject], JsonObject]) -
 def _temporary_file(path: Path) -> tuple[int, Path]:
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, temp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
-    if path.exists() and hasattr(os, "fchmod"):
+    if path.exists() and fchmod is not None:
         with suppress(AttributeError):
-            os.fchmod(fd, stat.S_IMODE(path.stat().st_mode))
+            fchmod(fd, stat.S_IMODE(path.stat().st_mode))
     return fd, Path(temp_name)
 
 
