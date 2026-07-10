@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from threading import Event
 
+from src.application import paths as _paths
 from src.application.config_context import get_config
 from src.application.errors import (
     ApplicationValidationError,
@@ -26,7 +27,6 @@ from src.application.errors import (
     ResourceNotFoundError,
 )
 from src.application.progress import ProgressEvent
-from src.config import Config
 from src.domain.target_language import normalize_target_language
 from src.services.packaging import (  # type: ignore[attr-defined]
     EPUBBuilder,
@@ -95,25 +95,6 @@ class PackResult:
 
 
 # ---------------------------------------------------------------------------
-# Path helpers
-# ---------------------------------------------------------------------------
-
-
-def _output_dir(config: Config, novel_name: str, target_language: str | None = None) -> Path:
-    target = normalize_target_language(target_language or config.target_language)
-    base = Path(config.translated_dir) / novel_name / "output"
-    return base if target == "vi" else base / target
-
-
-def _default_package_dir(config: Config, novel_name: str) -> Path:
-    return Path(config.translated_dir) / novel_name / "artifacts"
-
-
-def _novel_root_dir(config: Config, novel_name: str) -> Path:
-    return Path(config.translated_dir) / novel_name
-
-
-# ---------------------------------------------------------------------------
 # Workflow
 # ---------------------------------------------------------------------------
 
@@ -172,7 +153,7 @@ def run_pack(
     normalized_formats: list[str] = []
     normalized_formats = ["epub", "pdf"] if "all" in request.formats else list(request.formats)
 
-    output_dir = _output_dir(config, request.novel, target_normalized)
+    output_dir = _paths.novel_output_dir(config, request.novel, target_normalized)
     chapter_files = _find_chapter_files(output_dir)
     sorted_chapters = sorted(chapter_files.items())
 
@@ -180,11 +161,12 @@ def run_pack(
     book_title = request.title or resolve_book_title(metadata, target_normalized, request.novel)
     book_author = request.author if request.author != "AI Translator" else resolve_book_author(metadata, request.author)
 
-    cover_image = resolve_cover_image(metadata, _novel_root_dir(config, request.novel))
-    illustrations_dir = _novel_root_dir(config, request.novel) / "illustrations"
+    novel_root = _paths.novel_root_dir(config, request.novel)
+    cover_image = resolve_cover_image(metadata, novel_root)
+    illustrations_dir = novel_root / "illustrations"
     downloaded_cover = cover_image is not None and str(cover_image).startswith(tempfile.gettempdir())
 
-    package_dir = request.output_dir or _default_package_dir(config, request.novel)
+    package_dir = request.output_dir or _paths.novel_artifact_dir(config, request.novel)
     package_dir.mkdir(parents=True, exist_ok=True)
     package_stem = package_file_stem(request.novel, target_normalized)
 

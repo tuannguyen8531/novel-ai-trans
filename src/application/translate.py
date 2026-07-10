@@ -46,36 +46,6 @@ def get_config() -> Config:
 
 
 # ---------------------------------------------------------------------------
-# Path helpers (operate on the active config snapshot)
-# ---------------------------------------------------------------------------
-
-
-def _input_dir(config: Config, novel_name: str) -> Path:
-    return Path(config.translated_dir) / novel_name / "input"
-
-
-def _output_dir(config: Config, novel_name: str, target_language: str | None = None) -> Path:
-    target = normalize_target_language(target_language or config.target_language)
-    base = Path(config.translated_dir) / novel_name / "output"
-    return base if target == "vi" else base / target
-
-
-def _progress_path(config: Config, novel_name: str, target_language: str | None = None) -> Path:
-    target = normalize_target_language(target_language or config.target_language)
-    if target == "vi":
-        return _paths.PROGRESS_DIR / f"{novel_name}.json"
-    return _paths.PROGRESS_DIR / target / f"{novel_name}.json"
-
-
-def _report_path(config: Config, novel_name: str, chapter_number: int, target_language: str | None = None) -> Path:
-    target = normalize_target_language(target_language or config.target_language)
-    base = _paths.REPORT_DIR
-    if target == "vi":
-        return base / novel_name / f"chapter_{chapter_number:03d}.json"
-    return base / target / novel_name / f"chapter_{chapter_number:03d}.json"
-
-
-# ---------------------------------------------------------------------------
 # Chapter scanning and progress
 # ---------------------------------------------------------------------------
 
@@ -303,9 +273,9 @@ def run_translation(
     if request.enable_summary:
         config.enable_summary = True
 
-    input_dir = _input_dir(config, novel_name)
-    output_dir = _output_dir(config, novel_name, target_language)
-    progress_path = _progress_path(config, novel_name, target_language)
+    input_dir = _paths.novel_input_dir(config, novel_name)
+    output_dir = _paths.novel_output_dir(config, novel_name, target_language)
+    progress_path = _paths.translation_progress_path(config, novel_name, target_language)
 
     chapters = scan_chapters(input_dir)
     if not chapters:
@@ -443,7 +413,7 @@ def run_translation(
                 target_language=target_normalized,
                 graph=graph,
                 output_dir=output_dir,
-                report_path=_report_path(config, novel_name, chapter_num, target_normalized),
+                report_path=_paths.translation_report_path(config, novel_name, chapter_num, target_normalized),
             )
         except OperationCancelledError:
             cancelled = True

@@ -21,22 +21,11 @@ import time
 from pathlib import Path
 
 from src.application import config_context
+from src.application import paths as _paths
 from src.application import translate as _app_translate
 from src.application.config_context import get_config  # legacy reference for patches
 from src.application.errors import ResourceConflictError as _ApplicationConflictError
 from src.application.errors import ResourceNotFoundError as _ApplicationNotFoundError
-from src.application.paths import (
-    INPUT_DIR as _SHARED_INPUT_DIR,
-)
-from src.application.paths import (
-    OUTPUT_DIR as _SHARED_OUTPUT_DIR,
-)
-from src.application.paths import (
-    PROGRESS_DIR as _SHARED_PROGRESS_DIR,
-)
-from src.application.paths import (
-    REPORT_DIR as _SHARED_REPORT_DIR,
-)
 from src.application.progress import ProgressEvent
 from src.application.translate import (
     TranslationRequest,
@@ -74,10 +63,10 @@ __all__ = [
     "REPORT_DIR",
 ]
 
-INPUT_DIR = _SHARED_INPUT_DIR
-OUTPUT_DIR = _SHARED_OUTPUT_DIR
-REPORT_DIR = _SHARED_REPORT_DIR
-PROGRESS_DIR = _SHARED_PROGRESS_DIR
+INPUT_DIR = _paths.INPUT_DIR
+OUTPUT_DIR = _paths.OUTPUT_DIR
+REPORT_DIR = _paths.REPORT_DIR
+PROGRESS_DIR = _paths.PROGRESS_DIR
 
 _shutdown_requested = False
 _cancel_event = threading.Event()
@@ -98,14 +87,12 @@ def _signal_handler(signum, frame) -> None:  # noqa: ARG001
 
 def _get_input_dir(novel_name: str) -> Path:
     config = config_context.get_config()
-    return Path(config.translated_dir) / novel_name / "input"
+    return _paths.novel_input_dir(config, novel_name)
 
 
 def _get_output_dir(novel_name: str, target_language: str | None = None) -> Path:
     config = config_context.get_config()
-    target = _app_translate._normalize_target(target_language or config.target_language)
-    base_dir = Path(config.translated_dir) / novel_name / "output"
-    return base_dir if target == "vi" else base_dir / target
+    return _paths.novel_output_dir(config, novel_name, target_language)
 
 
 def scan_chapters(novel_name: str) -> dict[int, Path]:
@@ -131,10 +118,7 @@ def find_untranslated(
 
 def _progress_path(novel_name: str, target_language: str | None = None) -> Path:
     config = get_config()
-    target = _app_translate._normalize_target(target_language or config.target_language)
-    if target == "vi":
-        return PROGRESS_DIR / f"{novel_name}.json"
-    return PROGRESS_DIR / target / f"{novel_name}.json"
+    return _paths.translation_progress_path(config, novel_name, target_language, progress_root=PROGRESS_DIR)
 
 
 def load_progress(novel_name: str, target_language: str | None = None) -> dict:
@@ -147,11 +131,7 @@ def save_progress(novel_name: str, progress: dict, target_language: str | None =
 
 def _report_path(novel_name: str, chapter_number: int, target_language: str | None = None) -> Path:
     config = get_config()
-    target = _app_translate._normalize_target(target_language or config.target_language)
-    base = REPORT_DIR
-    if target == "vi":
-        return base / novel_name / f"chapter_{chapter_number:03d}.json"
-    return base / target / novel_name / f"chapter_{chapter_number:03d}.json"
+    return _paths.translation_report_path(config, novel_name, chapter_number, target_language, report_root=REPORT_DIR)
 
 
 def save_quality_report(
