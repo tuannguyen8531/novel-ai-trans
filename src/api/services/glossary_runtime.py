@@ -9,18 +9,20 @@ from threading import Event
 
 from src.application import paths as _paths
 from src.application.errors import ResourceConflictError, ResourceNotFoundError
+from src.application.glossary_replacements import (
+    apply_pending_replacements,
+    dismiss_pending_replacements,
+    rollback_glossary_replacement,
+)
 from src.application.progress import ProgressEvent
 from src.domain.glossary import audit_term_usage, validate_glossary_data
 from src.services.glossary import (
-    apply_pending_replacements,
-    dismiss_pending_replacements,
-    remove_glossary_term,
-    resolve_glossary_path,
-    rollback_glossary_replacement,
-    update_glossary_term,
+    remove_character as remove_character_impl,
 )
 from src.services.glossary import (
-    remove_character as remove_character_impl,
+    remove_glossary_term,
+    resolve_glossary_path,
+    update_glossary_term,
 )
 from src.services.glossary import (
     remove_relationship as remove_relationship_impl,

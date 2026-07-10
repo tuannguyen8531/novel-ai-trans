@@ -2,6 +2,54 @@
 
 import re
 
+PENDING_REPLACEMENTS_KEY = "_pending_replacements"
+
+
+def queue_pending_replacement(
+    data: dict,
+    *,
+    kind: str,
+    sources: list[str],
+    old_value: str,
+    new_value: str,
+) -> dict:
+    """Queue or collapse a pending rendered-value replacement."""
+    sources = list(dict.fromkeys(source for source in sources if source))
+    if not sources or not old_value or not new_value or old_value == new_value:
+        return data
+
+    pending = [dict(item) for item in data.get(PENDING_REPLACEMENTS_KEY, []) if isinstance(item, dict)]
+    for index, item in enumerate(pending):
+        if item.get("kind") == kind and item.get("sources") == sources and item.get("new") == old_value:
+            if item.get("old") == new_value:
+                pending.pop(index)
+            else:
+                item["new"] = new_value
+            return {**data, PENDING_REPLACEMENTS_KEY: pending}
+    pending.append({"kind": kind, "sources": sources, "old": old_value, "new": new_value})
+    return {**data, PENDING_REPLACEMENTS_KEY: pending}
+
+
+def merge_pending_replacements(restored: list[dict], current: list[dict]) -> list[dict]:
+    """Merge a restored pending chain with edits made after the backup."""
+    merged = [dict(item) for item in restored]
+    for current_item in current:
+        item = dict(current_item)
+        collapsed = False
+        for previous in merged:
+            if (
+                previous.get("kind") == item.get("kind")
+                and previous.get("sources") == item.get("sources")
+                and previous.get("new") == item.get("old")
+            ):
+                previous["new"] = item.get("new")
+                collapsed = True
+                break
+        if not collapsed and item not in merged:
+            merged.append(item)
+    return merged
+
+
 CJK_RE = re.compile(r"[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]")
 
 SYMMETRIC_RELATIONSHIPS = {

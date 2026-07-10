@@ -8,11 +8,14 @@ from unittest.mock import patch
 import pytest
 
 from src.application.errors import ResourceConflictError
-from src.services.glossary import (
-    PENDING_REPLACEMENTS_KEY,
+from src.application.glossary_replacements import (
     apply_pending_replacements,
-    clean_glossary,
     dismiss_pending_replacements,
+    rollback_glossary_replacement,
+)
+from src.domain.glossary import PENDING_REPLACEMENTS_KEY
+from src.services.glossary import (
+    clean_glossary,
     get_active_context,
     load_chapter_summaries_recent,
     load_chapter_summary,
@@ -23,7 +26,6 @@ from src.services.glossary import (
     remove_character,
     remove_glossary_term,
     remove_relationship,
-    rollback_glossary_replacement,
     save_chapter_summary,
     save_character,
     save_character_pronoun,
@@ -41,7 +43,10 @@ class TestGlossary:
         self.temp_dir = tempfile.TemporaryDirectory()
         self.patcher = patch("src.services.glossary.GLOSSARY_DIR", Path(self.temp_dir.name))
         self.patcher.start()
-        self.backup_patcher = patch("src.services.glossary.GLOSSARY_BACKUP_DIR", Path(self.temp_dir.name) / "backups")
+        self.backup_patcher = patch(
+            "src.application.glossary_replacements.GLOSSARY_BACKUP_DIR",
+            Path(self.temp_dir.name) / "backups",
+        )
         self.backup_patcher.start()
         self.config_patcher = patch("src.services.glossary.config")
         self.mock_config = self.config_patcher.start()
@@ -413,7 +418,10 @@ class TestGlossaryTranslatedDir:
         self.patcher_glossary_dir.start()
         self.patcher_lock_dir = patch("src.services.glossary.LOCK_DIR", self.base / "locks")
         self.patcher_lock_dir.start()
-        self.patcher_backup_dir = patch("src.services.glossary.GLOSSARY_BACKUP_DIR", self.base / "backups")
+        self.patcher_backup_dir = patch(
+            "src.application.glossary_replacements.GLOSSARY_BACKUP_DIR",
+            self.base / "backups",
+        )
         self.patcher_backup_dir.start()
 
     def teardown_method(self):

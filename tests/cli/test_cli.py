@@ -349,7 +349,10 @@ class TestGlossaryCli:
         self.base = Path(self.temp_dir.name)
         self.lock_patcher = patch("src.services.glossary.LOCK_DIR", self.base / "locks")
         self.lock_patcher.start()
-        self.backup_patcher = patch("src.services.glossary.GLOSSARY_BACKUP_DIR", self.base / "backups")
+        self.backup_patcher = patch(
+            "src.application.glossary_replacements.GLOSSARY_BACKUP_DIR",
+            self.base / "backups",
+        )
         self.backup_patcher.start()
 
     def teardown_method(self):

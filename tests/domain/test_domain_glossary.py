@@ -1,6 +1,7 @@
 import pytest
 
 from src.domain.glossary import (
+    PENDING_REPLACEMENTS_KEY,
     audit_term_usage,
     find_glossary_replacement_conflicts,
     format_address_rules,
@@ -8,9 +9,11 @@ from src.domain.glossary import (
     format_recent_summaries,
     format_relationships_shorthand,
     merge_character_context,
+    merge_pending_replacements,
     normalize_address_rules,
     normalize_character_edges,
     normalize_glossary_data,
+    queue_pending_replacement,
     replace_glossary_value,
     replace_glossary_values,
     select_active_address_rules,
@@ -19,6 +22,55 @@ from src.domain.glossary import (
     upsert_relationship,
     validate_glossary_data,
 )
+
+
+def test_queue_pending_replacement_collapses_edit_chain_and_revert():
+    data = queue_pending_replacement(
+        {},
+        kind="term",
+        sources=["魔法"],
+        old_value="ma thuật",
+        new_value="ma pháp",
+    )
+    data = queue_pending_replacement(
+        data,
+        kind="term",
+        sources=["魔法"],
+        old_value="ma pháp",
+        new_value="huyền thuật",
+    )
+
+    assert data[PENDING_REPLACEMENTS_KEY] == [
+        {
+            "kind": "term",
+            "sources": ["魔法"],
+            "old": "ma thuật",
+            "new": "huyền thuật",
+        }
+    ]
+
+    reverted = queue_pending_replacement(
+        data,
+        kind="term",
+        sources=["魔法"],
+        old_value="huyền thuật",
+        new_value="ma thuật",
+    )
+    assert reverted[PENDING_REPLACEMENTS_KEY] == []
+
+
+def test_merge_pending_replacements_connects_restored_and_current_edits():
+    restored = [{"kind": "term", "sources": ["魔法"], "old": "ma thuật", "new": "ma pháp"}]
+    current = [{"kind": "term", "sources": ["魔法"], "old": "ma pháp", "new": "huyền thuật"}]
+
+    assert merge_pending_replacements(restored, current) == [
+        {
+            "kind": "term",
+            "sources": ["魔法"],
+            "old": "ma thuật",
+            "new": "huyền thuật",
+        }
+    ]
 
 
 def test_format_glossary_for_prompt():

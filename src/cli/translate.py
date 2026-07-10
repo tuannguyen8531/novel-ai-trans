@@ -211,13 +211,15 @@ def translate_file(
 
 def glossary_main(argv: list[str] | None = None) -> None:
     """Manage per-novel glossary data."""
-    from src.services.glossary import (
+    from src.application.glossary_replacements import (
         apply_pending_replacements,
-        clean_glossary,
         dismiss_pending_replacements,
+        rollback_glossary_replacement,
+    )
+    from src.services.glossary import (
+        clean_glossary,
         load_glossary_data,
         remove_glossary_term,
-        rollback_glossary_replacement,
         save_character,
         save_character_pronoun,
         save_glossary,
