@@ -1,24 +1,26 @@
 import pytest
 
+from src.domain.characters import (
+    format_address_rules,
+    format_relationships_shorthand,
+    merge_character_context,
+    normalize_address_rules,
+    normalize_character_edges,
+    select_active_address_rules,
+    select_active_character_context,
+    upsert_relationship,
+)
 from src.domain.glossary import (
     PENDING_REPLACEMENTS_KEY,
     audit_term_usage,
     find_glossary_replacement_conflicts,
-    format_address_rules,
     format_glossary_for_prompt,
-    format_relationships_shorthand,
-    merge_character_context,
     merge_pending_replacements,
-    normalize_address_rules,
-    normalize_character_edges,
     normalize_glossary_data,
     queue_pending_replacement,
     replace_glossary_value,
     replace_glossary_values,
-    select_active_address_rules,
-    select_active_character_context,
     select_active_glossary_terms,
-    upsert_relationship,
     validate_glossary_data,
 )
 

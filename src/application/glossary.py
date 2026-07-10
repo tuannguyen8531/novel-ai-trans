@@ -13,9 +13,9 @@ from pathlib import Path
 from src import paths as _paths
 from src.application.errors import ResourceConflictError
 from src.config import active_config_scope, config
+from src.domain.characters import count_name_occurrences
 from src.domain.glossary import (
     PENDING_REPLACEMENTS_KEY,
-    count_name_occurrences,
     find_glossary_replacement_conflicts,
     merge_pending_replacements,
     replace_glossary_values,

@@ -46,15 +46,17 @@ from pathlib import Path
 from src import paths as _paths
 from src.config import config
 from src.domain import glossary as glossary_domain
-from src.domain.glossary import (
+from src.domain.characters import (
     get_character_translated_name,
     merge_character_context,
     normalize_character_info,
-    normalize_glossary_data,
-    queue_pending_replacement,
     select_active_address_rules,
     select_active_character_context,
     upsert_relationship,
+)
+from src.domain.glossary import (
+    normalize_glossary_data,
+    queue_pending_replacement,
     validate_glossary_data,
 )
 from src.domain.language import normalize_target_language

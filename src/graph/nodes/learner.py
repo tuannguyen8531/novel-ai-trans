@@ -8,7 +8,7 @@ Runs after all chunks are translated. Responsible for:
 """
 
 from src.config import config
-from src.domain.glossary import (
+from src.domain.characters import (
     get_character_translated_name,
     normalize_address_rules,
     normalize_character_edges,
