@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import contextlib
 import io
 import logging
@@ -9,17 +10,51 @@ import unittest
 import unittest.mock
 from pathlib import Path
 
+from src.application.crawl import CrawlResult, browser_profile_dir, resolve_config_path
+from src.application.progress import ProgressEvent
 from src.cli import crawl
 from src.cli.crawl import (
-    _browser_profile_dir,
-    _resolve_config_path,
     build_generate_parser,
     build_import_parser,
     build_parser,
     build_short_parser,
 )
-from src.models import ChapterResult, CrawlProgress, CrawlResult, NovelMetadata
+from src.paths import CONFIG_DIR, RUNTIME_DIR
 from src.utils.logging import get_logger, setup_logging
+
+
+def _dry_crawl_result() -> CrawlResult:
+    return CrawlResult(
+        novel="example",
+        title="Example",
+        author=None,
+        fetched=0,
+        skipped=0,
+        failed=0,
+        total=0,
+        output_dir="",
+        chapter_output_dir="",
+        started_at=0.0,
+        finished_at=0.0,
+        dry_run=True,
+    )
+
+
+def _crawl_args(**overrides: object) -> argparse.Namespace:
+    values = {
+        "target": "example",
+        "workers": 1,
+        "browser": False,
+        "headed": False,
+        "max_chapters": None,
+        "translated_output": None,
+        "fail_fast": False,
+        "ignore_robots": False,
+        "overwrite": False,
+        "dry_run": False,
+    }
+    values.update(overrides)
+    return argparse.Namespace(**values)
 
 
 class CliTest(unittest.TestCase):
@@ -40,19 +75,19 @@ class CliTest(unittest.TestCase):
 
     def test_browser_profile_is_scoped_by_domain(self) -> None:
         self.assertEqual(
-            _browser_profile_dir("https://www.69shuba.com/book/84642/"),
-            Path("runtime/browser-profiles/www.69shuba.com"),
+            browser_profile_dir("https://www.69shuba.com/book/84642/"),
+            RUNTIME_DIR / "browser-profiles/www.69shuba.com",
         )
 
     def test_resolve_config_path_accepts_novel_name(self) -> None:
-        self.assertEqual(_resolve_config_path("example"), Path("configs/example.json"))
+        self.assertEqual(resolve_config_path("example"), CONFIG_DIR / "example.json")
 
     def test_resolve_config_path_accepts_direct_path(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             config_path = Path(tempdir) / "config.json"
             config_path.write_text("{}", encoding="utf-8")
 
-            self.assertEqual(_resolve_config_path(str(config_path)), config_path)
+            self.assertEqual(resolve_config_path(str(config_path)), config_path)
 
     def test_validate_parser_exists(self) -> None:
         args = build_parser().parse_args(["validate", "demo"])
@@ -89,106 +124,40 @@ class CliTest(unittest.TestCase):
         self.assertTrue(short_args.keep_existing)
 
     def test_crawl_validation_rejects_zero_workers(self) -> None:
-        import argparse
-
         from src.cli.crawl import _crawl
 
-        args = argparse.Namespace(
-            target="example",
-            workers=0,
-            browser=False,
-            max_chapters=None,
-            translated_output=None,
-        )
-        res = _crawl(args)
-        self.assertEqual(res, 1)
+        self.assertEqual(_crawl(_crawl_args(workers=0)), 1)
 
-    @unittest.mock.patch("src.cli.crawl.BrowserFetcher")
-    @unittest.mock.patch("src.cli.crawl._crawl_with_fetcher")
-    def test_crawl_browser_passes_worker_count_to_fetcher(self, mock_crawl_with_fetcher, mock_browser_fetcher) -> None:
-        import argparse
-
+    @unittest.mock.patch("src.cli.crawl.run_crawl")
+    def test_crawl_browser_passes_worker_count_to_application(self, mock_run_crawl) -> None:
         from src.cli.crawl import _crawl
 
-        args = argparse.Namespace(
-            target="example",
-            workers=4,
-            browser=True,
-            max_chapters=None,
-            translated_output=None,
-        )
-        _crawl(args)
-        self.assertEqual(args.workers, 4)
-        mock_browser_fetcher.assert_called_once_with(
-            user_agent=unittest.mock.ANY,
-            timeout_seconds=unittest.mock.ANY,
-            delay_seconds=unittest.mock.ANY,
-            retry_attempts=unittest.mock.ANY,
-            retry_backoff_seconds=unittest.mock.ANY,
-            max_concurrency=4,
-            profile_dir=None,
-            headless=True,
-            challenge_timeout_seconds=None,
-        )
+        mock_run_crawl.return_value = _dry_crawl_result()
+        _crawl(_crawl_args(workers=4, browser=True, dry_run=True))
+        request = mock_run_crawl.call_args.args[0]
+        self.assertEqual(request.workers, 4)
+        self.assertTrue(request.use_browser)
+        self.assertFalse(request.headed)
 
-    @unittest.mock.patch("src.cli.crawl.BrowserFetcher")
-    @unittest.mock.patch("src.cli.crawl._crawl_with_fetcher")
-    def test_crawl_defaults_to_one_worker(self, mock_crawl_with_fetcher, mock_browser_fetcher) -> None:
-        import argparse
-
+    @unittest.mock.patch("src.cli.crawl.run_crawl")
+    def test_crawl_defaults_to_one_worker(self, mock_run_crawl) -> None:
         from src.cli.crawl import _crawl
 
-        args = argparse.Namespace(
-            target="example",
-            workers=None,
-            browser=True,
-            max_chapters=None,
-            translated_output=None,
-        )
-        _crawl(args)
-        self.assertEqual(args.workers, 1)
-        mock_browser_fetcher.assert_called_once_with(
-            user_agent=unittest.mock.ANY,
-            timeout_seconds=unittest.mock.ANY,
-            delay_seconds=unittest.mock.ANY,
-            retry_attempts=unittest.mock.ANY,
-            retry_backoff_seconds=unittest.mock.ANY,
-            max_concurrency=1,
-            profile_dir=None,
-            headless=True,
-            challenge_timeout_seconds=None,
-        )
+        mock_run_crawl.return_value = _dry_crawl_result()
+        _crawl(_crawl_args(workers=None, browser=True, dry_run=True))
+        request = mock_run_crawl.call_args.args[0]
+        self.assertEqual(request.workers, 1)
 
-    @unittest.mock.patch("src.cli.crawl.BrowserFetcher")
-    @unittest.mock.patch("src.cli.crawl._crawl_with_fetcher")
-    def test_headed_implies_browser_mode(self, mock_crawl_with_fetcher, mock_browser_fetcher) -> None:
-        import argparse
-
+    @unittest.mock.patch("src.cli.crawl.run_crawl")
+    def test_headed_implies_browser_mode(self, mock_run_crawl) -> None:
         from src.cli.crawl import _crawl
 
-        args = argparse.Namespace(
-            target="example",
-            workers=None,
-            browser=None,
-            headed=True,
-            max_chapters=None,
-            translated_output=None,
-        )
-        _crawl(args)
-
-        self.assertEqual(args.workers, 1)
-        mock_browser_fetcher.assert_called_once_with(
-            user_agent=None,
-            timeout_seconds=unittest.mock.ANY,
-            delay_seconds=unittest.mock.ANY,
-            retry_attempts=unittest.mock.ANY,
-            retry_backoff_seconds=unittest.mock.ANY,
-            max_concurrency=1,
-            profile_dir=unittest.mock.ANY,
-            headless=False,
-            challenge_timeout_seconds=120.0,
-        )
-        mock_crawl_with_fetcher.assert_called_once()
+        mock_run_crawl.return_value = _dry_crawl_result()
+        _crawl(_crawl_args(workers=None, browser=None, headed=True, dry_run=True))
+        request = mock_run_crawl.call_args.args[0]
+        self.assertEqual(request.workers, 1)
+        self.assertIsNone(request.use_browser)
+        self.assertTrue(request.headed)
 
     def test_logging_stderr_and_quiet_mode(self) -> None:
         setup_logging("info")
@@ -203,12 +172,12 @@ class CliTest(unittest.TestCase):
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
             crawl._print_progress(
-                CrawlProgress(
+                ProgressEvent(
+                    kind="chapter",
                     current=1,
                     total=3,
-                    status="fetched",
-                    title="Chapter 1",
-                    source_url="url",
+                    message="Chapter 1",
+                    extra={"status": "fetched", "url": "url"},
                 )
             )
         self.assertEqual(output.getvalue(), "")
@@ -221,8 +190,6 @@ class CliTest(unittest.TestCase):
         self.assertIn("Config not found", error_output.getvalue())
 
     def test_crawl_notification_counts_result_errors(self) -> None:
-        import argparse
-
         sent: list[str] = []
 
         class _StubNotifier:
@@ -234,26 +201,30 @@ class CliTest(unittest.TestCase):
             def escape(text: str) -> str:
                 return text
 
-        crawler = unittest.mock.MagicMock()
-        crawler.config = unittest.mock.MagicMock()
-        crawler.config.name = "demo-slug"
-        crawler.crawl.return_value = CrawlResult(
-            metadata=NovelMetadata(title="Demo <Novel>", author=None, source_url="url", site_name="demo"),
-            chapters=[
-                ChapterResult(index=1, title="C1", source_url="u1", path="p1"),
-                ChapterResult(index=2, title="C2", source_url="u2", path="p2", skipped=True),
-            ],
+        crawl_result = CrawlResult(
+            novel="demo-slug",
+            title="Demo <Novel>",
+            author=None,
+            fetched=1,
+            skipped=1,
+            failed=1,
+            total=3,
             output_dir="runtime/demo",
             chapter_output_dir="runtime/demo/chapters",
-            errors=[{"index": 3, "url": "u3", "error": "failed"}],
+            started_at=0.0,
+            finished_at=0.0,
         )
-        args = argparse.Namespace(dry_run=False, fail_fast=False, overwrite=False, workers=1)
+        args = _crawl_args(
+            target="demo",
+            dry_run=False,
+        )
 
         with (
             unittest.mock.patch("src.cli.crawl.get_notifier", return_value=_StubNotifier()),
             unittest.mock.patch("src.cli.crawl.format_run_footer", return_value="Time: 2026-01-01 00:00\nRuntime: 0s"),
+            unittest.mock.patch("src.cli.crawl.run_crawl", return_value=crawl_result),
         ):
-            result = crawl._run_crawl(crawler, args, max_chapters=None, share_root=None, started_at=0.0)
+            result = crawl._crawl(args)
 
         self.assertEqual(result, 0)
         self.assertEqual(len(sent), 1)
