@@ -123,37 +123,19 @@ def translation_progress(
     target: Literal["vi", "en"] | None = None,
     _: Principal = Depends(authenticate),
 ) -> dict:
-    import json
-
-    from src.api.services.novel_paths import is_valid_novel_slug, resolve_translated_root, safe_novel_path
-    from src.application.paths import PROGRESS_DIR
+    from src.application import novels
 
     config = config_context.get_config()
-    root = resolve_translated_root(config.translated_dir)
-    if not is_valid_novel_slug(name):
+    root = novels.resolve_root(config.translated_dir)
+    if not novels.is_valid_slug(name):
         from src.api.errors import ResourceNotFoundError
 
         raise ResourceNotFoundError(f"Invalid novel name: {name!r}")
-    novel_root = safe_novel_path(root, name)
     resolved_target: Literal["vi", "en"] = target or ("en" if config.target_language == "en" else "vi")
-    # ``name`` is the slug from the URL path; it is validated by
-    # ``is_valid_novel_slug`` above. CodeQL can't trace the call, so the
-    # alert is suppressed at the interpolation.
-    progress_paths = [
-        PROGRESS_DIR / f"{name}.json"
-        if resolved_target == "vi"
-        else PROGRESS_DIR / resolved_target / f"{name}.json",  # codeql[py/path-injection]: validated by is_valid_novel_slug
-        novel_root / ("progress.json" if resolved_target == "vi" else f"progress.{resolved_target}.json"),
-    ]
-    completed: set[int] = set()
-    failed: set[int] = set()
-    for progress_path in progress_paths:
-        if not progress_path.exists():
-            continue
-        try:
-            data = json.loads(progress_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            continue
-        completed.update(data.get("completed", []))
-        failed.update(data.get("failed", []))
-    return {"novel": name, "target": resolved_target, "completed": sorted(completed), "failed": sorted(failed)}
+    saved = novels.progress(root, name, resolved_target)
+    return {
+        "novel": name,
+        "target": resolved_target,
+        "completed": saved["completed"],
+        "failed": saved["failed"],
+    }

@@ -49,25 +49,20 @@ from src.api.services.glossary_runtime import (
 from src.api.services.glossary_runtime import (
     save_relationship as save_relationship_impl,
 )
-from src.api.services.novel_paths import (
-    is_valid_novel_slug,
-    resolve_translated_root,
-    safe_novel_path,
-)
-from src.application import config_context
+from src.application import config_context, novels
 
 router = APIRouter(tags=["glossary"])
 
 
 def _validate_novel(name: str) -> Path:
     config = config_context.get_config()
-    root = resolve_translated_root(config.translated_dir)
-    if not is_valid_novel_slug(name):
+    root = novels.resolve_root(config.translated_dir)
+    if not novels.is_valid_slug(name):
         raise HTTPException(
             status_code=404,
             detail={"code": "not_found", "message": f"Invalid novel name: {name!r}"},
         )
-    novel_root = safe_novel_path(root, name)
+    novel_root = novels.resolve_path(root, name)
     if not novel_root.exists():
         raise HTTPException(
             status_code=404,
