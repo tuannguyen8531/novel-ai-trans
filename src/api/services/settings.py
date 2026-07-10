@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from src.api.schemas import SettingsResponse
-from src.application import config_context
+from src.application import config as app_config
 from src.application.errors import ApplicationValidationError
 
 
 def build_settings_response() -> SettingsResponse:
-    config = config_context.get_config()
+    config = app_config.get_config()
     return SettingsResponse(
         translated_dir=config.translated_dir,
         target_language=config.target_language,
@@ -41,7 +41,7 @@ def build_settings_response() -> SettingsResponse:
 
 def apply_settings_patch(patch: dict) -> SettingsResponse:
     try:
-        config_context.apply_settings_patch(patch)
+        app_config.apply_settings_patch(patch)
     except ValueError as error:
         raise ApplicationValidationError(str(error)) from error
     return build_settings_response()

@@ -20,10 +20,10 @@ import threading
 import time
 from pathlib import Path
 
-from src.application import config_context
+from src.application import config as app_config
 from src.application import paths as _paths
 from src.application import translate as _app_translate
-from src.application.config_context import get_config  # legacy reference for patches
+from src.application.config import get_config  # legacy reference for patches
 from src.application.errors import ResourceConflictError as _ApplicationConflictError
 from src.application.errors import ResourceNotFoundError as _ApplicationNotFoundError
 from src.application.progress import ProgressEvent
@@ -86,12 +86,12 @@ def _signal_handler(signum, frame) -> None:  # noqa: ARG001
 
 
 def _get_input_dir(novel_name: str) -> Path:
-    config = config_context.get_config()
+    config = app_config.get_config()
     return _paths.novel_input_dir(config, novel_name)
 
 
 def _get_output_dir(novel_name: str, target_language: str | None = None) -> Path:
-    config = config_context.get_config()
+    config = app_config.get_config()
     return _paths.novel_output_dir(config, novel_name, target_language)
 
 
@@ -111,7 +111,7 @@ def find_untranslated(
     target_language: str | None = None,
 ) -> list[int]:
     """Backward-compatible wrapper around the application helper."""
-    config = config_context.get_config()
+    config = app_config.get_config()
     output_dir = _get_output_dir(novel_name, target_language or config.target_language)
     return _app_translate.find_untranslated(output_dir, chapters, force=force)
 
@@ -211,7 +211,7 @@ def translate_file(
 
 def glossary_main(argv: list[str] | None = None) -> None:
     """Manage per-novel glossary data."""
-    from src.application.glossary_replacements import (
+    from src.application.glossary import (
         apply_pending_replacements,
         dismiss_pending_replacements,
         rollback_glossary_replacement,

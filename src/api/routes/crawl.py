@@ -13,7 +13,7 @@ from src.api.auth import Principal, authenticate
 from src.api.dependencies import get_job_manager, get_state
 from src.api.jobs import JobManager, build_progress_emitter
 from src.api.schemas import CrawlRequestPayload, JobStartResponse
-from src.application import config_context
+from src.application import config as app_config
 from src.application.crawl import (
     CrawlRequest,
     ImportRequest,
@@ -31,7 +31,7 @@ async def post_crawl(
     _: Principal = Depends(authenticate),
     jobs: JobManager = Depends(get_job_manager),
 ) -> JobStartResponse:
-    snapshot = config_context.get_config().clone()
+    snapshot = app_config.get_config().clone()
     loop = asyncio.get_running_loop()
 
     def _run(job, emit, cancel_event):
@@ -110,7 +110,7 @@ async def post_import(
     jobs: JobManager = Depends(get_job_manager),
 ) -> JobStartResponse:
     state = get_state()
-    snapshot = config_context.get_config().clone()
+    snapshot = app_config.get_config().clone()
     loop = asyncio.get_running_loop()
     max_bytes = state.max_upload_bytes
 

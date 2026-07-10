@@ -7,7 +7,7 @@ import zipfile
 from pathlib import Path
 from xml.sax.saxutils import escape
 
-from src.services.epub_importer import (
+from src.services.importer import (
     EpubSection,
     TextExtractor,
     detect_chapter_number,

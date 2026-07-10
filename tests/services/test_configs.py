@@ -7,7 +7,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-from src.services.config_generator import ConfigGenerator, _HtmlCache
+from src.services.configs import ConfigGenerator, _HtmlCache
 from src.services.http import FetchResponse
 
 

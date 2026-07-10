@@ -1,7 +1,7 @@
 from pathlib import Path
 from unittest.mock import patch
 
-from src.application.glossary_replacements import apply_pending_replacements
+from src.application.glossary import apply_pending_replacements
 from src.config import Config, active_config_scope
 from src.services.glossary import save_glossary, update_glossary_term
 
@@ -25,7 +25,7 @@ def test_apply_pending_replacements_uses_explicit_target_scope(tmp_path: Path) -
     with (
         active_config_scope(vietnamese_config),
         patch("src.services.glossary.LOCK_DIR", tmp_path / "locks"),
-        patch("src.application.glossary_replacements.GLOSSARY_BACKUP_DIR", tmp_path / "backups"),
+        patch("src.application.glossary.GLOSSARY_BACKUP_DIR", tmp_path / "backups"),
     ):
         result = apply_pending_replacements("demo", target_language="en", write=True)
 

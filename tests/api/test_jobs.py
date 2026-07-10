@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from src.api.services.job_store import (
+from src.api.services.jobs import (
     JobStore,
     job_to_snapshot,
     snapshot_to_job,

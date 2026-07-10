@@ -22,7 +22,8 @@ from src.api.schemas import (
     NovelRulesPayload,
     NovelSummary,
 )
-from src.application import config_context, novels
+from src.application import config as app_config
+from src.application import novels
 from src.application.errors import PersistenceError
 from src.domain.language import normalize_source_language
 
@@ -43,7 +44,7 @@ def create_novel(
             ),
         )
 
-    root = novels.resolve_root(config_context.get_config().translated_dir)
+    root = novels.resolve_root(app_config.get_config().translated_dir)
     if novels.resolve_path(root, payload.name).exists():
         raise HTTPException(
             status_code=400,
@@ -67,7 +68,7 @@ def create_novel(
 def list_novels_endpoint(
     _: Principal = Depends(authenticate),
 ) -> list[NovelSummary]:
-    root = novels.resolve_root(config_context.get_config().translated_dir)
+    root = novels.resolve_root(app_config.get_config().translated_dir)
     return [NovelSummary(**asdict(summary)) for summary in novels.list_summaries(root)]
 
 
@@ -76,7 +77,7 @@ def novel_detail(
     name: str,
     _: Principal = Depends(authenticate),
 ) -> NovelDetail:
-    root = novels.resolve_root(config_context.get_config().translated_dir)
+    root = novels.resolve_root(app_config.get_config().translated_dir)
     return NovelDetail(**asdict(novels.detail(root, name)))
 
 
@@ -85,7 +86,7 @@ def novel_chapters(
     name: str,
     _: Principal = Depends(authenticate),
 ) -> list[NovelChapterStatus]:
-    root = novels.resolve_root(config_context.get_config().translated_dir)
+    root = novels.resolve_root(app_config.get_config().translated_dir)
     return [NovelChapterStatus(**asdict(chapter)) for chapter in novels.list_chapters(root, name)]
 
 
@@ -97,7 +98,7 @@ def novel_chapter_content(
     target: Literal["vi", "en"] | None = Query(None),
     _: Principal = Depends(authenticate),
 ) -> ChapterContentResponse:
-    config = config_context.get_config()
+    config = app_config.get_config()
     root = novels.resolve_root(config.translated_dir)
     content = novels.read_chapter(
         root,
@@ -116,7 +117,7 @@ def put_chapter_content(
     payload: ChapterContentPayload,
     _: Principal = Depends(authenticate),
 ) -> ChapterContentResponse:
-    root = novels.resolve_root(config_context.get_config().translated_dir)
+    root = novels.resolve_root(app_config.get_config().translated_dir)
     return ChapterContentResponse(**asdict(novels.write_chapter(root, name, number, payload.content)))
 
 
@@ -126,7 +127,7 @@ def delete_chapter(
     number: int,
     _: Principal = Depends(authenticate),
 ) -> None:
-    root = novels.resolve_root(config_context.get_config().translated_dir)
+    root = novels.resolve_root(app_config.get_config().translated_dir)
     novels.delete_chapter(root, name, number)
 
 
@@ -135,7 +136,7 @@ def get_novel_metadata(
     name: str,
     _: Principal = Depends(authenticate),
 ) -> NovelMetadataResponse:
-    root = novels.resolve_root(config_context.get_config().translated_dir)
+    root = novels.resolve_root(app_config.get_config().translated_dir)
     return NovelMetadataResponse(novel=name, data=novels.metadata(root, name))
 
 
@@ -145,7 +146,7 @@ def patch_novel_metadata(
     payload: NovelMetadataPatch,
     _: Principal = Depends(authenticate),
 ) -> NovelMetadataResponse:
-    root = novels.resolve_root(config_context.get_config().translated_dir)
+    root = novels.resolve_root(app_config.get_config().translated_dir)
     updates = payload.model_dump(exclude_none=True)
     if "source_language" in payload.model_fields_set:
         updates["source_language"] = normalize_source_language(payload.source_language) or None
@@ -157,7 +158,7 @@ def delete_novel(
     name: str,
     _: Principal = Depends(authenticate),
 ) -> None:
-    root = novels.resolve_root(config_context.get_config().translated_dir)
+    root = novels.resolve_root(app_config.get_config().translated_dir)
     novels.require_path(root, name)
     state = get_state()
     current = state.job_manager.current
@@ -178,7 +179,7 @@ def list_artifacts(
     name: str,
     _: Principal = Depends(authenticate),
 ) -> list[ArtifactInfoResponse]:
-    root = novels.resolve_root(config_context.get_config().translated_dir)
+    root = novels.resolve_root(app_config.get_config().translated_dir)
     return [ArtifactInfoResponse(**asdict(artifact)) for artifact in novels.list_artifacts(root, name)]
 
 
@@ -188,7 +189,7 @@ def download_artifact(
     filename: str,
     _: Principal = Depends(authenticate),
 ) -> FileResponse:
-    root = novels.resolve_root(config_context.get_config().translated_dir)
+    root = novels.resolve_root(app_config.get_config().translated_dir)
     return FileResponse(novels.artifact(root, name, filename), filename=filename)
 
 
@@ -198,7 +199,7 @@ def delete_artifact(
     filename: str,
     _: Principal = Depends(authenticate),
 ) -> None:
-    root = novels.resolve_root(config_context.get_config().translated_dir)
+    root = novels.resolve_root(app_config.get_config().translated_dir)
     novels.delete_artifact(root, name, filename)
 
 
@@ -208,7 +209,7 @@ def get_illustration(
     filename: str,
     _: Principal = Depends(authenticate),
 ) -> FileResponse:
-    root = novels.resolve_root(config_context.get_config().translated_dir)
+    root = novels.resolve_root(app_config.get_config().translated_dir)
     return FileResponse(novels.illustration(root, name, filename))
 
 
@@ -217,7 +218,7 @@ def get_novel_rules(
     name: str,
     _: Principal = Depends(authenticate),
 ) -> dict[str, str]:
-    root = novels.resolve_root(config_context.get_config().translated_dir)
+    root = novels.resolve_root(app_config.get_config().translated_dir)
     try:
         return {"rules": novels.rules(root, name)}
     except PersistenceError as error:
@@ -230,7 +231,7 @@ def put_novel_rules(
     payload: NovelRulesPayload,
     _: Principal = Depends(authenticate),
 ) -> dict[str, str]:
-    root = novels.resolve_root(config_context.get_config().translated_dir)
+    root = novels.resolve_root(app_config.get_config().translated_dir)
     try:
         novels.save_rules(root, name, payload.rules)
     except PersistenceError as error:

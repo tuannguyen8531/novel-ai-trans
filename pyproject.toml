@@ -83,7 +83,7 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 [tool.ruff.lint.per-file-ignores]
 "src/api/**" = ["B008"]  # FastAPI Depends/File/Form/Query in defaults are intentional
 "src/api/jobs.py" = ["B008", "SIM105"]  # Event loop dispatch uses try/except RuntimeError
-"src/api/services/glossary_runtime.py" = ["B008", "SIM105"]
+"src/api/services/glossary.py" = ["B008", "SIM105"]
 "src/application/crawl.py" = ["B008", "SIM105"]
 "src/application/translate.py" = ["SIM105"]
 "src/application/pack.py" = ["SIM105"]

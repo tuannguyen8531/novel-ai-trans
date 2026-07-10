@@ -13,10 +13,10 @@ from bs4 import BeautifulSoup
 from src.config import SiteConfig, config
 from src.models import CrawlProgress
 from src.services.browser import BrowserFetcher
-from src.services.config_generator import ConfigGenerator
+from src.services.configs import ConfigGenerator
 from src.services.crawler import ConsecutiveFailureError, NovelCrawler
-from src.services.epub_importer import EpubImportError, import_epub
 from src.services.http import FetchError, HttpClient
+from src.services.importer import EpubImportError, import_epub
 from src.services.llm import get_llm
 from src.services.notifier import format_run_footer, get_notifier
 from src.utils.logging import get_logger, setup_logging

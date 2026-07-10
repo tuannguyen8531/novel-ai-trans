@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from src.api.services.glossary_runtime import audit_glossary
+from src.api.services.glossary import audit_glossary
 
 
 def test_vietnamese_audit_reads_legacy_output_directory(tmp_path):
@@ -15,7 +15,7 @@ def test_vietnamese_audit_reads_legacy_output_directory(tmp_path):
     (output_dir / "chapter_001.txt").write_text("cat", encoding="utf-8")
 
     with patch(
-        "src.api.services.glossary_runtime.load_glossary",
+        "src.api.services.glossary.load_glossary",
         return_value={"terms": {"猫": "mèo"}},
     ):
         issues = audit_glossary(novel_root, target="vi")

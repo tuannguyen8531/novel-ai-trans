@@ -10,7 +10,7 @@ from src.api.auth import Principal, authenticate
 from src.api.jobs import JobManager
 
 if TYPE_CHECKING:
-    from src.api.app_factory import AppState
+    from src.api.factory import AppState
 
 # Module-level reference to the current app, set by ``register_routes`` so
 # module-level helpers (e.g. background job runners) can reach the app state

@@ -10,7 +10,7 @@ from src.api.auth import Principal, authenticate
 from src.api.dependencies import get_job_manager
 from src.api.jobs import JobManager, build_progress_emitter
 from src.api.schemas import JobStartResponse, PackRequestPayload
-from src.application import config_context
+from src.application import config as app_config
 from src.application.pack import PackRequest, run_pack
 
 router = APIRouter(tags=["pack"])
@@ -22,7 +22,7 @@ async def post_pack(
     _: Principal = Depends(authenticate),
     jobs: JobManager = Depends(get_job_manager),
 ) -> JobStartResponse:
-    snapshot = config_context.get_config().clone(
+    snapshot = app_config.get_config().clone(
         target_language=payload.target_language,
     )
     loop = asyncio.get_running_loop()

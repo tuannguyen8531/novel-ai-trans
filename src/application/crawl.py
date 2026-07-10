@@ -13,7 +13,7 @@ from pathlib import Path
 from threading import Event
 from urllib.parse import urlparse
 
-from src.application import config_context
+from src.application import config as app_config
 from src.application.errors import (
     ApplicationValidationError,
     ExternalServiceError,
@@ -24,10 +24,10 @@ from src.application.errors import (
 from src.application.paths import CONFIG_DIR, RUNTIME_DIR, RUNTIME_OUTPUT_ROOT
 from src.application.progress import ProgressEvent
 from src.config import SiteConfig
-from src.services.config_generator import ConfigGenerator
+from src.services.configs import ConfigGenerator
 from src.services.crawler import ConsecutiveFailureError, NovelCrawler
-from src.services.epub_importer import EpubImportError, import_epub
 from src.services.http import FetchError
+from src.services.importer import EpubImportError, import_epub
 from src.services.llm import get_llm
 
 _DRAFT_TTL = timedelta(days=7)
@@ -104,7 +104,7 @@ def run_crawl(
     cancel_event: Event | None = None,
 ) -> CrawlResult:
     """Run the crawler with cooperative cancellation."""
-    config = config_context.get_config()
+    config = app_config.get_config()
     started_at = time.time()
     config_path = _resolve_config_path(request.target)
     site_config = SiteConfig.from_file(config_path)
@@ -501,7 +501,7 @@ def import_epub_workflow(
     progress_callback: Callable[[ProgressEvent], None] | None = None,
     cancel_event: Event | None = None,
 ) -> ImportResult:
-    config = config_context.get_config()
+    config = app_config.get_config()
     share_root = request.translated_output or (Path(config.translated_dir) if config.translated_dir else None)
     if share_root is None:
         share_root = Path("translated")

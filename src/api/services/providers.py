@@ -11,11 +11,11 @@ from src.api.schemas import (
     ProviderModelsResponse,
     ProvidersResponse,
 )
-from src.application import config_context
+from src.application import config as app_config
 
 
 def list_providers() -> ProvidersResponse:
-    config = config_context.get_config()
+    config = app_config.get_config()
     providers = [
         ProviderInfo(
             name="ollama",
@@ -46,7 +46,7 @@ def list_provider_models(provider: str) -> ProviderModelsResponse:
     On any network/parse failure we return an empty list rather than
     raising — the GUI can still let the user type a model name manually.
     """
-    config = config_context.get_config()
+    config = app_config.get_config()
     provider = provider.lower().strip()
     try:
         if provider == "ollama":
@@ -119,7 +119,7 @@ def check_provider_runtime(
     openrouter_api_key: str | None = None,
 ) -> ProviderCheckResponse:
     """Synchronously verify a provider is reachable."""
-    config = config_context.get_config()
+    config = app_config.get_config()
     provider = provider.lower().strip()
     if provider == "ollama":
         base_url = (ollama_base_url or config.ollama_base_url).rstrip("/")

@@ -11,7 +11,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from src.application.config_context import get_config
+from src.application.config import get_config
 from src.application.pack import (
     PackRequest,
     PackResult,

@@ -13,11 +13,11 @@ from pathlib import Path
 from src.config import config
 from src.domain.glossary import select_active_glossary_terms
 from src.models.state import TranslationState
-from src.services.chapter_memory import load_recent_chapter_summaries
 from src.services.glossary import (
     get_active_context,
     load_glossary,
 )
+from src.services.memory import load_recent_chapter_summaries
 from src.services.metadata import load_source_language
 
 RULES_DIR = Path("rules")

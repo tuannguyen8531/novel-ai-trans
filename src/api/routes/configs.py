@@ -25,7 +25,7 @@ from src.api.schemas import (
     DraftSummary,
     JobStartResponse,
 )
-from src.application import config_context
+from src.application import config as app_config
 from src.application.crawl import (
     ConfigGenerationResult,
     ConfigValidationResult,
@@ -147,7 +147,7 @@ async def post_generate_config(
     _: Principal = Depends(authenticate),
     jobs: JobManager = Depends(get_job_manager),
 ) -> JobStartResponse:
-    snapshot = config_context.get_config().clone()
+    snapshot = app_config.get_config().clone()
     loop = asyncio.get_running_loop()
 
     def _run(job, emit, cancel_event):
@@ -194,7 +194,7 @@ async def post_validate_config(
     _: Principal = Depends(authenticate),
     jobs: JobManager = Depends(get_job_manager),
 ) -> JobStartResponse:
-    snapshot = config_context.get_config().clone()
+    snapshot = app_config.get_config().clone()
     import asyncio
 
     loop = asyncio.get_running_loop()

@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from src.api.services.env_persistence import (
+from src.api.services.env import (
     config_to_env_dict,
     persist_config_to_env,
 )

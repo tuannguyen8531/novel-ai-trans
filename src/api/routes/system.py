@@ -22,7 +22,7 @@ from src.api.schemas import (
     SettingsResponse,
     TelegramSettingsPatch,
 )
-from src.api.services.env_persistence import (
+from src.api.services.env import (
     persist_config_to_env,
 )
 from src.api.services.providers import (
@@ -31,7 +31,7 @@ from src.api.services.providers import (
     list_providers,
 )
 from src.api.services.settings import apply_settings_patch, build_settings_response
-from src.application import config_context
+from src.application import config as app_config
 
 router = APIRouter(tags=["settings"])
 _logger = logging.getLogger(__name__)
@@ -66,7 +66,7 @@ def persist_settings(
     Telegram tokens) are only written when the in-memory value is non-empty,
     so a freshly-cleared field is not written as an empty line.
     """
-    config = config_context.get_config()
+    config = app_config.get_config()
     env_path = DEFAULT_ENV_PATH
     written = persist_config_to_env(
         config,
@@ -107,7 +107,7 @@ def persist_telegram_settings(
 ) -> SettingsPersistResponse:
     """Update Telegram runtime settings and persist only Telegram env fields."""
     apply_settings_patch(payload.model_dump())
-    config = config_context.get_config()
+    config = app_config.get_config()
     env_path = DEFAULT_ENV_PATH
     written = persist_config_to_env(
         config,
@@ -136,7 +136,7 @@ def persist_provider_settings(
     if not patch.get("openrouter_api_key"):
         patch.pop("openrouter_api_key", None)
     apply_settings_patch(patch)
-    config = config_context.get_config()
+    config = app_config.get_config()
     env_path = DEFAULT_ENV_PATH
     written = persist_config_to_env(
         config,

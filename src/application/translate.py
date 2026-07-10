@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from threading import Event
 
-from src.application import config_context
+from src.application import config as app_config
 from src.application import paths as _paths
 from src.application.errors import (
     ApplicationValidationError,
@@ -42,8 +42,8 @@ _normalize_target = normalize_target_language
 
 
 def get_config() -> Config:
-    """Indirection so tests can patch ``config_context.get_config``."""
-    return config_context.get_config()
+    """Indirection so tests can patch ``app_config.get_config``."""
+    return app_config.get_config()
 
 
 # ---------------------------------------------------------------------------
@@ -246,7 +246,7 @@ def run_translation(
     The function does not print to stdout/stderr; it returns a structured
     :class:`TranslationResult` and emits progress events to *progress_callback*.
     """
-    config = config_context.get_config()
+    config = app_config.get_config()
     started_at = time.time()
     novel_name = request.novel
     target_language = request.target_language or config.target_language

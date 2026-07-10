@@ -19,7 +19,7 @@ from pathlib import Path
 from threading import Event
 
 from src.application import paths as _paths
-from src.application.config_context import get_config
+from src.application.config import get_config
 from src.application.errors import (
     ApplicationValidationError,
     OperationCancelledError,

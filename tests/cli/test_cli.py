@@ -23,7 +23,7 @@ from src.config import Config
 
 @pytest.fixture(autouse=True)
 def _patch_cli_paths():
-    """Each test patches the application config_context default rather than
+    """Each test patches the application config default rather than
     the legacy module-level ``config`` global."""
     with patch("src.services.glossary.config") as mock_glossary_config:
         mock_glossary_config.translated_dir = ""
@@ -33,7 +33,7 @@ def _patch_cli_paths():
 
 def _patch_config(**attrs):
     """Return a context manager that overrides the application config snapshot."""
-    from src.application import config_context
+    from src.application import config
 
     class _FakeConfig:
         def __init__(self):
@@ -43,7 +43,7 @@ def _patch_config(**attrs):
         def __getattr__(self, name):
             return ""
 
-    return patch.object(config_context, "get_config", lambda: _FakeConfig())
+    return patch.object(config, "get_config", lambda: _FakeConfig())
 
 
 class TestScanChapters:
@@ -275,7 +275,7 @@ class TestTranslationWorkflow:
             return True, len(output), 1.0, 0
 
         with (
-            patch("src.application.translate.config_context.get_config", return_value=config),
+            patch("src.application.translate.app_config.get_config", return_value=config),
             patch("src.application.translate._paths.PROGRESS_DIR", tmp_path / "progress"),
             patch("src.application.translate._validate_provider"),
             patch("src.application.translate.build_graph", return_value=object()),
@@ -299,7 +299,7 @@ class TestTranslationWorkflow:
         config = Config(translated_dir=str(translated_root))
 
         with (
-            patch("src.application.translate.config_context.get_config", return_value=config),
+            patch("src.application.translate.app_config.get_config", return_value=config),
             patch("src.application.translate._paths.PROGRESS_DIR", tmp_path / "progress"),
             patch("src.application.translate._validate_provider"),
             patch("src.application.translate.build_graph", return_value=object()),
@@ -329,7 +329,7 @@ class TestTranslationWorkflow:
             return True, 10, 1.0, 0
 
         with (
-            patch("src.application.translate.config_context.get_config", return_value=config),
+            patch("src.application.translate.app_config.get_config", return_value=config),
             patch("src.application.translate._paths.PROGRESS_DIR", tmp_path / "progress"),
             patch("src.application.translate._validate_provider"),
             patch("src.application.translate.build_graph", return_value=object()),
@@ -350,7 +350,7 @@ class TestGlossaryCli:
         self.lock_patcher = patch("src.services.glossary.LOCK_DIR", self.base / "locks")
         self.lock_patcher.start()
         self.backup_patcher = patch(
-            "src.application.glossary_replacements.GLOSSARY_BACKUP_DIR",
+            "src.application.glossary.GLOSSARY_BACKUP_DIR",
             self.base / "backups",
         )
         self.backup_patcher.start()

@@ -9,7 +9,7 @@ from threading import Event
 
 from src.application import paths as _paths
 from src.application.errors import ResourceConflictError, ResourceNotFoundError
-from src.application.glossary_replacements import (
+from src.application.glossary import (
     apply_pending_replacements,
     dismiss_pending_replacements,
     rollback_glossary_replacement,

@@ -17,13 +17,13 @@ from src.domain.language import target_language_name
 from src.domain.terms import filter_extracted_terms
 from src.models.state import TranslationState
 from src.prompts import render_prompt
-from src.services.chapter_memory import save_chapter_summary
 from src.services.glossary import (
     save_characters_batch,
     save_glossary,
 )
 from src.services.llm import get_llm
 from src.services.logger import log_ai_call, log_error
+from src.services.memory import save_chapter_summary
 from src.services.metadata import save_source_language
 from src.utils.json import parse_json_object
 

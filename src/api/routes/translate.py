@@ -12,7 +12,7 @@ from src.api.auth import Principal, authenticate
 from src.api.dependencies import get_job_manager
 from src.api.jobs import JobManager, build_progress_emitter
 from src.api.schemas import JobStartResponse, TranslationRequestPayload
-from src.application import config_context
+from src.application import config as app_config
 from src.application.translate import (
     TranslationRequest,
     run_translation,
@@ -28,7 +28,7 @@ async def post_translate(
     _: Principal = Depends(authenticate),
     jobs: JobManager = Depends(get_job_manager),
 ) -> JobStartResponse:
-    snapshot = config_context.get_config().clone(
+    snapshot = app_config.get_config().clone(
         llm_provider=payload.provider or None,
         target_language=payload.target_language or None,
     )
@@ -125,7 +125,7 @@ def translation_progress(
 ) -> dict:
     from src.application import novels
 
-    config = config_context.get_config()
+    config = app_config.get_config()
     root = novels.resolve_root(config.translated_dir)
     if not novels.is_valid_slug(name):
         from src.api.errors import ResourceNotFoundError

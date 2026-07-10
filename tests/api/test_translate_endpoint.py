@@ -11,8 +11,8 @@ from unittest.mock import patch
 import pytest
 from starlette.testclient import TestClient
 
-from src.api.app_factory import create_app
-from src.application import config_context as _config_context
+from src.api.factory import create_app
+from src.application import config as _config
 from src.config import Config
 
 
@@ -25,8 +25,8 @@ def client():
         drafts = tmp_path / "drafts"
         drafts.mkdir(parents=True, exist_ok=True)
         snapshot = Config(translated_dir=str(translated))
-        original = _config_context.get_config()
-        _config_context.set_default(snapshot)
+        original = _config.get_config()
+        _config.set_default(snapshot)
         try:
             with patch.dict(
                 os.environ,
@@ -42,7 +42,7 @@ def client():
                 with TestClient(app) as test_client:
                     yield test_client
         finally:
-            _config_context.set_default(original)
+            _config.set_default(original)
 
 
 def test_translate_accepts_empty_provider_and_target(client):

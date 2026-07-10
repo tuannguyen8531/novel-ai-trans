@@ -25,7 +25,7 @@ from src.api.schemas import (
     GlossaryTermUpdate,
     JobStartResponse,
 )
-from src.api.services.glossary_runtime import (
+from src.api.services.glossary import (
     apply_replacements,
     audit_glossary,
     dismiss_replacements,
@@ -37,25 +37,26 @@ from src.api.services.glossary_runtime import (
     update_term,
     validate_glossary,
 )
-from src.api.services.glossary_runtime import (
+from src.api.services.glossary import (
     remove_character as remove_character_impl,
 )
-from src.api.services.glossary_runtime import (
+from src.api.services.glossary import (
     remove_relationship as remove_relationship_impl,
 )
-from src.api.services.glossary_runtime import (
+from src.api.services.glossary import (
     save_character as save_character_impl,
 )
-from src.api.services.glossary_runtime import (
+from src.api.services.glossary import (
     save_relationship as save_relationship_impl,
 )
-from src.application import config_context, novels
+from src.application import config as app_config
+from src.application import novels
 
 router = APIRouter(tags=["glossary"])
 
 
 def _validate_novel(name: str) -> Path:
-    config = config_context.get_config()
+    config = app_config.get_config()
     root = novels.resolve_root(config.translated_dir)
     if not novels.is_valid_slug(name):
         raise HTTPException(
@@ -216,7 +217,7 @@ async def post_validate_glossary(
     jobs: JobManager = Depends(get_job_manager),
 ) -> JobStartResponse:
     novel_root = _validate_novel(name)
-    snapshot = config_context.get_config().clone()
+    snapshot = app_config.get_config().clone()
     loop = asyncio.get_running_loop()
 
     def _run(job, emit, cancel_event):
@@ -242,7 +243,7 @@ async def post_audit_glossary(
     jobs: JobManager = Depends(get_job_manager),
 ) -> JobStartResponse:
     novel_root = _validate_novel(name)
-    snapshot = config_context.get_config().clone(target_language=target)
+    snapshot = app_config.get_config().clone(target_language=target)
     loop = asyncio.get_running_loop()
     resolved_target = target or snapshot.target_language
 
