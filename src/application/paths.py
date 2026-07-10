@@ -33,18 +33,44 @@ def novel_root_dir(config: Any, novel_name: str) -> Path:
     return Path(config.translated_dir) / novel_name
 
 
+def novel_input_dir_from_root(novel_root: Path) -> Path:
+    return novel_root / "input"
+
+
+def novel_output_dir_from_root(novel_root: Path, target_language: str) -> Path:
+    target = normalize_target_language(target_language)
+    base = novel_root / "output"
+    return base if target == "vi" else base / target
+
+
+def novel_artifact_dir_from_root(novel_root: Path) -> Path:
+    return novel_root / "artifacts"
+
+
 def novel_input_dir(config: Any, novel_name: str) -> Path:
-    return novel_root_dir(config, novel_name) / "input"
+    return novel_input_dir_from_root(novel_root_dir(config, novel_name))
 
 
 def novel_output_dir(config: Any, novel_name: str, target_language: str | None = None) -> Path:
     target = normalize_target_language(target_language or config.target_language)
-    base = novel_root_dir(config, novel_name) / "output"
-    return base if target == "vi" else base / target
+    return novel_output_dir_from_root(novel_root_dir(config, novel_name), target)
 
 
 def novel_artifact_dir(config: Any, novel_name: str) -> Path:
-    return novel_root_dir(config, novel_name) / "artifacts"
+    return novel_artifact_dir_from_root(novel_root_dir(config, novel_name))
+
+
+def translation_progress_path_for_target(
+    novel_name: str,
+    target_language: str,
+    *,
+    progress_root: Path | None = None,
+) -> Path:
+    target = normalize_target_language(target_language)
+    root = progress_root or PROGRESS_DIR
+    if target == "vi":
+        return root / f"{novel_name}.json"
+    return root / target / f"{novel_name}.json"
 
 
 def translation_progress_path(
@@ -55,10 +81,7 @@ def translation_progress_path(
     progress_root: Path | None = None,
 ) -> Path:
     target = normalize_target_language(target_language or config.target_language)
-    root = progress_root or PROGRESS_DIR
-    if target == "vi":
-        return root / f"{novel_name}.json"
-    return root / target / f"{novel_name}.json"
+    return translation_progress_path_for_target(novel_name, target, progress_root=progress_root)
 
 
 def translation_report_path(
@@ -90,9 +113,13 @@ __all__ = [
     "LOCK_DIR",
     "GLOSSARY_BACKUP_DIR",
     "novel_root_dir",
+    "novel_input_dir_from_root",
+    "novel_output_dir_from_root",
+    "novel_artifact_dir_from_root",
     "novel_input_dir",
     "novel_output_dir",
     "novel_artifact_dir",
+    "translation_progress_path_for_target",
     "translation_progress_path",
     "translation_report_path",
 ]

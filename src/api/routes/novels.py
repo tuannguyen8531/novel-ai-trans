@@ -34,10 +34,15 @@ from src.api.services.novel_paths import (
     resolve_translated_root,
     safe_novel_path,
 )
+from src.application import paths as _paths
 from src.application.paths import PROGRESS_DIR
 from src.domain.target_language import SUPPORTED_TARGET_LANGUAGES, normalize_target_language
 
 router = APIRouter(tags=["novels"])
+
+_CHAPTER_PATTERN = re.compile(r"^chapter_(\d+)\.txt$")
+_ARTIFACT_SUFFIXES = frozenset({".epub", ".pdf"})
+_IMAGE_SUFFIXES = frozenset({".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif"})
 
 
 @router.post("/novels", status_code=status.HTTP_201_CREATED)
@@ -66,9 +71,9 @@ def create_novel(
 
     try:
         novel_root.mkdir(parents=True, exist_ok=True)
-        (novel_root / "input").mkdir(parents=True, exist_ok=True)
-        (novel_root / "output").mkdir(parents=True, exist_ok=True)
-        (novel_root / "artifacts").mkdir(parents=True, exist_ok=True)
+        _paths.novel_input_dir_from_root(novel_root).mkdir(parents=True, exist_ok=True)
+        _paths.novel_output_dir_from_root(novel_root, "vi").mkdir(parents=True, exist_ok=True)
+        _paths.novel_artifact_dir_from_root(novel_root).mkdir(parents=True, exist_ok=True)
 
         from src.services.glossary import normalize_source_language
 
@@ -91,25 +96,16 @@ def create_novel(
     return {"name": payload.name, "message": "Novel created successfully."}
 
 
-_CHAPTER_PATTERN = re.compile(r"^chapter_(\d+)\.txt$")
-
-
-def _input_dir(novel_root: Path) -> Path:
-    return novel_root / "input"
-
-
-def _output_dir(novel_root: Path, target: str) -> Path:
-    return novel_root / "output" if target == "vi" else novel_root / "output" / target
-
-
 def _progress_paths(novel_root: Path, novel: str, target: str) -> tuple[Path, ...]:
     # ``novel`` is the slug from the URL path; every caller validates it
     # with ``is_valid_novel_slug`` (which rejects separators, ``..``,
     # absolute paths) before this function is invoked. The CodeQL
     # py/path-injection query cannot follow the validation across the
     # function boundary, so the alert is suppressed here.
-    runtime_path = (
-        PROGRESS_DIR / f"{novel}.json" if target == "vi" else PROGRESS_DIR / target / f"{novel}.json"
+    runtime_path = _paths.translation_progress_path_for_target(
+        novel,
+        target,
+        progress_root=PROGRESS_DIR,
     )  # codeql[py/path-injection]: validated by is_valid_novel_slug at each route entry
     shared_path = novel_root / (f"progress.{target}.json" if target != "vi" else "progress.json")
     return runtime_path, shared_path
@@ -168,7 +164,7 @@ def _load_metadata(novel_root: Path) -> dict[str, Any]:
 
 def _summarize_novel(root: Path, name: str) -> NovelSummary:
     novel_root = safe_novel_path(root, name)
-    input_dir = _input_dir(novel_root)
+    input_dir = _paths.novel_input_dir_from_root(novel_root)
     metadata = _load_metadata(novel_root)
     chapters = _list_chapters(input_dir)
     total = len(chapters)
@@ -176,7 +172,7 @@ def _summarize_novel(root: Path, name: str) -> NovelSummary:
     targets: list[NovelTargetProgress] = []
     for target in SUPPORTED_TARGET_LANGUAGES:
         progress = _load_progress_candidates(_progress_paths(novel_root, name, target))
-        on_disk = _count_outputs(_output_dir(novel_root, target))
+        on_disk = _count_outputs(_paths.novel_output_dir_from_root(novel_root, target))
         # Trust on-disk output as the authoritative "completed" set so that
         # novels with missing or stale progress.json (e.g. imported EPUBs,
         # chapters placed manually, or a wiped progress file) still report
@@ -324,10 +320,11 @@ def novel_chapters(
     novel_root = safe_novel_path(root, name)
     if not novel_root.exists():
         raise ResourceNotFoundError(f"Novel not found: {name}")
-    input_dir = _input_dir(novel_root)
+    input_dir = _paths.novel_input_dir_from_root(novel_root)
     sources = _list_chapters(input_dir)
     outputs_by_target: dict[str, set[int]] = {
-        target: _count_outputs(_output_dir(novel_root, target)) for target in SUPPORTED_TARGET_LANGUAGES
+        target: _count_outputs(_paths.novel_output_dir_from_root(novel_root, target))
+        for target in SUPPORTED_TARGET_LANGUAGES
     }
     statuses: list[NovelChapterStatus] = []
     for number in sorted(sources):
@@ -337,7 +334,7 @@ def novel_chapters(
             has_translation = number in outputs_by_target[target]
             title = f"Chapter {number}"
             if has_translation:
-                out_dir = _output_dir(novel_root, target)
+                out_dir = _paths.novel_output_dir_from_root(novel_root, target)
                 out_path = out_dir / f"chapter_{number:03d}.txt"
                 title = _get_chapter_title_on_fly(out_path, f"Chapter {number}")
             statuses.append(
@@ -369,7 +366,7 @@ def novel_chapter_content(
     if not novel_root.exists():
         raise ResourceNotFoundError(f"Novel not found: {name}")
     if view == "source":
-        path = _input_dir(novel_root) / f"chapter_{number}.txt"
+        path = _paths.novel_input_dir_from_root(novel_root) / f"chapter_{number}.txt"
         if not path.exists():
             raise ResourceNotFoundError(f"Source chapter not found: chapter {number}")
         return ChapterContentResponse(
@@ -381,8 +378,8 @@ def novel_chapter_content(
         )
     target_normalized = normalize_target_language(target or config.target_language)
     candidates = [
-        _output_dir(novel_root, target_normalized) / f"chapter_{number:03d}.txt",
-        _output_dir(novel_root, target_normalized) / f"chapter_{number}.txt",
+        _paths.novel_output_dir_from_root(novel_root, target_normalized) / f"chapter_{number:03d}.txt",
+        _paths.novel_output_dir_from_root(novel_root, target_normalized) / f"chapter_{number}.txt",
     ]
     for path in candidates:
         if path.exists():
@@ -410,7 +407,7 @@ def put_chapter_content(
     novel_root = safe_novel_path(root, name)
     if not novel_root.exists():
         raise ResourceNotFoundError(f"Novel not found: {name}")
-    input_dir = _input_dir(novel_root)
+    input_dir = _paths.novel_input_dir_from_root(novel_root)
     input_dir.mkdir(parents=True, exist_ok=True)
     path = input_dir / f"chapter_{number}.txt"
     path.write_text(payload.content, encoding="utf-8")
@@ -436,7 +433,7 @@ def delete_chapter(
     novel_root = safe_novel_path(root, name)
     if not novel_root.exists():
         raise ResourceNotFoundError(f"Novel not found: {name}")
-    input_dir = _input_dir(novel_root)
+    input_dir = _paths.novel_input_dir_from_root(novel_root)
     path = input_dir / f"chapter_{number}.txt"
     if not path.exists():
         raise ResourceNotFoundError(f"Input chapter not found: chapter {number}")
@@ -571,18 +568,7 @@ def download_artifact(
     novel_root = safe_novel_path(root, name)
     if not novel_root.exists():
         raise ResourceNotFoundError(f"Novel not found: {name}")
-    if "/" in filename or "\\" in filename or filename.startswith("."):
-        raise ResourceNotFoundError("Invalid artifact name")
-    # Try the new "artifacts" subdirectory first, fallback to novel root
-    artifact_path = (novel_root / "artifacts" / filename).resolve()
-    if not artifact_path.is_file():
-        artifact_path = (novel_root / filename).resolve()
-    try:
-        artifact_path.relative_to(novel_root.resolve())
-    except ValueError as error:
-        raise ResourceNotFoundError("Artifact escapes novel root") from error
-    if not artifact_path.is_file() or artifact_path.suffix.lower() not in {".epub", ".pdf"}:
-        raise ResourceNotFoundError(f"Artifact not found: {filename}")
+    artifact_path = _resolve_artifact_path(novel_root, filename)
     return FileResponse(artifact_path, filename=filename)
 
 
@@ -599,18 +585,7 @@ def delete_artifact(
     novel_root = safe_novel_path(root, name)
     if not novel_root.exists():
         raise ResourceNotFoundError(f"Novel not found: {name}")
-    if "/" in filename or "\\" in filename or filename.startswith("."):
-        raise ResourceNotFoundError("Invalid artifact name")
-    # Try the new "artifacts" subdirectory first, fallback to novel root
-    artifact_path = (novel_root / "artifacts" / filename).resolve()
-    if not artifact_path.is_file():
-        artifact_path = (novel_root / filename).resolve()
-    try:
-        artifact_path.relative_to(novel_root.resolve())
-    except ValueError as error:
-        raise ResourceNotFoundError("Artifact escapes novel root") from error
-    if not artifact_path.is_file() or artifact_path.suffix.lower() not in {".epub", ".pdf"}:
-        raise ResourceNotFoundError(f"Artifact not found: {filename}")
+    artifact_path = _resolve_artifact_path(novel_root, filename)
     artifact_path.unlink()
     return None
 
@@ -636,10 +611,24 @@ def get_illustration(
         illustration_path.relative_to(illustrations_dir.resolve())
     except ValueError as error:
         raise ResourceNotFoundError("Illustration escapes illustrations directory") from error
-    _ALLOWED_IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif"}
-    if not illustration_path.is_file() or illustration_path.suffix.lower() not in _ALLOWED_IMAGE_SUFFIXES:
+    if not illustration_path.is_file() or illustration_path.suffix.lower() not in _IMAGE_SUFFIXES:
         raise ResourceNotFoundError(f"Illustration not found: {filename}")
     return FileResponse(illustration_path)
+
+
+def _resolve_artifact_path(novel_root: Path, filename: str) -> Path:
+    if "/" in filename or "\\" in filename or filename.startswith("."):
+        raise ResourceNotFoundError("Invalid artifact name")
+    artifact_path = (_paths.novel_artifact_dir_from_root(novel_root) / filename).resolve()
+    if not artifact_path.is_file():
+        artifact_path = (novel_root / filename).resolve()
+    try:
+        artifact_path.relative_to(novel_root.resolve())
+    except ValueError as error:
+        raise ResourceNotFoundError("Artifact escapes novel root") from error
+    if not artifact_path.is_file() or artifact_path.suffix.lower() not in _ARTIFACT_SUFFIXES:
+        raise ResourceNotFoundError(f"Artifact not found: {filename}")
+    return artifact_path
 
 
 def _list_artifacts(novel_root: Path) -> list[Path]:
@@ -648,15 +637,15 @@ def _list_artifacts(novel_root: Path) -> list[Path]:
     seen_names = set()
     artifacts: list[Path] = []
     # 1. Scan the new "artifacts" subdirectory first
-    artifacts_dir = novel_root / "artifacts"
+    artifacts_dir = _paths.novel_artifact_dir_from_root(novel_root)
     if artifacts_dir.is_dir():
         for p in artifacts_dir.iterdir():
-            if p.is_file() and p.suffix.lower() in {".epub", ".pdf"}:
+            if p.is_file() and p.suffix.lower() in _ARTIFACT_SUFFIXES:
                 artifacts.append(p)
                 seen_names.add(p.name)
     # 2. Scan the novel root directory for backward compatibility
     for p in novel_root.iterdir():
-        if p.is_file() and p.suffix.lower() in {".epub", ".pdf"} and p.name not in seen_names:
+        if p.is_file() and p.suffix.lower() in _ARTIFACT_SUFFIXES and p.name not in seen_names:
             artifacts.append(p)
     return sorted(artifacts, key=lambda p: p.name)
 
@@ -671,7 +660,7 @@ def _parse_artifact_info(novel_root: Path, artifact_path: Path) -> tuple[str, in
     parts = stem.rsplit(".", 1)
     target_language = parts[1] if len(parts) == 2 else "vi"
 
-    output_dir = _output_dir(novel_root, target_language)
+    output_dir = _paths.novel_output_dir_from_root(novel_root, target_language)
     chapter_count = len(_count_outputs(output_dir))
     return target_language, chapter_count
 
