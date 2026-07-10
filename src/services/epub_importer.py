@@ -11,8 +11,8 @@ from urllib.parse import unquote, urldefrag
 from xml.etree import ElementTree
 
 from src.models import ChapterResult, NovelMetadata
+from src.services.chapters import detect_chapter_number, is_obvious_non_chapter_title
 from src.services.metadata import metadata_to_dict
-from src.utils.chapters import detect_chapter_number, is_obvious_non_chapter_title
 from src.utils.files import write_bytes_atomic, write_json_atomic, write_text_atomic
 from src.utils.text import slugify
 

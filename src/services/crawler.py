@@ -23,9 +23,9 @@ from src.models import (
     CrawlResult,
     NovelMetadata,
 )
+from src.services.chapters import detect_chapter_number, select_likely_chapters
 from src.services.http import FetchError, FetchResponse, HttpClient
 from src.services.metadata import metadata_to_dict
-from src.utils.chapters import detect_chapter_number, select_likely_chapters
 from src.utils.files import write_text_atomic
 from src.utils.text import html_to_plain_text, normalize_text, slugify
 

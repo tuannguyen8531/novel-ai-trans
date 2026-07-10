@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
@@ -37,10 +36,10 @@ from src.application import config_context
 from src.application import paths as _paths
 from src.application.paths import PROGRESS_DIR
 from src.domain.language import SUPPORTED_TARGET_LANGUAGES, normalize_source_language, normalize_target_language
+from src.services import chapters
 
 router = APIRouter(tags=["novels"])
 
-_CHAPTER_PATTERN = re.compile(r"^chapter_(\d+)\.txt$")
 _ARTIFACT_SUFFIXES = frozenset({".epub", ".pdf"})
 _IMAGE_SUFFIXES = frozenset({".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif"})
 
@@ -128,28 +127,6 @@ def _load_progress_candidates(paths: tuple[Path, ...]) -> dict[str, list[int]]:
     return {"completed": sorted(completed), "failed": sorted(failed)}
 
 
-def _list_chapters(input_dir: Path) -> dict[int, Path]:
-    if not input_dir.exists():
-        return {}
-    chapters: dict[int, Path] = {}
-    for f in input_dir.iterdir():
-        match = _CHAPTER_PATTERN.match(f.name)
-        if match and f.is_file():
-            chapters[int(match.group(1))] = f
-    return dict(sorted(chapters.items()))
-
-
-def _count_outputs(output_dir: Path) -> set[int]:
-    if not output_dir.exists():
-        return set()
-    out: set[int] = set()
-    for f in output_dir.iterdir():
-        match = _CHAPTER_PATTERN.match(f.name)
-        if match and f.is_file():
-            out.add(int(match.group(1)))
-    return out
-
-
 def _load_metadata(novel_root: Path) -> dict[str, Any]:
     metadata_path = novel_root / "metadata.json"
     if not metadata_path.exists():
@@ -164,13 +141,13 @@ def _summarize_novel(root: Path, name: str) -> NovelSummary:
     novel_root = safe_novel_path(root, name)
     input_dir = _paths.novel_input_dir_from_root(novel_root)
     metadata = _load_metadata(novel_root)
-    chapters = _list_chapters(input_dir)
-    total = len(chapters)
+    source_chapters = chapters.scan(input_dir)
+    total = len(source_chapters)
 
     targets: list[NovelTargetProgress] = []
     for target in SUPPORTED_TARGET_LANGUAGES:
         progress = _load_progress_candidates(_progress_paths(novel_root, name, target))
-        on_disk = _count_outputs(_paths.novel_output_dir_from_root(novel_root, target))
+        on_disk = chapters.numbers(_paths.novel_output_dir_from_root(novel_root, target))
         # Trust on-disk output as the authoritative "completed" set so that
         # novels with missing or stale progress.json (e.g. imported EPUBs,
         # chapters placed manually, or a wiped progress file) still report
@@ -248,64 +225,6 @@ def novel_detail(
     )
 
 
-def _get_chapter_title_on_fly(file_path: Path, fallback: str, keep_cjk: bool = True) -> str:
-    if not file_path.exists():
-        return fallback
-    try:
-        with open(file_path, encoding="utf-8") as f:
-            lines = []
-            for line in f:
-                stripped = line.strip()
-                if stripped.startswith("\ufeff"):
-                    stripped = stripped.lstrip("\ufeff")
-                if stripped:
-                    lines.append(stripped)
-                    if len(lines) >= 5:
-                        break
-        if not lines:
-            return fallback
-        header_lines = []
-        for idx, line in enumerate(lines[:5]):
-            if line.startswith("Chương ") or "Chương" in line or line.lower().startswith("chapter"):
-                header_lines.append((idx, line))
-            else:
-                break
-        title = header_lines[-1][1] if header_lines else lines[0]
-        if not title:
-            return fallback
-        replacements = {
-            "『": '"',
-            "』": '"',
-            "「": '"',
-            "」": '"',
-            "【": "[",
-            "】": "]",
-            "〖": "[",
-            "〗": "]",
-            "—": "-",
-            "–": "-",
-            "﹏": "~",
-        }
-        for orig, rep in replacements.items():
-            title = title.replace(orig, rep)
-        if not keep_cjk:
-            cjk_pattern = re.compile(
-                r"[\u4e00-\u9fff"
-                r"\u3040-\u309f"
-                r"\u30a0-\u30ff"
-                r"\uac00-\ud7af"
-                r"\u1100-\u11ff"
-                r"\u3130-\u318f"
-                r"\ufe30-\ufe4f"
-                r"]"
-            )
-            title = cjk_pattern.sub("", title)
-        title = re.sub(r" +", " ", title)
-        return title.strip()
-    except Exception:
-        return fallback
-
-
 @router.get("/novels/{name}/chapters", response_model=list[NovelChapterStatus])
 def novel_chapters(
     name: str,
@@ -319,21 +238,21 @@ def novel_chapters(
     if not novel_root.exists():
         raise ResourceNotFoundError(f"Novel not found: {name}")
     input_dir = _paths.novel_input_dir_from_root(novel_root)
-    sources = _list_chapters(input_dir)
+    sources = chapters.scan(input_dir)
     outputs_by_target: dict[str, set[int]] = {
-        target: _count_outputs(_paths.novel_output_dir_from_root(novel_root, target)) for target in SUPPORTED_TARGET_LANGUAGES
+        target: chapters.numbers(_paths.novel_output_dir_from_root(novel_root, target)) for target in SUPPORTED_TARGET_LANGUAGES
     }
     statuses: list[NovelChapterStatus] = []
     for number in sorted(sources):
         source_path = input_dir / f"chapter_{number}.txt"
-        source_title = _get_chapter_title_on_fly(source_path, f"Chapter {number}")
+        source_title = chapters.read_title(source_path, f"Chapter {number}")
         for target in SUPPORTED_TARGET_LANGUAGES:
             has_translation = number in outputs_by_target[target]
             title = f"Chapter {number}"
             if has_translation:
                 out_dir = _paths.novel_output_dir_from_root(novel_root, target)
                 out_path = out_dir / f"chapter_{number:03d}.txt"
-                title = _get_chapter_title_on_fly(out_path, f"Chapter {number}")
+                title = chapters.read_title(out_path, f"Chapter {number}")
             statuses.append(
                 NovelChapterStatus(
                     number=number,
@@ -656,7 +575,7 @@ def _parse_artifact_info(novel_root: Path, artifact_path: Path) -> tuple[str, in
     target_language = parts[1] if len(parts) == 2 else "vi"
 
     output_dir = _paths.novel_output_dir_from_root(novel_root, target_language)
-    chapter_count = len(_count_outputs(output_dir))
+    chapter_count = len(chapters.numbers(output_dir))
     return target_language, chapter_count
 
 

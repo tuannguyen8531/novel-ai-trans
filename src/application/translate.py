@@ -12,7 +12,6 @@ Long-running workflows in this module accept:
 
 from __future__ import annotations
 
-import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -32,6 +31,7 @@ from src.domain.chunking import estimate_token_count
 from src.domain.language import normalize_target_language
 from src.graph.builder import build_graph
 from src.models.state import initial_state
+from src.services import chapters as chapter_service
 from src.services.logger import log_error
 from src.services.metadata import load_source_language
 from src.services.notifier import get_notifier
@@ -51,20 +51,11 @@ def get_config() -> Config:
 # ---------------------------------------------------------------------------
 
 
-_CHAPTER_PATTERN = re.compile(r"^chapter_(\d+)\.txt$")
-
-
 def scan_chapters(input_dir: Path) -> dict[int, Path]:
     """Scan *input_dir* for chapter files. Returns chapter number -> path."""
     if not input_dir.exists():
         raise ResourceNotFoundError(f"Input directory not found: {input_dir}")
-    chapters: dict[int, Path] = {}
-    for f in input_dir.iterdir():
-        if f.is_file():
-            match = _CHAPTER_PATTERN.match(f.name)
-            if match:
-                chapters[int(match.group(1))] = f
-    return dict(sorted(chapters.items()))
+    return chapter_service.scan(input_dir)
 
 
 def find_untranslated(
@@ -76,12 +67,7 @@ def find_untranslated(
     """Return chapter numbers that still need translation under *output_dir*."""
     if force:
         return sorted(chapters.keys())
-    translated: set[int] = set()
-    if output_dir.exists():
-        for f in output_dir.iterdir():
-            match = _CHAPTER_PATTERN.match(f.name)
-            if match:
-                translated.add(int(match.group(1)))
+    translated = chapter_service.numbers(output_dir)
     return [ch for ch in chapters if ch not in translated]
 
 
