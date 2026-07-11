@@ -69,7 +69,7 @@ def create_app(
     base = Path(__file__).resolve().parent.parent.parent
     _ = base / "runtime"
     jobs_dir = jobs_dir or base / "runtime" / "jobs"
-    from src.api.services.job_store import JobStore
+    from src.api.services.jobs import JobStore
 
     job_store = JobStore(jobs_dir)
     # Drop expired job files so the on-disk history mirrors the in-memory

@@ -20,9 +20,10 @@ from urllib.request import Request, urlopen
 
 from fpdf import FPDF
 
+from src import paths as _paths
 from src.config import config
 from src.domain.illustrations import parse_illustration_marker
-from src.domain.target_language import normalize_target_language
+from src.domain.language import normalize_target_language
 
 # ---------------------------------------------------------------------------
 # Path helpers
@@ -30,18 +31,16 @@ from src.domain.target_language import normalize_target_language
 
 
 def _get_output_dir(novel_name: str, target_language: str | None = None) -> Path:
-    target = normalize_target_language(target_language or config.target_language)
-    base_dir = Path(config.translated_dir) / novel_name / "output"
-    return base_dir if target == "vi" else base_dir / target
+    return _paths.novel_output_dir(config, novel_name, target_language)
 
 
 def _get_default_package_dir(novel_name: str, target_language: str | None = None) -> Path:
     """Return the default directory where EPUB/PDF files are written."""
-    return Path(config.translated_dir) / novel_name / "artifacts"
+    return _paths.novel_artifact_dir(config, novel_name)
 
 
 def _get_novel_root_dir(novel_name: str) -> Path:
-    return Path(config.translated_dir) / novel_name
+    return _paths.novel_root_dir(config, novel_name)
 
 
 def _package_file_stem(novel_name: str, target_language: str | None = None) -> str:

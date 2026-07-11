@@ -12,15 +12,15 @@ Long-running workflows in this module accept:
 
 from __future__ import annotations
 
-import re
 import time
 from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Event
 
-from src.application import config_context
-from src.application import paths as _paths
+from src import paths as _paths
+from src.application import config as app_config
 from src.application.errors import (
     ApplicationValidationError,
     OperationCancelledError,
@@ -29,50 +29,19 @@ from src.application.errors import (
 from src.application.progress import ProgressEvent
 from src.config import Config
 from src.domain.chunking import estimate_token_count
-from src.domain.target_language import normalize_target_language
+from src.domain.language import normalize_target_language
 from src.graph.builder import build_graph
 from src.models.state import initial_state
+from src.services import chapters as chapter_service
 from src.services.logger import log_error
+from src.services.metadata import load_source_language
 from src.services.notifier import get_notifier
 from src.utils.text import normalize_paragraph_spacing
 
-# Re-export for backward compat with the CLI adapter.
-_normalize_target = normalize_target_language
-
 
 def get_config() -> Config:
-    """Indirection so tests can patch ``config_context.get_config``."""
-    return config_context.get_config()
-
-
-# ---------------------------------------------------------------------------
-# Path helpers (operate on the active config snapshot)
-# ---------------------------------------------------------------------------
-
-
-def _input_dir(config: Config, novel_name: str) -> Path:
-    return Path(config.translated_dir) / novel_name / "input"
-
-
-def _output_dir(config: Config, novel_name: str, target_language: str | None = None) -> Path:
-    target = normalize_target_language(target_language or config.target_language)
-    base = Path(config.translated_dir) / novel_name / "output"
-    return base if target == "vi" else base / target
-
-
-def _progress_path(config: Config, novel_name: str, target_language: str | None = None) -> Path:
-    target = normalize_target_language(target_language or config.target_language)
-    if target == "vi":
-        return _paths.PROGRESS_DIR / f"{novel_name}.json"
-    return _paths.PROGRESS_DIR / target / f"{novel_name}.json"
-
-
-def _report_path(config: Config, novel_name: str, chapter_number: int, target_language: str | None = None) -> Path:
-    target = normalize_target_language(target_language or config.target_language)
-    base = _paths.REPORT_DIR
-    if target == "vi":
-        return base / novel_name / f"chapter_{chapter_number:03d}.json"
-    return base / target / novel_name / f"chapter_{chapter_number:03d}.json"
+    """Indirection so tests can patch ``app_config.get_config``."""
+    return app_config.get_config()
 
 
 # ---------------------------------------------------------------------------
@@ -80,20 +49,11 @@ def _report_path(config: Config, novel_name: str, chapter_number: int, target_la
 # ---------------------------------------------------------------------------
 
 
-_CHAPTER_PATTERN = re.compile(r"^chapter_(\d+)\.txt$")
-
-
 def scan_chapters(input_dir: Path) -> dict[int, Path]:
     """Scan *input_dir* for chapter files. Returns chapter number -> path."""
     if not input_dir.exists():
         raise ResourceNotFoundError(f"Input directory not found: {input_dir}")
-    chapters: dict[int, Path] = {}
-    for f in input_dir.iterdir():
-        if f.is_file():
-            match = _CHAPTER_PATTERN.match(f.name)
-            if match:
-                chapters[int(match.group(1))] = f
-    return dict(sorted(chapters.items()))
+    return chapter_service.scan(input_dir)
 
 
 def find_untranslated(
@@ -105,12 +65,7 @@ def find_untranslated(
     """Return chapter numbers that still need translation under *output_dir*."""
     if force:
         return sorted(chapters.keys())
-    translated: set[int] = set()
-    if output_dir.exists():
-        for f in output_dir.iterdir():
-            match = _CHAPTER_PATTERN.match(f.name)
-            if match:
-                translated.add(int(match.group(1)))
+    translated = chapter_service.numbers(output_dir)
     return [ch for ch in chapters if ch not in translated]
 
 
@@ -252,10 +207,8 @@ def _emit(
     event: ProgressEvent,
 ) -> None:
     if callback is not None:
-        try:
+        with suppress(Exception):
             callback(event)
-        except Exception:  # noqa: BLE001 - never let a callback crash the workflow
-            pass
 
 
 def _check_cancel(cancel_event: Event | None) -> None:
@@ -268,7 +221,7 @@ def novel_locked(func):
 
     @functools.wraps(func)
     def wrapper(request, *args, **kwargs):
-        from src.services.glossary import novel_lock
+        from src.application.glossary import novel_lock
 
         with novel_lock(request.novel):
             return func(request, *args, **kwargs)
@@ -289,7 +242,7 @@ def run_translation(
     The function does not print to stdout/stderr; it returns a structured
     :class:`TranslationResult` and emits progress events to *progress_callback*.
     """
-    config = config_context.get_config()
+    config = app_config.get_config()
     started_at = time.time()
     novel_name = request.novel
     target_language = request.target_language or config.target_language
@@ -303,9 +256,9 @@ def run_translation(
     if request.enable_summary:
         config.enable_summary = True
 
-    input_dir = _input_dir(config, novel_name)
-    output_dir = _output_dir(config, novel_name, target_language)
-    progress_path = _progress_path(config, novel_name, target_language)
+    input_dir = _paths.novel_input_dir(config, novel_name)
+    output_dir = _paths.novel_output_dir(config, novel_name, target_language)
+    progress_path = _paths.translation_progress_path(config, novel_name, target_language)
 
     chapters = scan_chapters(input_dir)
     if not chapters:
@@ -389,8 +342,6 @@ def run_translation(
 
     source_language = request.source_language
     if not source_language:
-        from src.services.glossary import load_source_language
-
         source_language = load_source_language(novel_name)
     if not source_language:
         source_language = ""
@@ -443,7 +394,7 @@ def run_translation(
                 target_language=target_normalized,
                 graph=graph,
                 output_dir=output_dir,
-                report_path=_report_path(config, novel_name, chapter_num, target_normalized),
+                report_path=_paths.translation_report_path(config, novel_name, chapter_num, target_normalized),
             )
         except OperationCancelledError:
             cancelled = True

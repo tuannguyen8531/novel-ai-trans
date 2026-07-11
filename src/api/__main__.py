@@ -13,7 +13,7 @@ def main() -> int:
     log_level = os.getenv("API_LOG_LEVEL", "info")
     print(f"Starting service at http://{host}:{port}", flush=True)
     uvicorn.run(
-        "src.api.app_factory:create_app",
+        "src.api.factory:create_app",
         factory=True,
         host=host,
         port=port,

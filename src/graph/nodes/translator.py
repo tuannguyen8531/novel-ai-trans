@@ -9,13 +9,13 @@ Builds a system prompt from template with:
 - Review feedback (if retrying)
 """
 
-from src.domain.glossary import (
+from src.domain.characters import (
     format_address_rules,
-    format_glossary_for_prompt,
     format_relationships_shorthand,
 )
+from src.domain.glossary import format_glossary_for_prompt
 from src.domain.illustrations import detach_illustration_markers, restore_illustration_markers
-from src.domain.target_language import target_language_name
+from src.domain.language import target_language_name
 from src.models.state import TranslationState
 from src.prompts import render_prompt
 from src.services.llm import get_llm

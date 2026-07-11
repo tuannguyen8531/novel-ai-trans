@@ -12,7 +12,7 @@ def test_serve_only_starts_uvicorn():
 
     assert result == 0
     mocked_run.assert_called_once_with(
-        "src.api.app_factory:create_app",
+        "src.api.factory:create_app",
         factory=True,
         host="127.0.0.1",
         port=8000,

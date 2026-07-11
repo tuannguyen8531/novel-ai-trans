@@ -11,14 +11,14 @@ import argparse
 import sys
 from pathlib import Path
 
-from src.application.config_context import get_config
+from src.application.config import get_config
 from src.application.pack import (
     PackRequest,
     PackResult,
     run_pack,
 )
 from src.application.progress import ProgressEvent
-from src.domain.target_language import SUPPORTED_TARGET_LANGUAGES
+from src.domain.language import SUPPORTED_TARGET_LANGUAGES
 from src.services.packaging import package_file_stem
 from src.utils.display import GREEN, RED, RESET, YELLOW
 

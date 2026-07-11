@@ -8,29 +8,27 @@ from unittest.mock import patch
 import pytest
 
 from src.application.errors import ResourceConflictError
-from src.services.glossary import (
-    PENDING_REPLACEMENTS_KEY,
+from src.application.glossary import (
     apply_pending_replacements,
-    clean_glossary,
     dismiss_pending_replacements,
+    rollback_glossary_replacement,
+)
+from src.domain.glossary import PENDING_REPLACEMENTS_KEY
+from src.services.glossary import (
+    GlossaryLockError,
+    clean_glossary,
     get_active_context,
-    load_chapter_summaries_recent,
-    load_chapter_summary,
     load_glossary,
     load_glossary_data,
-    load_source_language,
     novel_lock,
     remove_character,
     remove_glossary_term,
     remove_relationship,
-    rollback_glossary_replacement,
-    save_chapter_summary,
     save_character,
     save_character_pronoun,
     save_characters_batch,
     save_glossary,
     save_relationship,
-    save_source_language,
     update_glossary_term,
     validate_glossary,
 )
@@ -41,7 +39,10 @@ class TestGlossary:
         self.temp_dir = tempfile.TemporaryDirectory()
         self.patcher = patch("src.services.glossary.GLOSSARY_DIR", Path(self.temp_dir.name))
         self.patcher.start()
-        self.backup_patcher = patch("src.services.glossary.GLOSSARY_BACKUP_DIR", Path(self.temp_dir.name) / "backups")
+        self.backup_patcher = patch(
+            "src.application.glossary.GLOSSARY_BACKUP_DIR",
+            Path(self.temp_dir.name) / "backups",
+        )
         self.backup_patcher.start()
         self.config_patcher = patch("src.services.glossary.config")
         self.mock_config = self.config_patcher.start()
@@ -308,50 +309,6 @@ class TestGlossary:
 
         assert validate_glossary("test-novel") == []
 
-    def test_save_and_load_chapter_summary(self):
-        save_chapter_summary("test-novel", 1, "Chapter 1 summary")
-        result = load_chapter_summary("test-novel", 1)
-        assert result == "Chapter 1 summary"
-
-    def test_load_nonexistent_summary(self):
-        result = load_chapter_summary("nonexistent", 1)
-        assert result == ""
-
-    def test_load_recent_summaries(self):
-        for i in range(1, 6):
-            save_chapter_summary("test-novel", i, f"Summary {i}")
-
-        result = load_chapter_summaries_recent("test-novel", 6, max_count=3)
-        assert "Chapter 3" in result
-        assert "Chapter 4" in result
-        assert "Chapter 5" in result
-        assert "Chapter 2" not in result
-
-    def test_recent_summaries_order(self):
-        save_chapter_summary("test-novel", 1, "First")
-        save_chapter_summary("test-novel", 2, "Second")
-        save_chapter_summary("test-novel", 3, "Third")
-
-        result = load_chapter_summaries_recent("test-novel", 4, max_count=3)
-        first_idx = result.index("Chapter 1")
-        second_idx = result.index("Chapter 2")
-        third_idx = result.index("Chapter 3")
-        assert first_idx < second_idx < third_idx
-
-    def test_save_and_load_source_language(self):
-        save_source_language("test-novel", "chinese")
-        result = load_source_language("test-novel")
-        assert result == "chinese"
-
-    def test_load_source_language_nonexistent(self):
-        result = load_source_language("nonexistent")
-        assert result == ""
-
-    def test_save_empty_language_skips(self):
-        save_source_language("test-novel", "")
-        result = load_source_language("test-novel")
-        assert result == ""
-
     def test_target_language_uses_separate_glossary_file(self):
         self.mock_config.target_language = "vi"
         save_glossary("test-novel", {"李白": "Lý Bạch"})
@@ -413,7 +370,10 @@ class TestGlossaryTranslatedDir:
         self.patcher_glossary_dir.start()
         self.patcher_lock_dir = patch("src.services.glossary.LOCK_DIR", self.base / "locks")
         self.patcher_lock_dir.start()
-        self.patcher_backup_dir = patch("src.services.glossary.GLOSSARY_BACKUP_DIR", self.base / "backups")
+        self.patcher_backup_dir = patch(
+            "src.application.glossary.GLOSSARY_BACKUP_DIR",
+            self.base / "backups",
+        )
         self.patcher_backup_dir.start()
 
     def teardown_method(self):
@@ -546,8 +506,11 @@ class TestGlossaryTranslatedDir:
             save_glossary("test-novel", {"魔法": "ma thuật"})
             update_glossary_term("test-novel", "魔法", "魔法", "ma pháp", is_user_edit=True)
 
-            with novel_lock("test-novel"), pytest.raises(ResourceConflictError, match="locked"):
-                apply_pending_replacements("test-novel")
+            with novel_lock("test-novel"):
+                with pytest.raises(GlossaryLockError, match="locked"), novel_lock("test-novel"):
+                    pass
+                with pytest.raises(ResourceConflictError, match="locked"):
+                    apply_pending_replacements("test-novel")
 
     def test_apply_keeps_pending_when_output_is_missing(self):
         translated_root = self.base / "translated"

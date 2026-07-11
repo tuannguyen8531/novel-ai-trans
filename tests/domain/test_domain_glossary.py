@@ -1,24 +1,77 @@
 import pytest
 
-from src.domain.glossary import (
-    audit_term_usage,
-    find_glossary_replacement_conflicts,
+from src.domain.characters import (
     format_address_rules,
-    format_glossary_for_prompt,
-    format_recent_summaries,
     format_relationships_shorthand,
     merge_character_context,
     normalize_address_rules,
     normalize_character_edges,
-    normalize_glossary_data,
-    replace_glossary_value,
-    replace_glossary_values,
     select_active_address_rules,
     select_active_character_context,
-    select_active_glossary_terms,
     upsert_relationship,
+)
+from src.domain.glossary import (
+    PENDING_REPLACEMENTS_KEY,
+    audit_term_usage,
+    find_glossary_replacement_conflicts,
+    format_glossary_for_prompt,
+    merge_pending_replacements,
+    normalize_glossary_data,
+    queue_pending_replacement,
+    replace_glossary_value,
+    replace_glossary_values,
+    select_active_glossary_terms,
     validate_glossary_data,
 )
+
+
+def test_queue_pending_replacement_collapses_edit_chain_and_revert():
+    data = queue_pending_replacement(
+        {},
+        kind="term",
+        sources=["魔法"],
+        old_value="ma thuật",
+        new_value="ma pháp",
+    )
+    data = queue_pending_replacement(
+        data,
+        kind="term",
+        sources=["魔法"],
+        old_value="ma pháp",
+        new_value="huyền thuật",
+    )
+
+    assert data[PENDING_REPLACEMENTS_KEY] == [
+        {
+            "kind": "term",
+            "sources": ["魔法"],
+            "old": "ma thuật",
+            "new": "huyền thuật",
+        }
+    ]
+
+    reverted = queue_pending_replacement(
+        data,
+        kind="term",
+        sources=["魔法"],
+        old_value="huyền thuật",
+        new_value="ma thuật",
+    )
+    assert reverted[PENDING_REPLACEMENTS_KEY] == []
+
+
+def test_merge_pending_replacements_connects_restored_and_current_edits():
+    restored = [{"kind": "term", "sources": ["魔法"], "old": "ma thuật", "new": "ma pháp"}]
+    current = [{"kind": "term", "sources": ["魔法"], "old": "ma pháp", "new": "huyền thuật"}]
+
+    assert merge_pending_replacements(restored, current) == [
+        {
+            "kind": "term",
+            "sources": ["魔法"],
+            "old": "ma thuật",
+            "new": "huyền thuật",
+        }
+    ]
 
 
 def test_format_glossary_for_prompt():
@@ -145,12 +198,6 @@ def test_replace_character_name_keeps_configured_casing():
 
     assert count == 2
     assert updated == "lý thái bạch gặp lý thái bạch."
-
-
-def test_format_recent_summaries_keeps_recent_order():
-    summaries = {"1": "First", "2": "Second", "3": "Third", "4": "Fourth"}
-    result = format_recent_summaries(summaries, current_chapter=5, max_count=3)
-    assert result == "Chapter 2: Second\n\nChapter 3: Third\n\nChapter 4: Fourth"
 
 
 def test_select_active_character_context_excludes_first_degree_neighbors():

@@ -7,13 +7,14 @@ import re
 import time
 import uuid
 from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from threading import Event
 from urllib.parse import urlparse
 
-from src.application import config_context
+from src.application import config as app_config
 from src.application.errors import (
     ApplicationValidationError,
     ExternalServiceError,
@@ -21,13 +22,13 @@ from src.application.errors import (
     PersistenceError,
     ResourceNotFoundError,
 )
-from src.application.paths import CONFIG_DIR, RUNTIME_DIR, RUNTIME_OUTPUT_ROOT
 from src.application.progress import ProgressEvent
 from src.config import SiteConfig
-from src.services.config_generator import ConfigGenerator
+from src.paths import CONFIG_DIR, RUNTIME_DIR, RUNTIME_OUTPUT_ROOT
+from src.services.configs import ConfigGenerator
 from src.services.crawler import ConsecutiveFailureError, NovelCrawler
-from src.services.epub_importer import EpubImportError, import_epub
 from src.services.http import FetchError
+from src.services.importer import EpubImportError, import_epub
 from src.services.llm import get_llm
 
 _DRAFT_TTL = timedelta(days=7)
@@ -50,12 +51,21 @@ class CrawlRequest:
     use_browser: bool | None = None
     headed: bool = False
     workers: int = 1
+    dry_run: bool = False
+
+
+@dataclass
+class CrawlPreview:
+    index: int
+    title: str
+    url: str
 
 
 @dataclass
 class CrawlResult:
     novel: str
     title: str
+    author: str | None
     fetched: int
     skipped: int
     failed: int
@@ -65,14 +75,14 @@ class CrawlResult:
     started_at: float
     finished_at: float
     cancelled: bool = False
+    dry_run: bool = False
+    preview: list[CrawlPreview] = field(default_factory=list)
 
 
 def _emit(callback: Callable[[ProgressEvent], None] | None, event: ProgressEvent) -> None:
     if callback is not None:
-        try:
+        with suppress(Exception):
             callback(event)
-        except Exception:  # noqa: BLE001
-            pass
 
 
 def _check_cancel(event: Event | None) -> None:
@@ -80,7 +90,7 @@ def _check_cancel(event: Event | None) -> None:
         raise OperationCancelledError("Crawl cancelled.")
 
 
-def _resolve_config_path(target: str) -> Path:
+def resolve_config_path(target: str) -> Path:
     path = Path(target)
     if path.is_file():
         return path
@@ -104,10 +114,13 @@ def run_crawl(
     cancel_event: Event | None = None,
 ) -> CrawlResult:
     """Run the crawler with cooperative cancellation."""
-    config = config_context.get_config()
+    config = app_config.get_config()
     started_at = time.time()
-    config_path = _resolve_config_path(request.target)
-    site_config = SiteConfig.from_file(config_path)
+    try:
+        config_path = resolve_config_path(request.target)
+        site_config = SiteConfig.from_file(config_path)
+    except (OSError, ValueError) as error:
+        raise ApplicationValidationError(str(error)) from error
     # Headed mode forces a browser with the host's real Chrome identity and
     # a reusable profile, so challenge clearance is device-bound. The
     # headless path keeps the legacy ephemeral fingerprint.
@@ -117,7 +130,7 @@ def run_crawl(
         use_browser = request.use_browser
     else:
         use_browser = False
-    workers = request.workers or 1
+    workers = request.workers
     if workers < 1:
         raise ApplicationValidationError("Number of workers must be at least 1.")
     max_chapters = request.max_chapters
@@ -151,7 +164,7 @@ def run_crawl(
             retry_attempts=site_config.retry_attempts,
             retry_backoff_seconds=site_config.retry_backoff_seconds,
             max_concurrency=workers,
-            profile_dir=_browser_profile_dir(site_config.start_url) if request.headed else None,
+            profile_dir=browser_profile_dir(site_config.start_url) if request.headed else None,
             headless=not request.headed,
             challenge_timeout_seconds=120.0 if request.headed else None,
         )
@@ -195,6 +208,28 @@ def run_crawl(
         )
 
     try:
+        if request.dry_run:
+            metadata, discovered = crawler.discover_chapters()
+            if max_chapters is not None:
+                discovered = discovered[:max_chapters]
+            return CrawlResult(
+                novel=site_config.name,
+                title=metadata.title,
+                author=metadata.author,
+                fetched=0,
+                skipped=0,
+                failed=0,
+                total=len(discovered),
+                output_dir="",
+                chapter_output_dir="",
+                started_at=started_at,
+                finished_at=time.time(),
+                dry_run=True,
+                preview=[
+                    CrawlPreview(index=index, title=chapter.title, url=chapter.url)
+                    for index, chapter in enumerate(discovered, start=1)
+                ],
+            )
         result = crawler.crawl(
             RUNTIME_OUTPUT_ROOT,
             max_chapters=max_chapters,
@@ -206,7 +241,7 @@ def run_crawl(
             cancel_event=cancel_event,
         )
     except ConsecutiveFailureError as error:
-        raise ExternalServiceError(str(error)) from error
+        raise ExternalServiceError(str(error), details={"novel": site_config.name}) from error
     except (FetchError, OSError, ValueError) as error:
         raise ApplicationValidationError(str(error)) from error
     finally:
@@ -231,6 +266,7 @@ def run_crawl(
     return CrawlResult(
         novel=site_config.name,
         title=result.metadata.title,
+        author=result.metadata.author,
         fetched=fetched,
         skipped=skipped,
         failed=failed,
@@ -246,17 +282,6 @@ def run_crawl(
 # ---------------------------------------------------------------------------
 # Config generation
 # ---------------------------------------------------------------------------
-
-
-@dataclass
-class ConfigGenerationRequest:
-    url: str
-    name: str | None = None
-    provider: str | None = None
-    use_browser: bool = False
-    headed: bool = False
-    no_cache: bool = False
-    ignore_sample: bool = False
 
 
 @dataclass
@@ -278,10 +303,11 @@ def generate_config(
     ignore_sample: bool = False,
     progress_callback: Callable[[ProgressEvent], None] | None = None,
     cancel_event: Event | None = None,
-    drafts_dir: Path,
+    drafts_dir: Path | None = None,
 ) -> ConfigGenerationResult:
     """Generate a site config using AI and persist it as a draft."""
-    drafts_dir.mkdir(parents=True, exist_ok=True)
+    if drafts_dir is not None:
+        drafts_dir.mkdir(parents=True, exist_ok=True)
     if provider:
         from src.services.llm.factory import _create_provider
 
@@ -308,29 +334,40 @@ def generate_config(
     except ValueError as error:
         _emit(progress_callback, ProgressEvent(kind="log", message=f"Validation warning: {error}"))
 
-    draft_id = uuid.uuid4().hex
-    now = datetime.now(UTC)
-    expires = now + _DRAFT_TTL
     suggested_name = str(config_dict.get("name", "generated"))
-    draft = {
-        "draft_id": draft_id,
-        "name": suggested_name,
-        "created_at": now.isoformat(),
-        "expires_at": expires.isoformat(),
-        "source_url": url,
-        "config": config_dict,
-    }
-    draft_path = drafts_dir / f"{draft_id}.json"
-    draft_path.write_text(
-        json.dumps(draft, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
+    draft_id = ""
+    expires = None
+    if drafts_dir is not None:
+        draft_id = uuid.uuid4().hex
+        now = datetime.now(UTC)
+        expires = now + _DRAFT_TTL
+        draft = {
+            "draft_id": draft_id,
+            "name": suggested_name,
+            "created_at": now.isoformat(),
+            "expires_at": expires.isoformat(),
+            "source_url": url,
+            "config": config_dict,
+        }
+        draft_path = drafts_dir / f"{draft_id}.json"
+        draft_path.write_text(
+            json.dumps(draft, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
     return ConfigGenerationResult(
         draft_id=draft_id,
         suggested_name=suggested_name,
         config=config_dict,
         expires_at=expires,
     )
+
+
+def save_generated_config(config: dict, output_dir: Path) -> Path:
+    """Persist a confirmed generated config."""
+    try:
+        return ConfigGenerator.save(config, output_dir)
+    except (OSError, ValueError) as error:
+        raise PersistenceError(str(error)) from error
 
 
 # ---------------------------------------------------------------------------
@@ -350,9 +387,14 @@ class ConfigIssue:
 class ConfigValidationResult:
     ok: bool
     target: str
+    config_path: str = ""
+    start_url: str = ""
+    fetcher: str = "http"
     issues: list[ConfigIssue] = field(default_factory=list)
     metadata: dict = field(default_factory=dict)
     chapter_count: int = 0
+    sample_url: str | None = None
+    content_length: int | None = None
 
 
 def validate_config(
@@ -364,8 +406,11 @@ def validate_config(
 ) -> ConfigValidationResult:
     """Test selectors from a config against live HTML."""
 
-    config_path = _resolve_config_path(target)
-    site_config = SiteConfig.from_file(config_path)
+    try:
+        config_path = resolve_config_path(target)
+        site_config = SiteConfig.from_file(config_path)
+    except (OSError, ValueError) as error:
+        raise ApplicationValidationError(str(error)) from error
     use_browser = use_browser if use_browser is not None else False
     _check_cancel(cancel_event)
     _emit(progress_callback, ProgressEvent(kind="phase", message=f"Validating {site_config.name}"))
@@ -380,7 +425,14 @@ def validate_config(
         )
         fetcher.__enter__()
         try:
-            return _validate_with_fetcher(site_config, fetcher, cancel_event, progress_callback)
+            return _validate_with_fetcher(
+                site_config,
+                fetcher,
+                cancel_event,
+                progress_callback,
+                config_path=config_path,
+                fetcher_name="browser",
+            )
         finally:
             fetcher.__exit__(None, None, None)
     else:
@@ -392,20 +444,37 @@ def validate_config(
             delay_seconds=site_config.request_delay_seconds,
             respect_robots=False,
         )
-        return _validate_with_fetcher(site_config, fetcher, cancel_event, progress_callback)
+        return _validate_with_fetcher(
+            site_config,
+            fetcher,
+            cancel_event,
+            progress_callback,
+            config_path=config_path,
+            fetcher_name="http",
+        )
 
 
-def _validate_with_fetcher(site_config, fetcher, cancel_event, progress_callback) -> ConfigValidationResult:
+def _validate_with_fetcher(
+    site_config,
+    fetcher,
+    cancel_event,
+    progress_callback,
+    *,
+    config_path: Path,
+    fetcher_name: str,
+) -> ConfigValidationResult:
     from bs4 import BeautifulSoup
 
     issues: list[ConfigIssue] = []
     metadata: dict = {}
     chapter_count = 0
+    sample_url = None
+    content_length = None
     ok = True
 
     if site_config.toc_expand_selector:
         if not hasattr(fetcher, "fetch_with_clicks"):
-            raise ApplicationValidationError("toc_expand_selector requires browser mode.")
+            raise ApplicationValidationError("toc_expand_selector requires browser mode (-b/--browser).")
         response = fetcher.fetch_with_clicks(
             site_config.start_url,
             [site_config.toc_expand_selector],
@@ -442,6 +511,7 @@ def _validate_with_fetcher(site_config, fetcher, cancel_event, progress_callback
 
     if chapters:
         first = chapters[0]
+        sample_url = first.url
         _check_cancel(cancel_event)
         ch_html = fetcher.fetch(first.url).body
         ch_soup = BeautifulSoup(ch_html, "html.parser")
@@ -461,13 +531,21 @@ def _validate_with_fetcher(site_config, fetcher, cancel_event, progress_callback
             matches = len(ch_soup.select(sel))
             status = "ok" if matches > 0 else "warn"
             issues.append(ConfigIssue(label="remove_selectors", selector=sel, matches=matches, status=status))
+        content_node = ch_soup.select_one(site_config.chapter_content_selector)
+        if content_node is not None:
+            content_length = len(content_node.get_text(strip=True))
 
     return ConfigValidationResult(
         ok=ok,
         target=site_config.name,
+        config_path=str(config_path),
+        start_url=site_config.start_url,
+        fetcher=fetcher_name,
         issues=issues,
         metadata=metadata,
         chapter_count=chapter_count,
+        sample_url=sample_url,
+        content_length=content_length,
     )
 
 
@@ -501,7 +579,7 @@ def import_epub_workflow(
     progress_callback: Callable[[ProgressEvent], None] | None = None,
     cancel_event: Event | None = None,
 ) -> ImportResult:
-    config = config_context.get_config()
+    config = app_config.get_config()
     share_root = request.translated_output or (Path(config.translated_dir) if config.translated_dir else None)
     if share_root is None:
         share_root = Path("translated")
@@ -535,7 +613,7 @@ def import_epub_workflow(
 # ---------------------------------------------------------------------------
 
 
-def _browser_profile_dir(start_url: str) -> Path:
+def browser_profile_dir(start_url: str) -> Path:
     """Return a per-host persistent browser profile directory.
 
     Anchored at the project root so the API server (which may run from a
@@ -550,15 +628,18 @@ def _browser_profile_dir(start_url: str) -> Path:
 
 __all__ = [
     "CrawlRequest",
+    "CrawlPreview",
     "CrawlResult",
     "run_crawl",
-    "ConfigGenerationRequest",
     "ConfigGenerationResult",
     "generate_config",
+    "save_generated_config",
     "ConfigIssue",
     "ConfigValidationResult",
     "validate_config",
     "ImportRequest",
     "ImportResult",
     "import_epub_workflow",
+    "resolve_config_path",
+    "browser_profile_dir",
 ]

@@ -5,18 +5,15 @@ from __future__ import annotations
 import asyncio
 import json
 import re
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 
-from src.api.application_config_context import config_context
-from src.api.auth import Principal, authenticate
-from src.api.dependencies import get_job_manager, get_state
+from src.api.dependencies import AuthenticatedPrincipal, JobManagerDependency, get_state
 from src.api.errors import ApplicationValidationError as _ApiValidationError
 from src.api.errors import ResourceNotFoundError
-from src.api.jobs import JobManager
 from src.api.schemas import (
     ConfigGenerateRequest,
     ConfigSaveRequest,
@@ -26,6 +23,7 @@ from src.api.schemas import (
     DraftSummary,
     JobStartResponse,
 )
+from src.application import config as app_config
 from src.application.crawl import (
     ConfigGenerationResult,
     ConfigValidationResult,
@@ -36,15 +34,12 @@ from src.application.crawl import (
 from src.application.crawl import (
     validate_config as application_validate_config,
 )
-from src.application.paths import CONFIG_DIR as _CONFIG_DIR
 from src.config import SiteConfig
-
-_current_app = None  # type: ignore[var-annotated]
+from src.paths import CONFIG_DIR as _CONFIG_DIR
 
 router = APIRouter(tags=["configs"])
 
 _SLUG_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
-_DRAFT_TTL = timedelta(days=7)
 
 
 def _is_valid_slug(name: str) -> bool:
@@ -86,14 +81,14 @@ def _list_configs() -> list[ConfigSummary]:
 
 
 @router.get("/configs", response_model=list[ConfigSummary])
-def get_configs(_: Principal = Depends(authenticate)) -> list[ConfigSummary]:
+def get_configs(_: AuthenticatedPrincipal) -> list[ConfigSummary]:
     return _list_configs()
 
 
 @router.get("/configs/{name}")
 def get_config_file(
     name: str,
-    _: Principal = Depends(authenticate),
+    _: AuthenticatedPrincipal,
 ) -> dict[str, Any]:
     path = _config_path(name)
     if not path.exists():
@@ -109,7 +104,7 @@ def save_config(
     name: str,
     payload: ConfigSaveRequest,
     request: Request,
-    _: Principal = Depends(authenticate),
+    _: AuthenticatedPrincipal,
 ) -> dict[str, Any]:
     if not _is_valid_slug(name):
         raise _ApiValidationError(f"Invalid config name: {name!r}")
@@ -144,10 +139,10 @@ def save_config(
 async def post_generate_config(
     payload: ConfigGenerateRequest,
     request: Request,
-    _: Principal = Depends(authenticate),
-    jobs: JobManager = Depends(get_job_manager),
+    _: AuthenticatedPrincipal,
+    jobs: JobManagerDependency,
 ) -> JobStartResponse:
-    snapshot = config_context.get_config().clone()
+    snapshot = app_config.get_config().clone()
     loop = asyncio.get_running_loop()
 
     def _run(job, emit, cancel_event):
@@ -191,10 +186,10 @@ async def post_validate_config(
     name: str,
     payload: ConfigValidateRequest,
     request: Request,
-    _: Principal = Depends(authenticate),
-    jobs: JobManager = Depends(get_job_manager),
+    _: AuthenticatedPrincipal,
+    jobs: JobManagerDependency,
 ) -> JobStartResponse:
-    snapshot = config_context.get_config().clone()
+    snapshot = app_config.get_config().clone()
     import asyncio
 
     loop = asyncio.get_running_loop()
@@ -279,7 +274,7 @@ def _cleanup_expired_drafts(now: datetime | None = None) -> None:
 
 
 @router.get("/config-drafts", response_model=list[DraftSummary])
-def list_drafts(_: Principal = Depends(authenticate)) -> list[DraftSummary]:
+def list_drafts(_: AuthenticatedPrincipal) -> list[DraftSummary]:
     _cleanup_expired_drafts()
     drafts_dir = get_state().drafts_dir
     if not drafts_dir.exists():
@@ -307,7 +302,7 @@ def list_drafts(_: Principal = Depends(authenticate)) -> list[DraftSummary]:
 @router.get("/config-drafts/{draft_id}", response_model=DraftDetail)
 def get_draft(
     draft_id: str,
-    _: Principal = Depends(authenticate),
+    _: AuthenticatedPrincipal,
 ) -> DraftDetail:
     return _load_draft(draft_id)
 
@@ -315,7 +310,7 @@ def get_draft(
 @router.delete("/config-drafts/{draft_id}", status_code=204)
 def delete_draft(
     draft_id: str,
-    _: Principal = Depends(authenticate),
+    _: AuthenticatedPrincipal,
 ) -> None:
     path = _draft_path(draft_id)
     if not path.exists():

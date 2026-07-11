@@ -15,8 +15,8 @@ import pytest
 from fastapi.routing import APIRoute
 from starlette.testclient import TestClient
 
-from src.api.app_factory import create_app
-from src.application import config_context as _config_context
+from src.api.factory import create_app
+from src.application import config as _config
 from src.config import Config
 
 
@@ -37,8 +37,8 @@ def client():
         # Replace the in-process config snapshot with one pointing at the
         # temp dir for the duration of the test.
         snapshot = Config(translated_dir=str(translated))
-        original_snapshot = _config_context.get_config()
-        _config_context.set_default(snapshot)
+        original_snapshot = _config.get_config()
+        _config.set_default(snapshot)
         try:
             with patch.dict(os.environ, env, clear=True):
                 app = create_app(
@@ -50,7 +50,7 @@ def client():
                 with TestClient(app) as test_client:
                     yield test_client
         finally:
-            _config_context.set_default(original_snapshot)
+            _config.set_default(original_snapshot)
 
 
 def test_health_returns_ok(client):
@@ -318,7 +318,7 @@ def test_jobs_are_persisted_to_disk(client):
 def test_jobs_survive_restart(tmp_path):
     """A second JobManager pointed at the same jobs dir must see the prior job."""
     from src.api.jobs import JobManager
-    from src.api.services.job_store import JobStore
+    from src.api.services.jobs import JobStore
 
     jobs_dir = tmp_path / "jobs"
     store = JobStore(jobs_dir)
@@ -460,7 +460,7 @@ def test_spa_fallback_rejects_paths_outside_dist(tmp_path):
 
 def test_apply_glossary_endpoint_success(client):
     with (
-        patch("src.api.routes.glossary.apply_replacements") as mock_apply,
+        patch("src.api.routes.glossary.glossary.apply_pending_replacements") as mock_apply,
         patch("src.api.routes.glossary._validate_novel"),
     ):
         mock_apply.return_value = {
@@ -484,13 +484,13 @@ def test_apply_glossary_endpoint_success(client):
         assert body["backup_id"] == "backup_123"
 
         mock_apply.assert_called_once()
-        assert mock_apply.call_args[1]["target"] == "vi"
+        assert mock_apply.call_args[1]["target_language"] == "vi"
         assert mock_apply.call_args[1]["write"] is True
 
 
 def test_dismiss_glossary_endpoint_success(client):
     with (
-        patch("src.api.routes.glossary.dismiss_replacements") as mock_dismiss,
+        patch("src.api.routes.glossary.glossary.dismiss_pending_replacements") as mock_dismiss,
         patch("src.api.routes.glossary._validate_novel"),
     ):
         response = client.post(
@@ -501,12 +501,12 @@ def test_dismiss_glossary_endpoint_success(client):
         assert response.json() == {"status": "ok"}
 
         mock_dismiss.assert_called_once()
-        assert mock_dismiss.call_args[1]["target"] == "en"
+        assert mock_dismiss.call_args[1]["target_language"] == "en"
 
 
 def test_rollback_glossary_endpoint_success(client):
     with (
-        patch("src.api.routes.glossary.rollback_replacements") as mock_rollback,
+        patch("src.api.routes.glossary.glossary.rollback_replacements") as mock_rollback,
         patch("src.api.routes.glossary._validate_novel"),
     ):
         response = client.post(

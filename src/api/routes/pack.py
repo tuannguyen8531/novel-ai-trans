@@ -4,13 +4,12 @@ from __future__ import annotations
 
 import asyncio
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 
-from src.api.application_config_context import config_context
-from src.api.auth import Principal, authenticate
-from src.api.dependencies import get_job_manager
-from src.api.jobs import JobManager, build_progress_emitter
+from src.api.dependencies import AuthenticatedPrincipal, JobManagerDependency
+from src.api.jobs import build_progress_emitter
 from src.api.schemas import JobStartResponse, PackRequestPayload
+from src.application import config as app_config
 from src.application.pack import PackRequest, run_pack
 
 router = APIRouter(tags=["pack"])
@@ -19,10 +18,10 @@ router = APIRouter(tags=["pack"])
 @router.post("/pack", response_model=JobStartResponse, status_code=202)
 async def post_pack(
     payload: PackRequestPayload,
-    _: Principal = Depends(authenticate),
-    jobs: JobManager = Depends(get_job_manager),
+    _: AuthenticatedPrincipal,
+    jobs: JobManagerDependency,
 ) -> JobStartResponse:
-    snapshot = config_context.get_config().clone(
+    snapshot = app_config.get_config().clone(
         target_language=payload.target_language,
     )
     loop = asyncio.get_running_loop()

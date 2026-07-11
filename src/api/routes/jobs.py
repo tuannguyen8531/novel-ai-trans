@@ -5,12 +5,11 @@ from __future__ import annotations
 import asyncio
 import json
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from sse_starlette.sse import EventSourceResponse
 
-from src.api.auth import Principal, authenticate
-from src.api.dependencies import get_job_manager
-from src.api.jobs import Job, JobManager, JobNotFoundError, JobStatus
+from src.api.dependencies import AuthenticatedPrincipal, JobManagerDependency
+from src.api.jobs import Job, JobNotFoundError, JobStatus
 from src.api.schemas import JobErrorModel, JobListResponse, JobModel
 
 router = APIRouter(tags=["jobs"])
@@ -43,8 +42,8 @@ def _serialize_job(job: Job) -> JobModel:
 
 @router.get("/jobs", response_model=JobListResponse)
 def list_jobs(
-    _: Principal = Depends(authenticate),
-    jobs: JobManager = Depends(get_job_manager),
+    _: AuthenticatedPrincipal,
+    jobs: JobManagerDependency,
 ) -> JobListResponse:
     current = jobs.current
     return JobListResponse(
@@ -56,8 +55,8 @@ def list_jobs(
 @router.get("/jobs/{job_id}", response_model=JobModel)
 def get_job(
     job_id: str,
-    _: Principal = Depends(authenticate),
-    jobs: JobManager = Depends(get_job_manager),
+    _: AuthenticatedPrincipal,
+    jobs: JobManagerDependency,
 ) -> JobModel:
     try:
         return _serialize_job(jobs.get(job_id))
@@ -71,8 +70,8 @@ def get_job(
 @router.post("/jobs/{job_id}/cancel", response_model=JobModel)
 def cancel_job(
     job_id: str,
-    _: Principal = Depends(authenticate),
-    jobs: JobManager = Depends(get_job_manager),
+    _: AuthenticatedPrincipal,
+    jobs: JobManagerDependency,
 ) -> JobModel:
     try:
         job = jobs.request_cancel(job_id)
@@ -88,8 +87,8 @@ def cancel_job(
 async def stream_events(
     job_id: str,
     request: Request,
-    _: Principal = Depends(authenticate),
-    jobs: JobManager = Depends(get_job_manager),
+    _: AuthenticatedPrincipal,
+    jobs: JobManagerDependency,
 ) -> EventSourceResponse:
     try:
         job = jobs.get(job_id)
@@ -151,8 +150,8 @@ async def stream_events(
 
 @router.delete("/jobs", status_code=204)
 def clear_inactive_jobs(
-    _: Principal = Depends(authenticate),
-    jobs: JobManager = Depends(get_job_manager),
+    _: AuthenticatedPrincipal,
+    jobs: JobManagerDependency,
 ) -> None:
     jobs.clear_inactive()
 
@@ -160,8 +159,8 @@ def clear_inactive_jobs(
 @router.delete("/jobs/{job_id}", status_code=204)
 def delete_job(
     job_id: str,
-    _: Principal = Depends(authenticate),
-    jobs: JobManager = Depends(get_job_manager),
+    _: AuthenticatedPrincipal,
+    jobs: JobManagerDependency,
 ) -> None:
     try:
         jobs.delete(job_id)

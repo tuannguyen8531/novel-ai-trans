@@ -10,7 +10,6 @@ Structure:
         "原始术语": "Target-language translation",
         "李明": "Lý Minh"
     },
-    "source_language": "chinese",
     "entities": {
         "李明": {"translated_name": "Lý Minh", "role": "protagonist"}
     },
@@ -39,239 +38,104 @@ Character schema:
   Non-overlapping per-pair direct address/reference timelines in the target language.
 """
 
-import contextlib
 import hashlib
-import json
-import os
-import re
-import secrets
-import shutil
-import stat
-import tempfile
 from collections.abc import Callable
-from datetime import UTC, datetime
+from contextlib import contextmanager
 from pathlib import Path
 
-try:
-    import fcntl
-
-    msvcrt = None
-except ImportError:
-    fcntl = None
-    import msvcrt
-
-from src.application.errors import ResourceConflictError
-from src.application.paths import GLOSSARY_BACKUP_DIR, LOCK_DIR
-from src.config import active_config_scope, config
-from src.domain.glossary import (
-    count_name_occurrences,
-    find_glossary_replacement_conflicts,
-    format_recent_summaries,
+from src import paths as _paths
+from src.config import config
+from src.domain import glossary as glossary_domain
+from src.domain.characters import (
     get_character_translated_name,
     merge_character_context,
     normalize_character_info,
-    normalize_glossary_data,
-    replace_glossary_values,
     select_active_address_rules,
     select_active_character_context,
-    uppercase_first_cased,
     upsert_relationship,
+)
+from src.domain.glossary import (
+    normalize_glossary_data,
+    queue_pending_replacement,
     validate_glossary_data,
 )
-from src.domain.target_language import normalize_target_language
+from src.domain.language import normalize_target_language
+from src.utils import files as file_utils
 
-_LOCK_SH = getattr(fcntl, "LOCK_SH", 0)
-_LOCK_EX = getattr(fcntl, "LOCK_EX", 0)
-_LOCK_NB = getattr(fcntl, "LOCK_NB", 0)
-_LOCK_UN = getattr(fcntl, "LOCK_UN", 0)
+_read_json_locked = file_utils.read_json_locked
+_merge_json_locked = file_utils.merge_json_locked
 
-
-def _flock(fd: int, op: int) -> None:
-    if fcntl is not None:
-        fcntl.flock(fd, op)  # type: ignore
-    elif msvcrt is not None:
-        # Only enforce non-blocking locks (like novel_lock) on Windows to prevent deadlocks
-        # on read/write of glossary JSON files which use blocking locks.
-        if op & 4:  # LOCK_NB
-            try:
-                os.lseek(fd, 0, os.SEEK_SET)
-                msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)  # type: ignore
-            except OSError as err:
-                raise BlockingIOError(err.strerror) from err
-        elif op & 8:  # LOCK_UN
-            try:
-                os.lseek(fd, 0, os.SEEK_SET)
-                msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)  # type: ignore
-            except OSError:
-                pass
+GLOSSARY_DIR = _paths.GLOSSARY_DIR
+LOCK_DIR = _paths.LOCK_DIR
+PENDING_REPLACEMENTS_KEY = glossary_domain.PENDING_REPLACEMENTS_KEY
 
 
-GLOSSARY_DIR = Path("runtime/glossary")
-PENDING_REPLACEMENTS_KEY = "_pending_replacements"
+class GlossaryLockError(RuntimeError):
+    """Raised when a novel glossary lock cannot be acquired."""
 
 
-def _current_target_language() -> str:
+def current_target_language() -> str:
     target = getattr(config, "target_language", "vi")
     if not isinstance(target, str):
         return "vi"
     return normalize_target_language(target)
 
 
+def translated_novel_root(novel_name: str) -> Path:
+    if config.translated_dir:
+        return _paths.novel_root_dir(config, novel_name)
+    return Path("translated") / novel_name
+
+
 def _glossary_path(novel_name: str) -> Path:
     """Get path to glossary file for a novel (directly in config.translated_dir or fallback to GLOSSARY_DIR)."""
-    target = _current_target_language()
-    if config.translated_dir:
-        novel_dir = Path(config.translated_dir) / novel_name
-        if target == "vi":
-            return novel_dir / "glossary.json"
-        return novel_dir / f"glossary.{target}.json"
-
-    if target == "vi":
-        return GLOSSARY_DIR / f"{novel_name}.json"
-    return GLOSSARY_DIR / f"{novel_name}.{target}.json"
+    return _paths.novel_glossary_path(
+        config,
+        novel_name,
+        current_target_language(),
+        fallback_root=GLOSSARY_DIR,
+    )
 
 
-def _resolve_glossary(novel_name: str) -> Path:
-    """Resolve glossary path directly."""
+def resolve_glossary_path(novel_name: str) -> Path:
+    """Return the active target's glossary path for a novel."""
     return _glossary_path(novel_name)
-
-
-def _ensure_dir(path: Path | None = None):
-    """Create glossary directory if it doesn't exist."""
-    if path is None:
-        GLOSSARY_DIR.mkdir(parents=True, exist_ok=True)
-    else:
-        path.parent.mkdir(parents=True, exist_ok=True)
-
-
-def _read_json_locked(path: Path) -> dict:
-    """Read JSON file with shared lock."""
-    if not path.exists():
-        return {}
-    with open(path, encoding="utf-8") as f:
-        _flock(f.fileno(), _LOCK_SH)
-        try:
-            return json.load(f)
-        finally:
-            _flock(f.fileno(), _LOCK_UN)
-
-
-def _write_json_locked(path: Path, data: dict):
-    """Write JSON file with exclusive lock."""
-    _ensure_dir(path)
-    with open(path, "w", encoding="utf-8") as f:
-        _flock(f.fileno(), _LOCK_EX)
-        try:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-        finally:
-            _flock(f.fileno(), _LOCK_UN)
 
 
 def load_glossary_data(novel_name: str) -> dict:
     """Load the full glossary JSON data for a novel."""
-    return _read_json_locked(_resolve_glossary(novel_name))
+    return _read_json_locked(_glossary_path(novel_name))
 
 
-def _merge_json_locked(path: Path, updater: Callable[[dict], dict]) -> dict:
-    """Atomically read-modify-write JSON with exclusive lock.
-
-    Args:
-        path: File path
-        updater: Function that takes existing data dict and returns updated dict
-    """
-    _ensure_dir(path)
-    with open(path, "a+", encoding="utf-8") as f:
-        _flock(f.fileno(), _LOCK_EX)
-        try:
-            f.seek(0)
-            try:
-                existing_data = json.load(f)
-            except (json.JSONDecodeError, ValueError):
-                existing_data = {}
-            new_data = updater(existing_data)
-            f.seek(0)
-            f.truncate()
-            json.dump(new_data, f, ensure_ascii=False, indent=2)
-        finally:
-            _flock(f.fileno(), _LOCK_UN)
-
-    return new_data
-
-
-def _queue_replacement(
-    data: dict,
-    *,
-    kind: str,
-    sources: list[str],
-    old_value: str,
-    new_value: str,
-) -> dict:
-    """Queue or collapse a pending rendered-value replacement."""
-    sources = list(dict.fromkeys(source for source in sources if source))
-    if not sources or not old_value or not new_value or old_value == new_value:
-        return data
-
-    pending = [dict(item) for item in data.get(PENDING_REPLACEMENTS_KEY, []) if isinstance(item, dict)]
-    for index, item in enumerate(pending):
-        if item.get("kind") == kind and item.get("sources") == sources and item.get("new") == old_value:
-            if item.get("old") == new_value:
-                pending.pop(index)
-            else:
-                item["new"] = new_value
-            return {**data, PENDING_REPLACEMENTS_KEY: pending}
-    pending.append({"kind": kind, "sources": sources, "old": old_value, "new": new_value})
-    return {**data, PENDING_REPLACEMENTS_KEY: pending}
-
-
-def _write_text_atomic(path: Path, text: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, temp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
-    try:
-        if path.exists() and hasattr(os, "fchmod"):
-            with contextlib.suppress(AttributeError):
-                os.fchmod(fd, stat.S_IMODE(path.stat().st_mode))  # type: ignore
-        with os.fdopen(fd, "w", encoding="utf-8") as temp_file:
-            temp_file.write(text)
-            temp_file.flush()
-            os.fsync(temp_file.fileno())
-        os.replace(temp_name, path)
-    except Exception:
-        with contextlib.suppress(OSError):
-            os.close(fd)
-        Path(temp_name).unlink(missing_ok=True)
-        raise
+def update_glossary_data(novel_name: str, updater: Callable[[dict], dict]) -> dict:
+    """Atomically update the full glossary document for a novel."""
+    return _merge_json_locked(_glossary_path(novel_name), updater)
 
 
 _ACTIVE_LOCKS: set[str] = set()
 
 
-@contextlib.contextmanager
+@contextmanager
 def novel_lock(novel_name: str):
     """Acquire an exclusive lock on a novel to prevent concurrent modifications."""
     if novel_name in _ACTIVE_LOCKS:
-        raise ResourceConflictError(
-            f"Novel {novel_name!r} is currently locked by another translation or glossary apply operation."
-        )
+        raise GlossaryLockError(f"Novel {novel_name!r} is currently locked by another translation or glossary apply operation.")
     _ACTIVE_LOCKS.add(novel_name)
     try:
         LOCK_DIR.mkdir(parents=True, exist_ok=True)
-        lock_path = LOCK_DIR / f"{_novel_runtime_key(novel_name)}.lock"
-        with open(lock_path, "a") as f:
-            try:
-                _flock(f.fileno(), _LOCK_EX | _LOCK_NB)
-            except BlockingIOError as err:
-                raise ResourceConflictError(
-                    f"Novel {novel_name!r} is currently locked by another translation or glossary apply operation."
-                ) from err
-            try:
+        lock_path = LOCK_DIR / f"{novel_runtime_key(novel_name)}.lock"
+        try:
+            with file_utils.exclusive_file_lock(lock_path, blocking=False):
                 yield
-            finally:
-                _flock(f.fileno(), _LOCK_UN)
+        except BlockingIOError as err:
+            raise GlossaryLockError(
+                f"Novel {novel_name!r} is currently locked by another translation or glossary apply operation."
+            ) from err
     finally:
         _ACTIVE_LOCKS.discard(novel_name)
 
 
-def _novel_runtime_key(novel_name: str) -> str:
+def novel_runtime_key(novel_name: str) -> str:
     return hashlib.sha256(novel_name.encode("utf-8")).hexdigest()
 
 
@@ -282,14 +146,14 @@ def _novel_runtime_key(novel_name: str) -> str:
 
 def load_glossary(novel_name: str) -> dict[str, str]:
     """Load term glossary for a novel. Returns empty dict if not found."""
-    path = _resolve_glossary(novel_name)
+    path = _glossary_path(novel_name)
     data = _read_json_locked(path)
     return data.get("terms", {})
 
 
 def save_glossary(novel_name: str, terms: dict[str, str], *, is_user_edit: bool = False):
     """Save/merge terms into the novel's glossary (thread-safe)."""
-    path = _resolve_glossary(novel_name)
+    path = _glossary_path(novel_name)
 
     def updater(data: dict) -> dict:
         old_terms = dict(data.get("terms", {}))
@@ -297,7 +161,7 @@ def save_glossary(novel_name: str, terms: dict[str, str], *, is_user_edit: bool 
         if is_user_edit:
             for original, translated in terms.items():
                 old_value = old_terms.get(original, "")
-                updated = _queue_replacement(
+                updated = queue_pending_replacement(
                     updated,
                     kind="term",
                     sources=[original],
@@ -311,7 +175,7 @@ def save_glossary(novel_name: str, terms: dict[str, str], *, is_user_edit: bool 
 
 def remove_glossary_term(novel_name: str, original: str) -> bool:
     """Remove a glossary term. Returns True if the term existed."""
-    path = _resolve_glossary(novel_name)
+    path = _glossary_path(novel_name)
     removed = False
 
     def updater(data: dict) -> dict:
@@ -335,7 +199,7 @@ def update_glossary_term(
     is_user_edit: bool = False,
 ) -> None:
     """Atomically update or rename a term without exposing partial state."""
-    path = _resolve_glossary(novel_name)
+    path = _glossary_path(novel_name)
 
     def updater(data: dict) -> dict:
         terms = dict(data.get("terms", {}))
@@ -349,7 +213,7 @@ def update_glossary_term(
             terms.pop(old_original)
         updated = {**data, "terms": terms}
         if is_user_edit:
-            updated = _queue_replacement(
+            updated = queue_pending_replacement(
                 updated,
                 kind="term",
                 sources=list(dict.fromkeys([new_original, old_original])),
@@ -363,7 +227,7 @@ def update_glossary_term(
 
 def remove_character(novel_name: str, original_name: str) -> bool:
     """Remove a character entity. Returns True if the character existed."""
-    path = _resolve_glossary(novel_name)
+    path = _glossary_path(novel_name)
     removed = False
 
     def updater(data: dict) -> dict:
@@ -388,7 +252,7 @@ def remove_character(novel_name: str, original_name: str) -> bool:
 
 def remove_relationship(novel_name: str, from_char: str, to_char: str) -> bool:
     """Remove a relationship edge between characters. Returns True if existed."""
-    path = _resolve_glossary(novel_name)
+    path = _glossary_path(novel_name)
     removed = False
 
     def updater(data: dict) -> dict:
@@ -407,7 +271,7 @@ def remove_relationship(novel_name: str, from_char: str, to_char: str) -> bool:
 
 def save_character_pronoun(novel_name: str, original_name: str, pronoun: str) -> bool:
     """Set a character pronoun. Returns True if the character existed."""
-    path = _resolve_glossary(novel_name)
+    path = _glossary_path(novel_name)
     found = False
 
     def updater(data: dict) -> dict:
@@ -435,7 +299,7 @@ def save_character(
     is_user_edit: bool = False,
 ) -> bool:
     """Update a character's translated name and/or role. Returns True if found."""
-    path = _resolve_glossary(novel_name)
+    path = _glossary_path(novel_name)
     found = False
     name_value = translated_name or name_vi
 
@@ -455,7 +319,7 @@ def save_character(
         found = True
         updated = {**data, "entities": entities}
         if is_user_edit:
-            updated = _queue_replacement(
+            updated = queue_pending_replacement(
                 updated,
                 kind="character",
                 sources=[original_name, *info.get("aliases", [])],
@@ -478,7 +342,7 @@ def save_relationship(
     update_since: bool = False,
 ) -> bool:
     """Add or update a relationship. Returns True when both characters exist."""
-    path = _resolve_glossary(novel_name)
+    path = _glossary_path(novel_name)
     updated = False
 
     def updater(data: dict) -> dict:
@@ -505,223 +369,9 @@ def validate_glossary(novel_name: str) -> list[str]:
     return validate_glossary_data(load_glossary_data(novel_name))
 
 
-def apply_pending_replacements(
-    novel_name: str,
-    *,
-    target_language: str | None = None,
-    write: bool = False,
-) -> dict:
-    """Preview or apply pending term/name changes to translated chapter files."""
-    target = normalize_target_language(target_language or _current_target_language())
-    if target != _current_target_language():
-        with active_config_scope(config.clone(target_language=target)):
-            return apply_pending_replacements(novel_name, write=write)
-
-    with novel_lock(novel_name):
-        data = load_glossary_data(novel_name)
-        pending = [dict(item) for item in data.get(PENDING_REPLACEMENTS_KEY, []) if isinstance(item, dict)]
-        if not pending:
-            return {
-                "novel": novel_name,
-                "target": target,
-                "write": write,
-                "conflicted": False,
-                "changed_files": 0,
-                "replacements": [],
-            }
-
-        conflicts = find_glossary_replacement_conflicts(pending)
-        has_global_conflicts = bool(conflicts)
-
-        translated_root = Path(config.translated_dir) if config.translated_dir else Path("translated")
-        novel_root = translated_root / novel_name
-        input_dir = novel_root / "input"
-        output_dir = novel_root / "output" if target == "vi" else novel_root / "output" / target
-
-        reports: list[dict] = []
-        pending_total_occurrences = [0] * len(pending)
-        pending_has_issues = [False] * len(pending)
-        files_to_write: dict[Path, str] = {}
-
-        if input_dir.exists():
-            for source_path in sorted(input_dir.glob("chapter_*.txt")):
-                try:
-                    chapter_number = int(source_path.stem.split("_")[-1])
-                    source_text = source_path.read_text(encoding="utf-8")
-                except (OSError, ValueError):
-                    continue
-
-                source_counts = [
-                    sum(count_name_occurrences(source, source_text) for source in item.get("sources", [])) for item in pending
-                ]
-                applicable_indexes = [index for index, count in enumerate(source_counts) if count > 0]
-                if not applicable_indexes:
-                    continue
-
-                output_path = output_dir / f"chapter_{chapter_number:03d}.txt"
-                if not output_path.exists():
-                    output_path = output_dir / source_path.name
-                if not output_path.exists():
-                    for index in applicable_indexes:
-                        pending_has_issues[index] = True
-                        item = pending[index]
-                        reports.append(
-                            {
-                                "chapter": chapter_number,
-                                "kind": item.get("kind", "term"),
-                                "sources": item.get("sources", []),
-                                "old": item.get("old", ""),
-                                "new": item.get("new", ""),
-                                "status": "missing_output",
-                                "source_count": source_counts[index],
-                                "output_count": 0,
-                                "occurrences": 0,
-                                "conflict_news": [],
-                            }
-                        )
-                    continue
-
-                translated_text = output_path.read_text(encoding="utf-8")
-                nonconflicting_indexes = [index for index in applicable_indexes if index not in conflicts]
-                planned_counts: dict[str, int] = {}
-                if nonconflicting_indexes:
-                    _, planned_counts = replace_glossary_values(
-                        translated_text,
-                        [pending[index] for index in nonconflicting_indexes],
-                    )
-
-                statuses: dict[int, tuple[str, int]] = {}
-                safe_indexes: set[int] = set()
-                for index in applicable_indexes:
-                    item = pending[index]
-                    source_count = source_counts[index]
-                    if index in conflicts:
-                        statuses[index] = ("conflict", 0)
-                        pending_has_issues[index] = True
-                        continue
-                    old_count = planned_counts.get(str(item.get("old", "")), 0)
-                    new_value = str(item.get("new", ""))
-                    new_variants = {new_value, uppercase_first_cased(new_value)}
-                    new_count = sum(count_name_occurrences(variant, translated_text) for variant in new_variants)
-                    if old_count == 0 and new_count >= source_count:
-                        statuses[index] = ("already_applied", new_count)
-                    elif old_count == source_count:
-                        statuses[index] = ("safe", old_count)
-                        safe_indexes.add(index)
-                    else:
-                        statuses[index] = ("ambiguous", old_count)
-                        pending_has_issues[index] = True
-
-                # Removing an ambiguous longer match can expose a shorter one.
-                # Recompute until every remaining safe item has the same count
-                # that preview and write will actually use.
-                while safe_indexes:
-                    _, actual_counts = replace_glossary_values(
-                        translated_text,
-                        [pending[index] for index in sorted(safe_indexes)],
-                    )
-                    invalid = {
-                        index
-                        for index in safe_indexes
-                        if actual_counts.get(str(pending[index].get("old", "")), 0) != source_counts[index]
-                    }
-                    if not invalid:
-                        break
-                    for index in invalid:
-                        statuses[index] = (
-                            "ambiguous",
-                            actual_counts.get(str(pending[index].get("old", "")), 0),
-                        )
-                        pending_has_issues[index] = True
-                    safe_indexes -= invalid
-
-                actual_counts = {}
-                if safe_indexes:
-                    updated_text, actual_counts = replace_glossary_values(
-                        translated_text,
-                        [pending[index] for index in sorted(safe_indexes)],
-                    )
-                    if updated_text != translated_text:
-                        files_to_write[output_path] = updated_text
-                    for index in safe_indexes:
-                        pending_total_occurrences[index] += actual_counts.get(str(pending[index].get("old", "")), 0)
-
-                for index in applicable_indexes:
-                    item = pending[index]
-                    status, output_count = statuses[index]
-                    occurrences = actual_counts.get(str(item.get("old", "")), 0) if status == "safe" else 0
-                    reports.append(
-                        {
-                            "chapter": chapter_number,
-                            "kind": item.get("kind", "term"),
-                            "sources": item.get("sources", []),
-                            "old": item.get("old", ""),
-                            "new": item.get("new", ""),
-                            "status": status,
-                            "source_count": source_counts[index],
-                            "output_count": output_count,
-                            "occurrences": occurrences,
-                            "conflict_news": conflicts.get(index, []),
-                        }
-                    )
-
-        effective_write = write and not has_global_conflicts
-        new_pending = [
-            item
-            for index, item in enumerate(pending)
-            if not (pending_total_occurrences[index] > 0 and not pending_has_issues[index])
-        ]
-
-        changed_files = 0
-        backup_id: str | None = None
-        if effective_write and files_to_write:
-            backup_id = f"{datetime.now(UTC).strftime('%Y%m%dT%H%M%S_%fZ')}_{secrets.token_hex(4)}"
-            backup_dir = GLOSSARY_BACKUP_DIR / _novel_runtime_key(novel_name) / backup_id
-            backup_dir.mkdir(parents=True, exist_ok=False)
-
-            backup_files: list[str] = []
-            for path in files_to_write:
-                rel_path = path.relative_to(novel_root)
-                backup_file_path = backup_dir / rel_path
-                backup_file_path.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(path, backup_file_path)
-                backup_files.append(str(rel_path))
-
-            manifest = {
-                "id": backup_id,
-                "status": "prepared",
-                "novel": novel_name,
-                "target": target,
-                "files": backup_files,
-                "pending_before": pending,
-            }
-            manifest_path = backup_dir / "manifest.json"
-            _write_text_atomic(manifest_path, json.dumps(manifest, ensure_ascii=False, indent=2))
-
-            for path, content in files_to_write.items():
-                _write_text_atomic(path, content)
-                changed_files += 1
-
-            path = _resolve_glossary(novel_name)
-            _merge_json_locked(path, lambda current: {**current, PENDING_REPLACEMENTS_KEY: new_pending})
-            manifest["status"] = "completed"
-            manifest["pending_after"] = new_pending
-            _write_text_atomic(manifest_path, json.dumps(manifest, ensure_ascii=False, indent=2))
-
-        return {
-            "novel": novel_name,
-            "target": target,
-            "write": effective_write,
-            "conflicted": has_global_conflicts,
-            "changed_files": len(files_to_write) if not effective_write else changed_files,
-            "backup_id": backup_id,
-            "replacements": reports,
-        }
-
-
 def clean_glossary(novel_name: str) -> dict:
     """Normalize a glossary file and return before/after counts."""
-    path = _resolve_glossary(novel_name)
+    path = _glossary_path(novel_name)
 
     stats: dict = {}
 
@@ -746,130 +396,6 @@ def clean_glossary(novel_name: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Source language
-# ---------------------------------------------------------------------------
-
-
-def normalize_source_language(lang: str | None) -> str:
-    """Normalize language code to full canonical name (korean, chinese, japanese)."""
-    if not lang:
-        return ""
-    lang_lower = lang.lower().strip()
-    mapping = {
-        "ko": "korean",
-        "korean": "korean",
-        "zh": "chinese",
-        "chinese": "chinese",
-        "ja": "japanese",
-        "japanese": "japanese",
-    }
-    return mapping.get(lang_lower, lang_lower)
-
-
-def _metadata_path(novel_name: str) -> Path:
-    """Get path to metadata.json file for a novel."""
-    if config.translated_dir:
-        return Path(config.translated_dir) / novel_name / "metadata.json"
-    return GLOSSARY_DIR / f"{novel_name}.metadata.json"
-
-
-def load_source_language(novel_name: str) -> str:
-    """Load detected source language for a novel. Returns empty string if not found."""
-    metadata_path = _metadata_path(novel_name)
-    source_lang = ""
-
-    if metadata_path.exists():
-        metadata = _read_json_locked(metadata_path)
-        source_lang = normalize_source_language(metadata.get("source_language", ""))
-
-    if not source_lang:
-        glossary_path = _resolve_glossary(novel_name)
-        if glossary_path.exists():
-            glossary = _read_json_locked(glossary_path)
-            raw_lang = glossary.get("source_language", "")
-            if raw_lang:
-                source_lang = normalize_source_language(raw_lang)
-                _merge_json_locked(
-                    metadata_path,
-                    lambda data: {
-                        **data,
-                        "source_language": source_lang,
-                    },
-                )
-                _merge_json_locked(
-                    glossary_path,
-                    lambda data: {k: v for k, v in data.items() if k != "source_language"},
-                )
-    return source_lang
-
-
-def save_source_language(novel_name: str, language: str):
-    """Save detected source language for a novel (thread-safe)."""
-    if not language:
-        return
-    normalized = normalize_source_language(language)
-
-    metadata_path = _metadata_path(novel_name)
-    _merge_json_locked(
-        metadata_path,
-        lambda data: {
-            **data,
-            "source_language": normalized,
-        },
-    )
-
-    glossary_path = _resolve_glossary(novel_name)
-    if glossary_path.exists():
-        _merge_json_locked(
-            glossary_path,
-            lambda data: {k: v for k, v in data.items() if k != "source_language"},
-        )
-
-
-# ---------------------------------------------------------------------------
-# Chapter summaries
-# ---------------------------------------------------------------------------
-
-
-def load_chapter_summary(novel_name: str, chapter_number: int) -> str:
-    """Load summary for a specific chapter. Returns empty string if not found."""
-    path = _resolve_glossary(novel_name)
-    data = _read_json_locked(path)
-    summaries = data.get("chapter_summaries", {})
-    return summaries.get(str(chapter_number), "")
-
-
-def load_chapter_summaries_recent(
-    novel_name: str,
-    current_chapter: int,
-    max_count: int = 3,
-) -> str:
-    """
-    Load the most recent chapter summaries (up to max_count).
-
-    For chapter 10 with max_count=3, loads summaries for chapters 9, 8, 7.
-    Returns a formatted string ready for inclusion in prompts.
-    """
-    path = _resolve_glossary(novel_name)
-    data = _read_json_locked(path)
-    summaries = data.get("chapter_summaries", {})
-
-    return format_recent_summaries(summaries, current_chapter, max_count=max_count)
-
-
-def save_chapter_summary(novel_name: str, chapter_number: int, summary: str):
-    """Save a chapter summary (thread-safe)."""
-    path = _resolve_glossary(novel_name)
-    _merge_json_locked(
-        path,
-        lambda data: {
-            **data,
-            "chapter_summaries": {**data.get("chapter_summaries", {}), str(chapter_number): summary},
-        },
-    )
-
-
-# ---------------------------------------------------------------------------
 # Characters — Entity + Edge graph
 # ---------------------------------------------------------------------------
 
@@ -888,7 +414,7 @@ def get_active_context(novel_name: str, source_text: str, chapter_number: int = 
         edges:    [[from, to, rel_type, since_chapter], ...]
         address_rules: [{speaker, listener, self, other, since, until?, notes?}, ...]
     """
-    data = normalize_glossary_data(_read_json_locked(_resolve_glossary(novel_name)))
+    data = normalize_glossary_data(_read_json_locked(_glossary_path(novel_name)))
     all_entities: dict = data.get("entities", {})
     all_edges: list = data.get("edges", [])
     all_address_rules: list = data.get("address_rules", [])
@@ -920,89 +446,9 @@ def save_characters_batch(
     if not entities and not edges and not address_rules:
         return
 
-    path = _resolve_glossary(novel_name)
+    path = _glossary_path(novel_name)
 
     def updater(data: dict) -> dict:
         return merge_character_context(data, entities, edges, address_rules=address_rules, chapter=chapter)
 
     _merge_json_locked(path, updater)
-
-
-_BACKUP_ID_PATTERN = re.compile(r"^\d{8}T\d{6}_\d{6}Z_[0-9a-f]{8}$")
-
-
-def _merge_pending_replacements(restored: list[dict], current: list[dict]) -> list[dict]:
-    merged = [dict(item) for item in restored]
-    for current_item in current:
-        item = dict(current_item)
-        collapsed = False
-        for previous in merged:
-            if (
-                previous.get("kind") == item.get("kind")
-                and previous.get("sources") == item.get("sources")
-                and previous.get("new") == item.get("old")
-            ):
-                previous["new"] = item.get("new")
-                collapsed = True
-                break
-        if not collapsed and item not in merged:
-            merged.append(item)
-    return merged
-
-
-def rollback_glossary_replacement(novel_name: str, backup_id: str) -> None:
-    """Rollback a previous glossary replacement using the backup manifest."""
-    if not _BACKUP_ID_PATTERN.fullmatch(backup_id):
-        raise FileNotFoundError(f"Invalid glossary backup id: {backup_id!r}")
-    backup_dir = GLOSSARY_BACKUP_DIR / _novel_runtime_key(novel_name) / backup_id
-    manifest_path = backup_dir / "manifest.json"
-    if not manifest_path.exists():
-        raise FileNotFoundError(f"Glossary backup not found: {backup_id}")
-
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    if manifest.get("novel") != novel_name:
-        raise FileNotFoundError(f"Glossary backup does not belong to novel {novel_name!r}")
-    target = normalize_target_language(manifest.get("target") or "vi")
-    if target != _current_target_language():
-        with active_config_scope(config.clone(target_language=target)):
-            rollback_glossary_replacement(novel_name, backup_id)
-        return
-
-    translated_root = Path(config.translated_dir) if config.translated_dir else Path("translated")
-    novel_root = (translated_root / novel_name).resolve()
-
-    with novel_lock(novel_name):
-        for rel_file_path in manifest.get("files", []):
-            backup_file_path = (backup_dir / rel_file_path).resolve()
-            target_file_path = (novel_root / rel_file_path).resolve()
-            try:
-                backup_file_path.relative_to(backup_dir.resolve())
-                target_file_path.relative_to(novel_root)
-            except ValueError as error:
-                raise FileNotFoundError("Glossary backup contains an invalid file path") from error
-            if backup_file_path.exists():
-                _write_text_atomic(target_file_path, backup_file_path.read_text(encoding="utf-8"))
-
-        pending_before = [item for item in manifest.get("pending_before", []) if isinstance(item, dict)]
-        path = _resolve_glossary(novel_name)
-
-        def restore_pending(current_data: dict) -> dict:
-            current_pending = [item for item in current_data.get(PENDING_REPLACEMENTS_KEY, []) if isinstance(item, dict)]
-            return {
-                **current_data,
-                PENDING_REPLACEMENTS_KEY: _merge_pending_replacements(pending_before, current_pending),
-            }
-
-        _merge_json_locked(path, restore_pending)
-
-
-def dismiss_pending_replacements(novel_name: str, *, target_language: str | None = None) -> None:
-    """Manually dismiss all pending replacements."""
-    target = normalize_target_language(target_language or _current_target_language())
-    if target != _current_target_language():
-        with active_config_scope(config.clone(target_language=target)):
-            dismiss_pending_replacements(novel_name)
-        return
-    path = _resolve_glossary(novel_name)
-    with novel_lock(novel_name):
-        _merge_json_locked(path, lambda current: {**current, PENDING_REPLACEMENTS_KEY: []})

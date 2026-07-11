@@ -30,9 +30,9 @@ from enum import StrEnum
 from typing import Any
 
 from src.api.events import JobEvent, event_from_application
-from src.api.services.job_store import JobStore, job_to_snapshot
-from src.api.services.job_store import snapshot_to_job as _snapshot_to_job
-from src.application.config_context import config_scope
+from src.api.services.jobs import JobStore, job_to_snapshot
+from src.api.services.jobs import snapshot_to_job as _snapshot_to_job
+from src.application.config import config_scope
 from src.config import Config
 
 _logger = logging.getLogger(__name__)
@@ -174,11 +174,8 @@ class _Subscriber:
                 with contextlib.suppress(asyncio.QueueFull):
                     self.queue.put_nowait(event)
 
-        try:
+        with contextlib.suppress(RuntimeError):
             self.loop.call_soon_threadsafe(_put)
-        except RuntimeError:
-            # Loop is closed; drop the event.
-            pass
 
     def close(self) -> None:
         self._closed = True

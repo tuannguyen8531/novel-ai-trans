@@ -5,7 +5,6 @@ from __future__ import annotations
 import importlib
 import unittest
 import unittest.mock
-from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
@@ -283,20 +282,21 @@ class CliNotificationWiringTest(unittest.TestCase):
         with (
             patch.object(crawl_module, "get_notifier", return_value=_Stub()),
             patch.object(crawl_module, "format_run_footer", return_value="Time: 2026-01-01 00:00\nRuntime: 0s"),
-            patch.object(crawl_module, "_resolve_config_path", return_value=Path("/tmp/demo.json")),
-            patch.object(crawl_module, "SiteConfig") as mock_site_config,
-            patch.object(crawl_module, "NovelCrawler") as mock_crawler_cls,
+            patch.object(
+                crawl_module,
+                "run_crawl",
+                side_effect=crawl_module.ExternalServiceError(
+                    "Stopped after 5 consecutive chapter failures.",
+                    details={"novel": "demo"},
+                ),
+            ),
         ):
-            instance = mock_crawler_cls.return_value
-            instance.config = type("Cfg", (), {"name": "demo"})()
-            instance.crawl.side_effect = crawl_module.ConsecutiveFailureError("Stopped after 5 consecutive chapter failures.")
-            mock_site_config.from_file.return_value = type("Cfg", (), {"name": "demo"})()
-
             import argparse
 
             args = argparse.Namespace(
                 target="demo",
                 browser=False,
+                headed=False,
                 workers=1,
                 max_chapters=None,
                 translated_output=None,

@@ -15,10 +15,10 @@ from src.domain.glossary import select_active_glossary_terms
 from src.models.state import TranslationState
 from src.services.glossary import (
     get_active_context,
-    load_chapter_summaries_recent,
     load_glossary,
-    load_source_language,
 )
+from src.services.memory import load_recent_chapter_summaries
+from src.services.metadata import load_source_language
 
 RULES_DIR = Path("rules")
 MAX_RECENT_SUMMARIES = 3  # Only keep context from last 3 chapters
@@ -32,11 +32,11 @@ def context_node(state: TranslationState) -> dict:
     chapter_number = state["chapter_number"]
     source_text = state.get("source_text", "")
 
-    # 0. Load source language from glossary if not specified by user
+    # 0. Load source language from metadata if not specified by user
     if not language:
         language = load_source_language(novel_name)
         if language:
-            print(f"  🌐 Loaded source language from glossary: {language}")
+            print(f"  🌐 Loaded source language from metadata: {language}")
 
     # 1. Load translation rules (common + language-specific)
     rules_parts = []
@@ -69,7 +69,7 @@ def context_node(state: TranslationState) -> dict:
     # 3. Load recent chapter summaries (last 3 chapters)
     previous_summary = ""
     if chapter_number > 1:
-        recent_summaries = load_chapter_summaries_recent(novel_name, chapter_number, max_count=MAX_RECENT_SUMMARIES)
+        recent_summaries = load_recent_chapter_summaries(novel_name, chapter_number, max_count=MAX_RECENT_SUMMARIES)
         if recent_summaries:
             previous_summary = recent_summaries
 

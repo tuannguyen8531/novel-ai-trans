@@ -6,14 +6,14 @@ import asyncio
 import tempfile
 import time
 from pathlib import Path
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
-from src.api.application_config_context import config_context
-from src.api.auth import Principal, authenticate
-from src.api.dependencies import get_job_manager, get_state
-from src.api.jobs import JobManager, build_progress_emitter
+from src.api.dependencies import AuthenticatedPrincipal, JobManagerDependency, get_state
+from src.api.jobs import build_progress_emitter
 from src.api.schemas import CrawlRequestPayload, JobStartResponse
+from src.application import config as app_config
 from src.application.crawl import (
     CrawlRequest,
     ImportRequest,
@@ -28,10 +28,10 @@ router = APIRouter(tags=["crawl"])
 @router.post("/crawl", response_model=JobStartResponse, status_code=202)
 async def post_crawl(
     payload: CrawlRequestPayload,
-    _: Principal = Depends(authenticate),
-    jobs: JobManager = Depends(get_job_manager),
+    _: AuthenticatedPrincipal,
+    jobs: JobManagerDependency,
 ) -> JobStartResponse:
-    snapshot = config_context.get_config().clone()
+    snapshot = app_config.get_config().clone()
     loop = asyncio.get_running_loop()
 
     def _run(job, emit, cancel_event):
@@ -103,14 +103,14 @@ async def post_crawl(
 
 @router.post("/import", response_model=JobStartResponse, status_code=202)
 async def post_import(
-    file: UploadFile = File(...),
-    name: str | None = Form(None),
-    keep_existing: bool = Form(False),
-    _: Principal = Depends(authenticate),
-    jobs: JobManager = Depends(get_job_manager),
+    _: AuthenticatedPrincipal,
+    jobs: JobManagerDependency,
+    file: Annotated[UploadFile, File()],
+    name: Annotated[str | None, Form()] = None,
+    keep_existing: Annotated[bool, Form()] = False,
 ) -> JobStartResponse:
     state = get_state()
-    snapshot = config_context.get_config().clone()
+    snapshot = app_config.get_config().clone()
     loop = asyncio.get_running_loop()
     max_bytes = state.max_upload_bytes
 

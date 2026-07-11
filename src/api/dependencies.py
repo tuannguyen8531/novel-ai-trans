@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated
 
 from fastapi import Depends, Request
 
-from src.api.auth import Principal, authenticate
+from src.api.auth import Principal, authenticate, health_authenticate
 from src.api.jobs import JobManager
 
 if TYPE_CHECKING:
-    from src.api.app_factory import AppState
+    from src.api.factory import AppState
 
 # Module-level reference to the current app, set by ``register_routes`` so
 # module-level helpers (e.g. background job runners) can reach the app state
@@ -35,5 +35,10 @@ def get_job_manager(request: Request) -> JobManager:
     return get_state(request).job_manager
 
 
-def get_principal(principal: Principal = Depends(authenticate)) -> Principal:
+AuthenticatedPrincipal = Annotated[Principal, Depends(authenticate)]
+HealthPrincipal = Annotated[Principal, Depends(health_authenticate)]
+JobManagerDependency = Annotated[JobManager, Depends(get_job_manager)]
+
+
+def get_principal(principal: AuthenticatedPrincipal) -> Principal:
     return principal

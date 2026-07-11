@@ -6,11 +6,9 @@ import asyncio
 import logging
 from pathlib import Path
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 
-from src.api.application_config_context import config_context
-from src.api.auth import Principal, authenticate
-from src.api.dependencies import get_state
+from src.api.dependencies import AuthenticatedPrincipal, get_state
 from src.api.errors import ExternalServiceError
 from src.api.schemas import (
     ProviderCheckRequest,
@@ -23,7 +21,7 @@ from src.api.schemas import (
     SettingsResponse,
     TelegramSettingsPatch,
 )
-from src.api.services.env_persistence import (
+from src.api.services.env import (
     persist_config_to_env,
 )
 from src.api.services.providers import (
@@ -32,6 +30,7 @@ from src.api.services.providers import (
     list_providers,
 )
 from src.api.services.settings import apply_settings_patch, build_settings_response
+from src.application import config as app_config
 
 router = APIRouter(tags=["settings"])
 _logger = logging.getLogger(__name__)
@@ -43,14 +42,14 @@ DEFAULT_ENV_PATH = _PROJECT_ROOT / ".env"
 
 
 @router.get("/settings", response_model=SettingsResponse)
-def get_settings(_: Principal = Depends(authenticate)) -> SettingsResponse:
+def get_settings(_: AuthenticatedPrincipal) -> SettingsResponse:
     return build_settings_response()
 
 
 @router.patch("/settings", response_model=SettingsResponse)
 def patch_settings(
     payload: SettingsPatch,
-    _: Principal = Depends(authenticate),
+    _: AuthenticatedPrincipal,
 ) -> SettingsResponse:
     apply_settings_patch(payload.model_dump(exclude_none=True))
     return build_settings_response()
@@ -58,7 +57,7 @@ def patch_settings(
 
 @router.post("/settings/persist", response_model=SettingsPersistResponse)
 def persist_settings(
-    _: Principal = Depends(authenticate),
+    _: AuthenticatedPrincipal,
 ) -> SettingsPersistResponse:
     """Write the current in-process settings back to ``.env``.
 
@@ -66,7 +65,7 @@ def persist_settings(
     Telegram tokens) are only written when the in-memory value is non-empty,
     so a freshly-cleared field is not written as an empty line.
     """
-    config = config_context.get_config()
+    config = app_config.get_config()
     env_path = DEFAULT_ENV_PATH
     written = persist_config_to_env(
         config,
@@ -103,11 +102,11 @@ def persist_settings(
 @router.post("/settings/telegram/persist", response_model=SettingsPersistResponse)
 def persist_telegram_settings(
     payload: TelegramSettingsPatch,
-    _: Principal = Depends(authenticate),
+    _: AuthenticatedPrincipal,
 ) -> SettingsPersistResponse:
     """Update Telegram runtime settings and persist only Telegram env fields."""
     apply_settings_patch(payload.model_dump())
-    config = config_context.get_config()
+    config = app_config.get_config()
     env_path = DEFAULT_ENV_PATH
     written = persist_config_to_env(
         config,
@@ -127,7 +126,7 @@ def persist_telegram_settings(
 @router.post("/settings/providers/persist", response_model=SettingsPersistResponse)
 def persist_provider_settings(
     payload: ProviderSettingsPatch,
-    _: Principal = Depends(authenticate),
+    _: AuthenticatedPrincipal,
 ) -> SettingsPersistResponse:
     """Update provider runtime settings and persist only provider env fields."""
     patch = payload.model_dump()
@@ -136,7 +135,7 @@ def persist_provider_settings(
     if not patch.get("openrouter_api_key"):
         patch.pop("openrouter_api_key", None)
     apply_settings_patch(patch)
-    config = config_context.get_config()
+    config = app_config.get_config()
     env_path = DEFAULT_ENV_PATH
     written = persist_config_to_env(
         config,
@@ -157,14 +156,14 @@ def persist_provider_settings(
 
 
 @router.get("/providers", response_model=ProvidersResponse)
-def get_providers(_: Principal = Depends(authenticate)) -> ProvidersResponse:
+def get_providers(_: AuthenticatedPrincipal) -> ProvidersResponse:
     return list_providers()
 
 
 @router.get("/providers/{provider}/models", response_model=ProviderModelsResponse)
 def get_provider_models(
     provider: str,
-    _: Principal = Depends(authenticate),
+    _: AuthenticatedPrincipal,
 ) -> ProviderModelsResponse:
     return list_provider_models(provider)
 
@@ -172,7 +171,7 @@ def get_provider_models(
 @router.post("/providers/check", response_model=ProviderCheckResponse)
 async def post_provider_check(
     payload: ProviderCheckRequest,
-    _: Principal = Depends(authenticate),
+    _: AuthenticatedPrincipal,
 ) -> ProviderCheckResponse:
     get_state()
 
