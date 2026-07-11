@@ -602,6 +602,10 @@ class NovelCrawlerTest(unittest.TestCase):
             ["started", "fetched", "started", "fetched"],
         )
         self.assertEqual(
+            [(event.current, event.total) for event in progress_events],
+            [(0, 2), (1, 2), (1, 2), (2, 2)],
+        )
+        self.assertEqual(
             [snapshot["completed_chapters"] for snapshot in manifest_snapshots],
             [0, 0, 1, 1],
         )
@@ -639,12 +643,12 @@ class NovelCrawlerTest(unittest.TestCase):
                 workers=2,
             )
             fake_client.fetched_urls.clear()
-            progress_snapshots: list[tuple[str, int, int]] = []
+            progress_snapshots: list[tuple[str, int, int, int]] = []
 
             def progress_callback(progress: CrawlProgress) -> None:
                 manifest_path = output_path / "runtime" / "demo.json"
                 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-                progress_snapshots.append((progress.status, progress.current, manifest["completed_chapters"]))
+                progress_snapshots.append((progress.status, progress.current, progress.total, manifest["completed_chapters"]))
 
             second_result = crawler.crawl(
                 output_path / "runtime",
@@ -669,7 +673,8 @@ class NovelCrawlerTest(unittest.TestCase):
             self.assertNotIn("https://public.example/c1", fake_client.fetched_urls)
             self.assertIn("https://public.example/c2", fake_client.fetched_urls)
             self.assertNotIn("https://public.example/c3", fake_client.fetched_urls)
-            self.assertIn(("started", 2, 1), progress_snapshots)
+            self.assertIn(("started", 0, 1, 1), progress_snapshots)
+            self.assertIn(("fetched", 1, 1, 1), progress_snapshots)
 
     def test_parallel_max_chapters_recovers_from_failures(self) -> None:
         crawler = NovelCrawler(demo_config())
@@ -684,11 +689,13 @@ class NovelCrawlerTest(unittest.TestCase):
             ],
         )
 
+        progress_events: list[CrawlProgress] = []
         with tempfile.TemporaryDirectory() as output:
             result = crawler.crawl(
                 Path(output) / "runtime",
                 max_chapters=1,
                 share_root=Path(output) / "translated",
+                progress_callback=progress_events.append,
                 workers=2,
             )
 
@@ -697,6 +704,10 @@ class NovelCrawlerTest(unittest.TestCase):
         self.assertFalse(result.chapters[0].skipped)
         self.assertEqual(result.errors, [{"index": 1, "url": "https://public.example/c1", "error": "Flaky fail"}])
         self.assertEqual(len(client.calls), 2)
+        self.assertEqual(
+            [(event.status, event.current, event.total) for event in progress_events],
+            [("started", 0, 1), ("failed", 1, 1), ("started", 1, 2), ("fetched", 2, 2)],
+        )
 
     def test_fail_fast_halts_workers_immediately(self) -> None:
         crawler = NovelCrawler(demo_config())

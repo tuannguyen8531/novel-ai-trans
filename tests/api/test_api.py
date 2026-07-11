@@ -422,6 +422,58 @@ def test_job_progress_log_events_are_not_duplicated():
     assert events[0].payload["message"] == "Validation warning: missing title"
 
 
+def test_crawl_job_console_hides_skipped_and_started_progress():
+    from datetime import datetime
+
+    from src.api.events import JobEvent
+    from src.api.jobs import Job, JobStatus, build_progress_emitter
+    from src.application.progress import ProgressEvent
+
+    job = Job(
+        id="job-1",
+        kind="crawl",
+        novel="demo",
+        status=JobStatus.RUNNING,
+        created_at=datetime.now(UTC),
+    )
+    events: list[JobEvent] = []
+
+    callback = build_progress_emitter(job, events.append)
+    callback(
+        ProgressEvent(
+            kind="chapter",
+            novel="demo",
+            current=21,
+            total=983,
+            message="Chapter 21",
+            extra={"status": "skipped", "title": "Chapter 21"},
+        )
+    )
+    callback(
+        ProgressEvent(
+            kind="chapter",
+            novel="demo",
+            current=0,
+            total=3,
+            message="Chapter 22",
+            extra={"status": "started", "title": "Chapter 22"},
+        )
+    )
+    callback(
+        ProgressEvent(
+            kind="chapter",
+            novel="demo",
+            current=1,
+            total=3,
+            message="Chapter 22",
+            extra={"status": "fetched", "title": "Chapter 22"},
+        )
+    )
+
+    assert [event.kind for event in events] == ["chapter", "chapter", "chapter", "log"]
+    assert events[-1].payload["message"] == "[1/3] Chapter 22"
+
+
 def test_config_save_rejects_traversal_draft_id(client, tmp_path):
     config_dir = tmp_path / "configs"
     payload = {

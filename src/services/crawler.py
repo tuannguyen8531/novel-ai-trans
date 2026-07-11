@@ -282,6 +282,14 @@ class NovelCrawler:
             results=results,
             errors=errors,
         )
+        planned_fetch_total = 0
+        for plan_index, _chapter_link in enumerate(chapter_links, start=1):
+            chapter_path = chapter_output_dir / f"chapter_{plan_index}.txt"
+            if not overwrite and self._is_existing_chapter(chapter_path):
+                continue
+            planned_fetch_total += 1
+            if max_chapters is not None and planned_fetch_total >= max_chapters:
+                break
 
         def _write_running_manifest(*, status: str = "running") -> None:
             self._write_manifest(
@@ -296,11 +304,16 @@ class NovelCrawler:
                 errors=errors,
             )
 
-        def _fetch_chapter(index: int, chapter_link: ChapterLink, chapter_path: Path) -> ChapterResult:
+        def _fetch_chapter(
+            index: int,
+            progress_index: int,
+            chapter_link: ChapterLink,
+            chapter_path: Path,
+        ) -> ChapterResult:
             self._report_progress(
                 progress_callback,
-                current=index,
-                total=len(chapter_links),
+                current=progress_index - 1,
+                total=planned_fetch_total,
                 status="started",
                 title=chapter_link.title,
                 source_url=chapter_link.url,
@@ -322,11 +335,13 @@ class NovelCrawler:
         # in-flight HTTP request cannot be cancelled reliably.
         effective_workers = 1 if fail_fast else workers
         next_chapter = 0
-        pending: dict[Future[ChapterResult], tuple[int, ChapterLink]] = {}
+        pending: dict[Future[ChapterResult], tuple[int, int, ChapterLink]] = {}
         attempted_chapters: dict[int, tuple[ChapterLink, Path]] = {}
         chapter_outcomes: dict[int, bool] = {}
         next_outcome_index = 1
         consecutive_failures = 0
+        scheduled_fetch_count = 0
+        completed_fetch_count = 0
 
         def _record_chapter_outcome(index: int, *, success: bool) -> bool:
             nonlocal next_outcome_index, consecutive_failures
@@ -355,7 +370,7 @@ class NovelCrawler:
             return cancel_event is not None and cancel_event.is_set()
 
         def _fill_pending(executor: ThreadPoolExecutor) -> None:
-            nonlocal next_chapter
+            nonlocal next_chapter, planned_fetch_total, scheduled_fetch_count
             while next_chapter < len(chapter_links):
                 if _is_cancelled():
                     return
@@ -393,9 +408,13 @@ class NovelCrawler:
                         _raise_if_too_many_consecutive_failures()
                     continue
 
+                scheduled_fetch_count += 1
+                progress_index = scheduled_fetch_count
+                if scheduled_fetch_count > planned_fetch_total:
+                    planned_fetch_total = scheduled_fetch_count
                 attempted_chapters[index] = (chapter_link, chapter_path)
-                future = executor.submit(_fetch_chapter, index, chapter_link, chapter_path)
-                pending[future] = (index, chapter_link)
+                future = executor.submit(_fetch_chapter, index, progress_index, chapter_link, chapter_path)
+                pending[future] = (index, progress_index, chapter_link)
 
         executor = ThreadPoolExecutor(max_workers=effective_workers)
         cancelled = False
@@ -404,10 +423,11 @@ class NovelCrawler:
             while pending:
                 completed, _ = wait(pending, return_when=FIRST_COMPLETED)
                 for future in completed:
-                    index, chapter_link = pending[future]
+                    index, _progress_index, chapter_link = pending[future]
                     try:
                         result = future.result()
                     except Exception as error:
+                        completed_fetch_count += 1
                         error_text = str(error)
                         errors.append(
                             {
@@ -418,8 +438,8 @@ class NovelCrawler:
                         )
                         self._report_progress(
                             progress_callback,
-                            current=index,
-                            total=len(chapter_links),
+                            current=completed_fetch_count,
+                            total=planned_fetch_total,
                             status="failed",
                             title=chapter_link.title,
                             source_url=chapter_link.url,
@@ -434,10 +454,11 @@ class NovelCrawler:
                     else:
                         results.append(result)
                         fetched_count += 1
+                        completed_fetch_count += 1
                         self._report_progress(
                             progress_callback,
-                            current=index,
-                            total=len(chapter_links),
+                            current=completed_fetch_count,
+                            total=planned_fetch_total,
                             status="fetched",
                             title=result.title,
                             source_url=result.source_url,
@@ -455,7 +476,7 @@ class NovelCrawler:
             for future in pending:
                 future.cancel()
             executor.shutdown(wait=True, cancel_futures=True)
-            for future, (index, chapter_link) in list(pending.items()):
+            for future, (index, _progress_index, chapter_link) in list(pending.items()):
                 if future.cancelled() or not future.done():
                     continue
                 try:
@@ -507,7 +528,7 @@ class NovelCrawler:
         if cancelled:
             # Drain any futures that completed after the cancel check but
             # before the executor shut down.
-            for future, (index, chapter_link) in list(pending.items()):
+            for future, (index, _progress_index, chapter_link) in list(pending.items()):
                 if not future.done() or future.cancelled():
                     continue
                 try:

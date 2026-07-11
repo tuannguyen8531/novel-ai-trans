@@ -11,6 +11,7 @@ import pytest
 from src.application.progress import ProgressEvent
 from src.application.translate import TranslationRequest, run_translation
 from src.cli.translate import (
+    _print_progress_callback,
     find_untranslated,
     load_progress,
     save_progress,
@@ -19,6 +20,7 @@ from src.cli.translate import (
     translate_main,
 )
 from src.config import Config
+from src.utils.progress import ProgressTracker
 
 
 @pytest.fixture(autouse=True)
@@ -260,6 +262,17 @@ class TestQualityReport:
 
 
 class TestTranslationWorkflow:
+    def test_cli_progress_uses_run_total_not_input_total(self):
+        tracker = ProgressTracker(10, "novel")
+
+        with patch("src.cli.translate._progress_tracker", tracker):
+            _print_progress_callback(ProgressEvent(kind="started", novel="novel", current=0, total=3))
+            _print_progress_callback(ProgressEvent(kind="chapter_started", novel="novel", current=0, total=3, chapter=8))
+
+        assert tracker.total_chapters == 3
+        assert tracker.current_index == 0
+        assert tracker.current_chapter == 8
+
     def test_progress_sizes_follow_token_chunk_mode(self, tmp_path):
         translated_root = tmp_path / "translated"
         input_dir = translated_root / "novel" / "input"

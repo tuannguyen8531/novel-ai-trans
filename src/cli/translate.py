@@ -70,6 +70,7 @@ PROGRESS_DIR = _paths.PROGRESS_DIR
 
 _shutdown_requested = False
 _cancel_event = threading.Event()
+_progress_tracker: ProgressTracker | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -260,9 +261,11 @@ def _notify_translation(notifier, novel_name: str, outcome: str, reason: str, st
 
 def _print_progress_callback(event: ProgressEvent) -> None:
     """Mirror :class:`ProgressEvent` updates onto the CLI's ProgressTracker."""
-    progress: ProgressTracker | None = getattr(_print_progress_callback, "_tracker", None)
+    progress = _progress_tracker
     if progress is None:
         return
+    if event.total:
+        progress.total_chapters = event.total
     if event.kind == "chapter_started":
         index = event.current
         chapter = event.chapter or 0
@@ -291,7 +294,7 @@ def _print_progress_callback(event: ProgressEvent) -> None:
 
 
 def translate_main() -> None:
-    global _shutdown_requested
+    global _progress_tracker, _shutdown_requested
     _shutdown_requested = False
     _cancel_event.clear()
     if len(sys.argv) > 1 and sys.argv[1] == "glossary":
@@ -497,11 +500,10 @@ Examples:
 
     # Track progress locally so the terminal output remains consistent.
     progress = ProgressTracker(total, novel_name)
-    callback = _print_progress_callback
-    callback._tracker = progress  # type: ignore[attr-defined]
+    _progress_tracker = progress
 
     try:
-        result = run_translation(request, progress_callback=callback, cancel_event=_cancel_event)
+        result = run_translation(request, progress_callback=_print_progress_callback, cancel_event=_cancel_event)
     except KeyboardInterrupt:
         if _shutdown_requested:
             print(f"\n{YELLOW}⚠ Interrupted. Progress saved.{RESET}")
@@ -519,6 +521,8 @@ Examples:
         )
         print(f"{RED}✗ {error}{RESET}")
         sys.exit(1)
+    finally:
+        _progress_tracker = None
 
     if result.dry_run:
         print(f"{DIM}📕 {novel_name}: {len(chapters)} chapters total, {result.total} would be translated{RESET}")

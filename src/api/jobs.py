@@ -541,11 +541,13 @@ def _format_console_progress(application_event: Any) -> str | None:
         return f"FAIL {label}: {error or 'unknown error'}"
     if kind == "chapter":
         status = str(extra.get("status", "")).lower()
+        if status in {"started", "skipped"}:
+            return None
         title = extra.get("title") or message or "chapter"
         prefix = f"[{current}/{total}] " if total else ""
         if status == "failed":
             return f"{prefix}{title} (fail: {extra.get('error') or 'unknown error'})"
-        if status in {"fetched", "skipped"}:
+        if status == "fetched":
             return f"{prefix}{title}"
         return f"{prefix}{title} ({status or kind})"
     if kind == "chapter_loaded" and chapter is not None:
