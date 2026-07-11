@@ -174,11 +174,8 @@ class _Subscriber:
                 with contextlib.suppress(asyncio.QueueFull):
                     self.queue.put_nowait(event)
 
-        try:
+        with contextlib.suppress(RuntimeError):
             self.loop.call_soon_threadsafe(_put)
-        except RuntimeError:
-            # Loop is closed; drop the event.
-            pass
 
     def close(self) -> None:
         self._closed = True

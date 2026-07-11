@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+from src.api.auth import Principal
 from src.api.routes.glossary import get_glossary
 from src.application.glossary import audit_glossary, load_glossary
 from src.config import Config, active_config_scope
@@ -27,7 +28,7 @@ def test_get_glossary_preserves_empty_response_contract(tmp_path):
     (tmp_path / "demo").mkdir()
 
     with active_config_scope(Config(translated_dir=str(tmp_path))):
-        response = get_glossary("demo")
+        response = get_glossary("demo", Principal(authenticated=True, source="local"))
 
     assert response.novel == "demo"
     assert response.data == EMPTY_GLOSSARY

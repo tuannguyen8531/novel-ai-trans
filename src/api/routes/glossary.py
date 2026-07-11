@@ -5,11 +5,10 @@ from __future__ import annotations
 import asyncio
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 
-from src.api.auth import Principal, authenticate
-from src.api.dependencies import get_job_manager
-from src.api.jobs import JobManager, build_progress_emitter
+from src.api.dependencies import AuthenticatedPrincipal, JobManagerDependency
+from src.api.jobs import build_progress_emitter
 from src.api.schemas import (
     GlossaryApplyRequest,
     GlossaryCharactersResponse,
@@ -49,7 +48,7 @@ def _validate_novel(name: str) -> None:
 @router.get("/novels/{name}/glossary", response_model=GlossaryResponse)
 def get_glossary(
     name: str,
-    _: Principal = Depends(authenticate),
+    _: AuthenticatedPrincipal,
 ) -> GlossaryResponse:
     _validate_novel(name)
     return GlossaryResponse(novel=name, data=glossary.load_glossary(name))
@@ -59,7 +58,7 @@ def get_glossary(
 def put_terms(
     name: str,
     payload: GlossaryTermsPut,
-    _: Principal = Depends(authenticate),
+    _: AuthenticatedPrincipal,
 ) -> GlossaryResponse:
     _validate_novel(name)
     data = glossary.save_terms(name, payload.terms)
@@ -70,7 +69,7 @@ def put_terms(
 def post_term(
     name: str,
     payload: GlossaryTermAdd,
-    _: Principal = Depends(authenticate),
+    _: AuthenticatedPrincipal,
 ) -> GlossaryResponse:
     _validate_novel(name)
     data = glossary.save_term(name, payload.original, payload.translated)
@@ -81,7 +80,7 @@ def post_term(
 def delete_term(
     name: str,
     original: str,
-    _: Principal = Depends(authenticate),
+    _: AuthenticatedPrincipal,
 ) -> GlossaryResponse:
     _validate_novel(name)
     data = glossary.remove_term(name, original)
@@ -93,7 +92,7 @@ def patch_term(
     name: str,
     original: str,
     payload: GlossaryTermUpdate,
-    _: Principal = Depends(authenticate),
+    _: AuthenticatedPrincipal,
 ) -> GlossaryResponse:
     _validate_novel(name)
     data = glossary.update_term(
@@ -109,7 +108,7 @@ def patch_term(
 @router.get("/novels/{name}/glossary/characters", response_model=GlossaryCharactersResponse)
 def list_characters(
     name: str,
-    _: Principal = Depends(authenticate),
+    _: AuthenticatedPrincipal,
 ) -> GlossaryCharactersResponse:
     _validate_novel(name)
     data = glossary.load_glossary(name)
@@ -131,7 +130,7 @@ def update_character(
     name: str,
     original: str,
     payload: GlossaryCharacterUpdate,
-    _: Principal = Depends(authenticate),
+    _: AuthenticatedPrincipal,
 ) -> GlossaryResponse:
     _validate_novel(name)
     data = glossary.save_character(
@@ -147,7 +146,7 @@ def update_character(
 def delete_character(
     name: str,
     original: str,
-    _: Principal = Depends(authenticate),
+    _: AuthenticatedPrincipal,
 ) -> GlossaryResponse:
     _validate_novel(name)
     data = glossary.remove_character(name, original)
@@ -158,7 +157,7 @@ def delete_character(
 def add_relationship(
     name: str,
     payload: GlossaryRelationshipAdd,
-    _: Principal = Depends(authenticate),
+    _: AuthenticatedPrincipal,
 ) -> GlossaryResponse:
     _validate_novel(name)
     data = glossary.save_relationship(
@@ -177,7 +176,7 @@ def delete_relationship(
     name: str,
     from_char: str,
     to_char: str,
-    _: Principal = Depends(authenticate),
+    _: AuthenticatedPrincipal,
 ) -> GlossaryResponse:
     _validate_novel(name)
     data = glossary.remove_relationship(name, from_char, to_char)
@@ -187,8 +186,8 @@ def delete_relationship(
 @router.post("/novels/{name}/glossary/validate", response_model=JobStartResponse, status_code=202)
 async def post_validate_glossary(
     name: str,
-    _: Principal = Depends(authenticate),
-    jobs: JobManager = Depends(get_job_manager),
+    _: AuthenticatedPrincipal,
+    jobs: JobManagerDependency,
 ) -> JobStartResponse:
     _validate_novel(name)
     snapshot = app_config.get_config().clone()
@@ -212,9 +211,9 @@ async def post_validate_glossary(
 @router.post("/novels/{name}/glossary/audit", response_model=JobStartResponse, status_code=202)
 async def post_audit_glossary(
     name: str,
+    _: AuthenticatedPrincipal,
+    jobs: JobManagerDependency,
     target: Literal["vi", "en"] | None = None,
-    _: Principal = Depends(authenticate),
-    jobs: JobManager = Depends(get_job_manager),
 ) -> JobStartResponse:
     _validate_novel(name)
     snapshot = app_config.get_config().clone(target_language=target)
@@ -245,7 +244,7 @@ async def post_audit_glossary(
 def post_apply_glossary(
     name: str,
     payload: GlossaryApplyRequest,
-    _: Principal = Depends(authenticate),
+    _: AuthenticatedPrincipal,
 ) -> dict:
     _validate_novel(name)
     return glossary.apply_pending_replacements(
@@ -259,7 +258,7 @@ def post_apply_glossary(
 def post_dismiss_glossary(
     name: str,
     payload: GlossaryDismissRequest,
-    _: Principal = Depends(authenticate),
+    _: AuthenticatedPrincipal,
 ) -> dict:
     _validate_novel(name)
     glossary.dismiss_pending_replacements(name, target_language=payload.target)
@@ -270,7 +269,7 @@ def post_dismiss_glossary(
 def post_rollback_glossary(
     name: str,
     payload: GlossaryRollbackRequest,
-    _: Principal = Depends(authenticate),
+    _: AuthenticatedPrincipal,
 ) -> dict:
     _validate_novel(name)
     glossary.rollback_replacements(name, payload.backup_id)

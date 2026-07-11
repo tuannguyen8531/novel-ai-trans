@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from typing import Literal
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import FileResponse
 
-from src.api.auth import Principal, authenticate
-from src.api.dependencies import get_state
+from src.api.dependencies import AuthenticatedPrincipal, get_state
 from src.api.schemas import (
     ArtifactInfoResponse,
     ChapterContentPayload,
@@ -33,7 +32,7 @@ router = APIRouter(tags=["novels"])
 @router.post("/novels", status_code=status.HTTP_201_CREATED)
 def create_novel(
     payload: CreateNovelPayload,
-    _: Principal = Depends(authenticate),
+    _: AuthenticatedPrincipal,
 ) -> dict[str, str]:
     if not novels.is_valid_slug(payload.name):
         raise HTTPException(
@@ -66,7 +65,7 @@ def create_novel(
 
 @router.get("/novels", response_model=list[NovelSummary])
 def list_novels_endpoint(
-    _: Principal = Depends(authenticate),
+    _: AuthenticatedPrincipal,
 ) -> list[NovelSummary]:
     root = novels.resolve_root(app_config.get_config().translated_dir)
     return [NovelSummary(**asdict(summary)) for summary in novels.list_summaries(root)]
@@ -75,7 +74,7 @@ def list_novels_endpoint(
 @router.get("/novels/{name}", response_model=NovelDetail)
 def novel_detail(
     name: str,
-    _: Principal = Depends(authenticate),
+    _: AuthenticatedPrincipal,
 ) -> NovelDetail:
     root = novels.resolve_root(app_config.get_config().translated_dir)
     return NovelDetail(**asdict(novels.detail(root, name)))
@@ -84,7 +83,7 @@ def novel_detail(
 @router.get("/novels/{name}/chapters", response_model=list[NovelChapterStatus])
 def novel_chapters(
     name: str,
-    _: Principal = Depends(authenticate),
+    _: AuthenticatedPrincipal,
 ) -> list[NovelChapterStatus]:
     root = novels.resolve_root(app_config.get_config().translated_dir)
     return [NovelChapterStatus(**asdict(chapter)) for chapter in novels.list_chapters(root, name)]
@@ -94,9 +93,9 @@ def novel_chapters(
 def novel_chapter_content(
     name: str,
     number: int,
-    view: Literal["source", "translation"] = Query("source"),
-    target: Literal["vi", "en"] | None = Query(None),
-    _: Principal = Depends(authenticate),
+    _: AuthenticatedPrincipal,
+    view: Annotated[Literal["source", "translation"], Query()] = "source",
+    target: Annotated[Literal["vi", "en"] | None, Query()] = None,
 ) -> ChapterContentResponse:
     config = app_config.get_config()
     root = novels.resolve_root(config.translated_dir)
@@ -115,7 +114,7 @@ def put_chapter_content(
     name: str,
     number: int,
     payload: ChapterContentPayload,
-    _: Principal = Depends(authenticate),
+    _: AuthenticatedPrincipal,
 ) -> ChapterContentResponse:
     root = novels.resolve_root(app_config.get_config().translated_dir)
     return ChapterContentResponse(**asdict(novels.write_chapter(root, name, number, payload.content)))
@@ -125,7 +124,7 @@ def put_chapter_content(
 def delete_chapter(
     name: str,
     number: int,
-    _: Principal = Depends(authenticate),
+    _: AuthenticatedPrincipal,
 ) -> None:
     root = novels.resolve_root(app_config.get_config().translated_dir)
     novels.delete_chapter(root, name, number)
@@ -134,7 +133,7 @@ def delete_chapter(
 @router.get("/novels/{name}/metadata", response_model=NovelMetadataResponse)
 def get_novel_metadata(
     name: str,
-    _: Principal = Depends(authenticate),
+    _: AuthenticatedPrincipal,
 ) -> NovelMetadataResponse:
     root = novels.resolve_root(app_config.get_config().translated_dir)
     return NovelMetadataResponse(novel=name, data=novels.metadata(root, name))
@@ -144,7 +143,7 @@ def get_novel_metadata(
 def patch_novel_metadata(
     name: str,
     payload: NovelMetadataPatch,
-    _: Principal = Depends(authenticate),
+    _: AuthenticatedPrincipal,
 ) -> NovelMetadataResponse:
     root = novels.resolve_root(app_config.get_config().translated_dir)
     updates = payload.model_dump(exclude_none=True)
@@ -156,7 +155,7 @@ def patch_novel_metadata(
 @router.delete("/novels/{name}", status_code=204)
 def delete_novel(
     name: str,
-    _: Principal = Depends(authenticate),
+    _: AuthenticatedPrincipal,
 ) -> None:
     root = novels.resolve_root(app_config.get_config().translated_dir)
     novels.require_path(root, name)
@@ -177,7 +176,7 @@ def delete_novel(
 @router.get("/novels/{name}/artifacts", response_model=list[ArtifactInfoResponse])
 def list_artifacts(
     name: str,
-    _: Principal = Depends(authenticate),
+    _: AuthenticatedPrincipal,
 ) -> list[ArtifactInfoResponse]:
     root = novels.resolve_root(app_config.get_config().translated_dir)
     return [ArtifactInfoResponse(**asdict(artifact)) for artifact in novels.list_artifacts(root, name)]
@@ -187,7 +186,7 @@ def list_artifacts(
 def download_artifact(
     name: str,
     filename: str,
-    _: Principal = Depends(authenticate),
+    _: AuthenticatedPrincipal,
 ) -> FileResponse:
     root = novels.resolve_root(app_config.get_config().translated_dir)
     return FileResponse(novels.artifact(root, name, filename), filename=filename)
@@ -197,7 +196,7 @@ def download_artifact(
 def delete_artifact(
     name: str,
     filename: str,
-    _: Principal = Depends(authenticate),
+    _: AuthenticatedPrincipal,
 ) -> None:
     root = novels.resolve_root(app_config.get_config().translated_dir)
     novels.delete_artifact(root, name, filename)
@@ -207,7 +206,7 @@ def delete_artifact(
 def get_illustration(
     name: str,
     filename: str,
-    _: Principal = Depends(authenticate),
+    _: AuthenticatedPrincipal,
 ) -> FileResponse:
     root = novels.resolve_root(app_config.get_config().translated_dir)
     return FileResponse(novels.illustration(root, name, filename))
@@ -216,7 +215,7 @@ def get_illustration(
 @router.get("/novels/{name}/rules")
 def get_novel_rules(
     name: str,
-    _: Principal = Depends(authenticate),
+    _: AuthenticatedPrincipal,
 ) -> dict[str, str]:
     root = novels.resolve_root(app_config.get_config().translated_dir)
     try:
@@ -229,7 +228,7 @@ def get_novel_rules(
 def put_novel_rules(
     name: str,
     payload: NovelRulesPayload,
-    _: Principal = Depends(authenticate),
+    _: AuthenticatedPrincipal,
 ) -> dict[str, str]:
     root = novels.resolve_root(app_config.get_config().translated_dir)
     try:

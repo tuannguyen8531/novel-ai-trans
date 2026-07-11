@@ -6,10 +6,9 @@ import asyncio
 import logging
 from pathlib import Path
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 
-from src.api.auth import Principal, authenticate
-from src.api.dependencies import get_state
+from src.api.dependencies import AuthenticatedPrincipal, get_state
 from src.api.errors import ExternalServiceError
 from src.api.schemas import (
     ProviderCheckRequest,
@@ -43,14 +42,14 @@ DEFAULT_ENV_PATH = _PROJECT_ROOT / ".env"
 
 
 @router.get("/settings", response_model=SettingsResponse)
-def get_settings(_: Principal = Depends(authenticate)) -> SettingsResponse:
+def get_settings(_: AuthenticatedPrincipal) -> SettingsResponse:
     return build_settings_response()
 
 
 @router.patch("/settings", response_model=SettingsResponse)
 def patch_settings(
     payload: SettingsPatch,
-    _: Principal = Depends(authenticate),
+    _: AuthenticatedPrincipal,
 ) -> SettingsResponse:
     apply_settings_patch(payload.model_dump(exclude_none=True))
     return build_settings_response()
@@ -58,7 +57,7 @@ def patch_settings(
 
 @router.post("/settings/persist", response_model=SettingsPersistResponse)
 def persist_settings(
-    _: Principal = Depends(authenticate),
+    _: AuthenticatedPrincipal,
 ) -> SettingsPersistResponse:
     """Write the current in-process settings back to ``.env``.
 
@@ -103,7 +102,7 @@ def persist_settings(
 @router.post("/settings/telegram/persist", response_model=SettingsPersistResponse)
 def persist_telegram_settings(
     payload: TelegramSettingsPatch,
-    _: Principal = Depends(authenticate),
+    _: AuthenticatedPrincipal,
 ) -> SettingsPersistResponse:
     """Update Telegram runtime settings and persist only Telegram env fields."""
     apply_settings_patch(payload.model_dump())
@@ -127,7 +126,7 @@ def persist_telegram_settings(
 @router.post("/settings/providers/persist", response_model=SettingsPersistResponse)
 def persist_provider_settings(
     payload: ProviderSettingsPatch,
-    _: Principal = Depends(authenticate),
+    _: AuthenticatedPrincipal,
 ) -> SettingsPersistResponse:
     """Update provider runtime settings and persist only provider env fields."""
     patch = payload.model_dump()
@@ -157,14 +156,14 @@ def persist_provider_settings(
 
 
 @router.get("/providers", response_model=ProvidersResponse)
-def get_providers(_: Principal = Depends(authenticate)) -> ProvidersResponse:
+def get_providers(_: AuthenticatedPrincipal) -> ProvidersResponse:
     return list_providers()
 
 
 @router.get("/providers/{provider}/models", response_model=ProviderModelsResponse)
 def get_provider_models(
     provider: str,
-    _: Principal = Depends(authenticate),
+    _: AuthenticatedPrincipal,
 ) -> ProviderModelsResponse:
     return list_provider_models(provider)
 
@@ -172,7 +171,7 @@ def get_provider_models(
 @router.post("/providers/check", response_model=ProviderCheckResponse)
 async def post_provider_check(
     payload: ProviderCheckRequest,
-    _: Principal = Depends(authenticate),
+    _: AuthenticatedPrincipal,
 ) -> ProviderCheckResponse:
     get_state()
 

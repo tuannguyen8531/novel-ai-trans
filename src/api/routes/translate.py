@@ -6,11 +6,10 @@ import asyncio
 import time
 from typing import Literal
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 
-from src.api.auth import Principal, authenticate
-from src.api.dependencies import get_job_manager
-from src.api.jobs import JobManager, build_progress_emitter
+from src.api.dependencies import AuthenticatedPrincipal, JobManagerDependency
+from src.api.jobs import build_progress_emitter
 from src.api.schemas import JobStartResponse, TranslationRequestPayload
 from src.application import config as app_config
 from src.application.translate import (
@@ -25,8 +24,8 @@ router = APIRouter(tags=["translate"])
 @router.post("/translate", response_model=JobStartResponse, status_code=202)
 async def post_translate(
     payload: TranslationRequestPayload,
-    _: Principal = Depends(authenticate),
-    jobs: JobManager = Depends(get_job_manager),
+    _: AuthenticatedPrincipal,
+    jobs: JobManagerDependency,
 ) -> JobStartResponse:
     snapshot = app_config.get_config().clone(
         llm_provider=payload.provider or None,
@@ -120,8 +119,8 @@ async def post_translate(
 @router.get("/novels/{name}/translation-progress")
 def translation_progress(
     name: str,
+    _: AuthenticatedPrincipal,
     target: Literal["vi", "en"] | None = None,
-    _: Principal = Depends(authenticate),
 ) -> dict:
     from src.application import novels
 

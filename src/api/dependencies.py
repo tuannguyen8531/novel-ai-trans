@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated
 
 from fastapi import Depends, Request
 
-from src.api.auth import Principal, authenticate
+from src.api.auth import Principal, authenticate, health_authenticate
 from src.api.jobs import JobManager
 
 if TYPE_CHECKING:
@@ -35,5 +35,10 @@ def get_job_manager(request: Request) -> JobManager:
     return get_state(request).job_manager
 
 
-def get_principal(principal: Principal = Depends(authenticate)) -> Principal:
+AuthenticatedPrincipal = Annotated[Principal, Depends(authenticate)]
+HealthPrincipal = Annotated[Principal, Depends(health_authenticate)]
+JobManagerDependency = Annotated[JobManager, Depends(get_job_manager)]
+
+
+def get_principal(principal: AuthenticatedPrincipal) -> Principal:
     return principal

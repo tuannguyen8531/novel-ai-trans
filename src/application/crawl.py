@@ -7,6 +7,7 @@ import re
 import time
 import uuid
 from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -80,10 +81,8 @@ class CrawlResult:
 
 def _emit(callback: Callable[[ProgressEvent], None] | None, event: ProgressEvent) -> None:
     if callback is not None:
-        try:
+        with suppress(Exception):
             callback(event)
-        except Exception:  # noqa: BLE001
-            pass
 
 
 def _check_cancel(event: Event | None) -> None:

@@ -14,6 +14,7 @@ from __future__ import annotations
 import tempfile
 import time
 from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass, field
 from pathlib import Path
 from threading import Event
@@ -104,10 +105,8 @@ def _emit(
     event: ProgressEvent,
 ) -> None:
     if callback is not None:
-        try:
+        with suppress(Exception):
             callback(event)
-        except Exception:  # noqa: BLE001
-            pass
 
 
 def _check_cancel(cancel_event: Event | None) -> None:
