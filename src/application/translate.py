@@ -37,9 +37,6 @@ from src.services.metadata import load_source_language
 from src.services.notifier import get_notifier
 from src.utils.text import normalize_paragraph_spacing
 
-# Re-export for backward compat with the CLI adapter.
-_normalize_target = normalize_target_language
-
 
 def get_config() -> Config:
     """Indirection so tests can patch ``app_config.get_config``."""

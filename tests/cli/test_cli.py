@@ -482,8 +482,6 @@ class TestGlossaryCli:
         try:
             with (
                 patch("src.services.glossary.GLOSSARY_DIR", glossary_dir),
-                patch("src.cli.translate.INPUT_DIR", novel_root / "input"),
-                patch("src.cli.translate.OUTPUT_DIR", novel_root / "output"),
                 _patch_config(translated_dir=str(translated_root), target_language="vi"),
             ):
                 from src.services.glossary import (

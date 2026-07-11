@@ -70,7 +70,6 @@ PROGRESS_DIR = _paths.PROGRESS_DIR
 
 _shutdown_requested = False
 _cancel_event = threading.Event()
-_graph = None
 
 
 # ---------------------------------------------------------------------------

@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -39,12 +39,9 @@ from src.application.crawl import (
 from src.config import SiteConfig
 from src.paths import CONFIG_DIR as _CONFIG_DIR
 
-_current_app = None  # type: ignore[var-annotated]
-
 router = APIRouter(tags=["configs"])
 
 _SLUG_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
-_DRAFT_TTL = timedelta(days=7)
 
 
 def _is_valid_slug(name: str) -> bool:
