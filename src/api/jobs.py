@@ -1,12 +1,12 @@
-"""Job lifecycle model and single-executor JobManager.
+"""Job lifecycle model and bounded-concurrency JobManager.
 
 The JobManager is responsible for:
 
-- accepting at most one top-level long job at a time (409 otherwise);
+- accepting multiple long jobs when their novel locks do not conflict;
 - running the job in a dedicated background thread;
 - emitting :class:`JobEvent` instances to subscribed SSE clients via an
   asyncio.Queue that lives in the FastAPI event loop;
-- exposing the current job plus a bounded recent-history list;
+- exposing active jobs plus a bounded recent-history list;
 - supporting cooperative cancellation through ``threading.Event``.
 
 Job worker callbacks run outside the API event-loop thread. Events are
@@ -23,11 +23,11 @@ import threading
 import uuid
 from collections import deque
 from collections.abc import Callable, Iterator
-from contextvars import copy_context
+from contextvars import ContextVar, copy_context
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, Final
 
 from src.api.events import JobEvent, event_from_application
 from src.api.services.jobs import JobStore, job_to_snapshot
@@ -36,6 +36,7 @@ from src.application.config import config_scope
 from src.config import Config
 
 _logger = logging.getLogger(__name__)
+_active_log_job_id: ContextVar[str | None] = ContextVar("active_log_job_id", default=None)
 
 
 class JobStatus(StrEnum):
@@ -45,6 +46,9 @@ class JobStatus(StrEnum):
     FAILED = "failed"
     CANCELLING = "cancelling"
     CANCELLED = "cancelled"
+
+
+_ACTIVE_STATUSES: Final = frozenset({JobStatus.QUEUED, JobStatus.RUNNING, JobStatus.CANCELLING})
 
 
 @dataclass
@@ -102,6 +106,8 @@ class _JobLogHandler(logging.Handler):
 
     def emit(self, record: logging.LogRecord) -> None:
         try:
+            if _active_log_job_id.get() != self._job.id:
+                return
             message = self.format(record)
             self._emit(
                 JobEvent(
@@ -203,7 +209,7 @@ class _JobRequest:
 
 
 class JobManager:
-    """Single-executor job manager."""
+    """Run non-conflicting jobs concurrently while keeping one active job per novel."""
 
     HISTORY_LIMIT_DEFAULT = 50
 
@@ -213,11 +219,11 @@ class JobManager:
         history_limit: int = HISTORY_LIMIT_DEFAULT,
         store: JobStore | None = None,
     ) -> None:
-        self._current: Job | None = None
+        self._active: dict[str, Job] = {}
         self._history: deque[Job] = deque(maxlen=history_limit)
         self._lock = threading.Lock()
         self._bus = EventBus()
-        self._thread: threading.Thread | None = None
+        self._threads: dict[str, threading.Thread] = {}
         self._wake_event = threading.Event()
         self._store = store
         if store is not None:
@@ -230,7 +236,11 @@ class JobManager:
     @property
     def current(self) -> Job | None:
         with self._lock:
-            return self._current
+            return min(self._active.values(), key=lambda job: (job.created_at, job.id), default=None)
+
+    def list_active(self) -> list[Job]:
+        with self._lock:
+            return sorted(self._active.values(), key=lambda job: job.created_at)
 
     def list_history(self) -> list[Job]:
         with self._lock:
@@ -273,12 +283,20 @@ class JobManager:
 
     def get(self, job_id: str) -> Job:
         with self._lock:
-            if self._current and self._current.id == job_id:
-                return self._current
+            if job_id in self._active:
+                return self._active[job_id]
             for job in self._history:
                 if job.id == job_id:
                     return job
         raise JobNotFoundError(job_id)
+
+    @staticmethod
+    def _job_conflicts(active: Job, *, novel: str | None) -> bool:
+        if active.status not in _ACTIVE_STATUSES:
+            return False
+        if active.novel is None or novel is None:
+            return True
+        return active.novel == novel
 
     # ------------------------------------------------------------------ submit
 
@@ -292,13 +310,9 @@ class JobManager:
         loop: Any,
     ) -> Job:
         with self._lock:
-            current = self._current
-            if current and current.status in {
-                JobStatus.QUEUED,
-                JobStatus.RUNNING,
-                JobStatus.CANCELLING,
-            }:
-                raise JobConflictError(current.id)
+            for active in self._active.values():
+                if self._job_conflicts(active, novel=novel):
+                    raise JobConflictError(active.id)
             job = Job(
                 id=str(uuid.uuid4()),
                 kind=kind,
@@ -306,7 +320,7 @@ class JobManager:
                 status=JobStatus.QUEUED,
                 created_at=datetime.now(UTC),
             )
-            self._current = job
+            self._active[job.id] = job
         self._persist(job)
         self._bus.publish(JobEvent(kind="queued", job_id=job.id, novel=novel, payload={"kind": kind}))
         request = _JobRequest(job=job, snapshot=snapshot, run=run, loop=loop)
@@ -338,7 +352,8 @@ class JobManager:
                 self._finish_failed(job, code="internal_error", message=str(error))
 
         thread = threading.Thread(target=_target, name=f"job-{request.job.id}", daemon=True)
-        self._thread = thread
+        with self._lock:
+            self._threads[request.job.id] = thread
         thread.start()
 
     def _run_job(self, request: _JobRequest) -> None:
@@ -357,6 +372,7 @@ class JobManager:
         handler = _JobLogHandler(job, emit)
         root_logger = logging.getLogger()
         root_logger.addHandler(handler)
+        token = _active_log_job_id.set(job.id)
         with config_scope(request.snapshot):
             try:
                 result = request.run(job, emit, job.cancel_event)
@@ -368,6 +384,7 @@ class JobManager:
                 )
                 return
             finally:
+                _active_log_job_id.reset(token)
                 root_logger.removeHandler(handler)
 
         if job.status == JobStatus.CANCELLING:
@@ -385,8 +402,8 @@ class JobManager:
             )
         )
         with self._lock:
-            if self._current and self._current.id == job.id:
-                self._current = None
+            self._active.pop(job.id, None)
+            self._threads.pop(job.id, None)
             self._history.appendleft(job)
         self._persist(job)
 
@@ -406,8 +423,8 @@ class JobManager:
             )
         )
         with self._lock:
-            if self._current and self._current.id == job.id:
-                self._current = None
+            self._active.pop(job.id, None)
+            self._threads.pop(job.id, None)
             self._history.appendleft(job)
         self._persist(job)
 
@@ -423,8 +440,8 @@ class JobManager:
             job.finished_at = datetime.now(UTC)
             self._bus.publish(JobEvent(kind="cancelled", job_id=job.id, novel=job.novel))
             with self._lock:
-                if self._current and self._current.id == job.id:
-                    self._current = None
+                self._active.pop(job.id, None)
+                self._threads.pop(job.id, None)
                 self._history.appendleft(job)
             self._persist(job)
             return job
@@ -436,11 +453,12 @@ class JobManager:
 
     def delete(self, job_id: str) -> None:
         with self._lock:
-            # Check if it's the current active/running job
-            if self._current and self._current.id == job_id:
-                if self._current.status in {JobStatus.QUEUED, JobStatus.RUNNING, JobStatus.CANCELLING}:
+            # Check if it's an active/running job
+            if job_id in self._active:
+                if self._active[job_id].status in _ACTIVE_STATUSES:
                     raise ValueError("Cannot delete an active job.")
-                self._current = None
+                self._active.pop(job_id, None)
+                self._threads.pop(job_id, None)
                 if self._store:
                     self._store.delete(job_id)
                 return
@@ -473,15 +491,15 @@ class JobManager:
 
     def clear_inactive(self) -> None:
         with self._lock:
-            active_statuses = {JobStatus.QUEUED, JobStatus.RUNNING, JobStatus.CANCELLING}
-
             # Filter memory history
-            new_history = deque([job for job in self._history if job.status in active_statuses], maxlen=self._history.maxlen)
+            new_history = deque([job for job in self._history if job.status in _ACTIVE_STATUSES], maxlen=self._history.maxlen)
             self._history = new_history
 
-            # Clear current if it is finished
-            if self._current and self._current.status not in active_statuses:
-                self._current = None
+            # Drop any stale non-active entries from the active map.
+            for job_id, job in list(self._active.items()):
+                if job.status not in _ACTIVE_STATUSES:
+                    self._active.pop(job_id, None)
+                    self._threads.pop(job_id, None)
 
             # Filter disk store
             if self._store:
@@ -491,12 +509,15 @@ class JobManager:
                         self._store.delete(snapshot["id"])
 
     def shutdown(self, timeout: float = 5.0) -> None:
-        current = self.current
-        if current and current.status in {JobStatus.QUEUED, JobStatus.RUNNING}:
-            self.request_cancel(current.id)
-        thread = self._thread
-        if thread is not None and thread.is_alive():
-            thread.join(timeout=timeout)
+        active = self.list_active()
+        for job in active:
+            if job.status in {JobStatus.QUEUED, JobStatus.RUNNING}:
+                self.request_cancel(job.id)
+        with self._lock:
+            threads = list(self._threads.values())
+        for thread in threads:
+            if thread.is_alive():
+                thread.join(timeout=timeout)
 
 
 # ---------------------------------------------------------------------------

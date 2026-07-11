@@ -9,11 +9,13 @@ from pathlib import Path
 
 import pytest
 
+from src.api.jobs import JobConflictError, JobManager, JobStatus
 from src.api.services.jobs import (
     JobStore,
     job_to_snapshot,
     snapshot_to_job,
 )
+from src.config import Config
 
 
 def _make_snapshot(job_id: str = "abc123", status: str = "completed") -> dict:
@@ -121,6 +123,37 @@ def test_snapshot_roundtrip():
     assert out["status"] == snap["status"]
     assert out["error"] == snap["error"]
     assert out["progress"] == snap["progress"]
+
+
+def test_manager_allows_different_novel_jobs_concurrently():
+    manager = JobManager()
+    config = Config()
+    started = {"a": threading.Event(), "b": threading.Event()}
+    proceed = threading.Event()
+
+    def slow_run(job, emit, cancel_event):
+        assert job.novel is not None
+        started[job.novel].set()
+        proceed.wait(timeout=5)
+        return {"novel": job.novel}
+
+    first = manager.submit(kind="crawl", novel="a", snapshot=config, loop=None, run=slow_run)
+    second = manager.submit(kind="translate", novel="b", snapshot=config, loop=None, run=slow_run)
+
+    assert started["a"].wait(timeout=5)
+    assert started["b"].wait(timeout=5)
+    assert {job.id for job in manager.list_active()} == {first.id, second.id}
+
+    with pytest.raises(JobConflictError) as exc:
+        manager.submit(kind="translate", novel="a", snapshot=config, loop=None, run=slow_run)
+    assert exc.value.args[0] == first.id
+
+    proceed.set()
+    for thread in list(manager._threads.values()):  # noqa: SLF001 - unit test waits for internal workers to finish.
+        thread.join(timeout=5)
+
+    assert manager.get(first.id).status == JobStatus.COMPLETED
+    assert manager.get(second.id).status == JobStatus.COMPLETED
 
 
 def test_iter_all_skips_unreadable_files(tmp_path: Path, caplog):

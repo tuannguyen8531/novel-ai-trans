@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, computed } from 'vue'
+import { onMounted, onUnmounted, computed } from 'vue'
 import { useNovelsStore } from '@/stores/novels'
 import { useJobsStore } from '@/stores/jobs'
 import JobMonitor from '@/components/JobMonitor.vue'
@@ -10,6 +10,11 @@ const jobs = useJobsStore()
 onMounted(() => {
   novels.refresh()
   jobs.refresh()
+  jobs.startPolling()
+})
+
+onUnmounted(() => {
+  jobs.stopPolling()
 })
 
 const totalInput = computed(() =>
@@ -21,6 +26,8 @@ const totalTranslated = computed(() =>
     0
   )
 )
+
+const activeJobs = computed(() => jobs.activeJobs)
 </script>
 
 <template>
@@ -49,8 +56,12 @@ const totalTranslated = computed(() =>
       </div>
     </div>
     <div class="card">
-      <h2>Current job</h2>
-      <JobMonitor v-if="jobs.current" :job="jobs.current" />
+      <h2>Active jobs</h2>
+      <div v-if="activeJobs.length" class="active-jobs">
+        <div v-for="job in activeJobs" :key="job.id" class="active-job-entry">
+          <JobMonitor :job="job" :live="false" />
+        </div>
+      </div>
       <p v-else class="muted">No active job. Start one from the Translate, Import, or Crawl pages.</p>
     </div>
   </section>
@@ -77,5 +88,16 @@ const totalTranslated = computed(() =>
 .stat-label {
   font-size: 0.85rem;
   color: var(--fg-dim);
+}
+
+.active-jobs {
+  display: flex;
+  flex-direction: column;
+}
+
+.active-job-entry + .active-job-entry {
+  border-top: 1px solid var(--border);
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
 }
 </style>

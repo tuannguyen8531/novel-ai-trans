@@ -3,17 +3,21 @@ import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
 import { useJobsStore } from '@/stores/jobs'
 import type { JobModel } from '@/api/types'
 
-const props = defineProps<{ job?: JobModel; jobId?: string }>()
+const props = withDefaults(defineProps<{ job?: JobModel; jobId?: string; live?: boolean }>(), {
+  live: true
+})
 const jobs = useJobsStore()
 const localJob = ref<JobModel | null>(props.job ?? null)
 const error = ref<string | null>(null)
 const consoleLog = ref<HTMLElement | null>(null)
 
-const followId = computed(() => props.jobId ?? props.job?.id ?? null)
+const followId = computed(() => props.live ? (props.jobId ?? props.job?.id ?? null) : null)
 
 function findLocal(id: string): JobModel | null {
   if (localJob.value?.id === id) return localJob.value
   if (jobs.current?.id === id) return jobs.current
+  const active = jobs.active.find((j) => j.id === id)
+  if (active) return active
   return jobs.history.find((j) => j.id === id) ?? null
 }
 
@@ -41,7 +45,7 @@ watch(
 )
 
 watch(
-  () => [jobs.current, jobs.history] as const,
+  () => [jobs.current, jobs.active, jobs.history] as const,
   () => {
     if (!followId.value) return
     const fresh = findLocal(followId.value)

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { api, getAuthToken } from '@/api/client'
 import { openSse, type SseClient } from '@/api/sse'
 import type { JobModel } from '@/api/types'
@@ -9,6 +9,8 @@ const POLL_INTERVAL_MS = 10_000
 
 export const useJobsStore = defineStore('jobs', () => {
   const current = ref<JobModel | null>(null)
+  const active = ref<JobModel[]>([])
+  const activeJobs = computed(() => active.value.length ? active.value : (current.value ? [current.value] : []))
   const history = ref<JobModel[]>([])
   const events = ref<{ event: string, data: unknown, timestamp: string }[]>([])
   const error = ref<string | null>(null)
@@ -22,6 +24,8 @@ export const useJobsStore = defineStore('jobs', () => {
   }
 
   function findJob(jobId: string): JobModel | null {
+    const activeJob = active.value.find((j) => j.id === jobId)
+    if (activeJob) return activeJob
     if (current.value?.id === jobId) return current.value
     return history.value.find((j) => j.id === jobId) ?? null
   }
@@ -31,7 +35,8 @@ export const useJobsStore = defineStore('jobs', () => {
     error.value = null
     try {
       const response = await api.listJobs()
-      current.value = response.current
+      active.value = response.active
+      current.value = active.value[0] ?? response.current ?? null
       history.value = response.history
     } catch (err) {
       error.value = (err as Error).message
@@ -41,15 +46,16 @@ export const useJobsStore = defineStore('jobs', () => {
   }
 
   async function refreshActiveJobs() {
-    const active: JobModel[] = []
-    const currentJob = current.value
-    if (isActive(currentJob)) active.push(currentJob)
-    for (const job of history.value) {
-      if (isActive(job)) active.push(job)
+    const jobsToRefresh: JobModel[] = []
+    for (const job of activeJobs.value) {
+      if (isActive(job)) jobsToRefresh.push(job)
     }
-    if (!active.length) return
+    for (const job of history.value) {
+      if (isActive(job)) jobsToRefresh.push(job)
+    }
+    if (!jobsToRefresh.length) return
     const results = await Promise.allSettled(
-      active.map((job) => api.getJob(job.id))
+      jobsToRefresh.map((job) => api.getJob(job.id))
     )
     for (let i = 0; i < results.length; i += 1) {
       const result = results[i]
@@ -167,6 +173,8 @@ export const useJobsStore = defineStore('jobs', () => {
 
   return {
     current,
+    active,
+    activeJobs,
     history,
     events,
     error,

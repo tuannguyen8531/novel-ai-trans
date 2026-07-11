@@ -45,9 +45,11 @@ def list_jobs(
     _: AuthenticatedPrincipal,
     jobs: JobManagerDependency,
 ) -> JobListResponse:
-    current = jobs.current
+    active = jobs.list_active()
+    current = active[0] if active else None
     return JobListResponse(
         current=_serialize_job(current) if current else None,
+        active=[_serialize_job(job) for job in active],
         history=[_serialize_job(job) for job in jobs.list_history()],
     )
 

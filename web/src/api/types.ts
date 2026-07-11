@@ -115,6 +115,7 @@ export interface JobModel {
 
 export interface JobListResponse {
   current: JobModel | null
+  active: JobModel[]
   history: JobModel[]
 }
 

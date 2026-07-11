@@ -129,7 +129,7 @@ def create_app(
             content={
                 "error": {
                     "code": "job_conflict",
-                    "message": "Another long-running job is already active.",
+                    "message": "Another conflicting long-running job is already active.",
                     "details": {"active_job_id": str(error)},
                 }
             },

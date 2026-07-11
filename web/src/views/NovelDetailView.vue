@@ -760,9 +760,14 @@ function cancelDeleteChapter() {
           role="tabpanel"
           aria-labelledby="rules-tab"
         >
-          <div style="display: flex; flex-direction: column; gap: 1rem;">
-            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
-              <h3 style="margin: 0;">Novel Translation Rules</h3>
+          <div class="rules-editor">
+            <div class="rules-editor-header">
+              <div class="rules-editor-copy">
+                <h3>Novel Translation Rules</h3>
+                <p class="muted">
+                  These instructions will be appended to the translation rules for this novel only. You can use Markdown.
+                </p>
+              </div>
               <button
                 type="button"
                 :disabled="rulesSaving || rulesLoading"
@@ -771,9 +776,6 @@ function cancelDeleteChapter() {
                 {{ rulesSaving ? 'Saving...' : 'Save Rules' }}
               </button>
             </div>
-            <p class="muted" style="margin: 0; font-size: 0.9rem;">
-              These instructions will be appended to the translation rules for this novel only. You can use Markdown.
-            </p>
             <textarea
               v-model="novelRules"
               placeholder="e.g.
@@ -1089,6 +1091,49 @@ function cancelDeleteChapter() {
   grid-column: 1 / -1;
   margin: 0;
   padding-top: 0.25rem;
+}
+
+.rules-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.rules-editor-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
+.rules-editor-copy {
+  flex: 1 1 24rem;
+  min-width: 0;
+}
+
+.rules-editor-copy h3,
+.rules-editor-copy p {
+  margin: 0;
+}
+
+.rules-editor-copy h3 {
+  margin-bottom: 0.35rem;
+}
+
+.rules-editor-header button {
+  flex: 0 0 auto;
+  margin-bottom: 0.1rem;
+}
+
+@media (max-width: 640px) {
+  .rules-editor-header {
+    align-items: flex-start;
+  }
+
+  .rules-editor-header button {
+    margin-bottom: 0;
+  }
 }
 
 .novel-cover-row {

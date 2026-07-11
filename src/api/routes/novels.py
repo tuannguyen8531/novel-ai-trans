@@ -160,14 +160,21 @@ def delete_novel(
     root = novels.resolve_root(app_config.get_config().translated_dir)
     novels.require_path(root, name)
     state = get_state()
-    current = state.job_manager.current
-    if current and current.status.value in {"running", "cancelling", "queued"}:
+    active_job = next(
+        (
+            job
+            for job in state.job_manager.list_active()
+            if job.novel == name and job.status.value in {"running", "cancelling", "queued"}
+        ),
+        None,
+    )
+    if active_job:
         raise HTTPException(
             status_code=409,
             detail={
                 "code": "novel_in_use",
-                "message": f"Novel {name!r} has an active job ({current.id}). Cancel the job first.",
-                "details": {"active_job_id": current.id},
+                "message": f"Novel {name!r} has an active job ({active_job.id}). Cancel the job first.",
+                "details": {"active_job_id": active_job.id},
             },
         )
     novels.delete(root, name)
