@@ -582,10 +582,6 @@ function cancelDeleteChapter() {
             <span class="meta-label">Total</span>
             <span>{{ novels.detail.total_input_chapters }} chapter{{ novels.detail.total_input_chapters === 1 ? '' : 's' }}</span>
           </div>
-          <div class="meta-row">
-            <span class="meta-label">Slug</span>
-            <span><code>{{ novelName }}</code></span>
-          </div>
           <p v-if="metadataError" class="error meta-empty">Failed to load metadata: {{ metadataError }}</p>
           <p v-else-if="!hasAnyMetadata" class="muted meta-empty">
             No metadata fields filled in yet — click <strong>Edit metadata</strong> to add some.
