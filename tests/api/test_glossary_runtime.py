@@ -2,8 +2,35 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from src.application.glossary import audit_glossary
-from src.config import Config
+from src.api.routes.glossary import get_glossary
+from src.application.glossary import audit_glossary, load_glossary
+from src.config import Config, active_config_scope
+
+EMPTY_GLOSSARY = {"terms": {}, "entities": {}, "edges": []}
+
+
+def test_load_glossary_returns_complete_empty_shape_when_missing(tmp_path):
+    with active_config_scope(Config(translated_dir=str(tmp_path))):
+        assert load_glossary("demo") == EMPTY_GLOSSARY
+
+
+def test_load_glossary_returns_complete_empty_shape_for_invalid_json(tmp_path):
+    glossary_path = tmp_path / "demo" / "glossary.json"
+    glossary_path.parent.mkdir(parents=True)
+    glossary_path.write_text("{invalid", encoding="utf-8")
+
+    with active_config_scope(Config(translated_dir=str(tmp_path))):
+        assert load_glossary("demo") == EMPTY_GLOSSARY
+
+
+def test_get_glossary_preserves_empty_response_contract(tmp_path):
+    (tmp_path / "demo").mkdir()
+
+    with active_config_scope(Config(translated_dir=str(tmp_path))):
+        response = get_glossary("demo")
+
+    assert response.novel == "demo"
+    assert response.data == EMPTY_GLOSSARY
 
 
 def test_vietnamese_audit_reads_legacy_output_directory(tmp_path):

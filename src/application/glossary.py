@@ -39,6 +39,10 @@ GLOSSARY_BACKUP_DIR = _paths.GLOSSARY_BACKUP_DIR
 _BACKUP_ID_PATTERN = re.compile(r"^\d{8}T\d{6}_\d{6}Z_[0-9a-f]{8}$")
 
 
+def _empty_glossary() -> dict:
+    return {"terms": {}, "entities": {}, "edges": []}
+
+
 def _emit(callback: Callable[[ProgressEvent], None] | None, event: ProgressEvent) -> None:
     if callback is not None:
         with suppress(Exception):
@@ -52,7 +56,13 @@ def _check_cancel(event: Event | None) -> None:
 
 def load_glossary(novel_name: str) -> dict:
     """Load the active glossary document for a novel."""
-    return glossary_service.load_glossary_data(novel_name)
+    path = glossary_service.resolve_glossary_path(novel_name)
+    try:
+        if not path.exists() or path.stat().st_size == 0:
+            return _empty_glossary()
+        return glossary_service.load_glossary_data(novel_name)
+    except (OSError, json.JSONDecodeError, ValueError):
+        return _empty_glossary()
 
 
 def save_terms(novel_name: str, terms: dict[str, str]) -> dict:
