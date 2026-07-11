@@ -26,6 +26,12 @@ EXISTING CHARACTERS (update relationships if new ones are discovered):
 
 RULES FOR ENTITIES:
 - Only extract characters with PROPER NAMES (e.g. "陆远秋", "白清夏")
+- The entity KEY must be the EXACT original-language name and NOTHING ELSE.
+  Do NOT append any romanization, translation, notes, or parenthetical annotations to the key.
+  CORRECT:   "준기": { "translated_name": "Jun Gi", ... }
+  WRONG:     "준기 (Jun Gi)": { ... }
+  WRONG:     "준기 - Jun Gi": { ... }
+  The translated/romanized form belongs ONLY in the "translated_name" field inside the value object.
 - NEVER extract kinship terms or role descriptors as character names:
   papa, mama, dad, mom, father, mother, uncle, aunt, grandma, grandpa, brother, sister,
   爸爸, 妈妈, 父亲, 母亲, 叔叔, 阿姨, 爷爷, 奶奶, 哥哥, 姐姐, 弟弟, 妹妹,
@@ -76,7 +82,7 @@ Respond with JSON ONLY (no other text):
     },
     "characters": {
         "entities": {
-            "original name": {
+            "原名": {
                 "translated_name": "Vietnamese name",
                 "role": "protagonist | antagonist | supporting | minor",
                 "pronoun": "Vietnamese pronoun (e.g. cậu, anh ấy, cô ấy, hắn)"
