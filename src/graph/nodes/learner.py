@@ -7,6 +7,8 @@ Runs after all chunks are translated. Responsible for:
 3. Saving both to the glossary JSON file
 """
 
+import re
+
 from src.config import config
 from src.domain.characters import (
     get_character_translated_name,
@@ -261,6 +263,73 @@ def _is_english(text: str) -> bool:
         return False
 
 
+# Pattern to match trailing parenthetical annotations in entity keys.
+# Examples: "준기 (Jun Gi)" → "준기", "노을 (No Eul)" → "노을"
+_PAREN_ANNOTATION_RE = re.compile(r"\s*\([^)]+\)\s*$")
+# Also catch " - annotation" style.
+_DASH_ANNOTATION_RE = re.compile(r"\s+-\s+[A-Za-z].*$")
+
+
+def _strip_entity_key_annotation(key: str) -> str:
+    """Remove trailing parenthetical or dash annotations from an entity key.
+
+    LLMs sometimes produce keys like '준기 (Jun Gi)' or '준기 - Jun Gi'
+    instead of the bare original name '준기'. This strips those annotations.
+    """
+    cleaned = _PAREN_ANNOTATION_RE.sub("", key)
+    cleaned = _DASH_ANNOTATION_RE.sub("", cleaned)
+    return cleaned.strip() or key
+
+
+def _sanitize_entity_keys(characters: dict) -> dict:
+    """Strip parenthetical annotations from entity keys, edges, and address rules."""
+    entities = characters.get("entities", {})
+    if not entities:
+        return characters
+
+    # Build key mapping: old_key -> cleaned_key
+    key_map: dict[str, str] = {}
+    cleaned_entities: dict = {}
+    for old_key, info in entities.items():
+        new_key = _strip_entity_key_annotation(old_key)
+        if new_key != old_key:
+            print(f"  ⚠ Cleaned entity key: '{old_key}' → '{new_key}'")
+        key_map[old_key] = new_key
+        # If two old keys map to the same new key, merge (keep last)
+        if new_key in cleaned_entities:
+            existing = cleaned_entities[new_key]
+            for field in ("translated_name", "role", "pronoun"):
+                if info.get(field) and not existing.get(field):
+                    existing[field] = info[field]
+        else:
+            cleaned_entities[new_key] = info
+    characters["entities"] = cleaned_entities
+
+    # Remap edge references
+    edges = characters.get("edges", [])
+    if edges:
+        cleaned_edges = []
+        for edge in edges:
+            if len(edge) >= 3:
+                edge = list(edge)
+                edge[0] = key_map.get(edge[0], _strip_entity_key_annotation(edge[0]))
+                edge[1] = key_map.get(edge[1], _strip_entity_key_annotation(edge[1]))
+            cleaned_edges.append(edge)
+        characters["edges"] = cleaned_edges
+
+    # Remap address_rules references
+    rules = characters.get("address_rules", [])
+    if rules:
+        for rule in rules:
+            if isinstance(rule, dict):
+                for field in ("speaker", "listener"):
+                    val = rule.get(field, "")
+                    if val:
+                        rule[field] = key_map.get(val, _strip_entity_key_annotation(val))
+
+    return characters
+
+
 def _normalize_relationship(rel_type: str) -> str:
     """Normalize relationship type to closest allowed English type."""
     rel_lower = rel_type.strip().lower()
@@ -468,6 +537,9 @@ def learner_node(state: TranslationState) -> dict:
     except Exception as e:
         log_error("Failed to extract terms and characters", e, chapter=chapter_number)
         print(f"\n  [Warning] Failed to extract terms and characters: {e}")
+
+    # Sanitize entity keys: strip parenthetical annotations from keys/edges/rules
+    new_characters = _sanitize_entity_keys(new_characters)
 
     # Filter out kinship terms and role descriptors from entities
     new_entities = new_characters.get("entities", {})
