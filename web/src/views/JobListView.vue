@@ -20,14 +20,14 @@ onUnmounted(() => {
 
 const rows = computed(() => {
   const list: Array<{ id: string; kind: string; novel: string | null; status: string; created_at: string; progress: Record<string, unknown> }> = []
-  if (jobs.current) {
+  for (const job of jobs.activeJobs) {
     list.push({
-      id: jobs.current.id,
-      kind: jobs.current.kind,
-      novel: jobs.current.novel,
-      status: jobs.current.status,
-      created_at: jobs.current.created_at,
-      progress: jobs.current.progress
+      id: job.id,
+      kind: job.kind,
+      novel: job.novel,
+      status: job.status,
+      created_at: job.created_at,
+      progress: job.progress
     })
   }
   for (const job of jobs.history) {

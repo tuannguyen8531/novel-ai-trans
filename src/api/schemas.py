@@ -349,6 +349,7 @@ class JobModel(BaseModel):
 
 class JobListResponse(BaseModel):
     current: JobModel | None
+    active: list[JobModel] = Field(default_factory=list)
     history: list[JobModel]
 
 
