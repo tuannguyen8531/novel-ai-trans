@@ -503,7 +503,8 @@ def merge_character_context(
                 "pronoun": info.get("pronoun", ""),
             }
         else:
-            if translated_name:
+            existing_name = get_character_translated_name(existing_entities[name])
+            if translated_name and not existing_name:
                 existing_entities[name]["translated_name"] = translated_name
             new_role = info.get("role", "")
             if new_role and new_role != "unknown":

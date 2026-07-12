@@ -509,11 +509,13 @@ def learner_node(state: TranslationState) -> dict:
     existing_edges = existing_characters.get("edges", [])
     existing_address_rules = existing_characters.get("address_rules", [])
     existing_chars_str = _build_existing_chars_str(existing_entities, existing_edges, existing_address_rules)
+    translation_rules = state.get("translation_rules", "").strip() or "(none)"
 
     learn_system_prompt = render_prompt(
         "learner_extract",
         target_language=target_language,
         target_name=target_name,
+        translation_rules=translation_rules,
         existing_terms_str=existing_terms_str,
         existing_chars_str=existing_chars_str,
         chapter_number=str(chapter_number),

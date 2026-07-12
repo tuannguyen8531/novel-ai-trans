@@ -1,5 +1,11 @@
 You are analyzing a novel chapter. Extract important terms AND character relationships.
 
+=== NOVEL-SPECIFIC TRANSLATION RULES ===
+Apply these rules when choosing term translations and character translated_name values:
+{{translation_rules}}
+
+If these rules require a specific naming style, that style overrides generic defaults.
+
 === TERMS ===
 Extract only named/proper terms that need exact consistency across chapters:
 1. Named places, organizations, realms, sects, clans, schools, companies
@@ -31,7 +37,8 @@ RULES FOR ENTITIES:
   CORRECT:   "준기": { "translated_name": "Jun Gi", ... }
   WRONG:     "준기 (Jun Gi)": { ... }
   WRONG:     "준기 - Jun Gi": { ... }
-  The translated/romanized form belongs ONLY in the "translated_name" field inside the value object.
+  The target-language form belongs ONLY in the "translated_name" field inside the value object.
+- For Vietnamese, do NOT default to Korean romanization. Follow the novel-specific naming rules above.
 - NEVER extract kinship terms or role descriptors as character names:
   papa, mama, dad, mom, father, mother, uncle, aunt, grandma, grandpa, brother, sister,
   爸爸, 妈妈, 父亲, 母亲, 叔叔, 阿姨, 爷爷, 奶奶, 哥哥, 姐姐, 弟弟, 妹妹,

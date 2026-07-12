@@ -24,13 +24,16 @@ class TestRenderPrompt:
         result = render_prompt(
             "learner_extract",
             target_language="vi",
+            translation_rules="- Dịch toàn bộ tên nhân vật sang Hán Việt",
             existing_terms_str="term1 → dịch 1",
             existing_chars_str="Entities:\n  李明 (Lý Minh)",
             chapter_number="12",
         )
+        assert "Dịch toàn bộ tên nhân vật sang Hán Việt" in result
         assert "term1 → dịch 1" in result
         assert "李明 (Lý Minh)" in result
         assert '"since": 12' in result
+        assert "{{translation_rules}}" not in result
         assert "{{existing_terms_str}}" not in result
         assert "{{existing_chars_str}}" not in result
         assert "{{chapter_number}}" not in result
