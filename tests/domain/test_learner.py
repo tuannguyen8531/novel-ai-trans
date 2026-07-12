@@ -58,3 +58,11 @@ class TestFilterByFrequency:
     def test_drops_llm_extracted_terms_absent_from_source_text(self):
         result = filter_extracted_terms("这里只有真实术语", {"不存在术语": "thuật ngữ ảo"})
         assert result == {}
+
+    def test_drops_llm_extracted_terms_with_source_chars_in_translation(self):
+        text = "창궁무애검법을 펼쳤다."
+        terms = {"창궁무애검법": "Thương Cung Vô 애 Kiếm Pháp"}
+
+        result = filter_extracted_terms(text, terms)
+
+        assert result == {}

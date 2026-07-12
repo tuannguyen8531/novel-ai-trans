@@ -3,6 +3,7 @@
 import re
 
 MIN_TERM_FREQUENCY = 3
+SOURCE_CHAR_RE = re.compile(r"[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]")
 
 
 def count_occurrences(text: str, term: str) -> int:
@@ -31,6 +32,6 @@ def filter_extracted_terms(source_text: str, terms: dict[str, str]) -> dict[str,
             continue
         original = original.strip()
         translation = translation.strip()
-        if original and translation and original in source_text:
+        if original and translation and original in source_text and not SOURCE_CHAR_RE.search(translation):
             filtered[original] = translation
     return filtered
