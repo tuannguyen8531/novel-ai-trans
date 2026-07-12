@@ -28,6 +28,7 @@ const showDeleteDialog = ref(false)
 const deleteLoading = ref(false)
 
 const showMenu = ref(false)
+const showScrollToTop = ref(false)
 
 const showToc = ref(false)
 const tocLang = ref<'source' | 'vi' | 'en'>('source')
@@ -245,15 +246,26 @@ function selectChapter(chapterNumber: number) {
   goTo(chapterNumber)
 }
 
+function updateScrollToTopVisibility() {
+  showScrollToTop.value = window.scrollY > 480
+}
+
+function scrollToTop() {
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 onMounted(async () => {
   window.addEventListener('click', closeMenu)
+  window.addEventListener('scroll', updateScrollToTopVisibility, { passive: true })
+  updateScrollToTopVisibility()
   await Promise.all([loadChapters(), loadMetadata(), settings.refresh()])
   await loadContent(props.chapter, defaultViewMode.value)
 })
 
 onUnmounted(() => {
   window.removeEventListener('click', closeMenu)
+  window.removeEventListener('scroll', updateScrollToTopVisibility)
   document.body.style.overflow = ''
 })
 
@@ -494,6 +506,17 @@ watch(
       @confirm="confirmDelete"
       @cancel="showDeleteDialog = false"
     />
+
+    <button
+      v-show="showScrollToTop"
+      type="button"
+      class="secondary scroll-to-top"
+      aria-label="Scroll to top"
+      title="Scroll to top"
+      @click="scrollToTop"
+    >
+      ↑ Top
+    </button>
   </section>
 </template>
 
@@ -652,6 +675,15 @@ watch(
 
 .chapter-nav-pos {
   font-size: 0.875rem;
+}
+
+.scroll-to-top {
+  position: fixed;
+  right: 1.5rem;
+  bottom: 1.5rem;
+  z-index: 120;
+  min-width: 4rem;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
 }
 
 /* ── Danger button variants ── */

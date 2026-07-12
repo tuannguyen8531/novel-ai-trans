@@ -11,6 +11,7 @@ from urllib.parse import unquote, urldefrag
 from xml.etree import ElementTree
 
 from src.models import ChapterResult, NovelMetadata
+from src.services import chapters as chapter_service
 from src.services.chapters import detect_chapter_number, is_obvious_non_chapter_title
 from src.services.metadata import metadata_to_dict
 from src.utils.files import write_bytes_atomic, write_json_atomic, write_text_atomic
@@ -57,6 +58,12 @@ class EpubIllustration:
 
 
 @dataclass(frozen=True)
+class ChapterImportChange:
+    number: int
+    title: str
+
+
+@dataclass(frozen=True)
 class EpubImportResult:
     metadata: NovelMetadata
     chapters: list[ChapterResult]
@@ -64,6 +71,11 @@ class EpubImportResult:
     output_dir: str
     chapter_output_dir: str
     illustrations_dir: str
+    retained_chapters: tuple[int, ...] = ()
+    unchanged_chapters: tuple[int, ...] = ()
+    overwritten_chapters: tuple[ChapterImportChange, ...] = ()
+    added_chapters: tuple[int, ...] = ()
+    removed_chapters: tuple[int, ...] = ()
     warnings: tuple[str, ...] = ()
 
 
@@ -195,8 +207,8 @@ def import_epub(
     illustrations_dir = novel_dir / "illustrations"
     chapter_output_dir.mkdir(parents=True, exist_ok=True)
     illustrations_dir.mkdir(parents=True, exist_ok=True)
+    existing_chapters = chapter_service.scan(chapter_output_dir)
     if not keep_existing:
-        clean_existing_chapters(chapter_output_dir)
         clean_existing_illustrations(illustrations_dir)
 
     metadata = NovelMetadata(
@@ -205,11 +217,16 @@ def import_epub(
         source_url=source_url,
         site_name=novel_slug,
     )
-    write_json_atomic(novel_dir / "metadata.json", metadata_to_dict(metadata))
+    metadata_path = novel_dir / "metadata.json"
+    if not metadata_path.exists():
+        write_json_atomic(metadata_path, metadata_to_dict(metadata))
 
     chapters: list[ChapterResult] = []
     illustrations: list[EpubIllustration] = []
     warnings: list[str] = []
+    unchanged_chapters: list[int] = []
+    overwritten_chapters: list[ChapterImportChange] = []
+    added_chapters: list[int] = []
     used_chapters: set[int] = set()
     illustration_index = 0
     with zipfile.ZipFile(epub_path) as epub:
@@ -256,7 +273,16 @@ def import_epub(
                 )
 
             path = chapter_output_dir / f"chapter_{chapter_number}.txt"
-            write_text_atomic(path, chapter_text.strip() + "\n")
+            imported_text = chapter_text.strip() + "\n"
+            if path.exists():
+                if path.read_text(encoding="utf-8") == imported_text:
+                    unchanged_chapters.append(chapter_number)
+                else:
+                    write_text_atomic(path, imported_text)
+                    overwritten_chapters.append(ChapterImportChange(number=chapter_number, title=section.title))
+            else:
+                write_text_atomic(path, imported_text)
+                added_chapters.append(chapter_number)
             chapters.append(
                 ChapterResult(
                     index=chapter_number,
@@ -266,6 +292,11 @@ def import_epub(
                 )
             )
 
+    retained_chapters = sorted(set(existing_chapters) - used_chapters) if keep_existing else []
+    removed_chapters = sorted(set(existing_chapters) - used_chapters) if not keep_existing else []
+    for chapter_number in removed_chapters:
+        existing_chapters[chapter_number].unlink()
+
     chapters.sort(key=lambda chapter_result: chapter_result.index)
     return EpubImportResult(
         metadata=metadata,
@@ -274,6 +305,11 @@ def import_epub(
         output_dir=str(novel_dir),
         chapter_output_dir=str(chapter_output_dir),
         illustrations_dir=str(illustrations_dir),
+        retained_chapters=tuple(retained_chapters),
+        unchanged_chapters=tuple(sorted(unchanged_chapters)),
+        overwritten_chapters=tuple(sorted(overwritten_chapters, key=lambda change: change.number)),
+        added_chapters=tuple(sorted(added_chapters)),
+        removed_chapters=tuple(removed_chapters),
         warnings=tuple(warnings),
     )
 
@@ -453,11 +489,6 @@ def should_skip_fallback_section(section: EpubSection) -> bool:
     if any(name in title_lower or name in source_name for name in front_matter_names):
         return True
     return section.index <= 5 and any(marker in section.text.casefold() for marker in metadata_markers)
-
-
-def clean_existing_chapters(chapter_output_dir: Path) -> None:
-    for existing_file in chapter_output_dir.glob("chapter_*.txt"):
-        existing_file.unlink()
 
 
 def clean_existing_illustrations(illustrations_dir: Path) -> None:

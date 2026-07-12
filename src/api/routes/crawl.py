@@ -157,6 +157,16 @@ async def post_import(
             "title": result.title,
             "chapters": result.chapters,
             "illustrations": result.illustrations,
+            "chapter_stats": {
+                "retained": result.retained,
+                "unchanged": result.unchanged,
+                "overwritten": result.overwritten,
+                "added": result.added,
+                "removed": result.removed,
+            },
+            "overwritten_chapters": [
+                {"number": chapter.number, "title": chapter.title} for chapter in result.overwritten_chapters
+            ],
             "output_dir": result.output_dir,
             "warnings": result.warnings,
         }

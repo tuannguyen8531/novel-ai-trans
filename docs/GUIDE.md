@@ -172,8 +172,13 @@ uv run import ./book.epub --name my-novel --translated-output ./translated
 ```
 
 The importer splits the EPUB into `chapter_N.txt` files, extracts illustrations
-into `translated/<novel>/illustrations/`, and writes `metadata.json` with the
-title, author, and cover URL.
+into `translated/<novel>/illustrations/`, and creates `metadata.json` with the
+title, author, and cover URL on the first import. Re-importing the same novel
+preserves its existing metadata. Import results report retained chapters,
+unchanged chapters skipped without rewriting, chapters overwritten because
+their content changed, newly added chapters, and chapters removed when
+`--keep-existing` is not enabled. Changed overwritten chapters are listed by
+number and title.
 
 #### Site config schema
 

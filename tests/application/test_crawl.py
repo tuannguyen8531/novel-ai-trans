@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from src.application.crawl import CrawlRequest, generate_config, run_crawl
+from src.application.crawl import CrawlRequest, ImportRequest, generate_config, import_epub_workflow, run_crawl
+from src.services.importer import ChapterImportChange
 
 
 def test_run_crawl_dry_run_returns_preview_without_crawling() -> None:
@@ -50,3 +52,29 @@ def test_generate_config_without_drafts_dir_does_not_create_draft() -> None:
     assert result.draft_id == ""
     assert result.expires_at is None
     assert result.config == generator.generate.return_value
+
+
+def test_import_workflow_reports_chapter_changes_in_result_and_logs() -> None:
+    imported = SimpleNamespace(
+        metadata=SimpleNamespace(title="Demo"),
+        chapters=[object(), object(), object()],
+        illustrations=[object()],
+        output_dir="translated/demo",
+        retained_chapters=(1,),
+        unchanged_chapters=(2,),
+        overwritten_chapters=(ChapterImportChange(number=3, title="Chapter 3: Revised"),),
+        added_chapters=(4,),
+        removed_chapters=(),
+        warnings=(),
+    )
+    events = []
+
+    with patch("src.application.crawl.import_epub", return_value=imported):
+        result = import_epub_workflow(ImportRequest(epub_path=Path("demo.epub")), progress_callback=events.append)
+
+    assert (result.retained, result.unchanged, result.overwritten, result.added, result.removed) == (1, 1, 1, 1, 0)
+    assert [(change.number, change.title) for change in result.overwritten_chapters] == [(3, "Chapter 3: Revised")]
+    assert [event.message for event in events if event.kind == "log"] == [
+        "Import chapters: retained 1 · unchanged 1 · overwritten 1 · added 1 · removed 0",
+        "Overwritten chapter 3: Chapter 3: Revised",
+    ]

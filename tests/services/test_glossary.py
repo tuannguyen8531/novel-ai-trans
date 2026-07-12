@@ -512,7 +512,7 @@ class TestGlossaryTranslatedDir:
                 with pytest.raises(ResourceConflictError, match="locked"):
                     apply_pending_replacements("test-novel")
 
-    def test_apply_keeps_pending_when_output_is_missing(self):
+    def test_apply_ignores_missing_output_and_clears_pending(self):
         translated_root = self.base / "translated"
         novel_root = translated_root / "test-novel"
         (novel_root / "input").mkdir(parents=True)
@@ -527,8 +527,32 @@ class TestGlossaryTranslatedDir:
             result = apply_pending_replacements("test-novel", write=True)
 
             assert result["changed_files"] == 0
-            assert result["replacements"][0]["status"] == "missing_output"
-            assert load_glossary_data("test-novel")[PENDING_REPLACEMENTS_KEY] != []
+            assert result["replacements"] == []
+            assert load_glossary_data("test-novel")[PENDING_REPLACEMENTS_KEY] == []
+
+    def test_apply_skips_untranslated_chapters_without_missing_output_issue(self):
+        translated_root = self.base / "translated"
+        novel_root = translated_root / "test-novel"
+        (novel_root / "input").mkdir(parents=True)
+        (novel_root / "output").mkdir(parents=True)
+        (novel_root / "input" / "chapter_1.txt").write_text("魔法再次.", encoding="utf-8")
+        (novel_root / "input" / "chapter_2.txt").write_text("魔法继续.", encoding="utf-8")
+        output_path = novel_root / "output" / "chapter_001.txt"
+        output_path.write_text("Ma thuật.", encoding="utf-8")
+
+        with patch("src.services.glossary.config") as mock_config:
+            mock_config.translated_dir = str(translated_root)
+            mock_config.target_language = "vi"
+            save_glossary("test-novel", {"魔法": "ma thuật"})
+            update_glossary_term("test-novel", "魔法", "魔法", "ma pháp", is_user_edit=True)
+
+            result = apply_pending_replacements("test-novel", write=True)
+
+            assert result["changed_files"] == 1
+            assert [report["chapter"] for report in result["replacements"]] == [1]
+            assert {report["status"] for report in result["replacements"]} == {"safe"}
+            assert output_path.read_text(encoding="utf-8") == "Ma pháp."
+            assert load_glossary_data("test-novel")[PENDING_REPLACEMENTS_KEY] == []
 
     def test_dismiss_pending_replacements(self):
         self.temp_dir_extra = tempfile.TemporaryDirectory()

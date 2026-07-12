@@ -5,6 +5,7 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from unittest.mock import patch
 from xml.sax.saxutils import escape
 
 from src.services.importer import (
@@ -14,6 +15,7 @@ from src.services.importer import (
     import_epub,
     select_processed_chapters,
 )
+from src.utils.files import write_text_atomic
 
 
 class EpubImporterTest(unittest.TestCase):
@@ -172,6 +174,87 @@ class EpubImporterTest(unittest.TestCase):
 
         self.assertEqual(result.output_dir, str(root / "translated" / "downloaded-book"))
         self.assertEqual(result.metadata.title, "Completely Different EPUB Title")
+
+    def test_reimport_preserves_existing_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            epub_path = root / "updated.epub"
+            write_epub(
+                epub_path,
+                title="Updated EPUB Title",
+                author="Updated EPUB Author",
+                sections=[("chapter-2.xhtml", "Chapter 2: Next", "New chapter.")],
+            )
+            novel_dir = root / "translated" / "existing-novel"
+            novel_dir.mkdir(parents=True)
+            existing_metadata = {
+                "title": "Existing Title",
+                "translated": {"en": "Existing English Title", "vi": "Tiêu đề hiện tại"},
+                "author": "Existing Author",
+                "source_url": "https://example.com/original",
+                "illustration_url": "https://example.com/cover.jpg",
+                "site_name": "existing-novel",
+                "source_language": "korean",
+                "custom_field": "keep me",
+            }
+            (novel_dir / "metadata.json").write_text(
+                json.dumps(existing_metadata, ensure_ascii=False),
+                encoding="utf-8",
+            )
+
+            import_epub(
+                epub_path,
+                root / "translated",
+                name="existing-novel",
+                keep_existing=True,
+            )
+            metadata = json.loads((novel_dir / "metadata.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(metadata, existing_metadata)
+
+    def test_reimport_reports_retained_unchanged_overwritten_and_added_chapters(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            initial_epub = root / "initial.epub"
+            updated_epub = root / "updated.epub"
+            write_epub(
+                initial_epub,
+                title="Demo",
+                author=None,
+                sections=[
+                    ("chapter-1.xhtml", "Chapter 1: Retained", "Only in the old import."),
+                    ("chapter-2.xhtml", "Chapter 2: Same", "Unchanged content."),
+                    ("chapter-3.xhtml", "Chapter 3: Old", "Old content."),
+                ],
+            )
+            write_epub(
+                updated_epub,
+                title="Demo",
+                author=None,
+                sections=[
+                    ("chapter-2.xhtml", "Chapter 2: Same", "Unchanged content."),
+                    ("chapter-3.xhtml", "Chapter 3: Revised", "Revised content."),
+                    ("chapter-4.xhtml", "Chapter 4: Added", "New content."),
+                ],
+            )
+            import_epub(initial_epub, root / "translated", name="demo")
+
+            with patch("src.services.importer.write_text_atomic", wraps=write_text_atomic) as write_text:
+                result = import_epub(
+                    updated_epub,
+                    root / "translated",
+                    name="demo",
+                    keep_existing=True,
+                )
+
+            written_chapters = {call.args[0].name for call in write_text.call_args_list}
+
+        self.assertEqual(result.retained_chapters, (1,))
+        self.assertEqual(result.unchanged_chapters, (2,))
+        self.assertEqual([(change.number, change.title) for change in result.overwritten_chapters], [(3, "Chapter 3: Revised")])
+        self.assertEqual(result.added_chapters, (4,))
+        self.assertEqual(result.removed_chapters, ())
+        self.assertEqual(written_chapters, {"chapter_3.txt", "chapter_4.txt"})
 
     def test_import_writes_illustrations_with_order_and_chapter_number(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:

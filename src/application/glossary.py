@@ -280,7 +280,6 @@ def apply_pending_replacements(
         output_dir = _paths.novel_output_dir_from_root(novel_root, target)
 
         reports: list[dict] = []
-        pending_total_occurrences = [0] * len(pending)
         pending_has_issues = [False] * len(pending)
         files_to_write: dict[Path, str] = {}
 
@@ -303,23 +302,6 @@ def apply_pending_replacements(
                 if not output_path.exists():
                     output_path = output_dir / source_path.name
                 if not output_path.exists():
-                    for index in applicable_indexes:
-                        pending_has_issues[index] = True
-                        item = pending[index]
-                        reports.append(
-                            {
-                                "chapter": chapter_number,
-                                "kind": item.get("kind", "term"),
-                                "sources": item.get("sources", []),
-                                "old": item.get("old", ""),
-                                "new": item.get("new", ""),
-                                "status": "missing_output",
-                                "source_count": source_counts[index],
-                                "output_count": 0,
-                                "occurrences": 0,
-                                "conflict_news": [],
-                            }
-                        )
                     continue
 
                 translated_text = output_path.read_text(encoding="utf-8")
@@ -381,8 +363,6 @@ def apply_pending_replacements(
                     )
                     if updated_text != translated_text:
                         files_to_write[output_path] = updated_text
-                    for index in safe_indexes:
-                        pending_total_occurrences[index] += actual_counts.get(str(pending[index].get("old", "")), 0)
 
                 for index in applicable_indexes:
                     item = pending[index]
@@ -404,14 +384,12 @@ def apply_pending_replacements(
                     )
 
         effective_write = write and not has_global_conflicts
-        new_pending = [
-            item
-            for index, item in enumerate(pending)
-            if not (pending_total_occurrences[index] > 0 and not pending_has_issues[index])
-        ]
+        new_pending = [item for index, item in enumerate(pending) if pending_has_issues[index]]
 
         changed_files = 0
         backup_id: str | None = None
+        manifest: dict | None = None
+        manifest_path: Path | None = None
         if effective_write and files_to_write:
             backup_id = f"{datetime.now(UTC).strftime('%Y%m%dT%H%M%S_%fZ')}_{secrets.token_hex(4)}"
             backup_dir = GLOSSARY_BACKUP_DIR / glossary_service.novel_runtime_key(novel_name) / backup_id
@@ -440,11 +418,14 @@ def apply_pending_replacements(
                 file_utils.write_text_atomic(path, content)
                 changed_files += 1
 
+        if effective_write and new_pending != pending:
             glossary_path = glossary_service.resolve_glossary_path(novel_name)
             file_utils.merge_json_locked(
                 glossary_path,
                 lambda current: {**current, PENDING_REPLACEMENTS_KEY: new_pending},
             )
+
+        if effective_write and manifest is not None and manifest_path is not None:
             manifest["status"] = "completed"
             manifest["pending_after"] = new_pending
             file_utils.write_text_atomic(manifest_path, json.dumps(manifest, ensure_ascii=False, indent=2))

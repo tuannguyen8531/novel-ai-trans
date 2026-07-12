@@ -561,7 +561,7 @@ onUnmounted(() => {
                 </tbody>
               </table>
             </div>
-            <p v-else class="muted">No matching translated chapter occurrences were found. The changes remain pending.</p>
+            <p v-else class="muted">No matching translated chapter occurrences were found in existing output.</p>
           </div>
         </div>
         <footer class="modal-footer">
@@ -581,9 +581,9 @@ onUnmounted(() => {
             v-if="previewData && !previewLoading && !previewData.write"
             type="button"
             @click="handleApply"
-            :disabled="previewData.conflicted || applyLoading || previewData.changed_files === 0"
+            :disabled="previewData.conflicted || applyLoading"
           >
-            {{ applyLoading ? 'Applying...' : 'Confirm & Overwrite' }}
+            {{ applyLoading ? 'Applying...' : 'Confirm & Apply' }}
           </button>
         </footer>
       </div>

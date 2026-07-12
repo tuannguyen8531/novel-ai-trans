@@ -400,6 +400,13 @@ def _import_epub(args: argparse.Namespace) -> int:
     for warning in result.warnings:
         get_logger().warning(warning)
     _print_output(f"Imported: {result.title} ({result.chapters} chapters, {result.illustrations} illustrations)")
+    _print_output(
+        "Chapters: "
+        f"retained {result.retained} · unchanged {result.unchanged} · "
+        f"overwritten {result.overwritten} · added {result.added} · removed {result.removed}"
+    )
+    for chapter in result.overwritten_chapters:
+        _print_output(f"Overwritten chapter {chapter.number}: {chapter.title}")
     _print_output(f"Output: {result.output_dir}")
     return 0
 

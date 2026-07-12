@@ -1,13 +1,24 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import JobMonitor from '@/components/JobMonitor.vue'
+import { useNovelsStore } from '@/stores/novels'
 
+const novels = useNovelsStore()
 const file = ref<File | null>(null)
 const name = ref<string>('')
+const selectedNovel = ref<string>('')
 const keepExisting = ref<boolean>(false)
 const jobId = ref<string | null>(null)
 const error = ref<string | null>(null)
+
+onMounted(() => novels.refresh())
+
+watch(name, (value) => {
+  if (selectedNovel.value && value !== selectedNovel.value) {
+    selectedNovel.value = ''
+  }
+})
 
 function slugFromFilename(filename: string): string {
   return filename.replace(/\.epub$/i, '').toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/-{2,}/g, '-').replace(/^[-._]+|[-._]+$/g, '')
@@ -19,6 +30,12 @@ function onFileChange(event: Event) {
   if (file.value && !name.value) {
     name.value = slugFromFilename(file.value.name)
   }
+}
+
+function onExistingNovelChange() {
+  if (!selectedNovel.value) return
+  name.value = selectedNovel.value
+  keepExisting.value = true
 }
 
 async function upload() {
@@ -45,6 +62,17 @@ async function upload() {
         <div>
           <label>EPUB file</label>
           <input type="file" accept=".epub" @change="onFileChange" />
+        </div>
+        <div>
+          <label>Existing novel (optional)</label>
+          <select v-model="selectedNovel" :disabled="novels.loading" @change="onExistingNovelChange">
+            <option value="">— choose an existing novel —</option>
+            <option v-for="novel in novels.novels" :key="novel.name" :value="novel.name">
+              {{ novel.title ? `${novel.title} (${novel.name})` : novel.name }} · {{ novel.total_input_chapters }} chapters
+            </option>
+          </select>
+          <p v-if="novels.error" class="error">{{ novels.error }}</p>
+          <p v-else class="muted">Selecting a novel fills its slug and enables Keep existing.</p>
         </div>
         <div>
           <label>Output slug (optional)</label>
