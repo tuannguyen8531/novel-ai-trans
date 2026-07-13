@@ -115,9 +115,20 @@ def put_chapter_content(
     number: int,
     payload: ChapterContentPayload,
     _: AuthenticatedPrincipal,
+    view: Annotated[Literal["source", "translation"], Query()] = "source",
+    target: Annotated[Literal["vi", "en"] | None, Query()] = None,
 ) -> ChapterContentResponse:
-    root = novels.resolve_root(app_config.get_config().translated_dir)
-    return ChapterContentResponse(**asdict(novels.write_chapter(root, name, number, payload.content)))
+    config = app_config.get_config()
+    root = novels.resolve_root(config.translated_dir)
+    content = novels.write_chapter(
+        root,
+        name,
+        number,
+        payload.content,
+        view=view,
+        target=target or config.target_language,
+    )
+    return ChapterContentResponse(**asdict(content))
 
 
 @router.delete("/novels/{name}/chapters/{number}", status_code=204)

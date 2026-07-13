@@ -278,16 +278,16 @@ def list_chapters(root: Path, name: str) -> list[Chapter]:
     input_dir = paths.novel_input_dir_from_root(novel_root)
     sources = chapters.scan(input_dir)
     outputs = {
-        target: chapters.numbers(paths.novel_output_dir_from_root(novel_root, target)) for target in SUPPORTED_TARGET_LANGUAGES
+        target: chapters.scan(paths.novel_output_dir_from_root(novel_root, target)) for target in SUPPORTED_TARGET_LANGUAGES
     }
     result: list[Chapter] = []
     for number in sources:
-        source_title = chapters.read_title(input_dir / f"chapter_{number}.txt", f"Chapter {number}")
+        source_title = chapters.read_title(sources[number], f"Chapter {number}")
         for target in SUPPORTED_TARGET_LANGUAGES:
             translated = number in outputs[target]
             title = f"Chapter {number}"
             if translated:
-                output_path = paths.novel_output_dir_from_root(novel_root, target) / f"chapter_{number:03d}.txt"
+                output_path = outputs[target][number]
                 title = chapters.read_title(output_path, title)
             result.append(
                 Chapter(
@@ -312,30 +312,46 @@ def read_chapter(
 ) -> Content:
     novel_root = require_path(root, name)
     if view == "source":
-        chapter_path = paths.novel_input_dir_from_root(novel_root) / f"chapter_{number}.txt"
+        chapter_path = chapters.chapter_path(paths.novel_input_dir_from_root(novel_root), number)
         if not chapter_path.exists():
             raise ResourceNotFoundError(f"Source chapter not found: chapter {number}")
         return Content(name, number, view, None, chapter_path.read_text(encoding="utf-8"))
 
     normalized_target = normalize_target_language(target)
     output_dir = paths.novel_output_dir_from_root(novel_root, normalized_target)
-    for chapter_path in (output_dir / f"chapter_{number:03d}.txt", output_dir / f"chapter_{number}.txt"):
-        if chapter_path.exists():
-            return Content(name, number, view, normalized_target, chapter_path.read_text(encoding="utf-8"))
+    chapter_path = chapters.chapter_path(output_dir, number)
+    if chapter_path.exists():
+        return Content(name, number, view, normalized_target, chapter_path.read_text(encoding="utf-8"))
     raise ResourceNotFoundError(f"Translated chapter not found: chapter {number}")
 
 
-def write_chapter(root: Path, name: str, number: int, content: str) -> Content:
+def write_chapter(
+    root: Path,
+    name: str,
+    number: int,
+    content: str,
+    *,
+    view: Literal["source", "translation"] = "source",
+    target: str | None = None,
+) -> Content:
     novel_root = require_path(root, name)
-    input_dir = paths.novel_input_dir_from_root(novel_root)
-    input_dir.mkdir(parents=True, exist_ok=True)
-    (input_dir / f"chapter_{number}.txt").write_text(content, encoding="utf-8")
-    return Content(name, number, "source", None, content)
+    if view == "source":
+        input_dir = paths.novel_input_dir_from_root(novel_root)
+        input_dir.mkdir(parents=True, exist_ok=True)
+        chapters.chapter_path(input_dir, number).write_text(content, encoding="utf-8")
+        return Content(name, number, view, None, content)
+
+    normalized_target = normalize_target_language(target)
+    output_dir = paths.novel_output_dir_from_root(novel_root, normalized_target)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    chapter_path = chapters.chapter_path(output_dir, number)
+    chapter_path.write_text(content, encoding="utf-8")
+    return Content(name, number, view, normalized_target, content)
 
 
 def delete_chapter(root: Path, name: str, number: int) -> None:
     novel_root = require_path(root, name)
-    chapter_path = paths.novel_input_dir_from_root(novel_root) / f"chapter_{number}.txt"
+    chapter_path = chapters.chapter_path(paths.novel_input_dir_from_root(novel_root), number)
     if not chapter_path.exists():
         raise ResourceNotFoundError(f"Input chapter not found: chapter {number}")
     chapter_path.unlink()

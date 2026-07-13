@@ -54,6 +54,61 @@ def test_update_metadata_merges_and_clears_translated_titles(tmp_path: Path) -> 
     assert json.loads((novel_root / "metadata.json").read_text(encoding="utf-8")) == updated
 
 
+@pytest.mark.parametrize(
+    ("target", "relative_path"),
+    [
+        ("vi", Path("output/chapter_007.txt")),
+        ("en", Path("output/en/chapter_007.txt")),
+    ],
+)
+def test_write_chapter_can_update_translation(tmp_path: Path, target: str, relative_path: Path) -> None:
+    root = tmp_path / "translated"
+    novel_root = root / "demo"
+    novel_root.mkdir(parents=True)
+
+    result = novels.write_chapter(
+        root,
+        "demo",
+        7,
+        "Translated chapter",
+        view="translation",
+        target=target,
+    )
+
+    assert result.view == "translation"
+    assert result.target == target
+    assert (novel_root / relative_path).read_text(encoding="utf-8") == "Translated chapter"
+    assert novels.read_chapter(root, "demo", 7, view="translation", target=target).content == "Translated chapter"
+
+
+def test_write_chapter_preserves_legacy_unpadded_translation_filename(tmp_path: Path) -> None:
+    root = tmp_path / "translated"
+    legacy_path = root / "demo" / "output" / "chapter_7.txt"
+    legacy_path.parent.mkdir(parents=True)
+    legacy_path.write_text("Old translation", encoding="utf-8")
+
+    novels.write_chapter(root, "demo", 7, "Updated translation", view="translation", target="vi")
+
+    assert legacy_path.read_text(encoding="utf-8") == "Updated translation"
+    assert not (legacy_path.parent / "chapter_007.txt").exists()
+
+
+def test_source_chapter_operations_preserve_legacy_unpadded_filename(tmp_path: Path) -> None:
+    root = tmp_path / "translated"
+    legacy_path = root / "demo" / "input" / "chapter_7.txt"
+    legacy_path.parent.mkdir(parents=True)
+    legacy_path.write_text("Old source", encoding="utf-8")
+
+    assert novels.read_chapter(root, "demo", 7, view="source").content == "Old source"
+    novels.write_chapter(root, "demo", 7, "Updated source")
+
+    assert legacy_path.read_text(encoding="utf-8") == "Updated source"
+    assert not (legacy_path.parent / "chapter_007.txt").exists()
+
+    novels.delete_chapter(root, "demo", 7)
+    assert not legacy_path.exists()
+
+
 def test_rules_round_trip_and_default_to_empty(tmp_path: Path) -> None:
     root = tmp_path / "translated"
     (root / "demo").mkdir(parents=True)

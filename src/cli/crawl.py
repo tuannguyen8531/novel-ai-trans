@@ -152,7 +152,7 @@ def _add_crawl_arguments(parser: argparse.ArgumentParser, *, target_help: str) -
     parser.add_argument(
         "--overwrite",
         action="store_true",
-        help="Re-download chapter files even if the shared chapter_N.txt already exists.",
+        help="Re-download chapter files even if the shared chapter_NNN.txt already exists.",
     )
     browser_mode = parser.add_mutually_exclusive_group()
     browser_mode.add_argument(

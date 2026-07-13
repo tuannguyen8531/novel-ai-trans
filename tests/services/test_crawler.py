@@ -163,7 +163,7 @@ class InvalidThenSuccessfulClient:
 class DelayedExistingCheckCrawler(NovelCrawler):
     @staticmethod
     def _is_existing_chapter(path: Path) -> bool:
-        if path.name == "chapter_1.txt":
+        if path.name == "chapter_001.txt":
             time.sleep(0.05)
         return False
 
@@ -509,7 +509,7 @@ class NovelCrawlerTest(unittest.TestCase):
             output_path = Path(output)
             result = crawler.crawl(output_path / "runtime", share_root=output_path / "translated")
             chapter_dir = Path(result.chapter_output_dir)
-            chapter_one = (chapter_dir / "chapter_1.txt").read_text(encoding="utf-8")
+            chapter_one = (chapter_dir / "chapter_001.txt").read_text(encoding="utf-8")
             shared_metadata = json.loads((chapter_dir.parent / "metadata.json").read_text(encoding="utf-8"))
 
         self.assertEqual(result.metadata.title, "Demo Novel")
@@ -528,7 +528,7 @@ class NovelCrawlerTest(unittest.TestCase):
             },
         )
         self.assertEqual(len(result.chapters), 2)
-        self.assertTrue(result.chapters[0].path.replace("\\", "/").endswith("demo/input/chapter_1.txt"))
+        self.assertTrue(result.chapters[0].path.replace("\\", "/").endswith("demo/input/chapter_001.txt"))
         self.assertFalse(result.chapters[0].skipped)
         self.assertTrue(chapter_one.startswith("Chapter 1: Start\n\n"))
         self.assertIn("Hello world.", chapter_one)
@@ -650,8 +650,8 @@ class NovelCrawlerTest(unittest.TestCase):
                 share_root=output_path / "translated",
             )
 
-            chapter_one = Path(first_result.chapter_output_dir) / "chapter_1.txt"
-            chapter_two = Path(second_result.chapter_output_dir) / "chapter_2.txt"
+            chapter_one = Path(first_result.chapter_output_dir) / "chapter_001.txt"
+            chapter_two = Path(second_result.chapter_output_dir) / "chapter_002.txt"
 
             self.assertTrue(chapter_one.is_file())
             self.assertTrue(chapter_two.is_file())
@@ -766,9 +766,9 @@ class NovelCrawlerTest(unittest.TestCase):
                 workers=2,
             )
 
-            chapter_one = Path(second_result.chapter_output_dir) / "chapter_1.txt"
-            chapter_two = Path(second_result.chapter_output_dir) / "chapter_2.txt"
-            chapter_three = Path(second_result.chapter_output_dir) / "chapter_3.txt"
+            chapter_one = Path(second_result.chapter_output_dir) / "chapter_001.txt"
+            chapter_two = Path(second_result.chapter_output_dir) / "chapter_002.txt"
+            chapter_three = Path(second_result.chapter_output_dir) / "chapter_003.txt"
 
             self.assertTrue(chapter_one.is_file())
             self.assertTrue(chapter_two.is_file())

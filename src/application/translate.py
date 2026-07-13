@@ -178,7 +178,7 @@ def translate_file(
     elapsed = time.time() - start
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    output_file = output_dir / f"chapter_{chapter_number:03d}.txt"
+    output_file = chapter_service.chapter_path(output_dir, chapter_number)
     final_text = result.get("final_translation", "")
     normalized_text = normalize_paragraph_spacing(final_text)
     new_terms_count = len(result.get("new_terms", {}))
@@ -442,7 +442,7 @@ def run_translation(
         output_unit = "chars"
         if ok and config.chunk_mode == "tokens":
             try:
-                output_text = (output_dir / f"chapter_{chapter_num:03d}.txt").read_text(encoding="utf-8")
+                output_text = chapter_service.chapter_path(output_dir, chapter_num).read_text(encoding="utf-8")
                 output_size = estimate_token_count(output_text)
                 output_unit = "tokens"
             except OSError:

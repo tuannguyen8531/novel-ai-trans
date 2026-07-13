@@ -32,6 +32,7 @@ from src.domain.glossary import (
     validate_glossary_data,
 )
 from src.domain.language import normalize_target_language
+from src.services import chapters as chapter_service
 from src.services import glossary as glossary_service
 from src.utils import files as file_utils
 
@@ -198,7 +199,7 @@ def audit_terms(
 ) -> list[dict]:
     """Audit translated chapters against an explicit set of terms."""
     novel_root = _paths.novel_root_dir(app_config.get_config(), novel_name)
-    chapters = sorted(_paths.novel_input_dir_from_root(novel_root).glob("chapter_*.txt"))
+    chapters = list(chapter_service.scan(_paths.novel_input_dir_from_root(novel_root)).values())
     output_dir = _paths.novel_output_dir_from_root(novel_root, target or "vi")
     if not output_dir.exists():
         return []
@@ -211,9 +212,7 @@ def audit_terms(
             chapter_number = int(source_path.stem.split("_")[-1])
         except ValueError:
             continue
-        output_path = output_dir / f"chapter_{chapter_number:03d}.txt"
-        if not output_path.exists():
-            output_path = output_dir / source_path.name
+        output_path = chapter_service.chapter_path(output_dir, chapter_number)
         if not output_path.exists():
             continue
         try:
@@ -284,7 +283,7 @@ def apply_pending_replacements(
         files_to_write: dict[Path, str] = {}
 
         if input_dir.exists():
-            for source_path in sorted(input_dir.glob("chapter_*.txt")):
+            for source_path in chapter_service.scan(input_dir).values():
                 try:
                     chapter_number = int(source_path.stem.split("_")[-1])
                     source_text = source_path.read_text(encoding="utf-8")
@@ -298,9 +297,7 @@ def apply_pending_replacements(
                 if not applicable_indexes:
                     continue
 
-                output_path = output_dir / f"chapter_{chapter_number:03d}.txt"
-                if not output_path.exists():
-                    output_path = output_dir / source_path.name
+                output_path = chapter_service.chapter_path(output_dir, chapter_number)
                 if not output_path.exists():
                     continue
 

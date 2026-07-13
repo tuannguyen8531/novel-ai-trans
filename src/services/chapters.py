@@ -7,6 +7,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 FILE_PATTERN = re.compile(r"^chapter_(\d+)\.txt$")
+CHAPTER_NUMBER_WIDTH = 3
 
 CHAPTER_PATTERNS = (
     re.compile(r"(?<!\d)(?:제\s*)?(\d+)\s*(?:화|장)(?!\d)", re.IGNORECASE),
@@ -60,13 +61,32 @@ def scan(directory: Path) -> dict[int, Path]:
     for path in directory.iterdir():
         match = FILE_PATTERN.match(path.name)
         if match and path.is_file():
-            found[int(match.group(1))] = path
+            number = int(match.group(1))
+            current = found.get(number)
+            if current is None or path.name == chapter_filename(number):
+                found[number] = path
     return dict(sorted(found.items()))
 
 
 def numbers(directory: Path) -> set[int]:
     """Return chapter numbers present in a directory."""
     return set(scan(directory))
+
+
+def chapter_filename(number: int) -> str:
+    """Return the canonical padded filename for a chapter number."""
+    return f"chapter_{number:0{CHAPTER_NUMBER_WIDTH}d}.txt"
+
+
+def chapter_path(directory: Path, number: int) -> Path:
+    """Return an existing legacy/canonical path, or the canonical path for a new file."""
+    canonical = directory / chapter_filename(number)
+    if canonical.exists():
+        return canonical
+    legacy = directory / f"chapter_{number}.txt"
+    if legacy.exists():
+        return legacy
+    return canonical
 
 
 def read_title(file_path: Path, fallback: str, *, keep_cjk: bool = True) -> str:

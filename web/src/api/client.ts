@@ -147,12 +147,21 @@ export const api = {
       `/api/novels/${encodeURIComponent(name)}/chapters/${chapter}?${params.toString()}`
     )
   },
-  putChapterContent: (name: string, chapter: number, content: string) =>
-    request<ChapterContentResponse>(`/api/novels/${encodeURIComponent(name)}/chapters/${chapter}`, {
+  putChapterContent: (
+    name: string,
+    chapter: number,
+    content: string,
+    view: 'source' | 'translation' = 'source',
+    target?: string
+  ) => {
+    const params = new URLSearchParams({ view })
+    if (target) params.set('target', target)
+    return request<ChapterContentResponse>(`/api/novels/${encodeURIComponent(name)}/chapters/${chapter}?${params.toString()}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content })
-    }),
+    })
+  },
   deleteChapter: (name: string, chapter: number) =>
     request<void>(`/api/novels/${encodeURIComponent(name)}/chapters/${chapter}`, {
       method: 'DELETE'

@@ -115,7 +115,7 @@ class EpubImporterTest(unittest.TestCase):
             novel_dir = root / "translated" / "military-training"
             chapter_dir = novel_dir / "input"
             metadata = json.loads((novel_dir / "metadata.json").read_text(encoding="utf-8"))
-            chapter_one = (chapter_dir / "chapter_1.txt").read_text(encoding="utf-8")
+            chapter_one = (chapter_dir / "chapter_001.txt").read_text(encoding="utf-8")
 
         self.assertEqual(result.output_dir, str(novel_dir))
         self.assertEqual(result.chapter_output_dir, str(chapter_dir))
@@ -255,7 +255,7 @@ class EpubImporterTest(unittest.TestCase):
         self.assertEqual([(change.number, change.title) for change in result.overwritten_chapters], [(3, "Chapter 3: Revised")])
         self.assertEqual(result.added_chapters, (4,))
         self.assertEqual(result.removed_chapters, ())
-        self.assertEqual(written_chapters, {"chapter_3.txt", "chapter_4.txt"})
+        self.assertEqual(written_chapters, {"chapter_003.txt", "chapter_004.txt"})
 
     def test_import_writes_illustrations_with_order_and_chapter_number(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
@@ -284,8 +284,8 @@ class EpubImporterTest(unittest.TestCase):
             illustrations_dir = root / "translated" / "illustrated" / "illustrations"
             first_image = (illustrations_dir / "001-001.jpg").read_bytes()
             second_image = (illustrations_dir / "002-001.png").read_bytes()
-            chapter_one = (root / "translated" / "illustrated" / "input" / "chapter_1.txt").read_text(encoding="utf-8")
-            chapter_two = (root / "translated" / "illustrated" / "input" / "chapter_2.txt").read_text(encoding="utf-8")
+            chapter_one = (root / "translated" / "illustrated" / "input" / "chapter_001.txt").read_text(encoding="utf-8")
+            chapter_two = (root / "translated" / "illustrated" / "input" / "chapter_002.txt").read_text(encoding="utf-8")
 
         self.assertEqual(
             [Path(illustration.path).name for illustration in result.illustrations],
@@ -329,7 +329,7 @@ class EpubImporterTest(unittest.TestCase):
             self.assertEqual(result.metadata.title, "Manual Name")
             self.assertEqual(metadata["title"], "Manual Name")
             self.assertFalse(stale_path.exists())
-            self.assertTrue((stale_path.parent / "chapter_1.txt").is_file())
+            self.assertTrue((stale_path.parent / "chapter_001.txt").is_file())
 
 
 def section(index: int, title: str, text: str = "body") -> EpubSection:

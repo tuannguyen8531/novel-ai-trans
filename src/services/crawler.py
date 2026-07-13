@@ -23,6 +23,7 @@ from src.models import (
     CrawlResult,
     NovelMetadata,
 )
+from src.services.chapters import chapter_path as resolve_chapter_path
 from src.services.chapters import detect_chapter_number, select_likely_chapters
 from src.services.http import FetchError, FetchResponse, HttpClient
 from src.services.metadata import metadata_to_dict
@@ -287,7 +288,7 @@ class NovelCrawler:
         )
         planned_fetch_total = 0
         for plan_index, _chapter_link in enumerate(chapter_links, start=1):
-            chapter_path = chapter_output_dir / f"chapter_{plan_index}.txt"
+            chapter_path = resolve_chapter_path(chapter_output_dir, plan_index)
             if not overwrite and self._is_existing_chapter(chapter_path):
                 continue
             planned_fetch_total += 1
@@ -385,7 +386,7 @@ class NovelCrawler:
                 index = next_chapter + 1
                 chapter_link = chapter_links[next_chapter]
                 next_chapter += 1
-                chapter_path = chapter_output_dir / f"chapter_{index}.txt"
+                chapter_path = resolve_chapter_path(chapter_output_dir, index)
 
                 if not overwrite and self._is_existing_chapter(chapter_path):
                     results.append(

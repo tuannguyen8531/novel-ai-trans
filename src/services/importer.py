@@ -272,7 +272,7 @@ def import_epub(
                     )
                 )
 
-            path = chapter_output_dir / f"chapter_{chapter_number}.txt"
+            path = chapter_service.chapter_path(chapter_output_dir, chapter_number)
             imported_text = chapter_text.strip() + "\n"
             if path.exists():
                 if path.read_text(encoding="utf-8") == imported_text:

@@ -37,7 +37,7 @@ For provider setup, see [PROVIDERS.md](PROVIDERS.md).
                           pack ──> EPUB / PDF
 ```
 
-Source chapters live as `chapter_N.txt` files under
+Source chapters live as zero-padded `chapter_NNN.txt` files under
 `translated/<novel>/input/`. Translation output is written to
 `translated/<novel>/output/` (Vietnamese) or `translated/<novel>/output/en/`
 (English). Packaging reads the output dir and writes `<novel>.<target>.epub`
@@ -103,7 +103,7 @@ uv run crawl example --fail-fast
 | `--fail-fast` | Stop on first chapter error | off |
 | `--ignore-robots` | Skip `robots.txt` check | off |
 | `--dry-run` | Only discover and print chapter links | off |
-| `--overwrite` | Re-download existing `chapter_N.txt` | off |
+| `--overwrite` | Re-download existing `chapter_NNN.txt` | off |
 | `--help` | Show crawl command help | off |
 | `-b, --browser` | Use an ephemeral headless browser for JS challenges | off |
 | `-h, --headed` | Use a visible browser with a persistent per-domain profile | off |
@@ -174,7 +174,7 @@ Override the per-novel root:
 uv run import ./book.epub --name my-novel --translated-output ./translated
 ```
 
-The importer splits the EPUB into `chapter_N.txt` files, extracts illustrations
+The importer splits the EPUB into `chapter_NNN.txt` files, extracts illustrations
 into `translated/<novel>/illustrations/`, and creates `metadata.json` with the
 title, author, and cover URL on the first import. Re-importing the same novel
 preserves its existing metadata. Import results report retained chapters,

@@ -20,6 +20,24 @@ def test_scan_returns_empty_for_missing_directory(tmp_path: Path) -> None:
     assert chapters.scan(tmp_path / "missing") == {}
 
 
+def test_chapter_path_uses_padding_for_new_files_and_preserves_legacy_files(tmp_path: Path) -> None:
+    assert chapters.chapter_path(tmp_path, 7).name == "chapter_007.txt"
+
+    legacy = tmp_path / "chapter_7.txt"
+    legacy.write_text("legacy", encoding="utf-8")
+
+    assert chapters.chapter_path(tmp_path, 7) == legacy
+
+
+def test_scan_prefers_canonical_file_when_both_names_exist(tmp_path: Path) -> None:
+    legacy = tmp_path / "chapter_2.txt"
+    canonical = tmp_path / "chapter_002.txt"
+    legacy.write_text("legacy", encoding="utf-8")
+    canonical.write_text("canonical", encoding="utf-8")
+
+    assert chapters.scan(tmp_path)[2] == canonical
+
+
 def test_read_title_uses_last_consecutive_header_and_normalizes_punctuation(tmp_path: Path) -> None:
     chapter = tmp_path / "chapter_1.txt"
     chapter.write_text(

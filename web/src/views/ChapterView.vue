@@ -164,7 +164,7 @@ async function changeView(mode: 'source' | 'vi' | 'en') {
     const tgt = mode === 'source' ? undefined : mode
     const resp = await api.getChapterContent(props.name, props.chapter, view, tgt)
     content.value = resp.content
-    if (mode === 'source') editContent.value = resp.content
+    editContent.value = resp.content
     viewMode.value = mode
   } catch (err) {
     error.value = (err as Error).message
@@ -188,7 +188,15 @@ async function saveEdit() {
   saving.value = true
   error.value = null
   try {
-    const resp = await api.putChapterContent(props.name, props.chapter, editContent.value)
+    const view = viewMode.value === 'source' ? 'source' : 'translation'
+    const target = viewMode.value === 'source' ? undefined : viewMode.value
+    const resp = await api.putChapterContent(
+      props.name,
+      props.chapter,
+      editContent.value,
+      view,
+      target
+    )
     content.value = resp.content
     editContent.value = resp.content
     editing.value = false
@@ -334,7 +342,7 @@ watch(
             <button
               type="button"
               class="secondary icon-btn menu-trigger"
-              :disabled="viewMode !== 'source' || loading"
+              :disabled="loading"
               @click.stop="showMenu = !showMenu"
             >
               ⋮
@@ -348,6 +356,7 @@ watch(
                 Edit
               </button>
               <button
+                v-if="viewMode === 'source'"
                 type="button"
                 class="menu-item danger"
                 @click="handleMenuAction(() => showDeleteDialog = true)"

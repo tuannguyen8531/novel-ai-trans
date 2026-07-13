@@ -437,7 +437,7 @@ Examples:
     if not chapters:
         input_dir = _get_input_dir(novel_name)
         print(f"{RED}✗ No chapter files found in {input_dir}{RESET}")
-        print(f"  Expected format: {input_dir}/chapter_1.txt{RESET}")
+        print(f"  Expected format: {input_dir}/chapter_001.txt{RESET}")
         _notify_translation(
             notifier,
             novel_name,
