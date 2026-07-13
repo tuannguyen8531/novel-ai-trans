@@ -119,6 +119,12 @@ class ProviderCheckResponse(BaseModel):
     detail: str | None = None
 
 
+class OllamaAccountResponse(BaseModel):
+    signed_in: bool
+    username: str | None = None
+    detail: str | None = None
+
+
 class SettingsPersistResponse(BaseModel):
     path: str
     changed_keys: list[str]

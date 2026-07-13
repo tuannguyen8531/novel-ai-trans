@@ -6,6 +6,7 @@ import httpx2 as httpx
 
 from src.api.errors import ExternalServiceError
 from src.api.schemas import (
+    OllamaAccountResponse,
     ProviderCheckResponse,
     ProviderInfo,
     ProviderModelsResponse,
@@ -34,6 +35,35 @@ def list_providers() -> ProvidersResponse:
         ),
     ]
     return ProvidersResponse(providers=providers, default_provider=config.llm_provider)
+
+
+def get_ollama_account() -> OllamaAccountResponse:
+    """Return the account authenticated by the configured Ollama daemon."""
+    config = app_config.get_config()
+    try:
+        response = httpx.post(
+            f"{config.ollama_base_url.rstrip('/')}/api/me",
+            timeout=5.0,
+        )
+        if response.status_code == 401:
+            return OllamaAccountResponse(
+                signed_in=False,
+                detail="Not signed in",
+            )
+        response.raise_for_status()
+        payload = response.json()
+        username = str(payload.get("name", "")).strip() if isinstance(payload, dict) else ""
+        if not username:
+            return OllamaAccountResponse(
+                signed_in=False,
+                detail="Ollama did not return an account name",
+            )
+        return OllamaAccountResponse(signed_in=True, username=username)
+    except (httpx.HTTPError, OSError, ValueError) as error:
+        return OllamaAccountResponse(
+            signed_in=False,
+            detail=f"Account unavailable: {error}",
+        )
 
 
 def list_provider_models(provider: str) -> ProviderModelsResponse:
@@ -124,9 +154,17 @@ def check_provider_runtime(
     if provider == "ollama":
         base_url = (ollama_base_url or config.ollama_base_url).rstrip("/")
         try:
-            response = httpx.get(f"{base_url}/api/tags", timeout=5.0)
+            response = httpx.post(f"{base_url}/api/me", timeout=5.0)
+            if response.status_code == 401:
+                raise ExternalServiceError("Ollama is not signed in.")
             response.raise_for_status()
-        except (httpx.HTTPError, OSError) as error:
+            payload = response.json()
+            username = str(payload.get("name", "")).strip() if isinstance(payload, dict) else ""
+            if not username:
+                raise ExternalServiceError("Ollama did not return an account name.")
+        except ExternalServiceError:
+            raise
+        except (httpx.HTTPError, OSError, ValueError) as error:
             raise ExternalServiceError(f"Ollama is unreachable: {error}") from error
         return ProviderCheckResponse(provider=provider, ok=True)
     if provider == "gemini":

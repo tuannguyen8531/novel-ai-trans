@@ -52,6 +52,12 @@ export interface ProviderCheckSettings {
   openrouter_api_key?: string
 }
 
+export interface OllamaAccount {
+  signed_in: boolean
+  username: string | null
+  detail: string | null
+}
+
 export interface NovelSummary {
   name: string
   title: string | null

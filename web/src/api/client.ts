@@ -13,6 +13,7 @@ import type {
   NovelDetail,
   NovelMetadataResponse,
   NovelSummary,
+  OllamaAccount,
   ProvidersResponse,
   ProviderCheckSettings,
   ProviderSettings,
@@ -115,6 +116,7 @@ export const api = {
       }
     ),
   listProviders: () => request<ProvidersResponse>('/api/providers'),
+  getOllamaAccount: () => request<OllamaAccount>('/api/providers/ollama/account'),
   listProviderModels: (provider: string) =>
     request<{ provider: string; models: string[] }>(
       `/api/providers/${encodeURIComponent(provider)}/models`

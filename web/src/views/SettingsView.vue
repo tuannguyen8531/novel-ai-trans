@@ -2,7 +2,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useSettingsStore } from '@/stores/settings'
 import { api } from '@/api/client'
-import type { ProviderInfo } from '@/api/types'
+import type { OllamaAccount, ProviderInfo } from '@/api/types'
 import ProviderModelField from '@/components/ProviderModelField.vue'
 
 const settings = useSettingsStore()
@@ -14,6 +14,8 @@ const telegramPersisting = ref(false)
 const providerPersistResult = ref<{ path: string; changed_keys: string[] } | null>(null)
 const providerPersisting = ref(false)
 const providerRefreshKey = ref(0)
+const ollamaAccount = ref<OllamaAccount | null>(null)
+const ollamaAccountLoading = ref(false)
 const telegramForm = reactive({
   telegram_enabled: false,
   telegram_api_base: 'https://api.telegram.org',
@@ -51,6 +53,7 @@ onMounted(async () => {
   }
   const list = await api.listProviders()
   providers.value = list.providers
+  await refreshOllamaAccount()
 })
 
 const fallbackOptions = computed(() => {
@@ -107,6 +110,53 @@ function getProviderStatusText(provider: string): string {
   return providerConfigured(provider) ? 'configured' : 'missing key'
 }
 
+function getOllamaStatusClass(): string {
+  const result = checkResults.value.ollama
+  if (result) {
+    return result.ok ? 'ok' : 'danger'
+  }
+  return ollamaAccount.value?.signed_in ? 'ok' : 'danger'
+}
+
+function getOllamaStatusText(): string {
+  const result = checkResults.value.ollama
+  if (result) {
+    return result.ok ? 'check: ok' : 'check: failed'
+  }
+  if (ollamaAccountLoading.value) {
+    return 'checking account…'
+  }
+  return ollamaAccount.value?.signed_in ? 'signed in' : 'not signed in'
+}
+
+function getOllamaAccountText(): string {
+  if (ollamaAccountLoading.value) {
+    return 'Checking…'
+  }
+  if (ollamaAccount.value?.username) {
+    return ollamaAccount.value.username
+  }
+  if (ollamaAccount.value?.detail === 'Not signed in') {
+    return 'Not signed in to Ollama Cloud.'
+  }
+  return 'Unavailable'
+}
+
+async function refreshOllamaAccount() {
+  ollamaAccountLoading.value = true
+  try {
+    ollamaAccount.value = await api.getOllamaAccount()
+  } catch (err) {
+    ollamaAccount.value = {
+      signed_in: false,
+      username: null,
+      detail: (err as Error).message
+    }
+  } finally {
+    ollamaAccountLoading.value = false
+  }
+}
+
 async function runProviderCheck(provider: string) {
   clearProviderCheck(provider)
   checkingProviders.value = { ...checkingProviders.value, [provider]: true }
@@ -116,6 +166,23 @@ async function runProviderCheck(provider: string) {
       gemini_api_key: geminiKeyInput.value.trim() || undefined,
       openrouter_api_key: openrouterKeyInput.value.trim() || undefined
     })
+    if (provider === 'ollama') {
+      if (res.ok) {
+        await refreshOllamaAccount()
+      } else if (res.detail?.toLowerCase().includes('not signed in')) {
+        ollamaAccount.value = {
+          signed_in: false,
+          username: null,
+          detail: 'Not signed in'
+        }
+      } else {
+        ollamaAccount.value = {
+          signed_in: false,
+          username: null,
+          detail: res.detail
+        }
+      }
+    }
     checkResults.value = {
       ...checkResults.value,
       [provider]: { ok: res.ok, detail: res.detail }
@@ -315,8 +382,8 @@ async function saveTelegramSettings() {
           <div class="row" style="justify-content: space-between; align-items: center;">
             <h3>Ollama</h3>
             <div class="row gap-1" style="align-items: center;">
-              <span v-if="checkResults['ollama']" class="badge" :class="checkResults['ollama'].ok ? 'ok' : 'danger'">
-                {{ checkResults['ollama'].ok ? 'check: ok' : 'check: failed' }}
+              <span class="badge" :class="getOllamaStatusClass()">
+                {{ getOllamaStatusText() }}
               </span>
               <button class="secondary" type="button" :disabled="checkingProviders['ollama']" @click="runProviderCheck('ollama')">
                 {{ checkingProviders['ollama'] ? 'Checking…' : 'Check' }}
@@ -326,15 +393,28 @@ async function saveTelegramSettings() {
           <p v-if="checkResults['ollama']?.detail" class="error" style="margin-top: 0.25rem; font-size: 0.85rem;">
             {{ checkResults['ollama'].detail }}
           </p>
-          <label>API base</label>
-          <input v-model="providerForm.ollama_base_url" />
-          <ProviderModelField
-            :key="`ollama-${providerRefreshKey}`"
-            provider="ollama"
-            label="Model"
-            :model-value="providerForm.ollama_model"
-            @update:model-value="(value: string) => providerForm.ollama_model = value"
-          />
+          <div class="provider-fields">
+            <div class="ollama-account-row">
+              <div>
+                <label>API base</label>
+                <input v-model="providerForm.ollama_base_url" />
+              </div>
+              <div>
+                <label>Cloud account</label>
+                <input disabled :value="getOllamaAccountText()" />
+                <p v-if="!ollamaAccountLoading && ollamaAccount?.detail && ollamaAccount.detail !== 'Not signed in'" class="muted account-detail">
+                  {{ ollamaAccount.detail }}
+                </p>
+              </div>
+            </div>
+            <ProviderModelField
+              :key="`ollama-${providerRefreshKey}`"
+              provider="ollama"
+              label="Model"
+              :model-value="providerForm.ollama_model"
+              @update:model-value="(value: string) => providerForm.ollama_model = value"
+            />
+          </div>
         </div>
 
         <div>
@@ -352,15 +432,19 @@ async function saveTelegramSettings() {
           <p v-if="checkResults['gemini']?.detail" class="error" style="margin-top: 0.25rem; font-size: 0.85rem;">
             {{ checkResults['gemini'].detail }}
           </p>
-          <label>API key</label>
-          <input v-model="geminiKeyInput" type="password" autocomplete="off" placeholder="paste new key or leave blank" />
-          <ProviderModelField
-            :key="`gemini-${providerRefreshKey}`"
-            provider="gemini"
-            label="Model"
-            :model-value="providerForm.gemini_model"
-            @update:model-value="(value: string) => providerForm.gemini_model = value"
-          />
+          <div class="provider-fields">
+            <div>
+              <label>API key</label>
+              <input v-model="geminiKeyInput" type="password" autocomplete="off" placeholder="paste new key or leave blank" />
+            </div>
+            <ProviderModelField
+              :key="`gemini-${providerRefreshKey}`"
+              provider="gemini"
+              label="Model"
+              :model-value="providerForm.gemini_model"
+              @update:model-value="(value: string) => providerForm.gemini_model = value"
+            />
+          </div>
         </div>
 
         <div>
@@ -378,15 +462,19 @@ async function saveTelegramSettings() {
           <p v-if="checkResults['openrouter']?.detail" class="error" style="margin-top: 0.25rem; font-size: 0.85rem;">
             {{ checkResults['openrouter'].detail }}
           </p>
-          <label>API key</label>
-          <input v-model="openrouterKeyInput" type="password" autocomplete="off" placeholder="paste new key or leave blank" />
-          <ProviderModelField
-            :key="`openrouter-${providerRefreshKey}`"
-            provider="openrouter"
-            label="Model"
-            :model-value="providerForm.openrouter_model"
-            @update:model-value="(value: string) => providerForm.openrouter_model = value"
-          />
+          <div class="provider-fields">
+            <div>
+              <label>API key</label>
+              <input v-model="openrouterKeyInput" type="password" autocomplete="off" placeholder="paste new key or leave blank" />
+            </div>
+            <ProviderModelField
+              :key="`openrouter-${providerRefreshKey}`"
+              provider="openrouter"
+              label="Model"
+              :model-value="providerForm.openrouter_model"
+              @update:model-value="(value: string) => providerForm.openrouter_model = value"
+            />
+          </div>
         </div>
 
         <div class="row gap-2" style="align-items: center;">
@@ -403,3 +491,29 @@ async function saveTelegramSettings() {
     <p v-if="settings.error" class="error">{{ settings.error }}</p>
   </section>
 </template>
+
+<style scoped>
+.provider-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.ollama-account-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.account-detail {
+  margin-top: 0.25rem;
+  font-size: 0.85rem;
+}
+
+@media (max-width: 640px) {
+  .ollama-account-row {
+    grid-template-columns: 1fr;
+  }
+}
+</style>

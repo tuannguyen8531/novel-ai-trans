@@ -11,6 +11,7 @@ from fastapi import APIRouter
 from src.api.dependencies import AuthenticatedPrincipal, get_state
 from src.api.errors import ExternalServiceError
 from src.api.schemas import (
+    OllamaAccountResponse,
     ProviderCheckRequest,
     ProviderCheckResponse,
     ProviderModelsResponse,
@@ -26,6 +27,7 @@ from src.api.services.env import (
 )
 from src.api.services.providers import (
     check_provider_runtime,
+    get_ollama_account,
     list_provider_models,
     list_providers,
 )
@@ -158,6 +160,11 @@ def persist_provider_settings(
 @router.get("/providers", response_model=ProvidersResponse)
 def get_providers(_: AuthenticatedPrincipal) -> ProvidersResponse:
     return list_providers()
+
+
+@router.get("/providers/ollama/account", response_model=OllamaAccountResponse)
+def get_ollama_account_status(_: AuthenticatedPrincipal) -> OllamaAccountResponse:
+    return get_ollama_account()
 
 
 @router.get("/providers/{provider}/models", response_model=ProviderModelsResponse)
