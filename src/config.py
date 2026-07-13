@@ -218,7 +218,7 @@ class SiteConfig:
     """Per-site configuration from JSON file (crawler only)."""
 
     name: str
-    start_url: str
+    toc_url: str
     chapter_link_selector: str
     chapter_content_selector: str
     version: int = 1
@@ -258,7 +258,7 @@ class SiteConfig:
 
         required = [
             "name",
-            "start_url",
+            "toc_url",
             "chapter_link_selector",
             "chapter_content_selector",
         ]
@@ -274,7 +274,7 @@ class SiteConfig:
 
         return cls(
             name=str(data["name"]),
-            start_url=str(data["start_url"]),
+            toc_url=str(data["toc_url"]),
             chapter_link_selector=str(data["chapter_link_selector"]),
             chapter_content_selector=str(data["chapter_content_selector"]),
             version=int(data.get("version", 1)),

@@ -1,6 +1,6 @@
 {
   "name": "sfacg",
-  "start_url": "https://book.sfacg.com/",
+  "toc_url": "https://book.sfacg.com/",
   "version": 1,
   "chapter_link_selector": ".catalog-list ul li a",
   "toc_next_selector": null,

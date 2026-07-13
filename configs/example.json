@@ -1,11 +1,7 @@
 {
   "name": "example-public-site",
-  "start_url": "https://example.com/novel/table-of-contents",
+  "toc_url": "https://example.com/novel/table-of-contents",
   "source_url": "https://example.com/novel",
-  "title": "Example Novel",
-  "author": "Example Author",
-  "illustration_url": "https://example.com/images/cover.jpg",
-  "summary": "Example novel summary.",
   "chapter_link_selector": ".chapter-list a",
   "toc_next_selector": "a.next",
   "chapter_title_selector": "h1",

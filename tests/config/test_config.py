@@ -133,7 +133,7 @@ class TestSiteConfig:
         config = SiteConfig.from_dict(
             {
                 "name": "test",
-                "start_url": "https://example.com",
+                "toc_url": "https://example.com",
                 "chapter_link_selector": ".chapters a",
                 "chapter_content_selector": ".content",
             }
@@ -143,11 +143,22 @@ class TestSiteConfig:
         assert config.filter_non_chapter_links is True
         assert config.toc_expand_selector is None
 
+    def test_from_dict_rejects_removed_start_url(self):
+        with pytest.raises(ValueError, match="Missing required config fields: toc_url"):
+            SiteConfig.from_dict(
+                {
+                    "name": "test",
+                    "start_url": "https://example.com",
+                    "chapter_link_selector": ".chapters a",
+                    "chapter_content_selector": ".content",
+                }
+            )
+
     def test_from_dict_accepts_toc_expand_selector(self):
         config = SiteConfig.from_dict(
             {
                 "name": "test",
-                "start_url": "https://example.com",
+                "toc_url": "https://example.com",
                 "chapter_link_selector": ".chapters a",
                 "chapter_content_selector": ".content",
                 "toc_expand_selector": "text=Show all chapters",
@@ -159,7 +170,7 @@ class TestSiteConfig:
         config = SiteConfig.from_dict(
             {
                 "name": "test",
-                "start_url": "https://example.com",
+                "toc_url": "https://example.com",
                 "chapter_link_selector": ".chapters a",
                 "chapter_content_selector": ".content",
                 "illustration_selector": ".cover img",
@@ -171,7 +182,7 @@ class TestSiteConfig:
         config = SiteConfig.from_dict(
             {
                 "name": "test",
-                "start_url": "https://example.com",
+                "toc_url": "https://example.com",
                 "chapter_link_selector": ".chapters a",
                 "chapter_content_selector": ".content",
                 "remove_selectors": "script",
@@ -183,7 +194,7 @@ class TestSiteConfig:
         config = SiteConfig.from_dict(
             {
                 "name": "test",
-                "start_url": "https://example.com",
+                "toc_url": "https://example.com",
                 "chapter_link_selector": ".chapters a",
                 "chapter_content_selector": ".content",
                 "filter_non_chapter_links": False,
@@ -196,7 +207,7 @@ class TestSiteConfig:
             SiteConfig.from_dict(
                 {
                     "name": "demo",
-                    "start_url": "url",
+                    "toc_url": "url",
                     "chapter_link_selector": "a",
                     "chapter_content_selector": "div",
                     "version": "invalid",
@@ -208,7 +219,7 @@ class TestSiteConfig:
             SiteConfig.from_dict(
                 {
                     "name": "demo",
-                    "start_url": "url",
+                    "toc_url": "url",
                     "chapter_link_selector": "a",
                     "chapter_content_selector": "div",
                     "version": 999,

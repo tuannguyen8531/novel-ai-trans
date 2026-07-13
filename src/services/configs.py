@@ -306,7 +306,7 @@ class ConfigGenerator:
                     for key in ("novel_title_selector", "author_selector", "illustration_selector"):
                         result.pop(key, None)
                     result["name"] = name or self._derive_name(source_url)
-                    result["start_url"] = toc_url
+                    result["toc_url"] = toc_url
                     return self._add_novel_info(result, source_url, novel_info)
 
             known = self._load_known_domain_config(domain, configs_dir) if use_samples else None
@@ -592,7 +592,7 @@ class ConfigGenerator:
         """Return a deep copy of a sample config matching ``domain``.
 
         ``samples_dir`` is a directory of per-site sample JSONs. Each file's
-        ``start_url`` netloc is compared against ``domain``; the first match
+        ``toc_url`` netloc is compared against ``domain``; the first match
         wins. Returns a deep copy so callers can mutate freely, or ``None``
         if the directory is missing or contains no matching sample.
         """
@@ -601,8 +601,8 @@ class ConfigGenerator:
         for path in sorted(samples_dir.glob("*.json")):
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
-                start_url = data.get("start_url", "")
-                if urlparse(start_url).netloc == domain:
+                toc_url = data.get("toc_url", "")
+                if urlparse(toc_url).netloc == domain:
                     return json.loads(json.dumps(data))
             except (OSError, ValueError):
                 continue
@@ -610,14 +610,14 @@ class ConfigGenerator:
 
     @staticmethod
     def _load_known_domain_config(domain: str, configs_dir: Path) -> dict[str, Any] | None:
-        """Scan configs_dir for a config whose start_url netloc matches domain."""
+        """Scan configs_dir for a config whose toc_url netloc matches domain."""
         if not configs_dir.is_dir():
             return None
         for path in sorted(configs_dir.glob("*.json")):
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
-                start_url = data.get("start_url", "")
-                if urlparse(start_url).netloc == domain:
+                toc_url = data.get("toc_url", "")
+                if urlparse(toc_url).netloc == domain:
                     return data
             except (OSError, ValueError):
                 continue
@@ -793,7 +793,7 @@ class ConfigGenerator:
 
         config = {
             "name": name,
-            "start_url": toc_url,
+            "toc_url": toc_url,
             "version": 1,
             "chapter_link_selector": _or(toc.get("chapter_link_selector"), "a"),
             "toc_next_selector": _or(toc_next, None),

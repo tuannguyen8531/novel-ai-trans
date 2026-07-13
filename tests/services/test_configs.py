@@ -109,7 +109,7 @@ class _StaticConfigGenerator(ConfigGenerator):
 
 _SAMPLE_FULL = {
     "name": "ixdzs8",
-    "start_url": "https://ixdzs8.com/",
+    "toc_url": "https://ixdzs8.com/",
     "version": 1,
     "chapter_link_selector": "ul.u-chapter li a",
     "toc_next_selector": None,
@@ -134,7 +134,7 @@ class ConfigGeneratorTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tempdir:
             configs_dir = Path(tempdir)
             (configs_dir / "known.json").write_text(
-                '{"start_url": "https://example.com/book/1/", "chapter_link_selector": "a"}',
+                '{"toc_url": "https://example.com/book/1/", "chapter_link_selector": "a"}',
                 encoding="utf-8",
             )
             result = ConfigGenerator._load_known_domain_config("example.com", configs_dir)
@@ -146,7 +146,7 @@ class ConfigGeneratorTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tempdir:
             configs_dir = Path(tempdir)
             (configs_dir / "known.json").write_text(
-                '{"start_url": "https://example.com/book/1/"}',
+                '{"toc_url": "https://example.com/book/1/"}',
                 encoding="utf-8",
             )
             result = ConfigGenerator._load_known_domain_config("other.com", configs_dir)
@@ -266,7 +266,7 @@ class ConfigGeneratorTest(unittest.TestCase):
             generator = _StaticConfigGenerator(llm, {source_url: "<html><h1>Sample Novel</h1></html>"})
             result = generator.generate(source_url, samples_dir=samples_dir)
 
-            self.assertEqual(result["start_url"], toc_url)
+            self.assertEqual(result["toc_url"], toc_url)
             self.assertEqual(result["name"], "999999")
             self.assertEqual(result["source_url"], source_url)
             self.assertEqual(result["summary"], "Sample summary.")
@@ -294,7 +294,7 @@ class ConfigGeneratorTest(unittest.TestCase):
             )
             result = generator.generate(source_url, name="my-novel", samples_dir=samples_dir)
             self.assertEqual(result["name"], "my-novel")
-            self.assertEqual(result["start_url"], toc_url)
+            self.assertEqual(result["toc_url"], toc_url)
 
     def test_generate_does_not_mutate_sample_on_disk(self) -> None:
         import json
@@ -386,7 +386,7 @@ class SiteSampleFilesTest(unittest.TestCase):
 
     REQUIRED_FIELDS: tuple[str, ...] = (
         "name",
-        "start_url",
+        "toc_url",
         "chapter_link_selector",
         "chapter_content_selector",
         "version",
@@ -430,7 +430,7 @@ class SiteSampleFilesTest(unittest.TestCase):
             data = json.loads(path.read_text(encoding="utf-8"))
             from urllib.parse import urlparse
 
-            domains.add(urlparse(data["start_url"]).netloc)
+            domains.add(urlparse(data["toc_url"]).netloc)
 
         expected = {"ixdzs8.com", "www.69shuba.com", "book.sfacg.com", "kakuyomu.jp"}
         self.assertTrue(expected.issubset(domains), f"Missing samples for: {expected - domains}")
