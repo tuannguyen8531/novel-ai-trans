@@ -254,12 +254,12 @@ async function saveTelegramSettings() {
         <div>
           <label>Target language</label>
           <select :value="settings.settings.target_language" @change="patchSetting('target_language', ($event.target as HTMLSelectElement).value)">
-            <option value="vi">vi</option>
-            <option value="en">en</option>
+            <option value="vi">Vietnamese</option>
+            <option value="en">English</option>
           </select>
         </div>
         <div>
-          <label>Translated root</label>
+          <label>Translated folder</label>
           <input :value="settings.settings.translated_dir" @change="patchSetting('translated_dir', ($event.target as HTMLInputElement).value)" />
         </div>
         <div>
