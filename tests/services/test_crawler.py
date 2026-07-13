@@ -466,6 +466,34 @@ class NovelCrawlerTest(unittest.TestCase):
 
         self.assertEqual(metadata.illustration_url, "https://public.example/images/bg-cover.webp")
 
+    def test_discover_uses_static_novel_info_and_keeps_original_source_url(self) -> None:
+        config = replace(
+            demo_config(),
+            start_url="https://public.example/novel/toc",
+            source_url="https://public.example/novel",
+            title="Canonical Novel",
+            author="Canonical Author",
+            illustration_url="https://cdn.example/cover.jpg",
+            summary="Canonical summary.",
+        )
+        pages = {
+            "https://public.example/novel/toc": """
+                <h1 class="title">Wrong TOC title</h1>
+                <span class="author">Wrong TOC author</span>
+                <nav class="chapters"><a href="/c1">Chapter 1</a></nav>
+            """,
+        }
+        crawler = NovelCrawler(config, fetcher=FakeClient(pages))
+
+        metadata, chapters = crawler.discover_chapters()
+
+        self.assertEqual(metadata.title, "Canonical Novel")
+        self.assertEqual(metadata.author, "Canonical Author")
+        self.assertEqual(metadata.source_url, "https://public.example/novel")
+        self.assertEqual(metadata.illustration_url, "https://cdn.example/cover.jpg")
+        self.assertEqual(metadata.summary, "Canonical summary.")
+        self.assertEqual([chapter.url for chapter in chapters], ["https://public.example/c1"])
+
     def test_discover_requires_browser_for_toc_expand_selector(self) -> None:
         config = replace(demo_config(), toc_expand_selector="text=Show all chapters")
         crawler = NovelCrawler(config, fetcher=FakeClient(demo_pages()))
@@ -494,6 +522,7 @@ class NovelCrawlerTest(unittest.TestCase):
                 "author": "Demo Author",
                 "source_url": "https://public.example/novel",
                 "illustration_url": None,
+                "summary": None,
                 "site_name": "demo",
                 "source_language": None,
             },
@@ -504,6 +533,42 @@ class NovelCrawlerTest(unittest.TestCase):
         self.assertTrue(chapter_one.startswith("Chapter 1: Start\n\n"))
         self.assertIn("Hello world.", chapter_one)
         self.assertNotIn("Buy now.", chapter_one)
+
+    def test_crawl_preserves_user_managed_metadata_fields(self) -> None:
+        crawler = NovelCrawler(demo_config())
+        crawler.client = FakeClient(demo_pages())  # type: ignore[arg-type]
+
+        with tempfile.TemporaryDirectory() as output:
+            output_path = Path(output)
+            novel_dir = output_path / "translated" / "demo"
+            novel_dir.mkdir(parents=True)
+            (novel_dir / "metadata.json").write_text(
+                json.dumps(
+                    {
+                        "title": "Old title",
+                        "translated": {"en": "English title", "vi": "Tiêu đề Việt"},
+                        "author": "Existing author",
+                        "source_url": "old-url",
+                        "illustration_url": "existing-cover.jpg",
+                        "summary": "Existing summary",
+                        "site_name": "demo",
+                        "source_language": "chinese",
+                        "custom_field": "keep me",
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            crawler.crawl(output_path / "runtime", share_root=output_path / "translated", max_chapters=1)
+            saved = json.loads((novel_dir / "metadata.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(saved["title"], "Demo Novel")
+        self.assertEqual(saved["translated"], {"en": "English title", "vi": "Tiêu đề Việt"})
+        self.assertEqual(saved["author"], "Demo Author")
+        self.assertEqual(saved["illustration_url"], "existing-cover.jpg")
+        self.assertEqual(saved["summary"], "Existing summary")
+        self.assertEqual(saved["source_language"], "chinese")
+        self.assertEqual(saved["custom_field"], "keep me")
 
     def test_crawl_uses_config_name_for_output_slug(self) -> None:
         config = replace(demo_config(), name="flower-1981")

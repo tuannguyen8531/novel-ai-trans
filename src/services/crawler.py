@@ -162,10 +162,12 @@ class NovelCrawler:
         chapters = self._order_chapters(chapters)
         if metadata is None:
             metadata = NovelMetadata(
-                title=config.name,
-                author=None,
-                source_url=config.start_url,
+                title=config.title or config.name,
+                author=config.author,
+                source_url=config.source_url or config.start_url,
                 site_name=config.name,
+                illustration_url=config.illustration_url,
+                summary=config.summary,
             )
         return metadata, chapters
 
@@ -587,25 +589,26 @@ class NovelCrawler:
         )
 
     def _extract_metadata(self, soup: BeautifulSoup, source_url: str) -> NovelMetadata:
-        title = self.config.name
-        if self.config.novel_title_selector:
+        title = self.config.title or self.config.name
+        if self.config.title is None and self.config.novel_title_selector:
             title_node = soup.select_one(self.config.novel_title_selector)
             if title_node:
                 title = normalize_text(title_node.get_text(" ", strip=True)) or title
 
-        author = None
-        if self.config.author_selector:
+        author = self.config.author
+        if author is None and self.config.author_selector:
             author_node = soup.select_one(self.config.author_selector)
             if author_node:
                 author = normalize_text(author_node.get_text(" ", strip=True)) or None
-        illustration_url = self._extract_illustration_url(soup, source_url)
+        illustration_url = self.config.illustration_url or self._extract_illustration_url(soup, source_url)
 
         return NovelMetadata(
             title=title,
             author=author,
-            source_url=source_url,
+            source_url=self.config.source_url or source_url,
             site_name=self.config.name,
             illustration_url=illustration_url,
+            summary=self.config.summary,
         )
 
     def _extract_illustration_url(self, soup: BeautifulSoup, source_url: str) -> str | None:
@@ -746,7 +749,28 @@ class NovelCrawler:
         self._write_json(path, manifest)
 
     def _write_metadata(self, path: Path, metadata: NovelMetadata) -> None:
-        self._write_json(path, metadata_to_dict(metadata))
+        data = metadata_to_dict(metadata)
+        if path.is_file():
+            try:
+                existing = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                existing = {}
+            if isinstance(existing, dict):
+                # Crawling refreshes canonical source metadata, but translated
+                # titles and detected language are managed by later pipeline
+                # stages and must survive a re-crawl.
+                translated = existing.get("translated")
+                if isinstance(translated, dict):
+                    data["translated"] = translated
+                source_language = existing.get("source_language")
+                if source_language and not data.get("source_language"):
+                    data["source_language"] = source_language
+                for key in ("author", "illustration_url", "summary"):
+                    if existing.get(key) and not data.get(key):
+                        data[key] = existing[key]
+                for key, value in existing.items():
+                    data.setdefault(key, value)
+        self._write_json(path, data)
 
     @staticmethod
     def _chapter_text(title: str, body: str) -> str:

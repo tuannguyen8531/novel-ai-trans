@@ -1,8 +1,8 @@
 """AI-assisted site config generator.
 
-Given a TOC URL, fetches the page HTML, sends it to an LLM for structural
-analysis, then repeats with a sample chapter page.  The result is a
-validated ``SiteConfig`` ready to write to disk.
+Given a novel information URL, extracts canonical metadata and the TOC URL,
+then analyses the TOC and a sample chapter. The result is a validated
+``SiteConfig`` ready to write to disk.
 """
 
 from __future__ import annotations
@@ -37,15 +37,19 @@ class _HtmlCache:
     Automatically invalidates entries that look like error or challenge pages.
     """
 
-    def __init__(self, cache_dir: Path) -> None:
+    def __init__(self, cache_dir: Path, *, enabled: bool = True) -> None:
         self._dir = cache_dir
-        self._dir.mkdir(parents=True, exist_ok=True)
+        self._enabled = enabled
+        if enabled:
+            self._dir.mkdir(parents=True, exist_ok=True)
 
     @staticmethod
     def _key(url: str) -> str:
         return hashlib.sha256(url.encode()).hexdigest()[:16] + ".html"
 
     def get(self, url: str) -> str | None:
+        if not self._enabled:
+            return None
         path = self._dir / self._key(url)
         if not path.is_file():
             return None
@@ -57,10 +61,14 @@ class _HtmlCache:
         return html
 
     def set(self, url: str, html: str) -> None:
+        if not self._enabled:
+            return
         path = self._dir / self._key(url)
         path.write_text(html, encoding="utf-8")
 
     def invalidate(self, url: str) -> None:
+        if not self._enabled:
+            return
         path = self._dir / self._key(url)
         if path.exists():
             path.unlink()
@@ -93,6 +101,32 @@ class _HtmlCache:
 # Prompts
 # ---------------------------------------------------------------------------
 
+_SYSTEM_NOVEL_INFO = """\
+You are an expert at reading novel information pages. Given the HTML of a \
+novel's main information/detail page and its URL, extract the canonical novel \
+metadata and the URL of its table of contents.
+
+Return **only** a JSON object (no markdown fences) with these keys:
+
+{
+  "title": "<the novel's exact original title>",
+  "author": "<the author's name, or null>",
+  "illustration_url": "<cover/illustration image URL, or null>",
+  "summary": "<the novel synopsis/description, preserving its original language, or null>",
+  "toc_url": "<URL of the full chapter list/table of contents>"
+}
+
+Rules:
+- Use the novel itself, not site slogans, SEO suffixes, breadcrumbs, latest \
+  chapter labels, translator names, or uploaders.
+- Prefer the main cover over avatars, logos, banners, ads, and chapter images.
+- The summary must describe the novel; do not invent or translate text.
+- The TOC URL must lead to the complete chapter list when such a link exists. \
+  It may be relative to the supplied page URL.
+- Image URLs may also be relative to the supplied page URL.
+- Output pure JSON only — no commentary or markdown.\
+"""
+
 _SYSTEM_TOC = """\
 You are an expert web scraper assistant.  Given the **cleaned HTML** of a \
 novel's Table-of-Contents page and its URL, identify the correct CSS selectors.
@@ -100,9 +134,6 @@ novel's Table-of-Contents page and its URL, identify the correct CSS selectors.
 Return **only** a JSON object (no markdown fences) with these keys:
 
 {
-  "novel_title_selector": "<CSS selector for the novel title, or null>",
-  "author_selector": "<CSS selector for the author name, or null>",
-  "illustration_selector": "<CSS selector for the cover/illustration image URL, or null>",
   "chapter_link_selector": "<CSS selector that matches ALL chapter <a> links>",
   "toc_next_selector": "<CSS selector for the 'next page' link if TOC is paginated, or null>",
   "toc_expand_selector": "<Playwright selector for a 'show all chapters' control, or null>"
@@ -115,13 +146,6 @@ Rules:
 - ``chapter_link_selector`` must match <a> elements whose ``href`` points to \
 individual chapter pages. It should NOT match unrelated links (home, profile, \
 ads).
-- ``novel_title_selector`` should target the actual novel name, usually inside \
-an ``<h1>`` or a breadcrumb. Example: ``#catalog h1 a``.
-- ``illustration_selector`` should target the novel cover image, metadata such \
-as ``meta[property="og:image"]``, or an element whose inline style has \
-``background-image: url(...)``. It must expose an image URL through ``src``, \
-``data-src``, ``data-original``, ``content``, ``href``, ``srcset``, or CSS \
-``url(...)``.
 - ``toc_expand_selector`` is only for pages that hide most chapters behind a \
 button/link such as "show all chapters" or "full chapter list". Prefer a \
 Playwright text selector such as ``text=查看完整章节目录`` when no stable \
@@ -131,9 +155,6 @@ id/class exists.
 
 Example for a typical Chinese novel site:
 {
-  "novel_title_selector": "#catalog h1 a",
-  "author_selector": null,
-  "illustration_selector": ".book-cover img",
   "chapter_link_selector": "#catalog ul li a",
   "toc_next_selector": null,
   "toc_expand_selector": null
@@ -193,8 +214,6 @@ Your previous selectors did not match any elements in the provided HTML.
 Please look again at the cleaned HTML and return corrected selectors.
 Pay special attention to:
 - The list of chapter links — what ``id`` or ``class`` wraps the <ul> or <ol> of links?
-- The novel title — is it inside ``<h1>`` or a breadcrumb?
-- The cover image — is there an ``img`` near the novel info, or a ``meta[property="og:image"]`` tag?
 - Hidden TOCs — if the HTML has a "show all chapters" control, return it as ``toc_expand_selector``.
 
 Return **only** the JSON object, no markdown.\
@@ -219,7 +238,7 @@ Return **only** the JSON object, no markdown.\
 
 
 class ConfigGenerator:
-    """Two-phase AI config generator with validation and retry."""
+    """AI config generator with selector validation and retry."""
 
     def __init__(
         self,
@@ -240,39 +259,59 @@ class ConfigGenerator:
 
     def generate(
         self,
-        toc_url: str,
+        source_url: str,
         *,
         name: str | None = None,
         configs_dir: Path | None = None,
         samples_dir: Path | None = None,
         cache_dir: Path | None = None,
+        use_cache: bool = True,
         use_samples: bool = True,
     ) -> dict[str, Any]:
-        """Run both phases and return a complete config dict.
+        """Extract novel info, analyse its TOC/chapter pages, and return a config.
 
         When ``use_samples`` is true, matching bundled samples and known-domain
-        configs may be reused before calling the LLM. Disabling it forces live
-        HTML analysis for both phases. Returns the raw dict (not yet a
-        SiteConfig) so the caller can review / edit before persisting.
+        configs may replace selector-analysis LLM calls. Novel metadata and the
+        TOC URL are always extracted from the supplied source page first.
+        Disabling samples forces live HTML selector analysis. Returns the raw
+        dict (not yet a SiteConfig) so the caller can review it before saving.
         """
         configs_dir = configs_dir or Path("configs")
         effective_samples_dir = samples_dir or self._samples_dir or (configs_dir / "samples")
-        domain = urlparse(toc_url).netloc
-
-        if use_samples:
-            sample = self._load_sample(domain, effective_samples_dir)
-            if sample is not None:
-                print(f"✅ Using bundled sample template for domain {domain} (no fetch, no LLM).")
-                result = json.loads(json.dumps(sample))
-                result["start_url"] = toc_url
-                result["name"] = name or self._derive_name(toc_url)
-                return result
-
-        cache = _HtmlCache(cache_dir or Path("runtime/crawler") / ".gen-cache")
-        known = self._load_known_domain_config(domain, configs_dir) if use_samples else None
+        cache = _HtmlCache(
+            cache_dir or Path("runtime/crawler") / ".gen-cache",
+            enabled=use_cache,
+        )
 
         with self._open_fetcher() as fetcher:
-            # Phase 1: TOC analysis
+            # Phase 1: canonical metadata and TOC discovery from the novel page.
+            source_html = self._fetch_or_cache(fetcher, cache, source_url, "Novel info")
+            if source_html is None:
+                raise RuntimeError(f"Failed to fetch novel information page: {source_url}")
+            source_clean = self._clean_novel_page_for_analysis(source_html)
+            novel_info = self._ask_llm(
+                system=_SYSTEM_NOVEL_INFO,
+                user=f"Page URL: {source_url}\n\nHTML:\n{source_clean}",
+                call_type="gen_novel_info",
+            )
+            novel_info = self._normalise_novel_info(novel_info, source_url)
+            toc_url = novel_info["toc_url"]
+            domain = urlparse(toc_url).netloc
+
+            if use_samples:
+                sample = self._load_sample(domain, effective_samples_dir)
+                if sample is not None:
+                    print(f"✅ Using bundled sample template for domain {domain}.")
+                    result = json.loads(json.dumps(sample))
+                    for key in ("novel_title_selector", "author_selector", "illustration_selector"):
+                        result.pop(key, None)
+                    result["name"] = name or self._derive_name(source_url)
+                    result["start_url"] = toc_url
+                    return self._add_novel_info(result, source_url, novel_info)
+
+            known = self._load_known_domain_config(domain, configs_dir) if use_samples else None
+
+            # Phase 2: TOC and sample chapter selector analysis.
             toc_html = self._fetch_or_cache(fetcher, cache, toc_url, "TOC")
             if toc_html is None:
                 raise RuntimeError(f"Failed to fetch TOC page: {toc_url}")
@@ -294,12 +333,12 @@ class ConfigGenerator:
             # Try known-domain selectors first; fall back to LLM.
             toc_result = self._try_known_selectors(known, toc_soup, "toc", toc_clean, _SYSTEM_TOC, _RETRY_TOC)
 
-            # Discover first chapter URL for Phase 2
+            # Discover a sample chapter URL from the TOC result.
             chapter_url = self._find_first_chapter(toc_soup, toc_url, toc_result.get("chapter_link_selector", ""))
 
             chapter_result: dict[str, Any] = {}
             if chapter_url:
-                # Phase 2: Chapter analysis with automatic browser fallback
+                # Analyse the sample chapter with automatic browser fallback.
                 ch_html, ch_soup = self._fetch_chapter_with_fallback(fetcher, chapter_url, cache)
                 if ch_soup is not None:
                     ch_clean = clean_html_for_analysis(ch_html)
@@ -312,8 +351,15 @@ class ConfigGenerator:
                 get_logger().warning("Could not find a chapter link — skipping Phase 2.")
 
         # Merge results
-        site_name = name or self._derive_name(toc_url)
-        config_dict = self._build_config(toc_url, site_name, toc_result, chapter_result)
+        site_name = name or self._derive_name(source_url)
+        config_dict = self._build_config(
+            toc_url,
+            site_name,
+            toc_result,
+            chapter_result,
+            source_url=source_url,
+            novel_info=novel_info,
+        )
         return config_dict
 
     def _try_known_selectors(
@@ -329,9 +375,6 @@ class ConfigGenerator:
         if known:
             result = (
                 {
-                    "novel_title_selector": known.get("novel_title_selector"),
-                    "author_selector": known.get("author_selector"),
-                    "illustration_selector": known.get("illustration_selector"),
                     "chapter_link_selector": known.get("chapter_link_selector"),
                     "toc_next_selector": known.get("toc_next_selector"),
                     "toc_expand_selector": known.get("toc_expand_selector"),
@@ -427,6 +470,73 @@ class ConfigGenerator:
         except Exception as e:
             get_logger().warning("Failed to fetch %s: %s", url, e)
             return None
+
+    @staticmethod
+    def _clean_novel_page_for_analysis(html: str, *, max_length: int = 60_000) -> str:
+        """Remove executable/noisy markup while retaining metadata attributes.
+
+        ``clean_html_for_analysis`` intentionally drops image and Open Graph
+        attributes because selector generation does not need their values. The
+        novel-info phase does need those values, so it uses this less aggressive
+        cleaner instead.
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        for tag in soup.select("script, style, noscript, svg, iframe"):
+            tag.decompose()
+        cleaned = str(soup)
+        if len(cleaned) > max_length:
+            cleaned = cleaned[:max_length] + "\n<!-- truncated -->"
+        return cleaned
+
+    @staticmethod
+    def _normalise_novel_info(info: dict[str, Any], source_url: str) -> dict[str, Any]:
+        """Validate LLM metadata and resolve relative URLs against the source page."""
+
+        def _text(key: str, *, required: bool = False) -> str | None:
+            value = info.get(key)
+            if value is None:
+                if required:
+                    raise ValueError(f"LLM did not return a {key} for the novel page.")
+                return None
+            text = str(value).strip()
+            if not text and required:
+                raise ValueError(f"LLM did not return a {key} for the novel page.")
+            return text or None
+
+        def _url(key: str, *, required: bool = False) -> str | None:
+            value = _text(key)
+            if value is None:
+                if required:
+                    raise ValueError(f"LLM did not return a {key} for the novel page.")
+                return None
+            absolute = urljoin(source_url, value)
+            if urlparse(absolute).scheme not in {"http", "https"}:
+                if required:
+                    raise ValueError(f"LLM returned an invalid {key}: {value!r}")
+                return None
+            return absolute
+
+        return {
+            "title": _text("title", required=True),
+            "author": _text("author"),
+            "illustration_url": _url("illustration_url"),
+            "summary": _text("summary"),
+            "toc_url": _url("toc_url", required=True),
+        }
+
+    @staticmethod
+    def _add_novel_info(
+        config: dict[str, Any],
+        source_url: str,
+        novel_info: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Attach canonical novel metadata to a generated selector config."""
+        config["source_url"] = source_url
+        config["title"] = novel_info.get("title")
+        config["author"] = novel_info.get("author")
+        config["illustration_url"] = novel_info.get("illustration_url")
+        config["summary"] = novel_info.get("summary")
+        return config
 
     def _fetch_chapter_with_fallback(
         self,
@@ -582,13 +692,9 @@ class ConfigGenerator:
         issues: list[str] = []
 
         if call_type.startswith("gen_config_toc"):
-            for key in ("chapter_link_selector", "novel_title_selector"):
-                selector = result.get(key)
-                if selector and not soup.select(selector):
-                    issues.append(f"{key} matches 0 elements")
-            selector = result.get("illustration_selector")
+            selector = result.get("chapter_link_selector")
             if selector and not soup.select(selector):
-                issues.append("illustration_selector matches 0 elements")
+                issues.append("chapter_link_selector matches 0 elements")
         elif call_type.startswith("gen_config_chapter"):
             content_sel = result.get("chapter_content_selector")
             if content_sel and not soup.select(content_sel):
@@ -661,6 +767,9 @@ class ConfigGenerator:
         name: str,
         toc: dict[str, Any],
         chapter: dict[str, Any],
+        *,
+        source_url: str | None = None,
+        novel_info: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Merge Phase 1 + Phase 2 results into a full config dict."""
         remove = list(chapter.get("remove_selectors") or ["script", "style"])
@@ -682,13 +791,10 @@ class ConfigGenerator:
         def _or(val: Any, default: Any) -> Any:
             return val if val is not None else default
 
-        return {
+        config = {
             "name": name,
             "start_url": toc_url,
             "version": 1,
-            "novel_title_selector": _or(toc.get("novel_title_selector"), None),
-            "author_selector": _or(toc.get("author_selector"), None),
-            "illustration_selector": _or(toc.get("illustration_selector"), None),
             "chapter_link_selector": _or(toc.get("chapter_link_selector"), "a"),
             "toc_next_selector": _or(toc_next, None),
             "toc_expand_selector": _or(toc.get("toc_expand_selector"), None),
@@ -703,3 +809,6 @@ class ConfigGenerator:
             "max_toc_pages": max_toc_pages,
             "user_agent": DEFAULT_USER_AGENT,
         }
+        if source_url is not None:
+            ConfigGenerator._add_novel_info(config, source_url, novel_info or {})
+        return config

@@ -48,10 +48,28 @@ def test_generate_config_without_drafts_dir_does_not_create_draft() -> None:
 
     generator_cls.assert_called_once_with(llm, use_browser=True, headed=True)
     generator.generate.assert_called_once()
+    assert generator.generate.call_args.kwargs["use_cache"] is True
     generator_cls.validate.assert_called_once_with(generator.generate.return_value)
     assert result.draft_id == ""
     assert result.expires_at is None
     assert result.config == generator.generate.return_value
+
+
+def test_generate_config_no_cache_disables_generator_cache() -> None:
+    generator = Mock()
+    generator.generate.return_value = {
+        "name": "demo",
+        "start_url": "https://example.com/book/toc",
+        "chapter_link_selector": "a.chapter",
+    }
+
+    with (
+        patch("src.application.crawl.get_llm", return_value=object()),
+        patch("src.application.crawl.ConfigGenerator", return_value=generator),
+    ):
+        generate_config(url="https://example.com/book", no_cache=True)
+
+    assert generator.generate.call_args.kwargs["use_cache"] is False
 
 
 def test_import_workflow_reports_chapter_changes_in_result_and_logs() -> None:

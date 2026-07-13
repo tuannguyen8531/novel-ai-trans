@@ -117,18 +117,20 @@ profile to unblock later `-b` runs.
 
 ### Generate a site config
 
-If no config exists for a site, let the LLM build one from the table-of-contents
-URL:
+If no config exists for a site, let the LLM build one from the novel's main
+information/detail URL:
 
 ```bash
-uv run generate https://example.com/novel/table-of-contents --name my-novel
+uv run generate https://example.com/novel --name my-novel
 uv run validate my-novel
 uv run crawl my-novel
 ```
 
-The generator fetches the TOC page, inspects the HTML, and proposes a JSON
+The generator first extracts the title, author, cover, summary, and TOC URL from
+the novel page. It then inspects the TOC and a sample chapter and proposes a JSON
 config with CSS selectors. Review the printed JSON, confirm, and it is saved to
-`configs/<name>.json`.
+`configs/<name>.json`. During crawl, `metadata.json.source_url` remains the main
+novel URL while `start_url` in the config is the discovered TOC URL.
 
 ```bash
 uv run generate <url> --provider gemini        # override provider for generation

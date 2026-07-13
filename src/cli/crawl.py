@@ -54,7 +54,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     gen = subparsers.add_parser(
         "generate",
-        help="Use AI to generate a site config from a TOC URL.",
+        help="Use AI to generate a site config from a novel information URL.",
         add_help=False,
     )
     _add_generate_arguments(gen)
@@ -87,7 +87,7 @@ def build_short_parser() -> argparse.ArgumentParser:
 def build_generate_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="generate",
-        description="Use AI to generate a site config from a TOC URL.",
+        description="Use AI to generate a site config from a novel information URL.",
         add_help=False,
     )
     _add_generate_arguments(parser)
@@ -183,7 +183,7 @@ def _add_generate_arguments(parser: argparse.ArgumentParser) -> None:
         action="help",
         help="Show this help message and exit.",
     )
-    parser.add_argument("url", type=str, help="URL of the novel's table-of-contents page.")
+    parser.add_argument("url", type=str, help="URL of the novel's main information page.")
     parser.add_argument(
         "--name",
         type=str,

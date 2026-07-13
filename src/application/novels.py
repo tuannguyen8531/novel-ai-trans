@@ -145,6 +145,7 @@ def create(
             "translated": {"en": None, "vi": None},
             "source_url": None,
             "illustration_url": illustration_url or None,
+            "summary": None,
             "site_name": None,
         }
         _write_metadata(novel_root, metadata, trailing_newline=False)
