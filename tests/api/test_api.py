@@ -479,7 +479,7 @@ def test_config_save_rejects_traversal_draft_id(client, tmp_path):
     payload = {
         "config": {
             "name": "demo",
-            "start_url": "https://example.com/novel",
+            "toc_url": "https://example.com/novel",
             "chapter_link_selector": ".chapter",
             "chapter_content_selector": ".content",
         },
@@ -489,6 +489,54 @@ def test_config_save_rejects_traversal_draft_id(client, tmp_path):
         response = client.put("/api/configs/demo", json=payload)
     assert response.status_code == 422
     assert not (config_dir / "demo.json").exists()
+
+
+def test_config_save_persists_draft_metadata_separately(client, tmp_path):
+    import json
+    from datetime import datetime, timedelta
+
+    config_dir = tmp_path / "configs"
+    drafts_dir = client.app.state.app_state.drafts_dir
+    draft_id = "generated-demo"
+    draft = {
+        "draft_id": draft_id,
+        "name": "demo",
+        "created_at": datetime.now(UTC).isoformat(),
+        "expires_at": (datetime.now(UTC) + timedelta(days=1)).isoformat(),
+        "source_url": "https://example.com/book",
+        "config": {},
+        "metadata": {
+            "title": "Demo Novel",
+            "author": "Demo Author",
+            "source_url": "https://example.com/book",
+            "illustration_url": "https://example.com/cover.jpg",
+            "summary": "Demo summary.",
+            "site_name": "demo",
+        },
+    }
+    (drafts_dir / f"{draft_id}.json").write_text(json.dumps(draft), encoding="utf-8")
+    payload = {
+        "config": {
+            "name": "demo",
+            "toc_url": "https://example.com/book/toc",
+            "source_url": "https://example.com/book",
+            "chapter_link_selector": ".chapter",
+            "chapter_content_selector": ".content",
+        },
+        "draft_id": draft_id,
+    }
+
+    with patch("src.api.routes.configs._CONFIG_DIR", config_dir):
+        response = client.put("/api/configs/demo", json=payload)
+
+    assert response.status_code == 200
+    saved_config = json.loads((config_dir / "demo.json").read_text(encoding="utf-8"))
+    translated_root = Path(_config.get_config().translated_dir)
+    saved_metadata = json.loads((translated_root / "demo" / "metadata.json").read_text(encoding="utf-8"))
+    assert "title" not in saved_config
+    assert saved_metadata["title"] == "Demo Novel"
+    assert saved_metadata["summary"] == "Demo summary."
+    assert not (drafts_dir / f"{draft_id}.json").exists()
 
 
 def test_spa_fallback_rejects_paths_outside_dist(tmp_path):

@@ -172,7 +172,7 @@ def demo_config() -> SiteConfig:
     return SiteConfig.from_dict(
         {
             "name": "demo",
-            "start_url": "https://public.example/novel",
+            "toc_url": "https://public.example/novel",
             "novel_title_selector": "h1.title",
             "author_selector": ".author",
             "chapter_link_selector": ".chapters a",
@@ -286,7 +286,7 @@ class NovelCrawlerTest(unittest.TestCase):
         config = SiteConfig.from_dict(
             {
                 "name": "demo",
-                "start_url": "https://public.example/novel",
+                "toc_url": "https://public.example/novel",
                 "novel_title_selector": "h1.title",
                 "chapter_link_selector": ".chapters a",
                 "chapter_content_selector": ".content",
@@ -338,7 +338,7 @@ class NovelCrawlerTest(unittest.TestCase):
     def test_discover_reads_next_data_toc_when_dom_is_collapsed(self) -> None:
         config = replace(
             demo_config(),
-            start_url="https://kakuyomu.jp/works/12345",
+            toc_url="https://kakuyomu.jp/works/12345",
             chapter_link_selector=".chapters a",
         )
         next_data = {
@@ -469,7 +469,7 @@ class NovelCrawlerTest(unittest.TestCase):
     def test_discover_uses_static_novel_info_and_keeps_original_source_url(self) -> None:
         config = replace(
             demo_config(),
-            start_url="https://public.example/novel/toc",
+            toc_url="https://public.example/novel/toc",
             source_url="https://public.example/novel",
             title="Canonical Novel",
             author="Canonical Author",
@@ -569,6 +569,49 @@ class NovelCrawlerTest(unittest.TestCase):
         self.assertEqual(saved["summary"], "Existing summary")
         self.assertEqual(saved["source_language"], "chinese")
         self.assertEqual(saved["custom_field"], "keep me")
+
+    def test_crawl_uses_metadata_file_when_config_has_no_novel_info(self) -> None:
+        config = replace(
+            demo_config(),
+            novel_title_selector=None,
+            author_selector=None,
+            source_url="https://public.example/book",
+        )
+        crawler = NovelCrawler(config)
+        crawler.client = FakeClient(demo_pages())  # type: ignore[arg-type]
+
+        with tempfile.TemporaryDirectory() as output:
+            output_path = Path(output)
+            novel_dir = output_path / "translated" / "demo"
+            novel_dir.mkdir(parents=True)
+            (novel_dir / "metadata.json").write_text(
+                json.dumps(
+                    {
+                        "title": "Canonical Novel",
+                        "translated": {"vi": "Tiểu thuyết mẫu"},
+                        "author": "Canonical Author",
+                        "source_url": "https://public.example/book",
+                        "illustration_url": "https://public.example/cover.jpg",
+                        "summary": "Canonical summary.",
+                        "site_name": "demo",
+                        "source_language": "chinese",
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            result = crawler.crawl(
+                output_path / "runtime",
+                share_root=output_path / "translated",
+                max_chapters=1,
+            )
+            saved = json.loads((novel_dir / "metadata.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(result.metadata.title, "Canonical Novel")
+        self.assertEqual(result.metadata.author, "Canonical Author")
+        self.assertEqual(result.metadata.summary, "Canonical summary.")
+        self.assertEqual(saved["title"], "Canonical Novel")
+        self.assertEqual(saved["translated"], {"vi": "Tiểu thuyết mẫu"})
 
     def test_crawl_uses_config_name_for_output_slug(self) -> None:
         config = replace(demo_config(), name="flower-1981")

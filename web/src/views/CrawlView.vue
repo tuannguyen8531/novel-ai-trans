@@ -215,7 +215,7 @@ function discardDraft() {
               {{ loadingConfigs ? 'Loading…' : 'No configs in configs/' }}
             </option>
             <option v-for="cfg in configs" :key="cfg.name" :value="cfg.name">
-              {{ cfg.name }} — {{ cfg.start_url }}
+              {{ cfg.name }} — {{ cfg.toc_url }}
             </option>
           </select>
           <p v-if="configsError" class="error" style="margin-top: 0.25rem;">{{ configsError }}</p>
@@ -303,7 +303,8 @@ function discardDraft() {
       <p class="muted">
         Provide the novel's main information URL. The AI extracts its metadata and table of
         contents, then proposes a site config. The result is saved as a draft; review and edit it,
-        then save to <code>configs/</code>.
+        then save the crawl settings to <code>configs/</code> and the novel information to
+        <code>translated/&lt;name&gt;/metadata.json</code>.
       </p>
 
       <div class="grid">
@@ -379,6 +380,8 @@ function discardDraft() {
       <h3>Review draft — <code>{{ generatedDraft.name }}</code></h3>
       <p class="muted">
         Edit the JSON below, then save it to <code>configs/{{ generatedDraft.name }}.json</code>.
+        Extracted novel information will be merged into
+        <code>translated/{{ generatedDraft.name }}/metadata.json</code>.
         Expires {{ new Date(generatedDraft.expires_at).toLocaleString() }}.
       </p>
       <textarea v-model="draftConfigText" class="draft-editor" spellcheck="false"></textarea>

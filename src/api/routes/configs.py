@@ -27,6 +27,7 @@ from src.application import config as app_config
 from src.application.crawl import (
     ConfigGenerationResult,
     ConfigValidationResult,
+    save_generated_metadata,
 )
 from src.application.crawl import (
     generate_config as application_generate_config,
@@ -71,7 +72,7 @@ def _list_configs() -> list[ConfigSummary]:
                     ConfigSummary(
                         name=entry.stem,
                         version=int(data.get("version", 1)),
-                        start_url=str(data.get("start_url", "")),
+                        toc_url=str(data.get("toc_url", "")),
                         updated_at=None,
                     )
                 )
@@ -110,6 +111,9 @@ def save_config(
         raise _ApiValidationError(f"Invalid config name: {name!r}")
     if payload.draft_id and not _is_valid_slug(payload.draft_id):
         raise _ApiValidationError(f"Invalid draft id: {payload.draft_id!r}")
+    draft = _load_draft(payload.draft_id) if payload.draft_id else None
+    if draft is not None and draft.name != name:
+        raise _ApiValidationError("Draft name does not match the target config name.")
     try:
         SiteConfig.from_dict(payload.config)
     except (ValueError, KeyError) as error:
@@ -123,6 +127,9 @@ def save_config(
         encoding="utf-8",
     )
     tmp.replace(target)
+
+    if draft is not None and draft.metadata:
+        save_generated_metadata(name, draft.metadata)
 
     if payload.draft_id:
         # ``payload.draft_id`` is validated by ``_draft_path`` before the
@@ -168,6 +175,7 @@ async def post_generate_config(
             "draft_id": result.draft_id,
             "name": result.suggested_name,
             "config": result.config,
+            "metadata": result.metadata,
         }
         return emit_dict
 
@@ -253,6 +261,7 @@ def _load_draft(draft_id: str) -> DraftDetail:
         expires_at=datetime.fromisoformat(data["expires_at"]),
         source_url=data.get("source_url"),
         config=data.get("config", {}),
+        metadata=data.get("metadata", {}),
     )
 
 

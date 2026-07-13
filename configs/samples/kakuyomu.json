@@ -1,6 +1,6 @@
 {
   "name": "kakuyomu",
-  "start_url": "https://kakuyomu.jp/",
+  "toc_url": "https://kakuyomu.jp/",
   "version": 1,
   "chapter_link_selector": "a[href*='/episodes/']",
   "toc_next_selector": null,

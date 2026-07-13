@@ -24,12 +24,15 @@ from src.application.errors import (
 )
 from src.application.progress import ProgressEvent
 from src.config import SiteConfig
+from src.domain.language import detect_language_heuristic
 from src.paths import CONFIG_DIR, RUNTIME_DIR, RUNTIME_OUTPUT_ROOT
 from src.services.configs import ConfigGenerator
 from src.services.crawler import ConsecutiveFailureError, NovelCrawler
 from src.services.http import FetchError
 from src.services.importer import ChapterImportChange, EpubImportError, import_epub
 from src.services.llm import get_llm
+from src.utils.files import merge_json_locked
+from src.utils.text import slugify
 
 _DRAFT_TTL = timedelta(days=7)
 _SLUG_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
@@ -164,7 +167,7 @@ def run_crawl(
             retry_attempts=site_config.retry_attempts,
             retry_backoff_seconds=site_config.retry_backoff_seconds,
             max_concurrency=workers,
-            profile_dir=browser_profile_dir(site_config.start_url) if request.headed else None,
+            profile_dir=browser_profile_dir(site_config.toc_url) if request.headed else None,
             headless=not request.headed,
             challenge_timeout_seconds=120.0 if request.headed else None,
         )
@@ -210,6 +213,10 @@ def run_crawl(
     try:
         if request.dry_run:
             metadata, discovered = crawler.discover_chapters()
+            if share_root is not None:
+                metadata_path = share_root / slugify(site_config.name) / "metadata.json"
+                if metadata_path.is_file():
+                    metadata = crawler.merge_metadata_from_file(metadata_path, metadata)
             if max_chapters is not None:
                 discovered = discovered[:max_chapters]
             return CrawlResult(
@@ -289,6 +296,7 @@ class ConfigGenerationResult:
     draft_id: str
     suggested_name: str
     config: dict = field(default_factory=dict)
+    metadata: dict = field(default_factory=dict)
     expires_at: datetime | None = None
 
 
@@ -330,12 +338,24 @@ def generate_config(
         use_samples=not ignore_sample,
     )
     _check_cancel(cancel_event)
+    suggested_name = str(config_dict.get("name", "generated"))
+    title = str(config_dict.pop("title", None) or suggested_name)
+    detected_language = detect_language_heuristic(title)
+    metadata = {
+        "title": title,
+        "translated": {"en": None, "vi": None},
+        "author": config_dict.pop("author", None),
+        "source_url": config_dict.get("source_url") or url,
+        "illustration_url": config_dict.pop("illustration_url", None),
+        "summary": config_dict.pop("summary", None),
+        "site_name": suggested_name,
+        "source_language": detected_language if detected_language != "unknown" else None,
+    }
     try:
         ConfigGenerator.validate(config_dict)
     except ValueError as error:
         _emit(progress_callback, ProgressEvent(kind="log", message=f"Validation warning: {error}"))
 
-    suggested_name = str(config_dict.get("name", "generated"))
     draft_id = ""
     expires = None
     if drafts_dir is not None:
@@ -349,6 +369,7 @@ def generate_config(
             "expires_at": expires.isoformat(),
             "source_url": url,
             "config": config_dict,
+            "metadata": metadata,
         }
         draft_path = drafts_dir / f"{draft_id}.json"
         draft_path.write_text(
@@ -359,14 +380,59 @@ def generate_config(
         draft_id=draft_id,
         suggested_name=suggested_name,
         config=config_dict,
+        metadata=metadata,
         expires_at=expires,
     )
 
 
-def save_generated_config(config: dict, output_dir: Path) -> Path:
-    """Persist a confirmed generated config."""
+def save_generated_metadata(
+    name: str,
+    metadata: dict,
+    *,
+    translated_root: Path | None = None,
+) -> Path:
+    """Merge generated novel information into its canonical metadata file."""
+    root = translated_root or Path(app_config.get_config().translated_dir)
+    path = root / name / "metadata.json"
+
+    def _merge(existing: dict) -> dict:
+        translated = existing.get("translated")
+        if not isinstance(translated, dict):
+            translated = {"en": None, "vi": None}
+        merged = {
+            **existing,
+            "title": metadata.get("title") or existing.get("title") or name,
+            "translated": translated,
+            "author": metadata.get("author") or existing.get("author"),
+            "source_url": metadata.get("source_url") or existing.get("source_url"),
+            "illustration_url": metadata.get("illustration_url") or existing.get("illustration_url"),
+            "summary": metadata.get("summary") or existing.get("summary"),
+            "site_name": metadata.get("site_name") or existing.get("site_name") or name,
+            "source_language": existing.get("source_language") or metadata.get("source_language"),
+        }
+        return merged
+
+    merge_json_locked(path, _merge)
+    return path
+
+
+def save_generated_config(
+    config: dict,
+    output_dir: Path,
+    *,
+    metadata: dict | None = None,
+    translated_root: Path | None = None,
+) -> Path:
+    """Persist a confirmed generated config and its extracted metadata."""
     try:
-        return ConfigGenerator.save(config, output_dir)
+        path = ConfigGenerator.save(config, output_dir)
+        if metadata:
+            save_generated_metadata(
+                str(config.get("name", "generated")),
+                metadata,
+                translated_root=translated_root,
+            )
+        return path
     except (OSError, ValueError) as error:
         raise PersistenceError(str(error)) from error
 
@@ -389,7 +455,7 @@ class ConfigValidationResult:
     ok: bool
     target: str
     config_path: str = ""
-    start_url: str = ""
+    toc_url: str = ""
     fetcher: str = "http"
     issues: list[ConfigIssue] = field(default_factory=list)
     metadata: dict = field(default_factory=dict)
@@ -477,12 +543,12 @@ def _validate_with_fetcher(
         if not hasattr(fetcher, "fetch_with_clicks"):
             raise ApplicationValidationError("toc_expand_selector requires browser mode (-b/--browser).")
         response = fetcher.fetch_with_clicks(
-            site_config.start_url,
+            site_config.toc_url,
             [site_config.toc_expand_selector],
             wait_for_selector=site_config.chapter_link_selector,
         )
     else:
-        response = fetcher.fetch(site_config.start_url)
+        response = fetcher.fetch(site_config.toc_url)
     toc_soup = BeautifulSoup(response.body, "html.parser")
     _check_cancel(cancel_event)
     for label, selector in [
@@ -540,7 +606,7 @@ def _validate_with_fetcher(
         ok=ok,
         target=site_config.name,
         config_path=str(config_path),
-        start_url=site_config.start_url,
+        toc_url=site_config.toc_url,
         fetcher=fetcher_name,
         issues=issues,
         metadata=metadata,
@@ -645,15 +711,15 @@ def import_epub_workflow(
 # ---------------------------------------------------------------------------
 
 
-def browser_profile_dir(start_url: str) -> Path:
+def browser_profile_dir(toc_url: str) -> Path:
     """Return a per-host persistent browser profile directory.
 
     Anchored at the project root so the API server (which may run from a
     different working directory than the CLI) finds the same location.
     """
-    hostname = urlparse(start_url).hostname
+    hostname = urlparse(toc_url).hostname
     if not hostname:
-        raise ValueError(f"Could not determine browser profile domain from URL: {start_url}")
+        raise ValueError(f"Could not determine browser profile domain from URL: {toc_url}")
     safe_hostname = "".join(character if character.isalnum() or character in ".-_" else "_" for character in hostname.lower())
     return RUNTIME_DIR / "browser-profiles" / safe_hostname
 
@@ -666,6 +732,7 @@ __all__ = [
     "ConfigGenerationResult",
     "generate_config",
     "save_generated_config",
+    "save_generated_metadata",
     "ConfigIssue",
     "ConfigValidationResult",
     "validate_config",

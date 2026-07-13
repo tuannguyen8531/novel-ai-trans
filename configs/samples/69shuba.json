@@ -1,6 +1,6 @@
 {
   "name": "69shuba",
-  "start_url": "https://www.69shuba.com/",
+  "toc_url": "https://www.69shuba.com/",
   "version": 1,
   "chapter_link_selector": "#catalog ul li a",
   "toc_next_selector": null,

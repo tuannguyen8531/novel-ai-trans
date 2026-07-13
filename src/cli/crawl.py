@@ -466,8 +466,9 @@ def _generate(args: argparse.Namespace) -> int:
         dest = output_dir / f"{name}.json"
         answer = input(f"\nSave to {dest}? [Y/n] ").strip().lower()
         if answer in ("", "y", "yes"):
-            path = save_generated_config(result.config, output_dir)
+            path = save_generated_config(result.config, output_dir, metadata=result.metadata)
             print(f"✅ Config saved to {path}")
+            print(f"✅ Metadata saved to translated/{name}/metadata.json")
             return 0
 
         print("Cancelled.")
@@ -504,7 +505,7 @@ def _validate(args: argparse.Namespace) -> int:
     print("Validating config selectors")
     print(f"{'═' * 60}")
     print(f"Config: {result.config_path}")
-    print(f"Start URL: {result.start_url}")
+    print(f"TOC URL: {result.toc_url}")
     print(f"Fetcher: {result.fetcher}")
     print()
 
@@ -524,7 +525,7 @@ def _validate(args: argparse.Namespace) -> int:
     remove_issues = [issue for issue in result.issues if issue.label == "remove_selectors"]
 
     print("📖 TOC Page")
-    print(f"   URL: {result.start_url}")
+    print(f"   URL: {result.toc_url}")
     for issue in toc_issues:
         _print_selector_issue(issue)
 

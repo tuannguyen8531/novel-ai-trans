@@ -1,10 +1,18 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from src.application.crawl import CrawlRequest, ImportRequest, generate_config, import_epub_workflow, run_crawl
+from src.application.crawl import (
+    CrawlRequest,
+    ImportRequest,
+    generate_config,
+    import_epub_workflow,
+    run_crawl,
+    save_generated_config,
+)
 from src.services.importer import ChapterImportChange
 
 
@@ -35,7 +43,7 @@ def test_generate_config_without_drafts_dir_does_not_create_draft() -> None:
     generator = Mock()
     generator.generate.return_value = {
         "name": "demo",
-        "start_url": "https://example.com/book/",
+        "toc_url": "https://example.com/book/",
         "chapter_link_selector": "a.chapter",
     }
 
@@ -59,7 +67,7 @@ def test_generate_config_no_cache_disables_generator_cache() -> None:
     generator = Mock()
     generator.generate.return_value = {
         "name": "demo",
-        "start_url": "https://example.com/book/toc",
+        "toc_url": "https://example.com/book/toc",
         "chapter_link_selector": "a.chapter",
     }
 
@@ -70,6 +78,76 @@ def test_generate_config_no_cache_disables_generator_cache() -> None:
         generate_config(url="https://example.com/book", no_cache=True)
 
     assert generator.generate.call_args.kwargs["use_cache"] is False
+
+
+def test_generate_config_separates_novel_metadata_from_crawler_config() -> None:
+    generator = Mock()
+    generator.generate.return_value = {
+        "name": "demo",
+        "toc_url": "https://example.com/book/toc",
+        "source_url": "https://example.com/book",
+        "title": "示例小说",
+        "author": "Demo Author",
+        "illustration_url": "https://example.com/cover.jpg",
+        "summary": "Demo summary.",
+        "chapter_link_selector": "a.chapter",
+        "chapter_content_selector": ".content",
+    }
+
+    with (
+        patch("src.application.crawl.get_llm", return_value=object()),
+        patch("src.application.crawl.ConfigGenerator", return_value=generator),
+    ):
+        result = generate_config(url="https://example.com/book")
+
+    assert result.metadata["title"] == "示例小说"
+    assert result.metadata["author"] == "Demo Author"
+    assert result.metadata["illustration_url"] == "https://example.com/cover.jpg"
+    assert result.metadata["summary"] == "Demo summary."
+    assert result.metadata["source_url"] == "https://example.com/book"
+    assert result.metadata["source_language"] == "chinese"
+    assert result.config["source_url"] == "https://example.com/book"
+    for key in ("title", "author", "illustration_url", "summary"):
+        assert key not in result.config
+
+
+def test_save_generated_config_merges_metadata_without_losing_translations(tmp_path: Path) -> None:
+    translated_root = tmp_path / "translated"
+    novel_root = translated_root / "demo"
+    novel_root.mkdir(parents=True)
+    (novel_root / "metadata.json").write_text(
+        '{"translated":{"vi":"Tên Việt"},"source_language":"chinese"}',
+        encoding="utf-8",
+    )
+    config = {
+        "name": "demo",
+        "toc_url": "https://example.com/book/toc",
+        "source_url": "https://example.com/book",
+        "chapter_link_selector": "a.chapter",
+        "chapter_content_selector": ".content",
+    }
+    metadata = {
+        "title": "Demo Novel",
+        "author": "Demo Author",
+        "source_url": "https://example.com/book",
+        "illustration_url": "https://example.com/cover.jpg",
+        "summary": "Demo summary.",
+        "site_name": "demo",
+    }
+
+    save_generated_config(
+        config,
+        tmp_path / "configs",
+        metadata=metadata,
+        translated_root=translated_root,
+    )
+
+    saved_config = json.loads((tmp_path / "configs" / "demo.json").read_text(encoding="utf-8"))
+    saved_metadata = json.loads((novel_root / "metadata.json").read_text(encoding="utf-8"))
+    assert "title" not in saved_config
+    assert saved_metadata["title"] == "Demo Novel"
+    assert saved_metadata["translated"] == {"vi": "Tên Việt"}
+    assert saved_metadata["source_language"] == "chinese"
 
 
 def test_import_workflow_reports_chapter_changes_in_result_and_logs() -> None:

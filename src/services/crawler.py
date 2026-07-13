@@ -103,8 +103,8 @@ class NovelCrawler:
 
     def discover_chapters(self) -> tuple[NovelMetadata, list[ChapterLink]]:
         config = self.config
-        toc_url = config.start_url
-        start_netloc = urlparse(config.start_url).netloc
+        toc_url = config.toc_url
+        toc_netloc = urlparse(config.toc_url).netloc
         visited_toc_urls: set[str] = set()
         seen_chapters: set[str] = set()
         chapters: list[ChapterLink] = []
@@ -126,7 +126,7 @@ class NovelCrawler:
                 if not isinstance(href, str) or not href:
                     continue
                 chapter_url = urljoin(response.url, href)
-                if config.same_domain and urlparse(chapter_url).netloc != start_netloc:
+                if config.same_domain and urlparse(chapter_url).netloc != toc_netloc:
                     continue
                 if chapter_url in seen_chapters:
                     continue
@@ -136,7 +136,7 @@ class NovelCrawler:
                 chapter_index_by_url[chapter_url] = len(chapters) - 1
 
             for chapter in self._extract_next_data_chapters(soup, response.url):
-                if config.same_domain and urlparse(chapter.url).netloc != start_netloc:
+                if config.same_domain and urlparse(chapter.url).netloc != toc_netloc:
                     continue
                 if chapter.url in seen_chapters:
                     index = chapter_index_by_url.get(chapter.url)
@@ -150,7 +150,7 @@ class NovelCrawler:
             next_url = self._next_toc_url(soup, response.url)
             if not next_url:
                 break
-            if config.same_domain and urlparse(next_url).netloc != start_netloc:
+            if config.same_domain and urlparse(next_url).netloc != toc_netloc:
                 break
             toc_url = next_url
 
@@ -164,7 +164,7 @@ class NovelCrawler:
             metadata = NovelMetadata(
                 title=config.title or config.name,
                 author=config.author,
-                source_url=config.source_url or config.start_url,
+                source_url=config.source_url or config.toc_url,
                 site_name=config.name,
                 illustration_url=config.illustration_url,
                 summary=config.summary,
@@ -266,6 +266,7 @@ class NovelCrawler:
         chapter_output_dir = share_root / novel_slug / "input" if share_root else output_root / novel_slug / "chapters"
         output_root.mkdir(parents=True, exist_ok=True)
         chapter_output_dir.mkdir(parents=True, exist_ok=True)
+        metadata = self.merge_metadata_from_file(chapter_output_dir.parent / "metadata.json", metadata)
 
         results: list[ChapterResult] = []
         errors: list[CrawlError] = []
@@ -586,6 +587,32 @@ class NovelCrawler:
             chapter_output_dir=str(chapter_output_dir),
             errors=list(errors),
             cancelled=cancelled,
+        )
+
+    def merge_metadata_from_file(self, path: Path, metadata: NovelMetadata) -> NovelMetadata:
+        """Apply canonical per-novel metadata without depending on config duplication."""
+        if not path.is_file():
+            return metadata
+        try:
+            existing = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return metadata
+        if not isinstance(existing, dict):
+            return metadata
+
+        translated = existing.get("translated")
+        if not isinstance(translated, dict):
+            translated = metadata.translated
+        use_existing_title = not self.config.title and not self.config.novel_title_selector
+        return NovelMetadata(
+            title=(existing.get("title") if use_existing_title else None) or metadata.title,
+            translated=translated,
+            author=metadata.author or existing.get("author"),
+            source_url=self.config.source_url or existing.get("source_url") or metadata.source_url,
+            illustration_url=metadata.illustration_url or existing.get("illustration_url"),
+            summary=metadata.summary or existing.get("summary"),
+            site_name=metadata.site_name,
+            source_language=metadata.source_language or existing.get("source_language"),
         )
 
     def _extract_metadata(self, soup: BeautifulSoup, source_url: str) -> NovelMetadata:

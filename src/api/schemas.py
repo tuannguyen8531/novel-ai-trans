@@ -284,7 +284,7 @@ class ArtifactInfoResponse(BaseModel):
 class ConfigSummary(BaseModel):
     name: str
     version: int
-    start_url: str
+    toc_url: str
     updated_at: str | None = None
 
 
@@ -324,6 +324,7 @@ class DraftSummary(BaseModel):
 
 class DraftDetail(DraftSummary):
     config: dict[str, Any]
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------

@@ -128,7 +128,7 @@ export interface JobListResponse {
 export interface ConfigSummary {
   name: string
   version: number
-  start_url: string
+  toc_url: string
   updated_at: string | null
 }
 
@@ -142,6 +142,7 @@ export interface DraftSummary {
 
 export interface DraftDetail extends DraftSummary {
   config: Record<string, unknown>
+  metadata: Record<string, unknown>
 }
 
 export interface ArtifactInfo {

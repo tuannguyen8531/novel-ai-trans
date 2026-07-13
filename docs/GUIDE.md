@@ -128,9 +128,10 @@ uv run crawl my-novel
 
 The generator first extracts the title, author, cover, summary, and TOC URL from
 the novel page. It then inspects the TOC and a sample chapter and proposes a JSON
-config with CSS selectors. Review the printed JSON, confirm, and it is saved to
-`configs/<name>.json`. During crawl, `metadata.json.source_url` remains the main
-novel URL while `start_url` in the config is the discovered TOC URL.
+config with CSS selectors. Review the printed JSON and confirm to save the crawl
+settings to `configs/<name>.json` and the extracted novel information to
+`translated/<name>/metadata.json`. The config keeps only `source_url` so the
+crawler can distinguish the main novel page from its `toc_url` TOC page.
 
 ```bash
 uv run generate <url> --provider gemini        # override provider for generation
@@ -189,7 +190,7 @@ Site configs live in `configs/` and use CSS selectors:
 ```json
 {
   "name": "example-public-site",
-  "start_url": "https://example.com/novel/table-of-contents",
+  "toc_url": "https://example.com/novel/table-of-contents",
   "novel_title_selector": "h1",
   "author_selector": ".author",
   "illustration_selector": ".book-cover img",
@@ -209,7 +210,7 @@ Site configs live in `configs/` and use CSS selectors:
 }
 ```
 
-Required: `name`, `start_url`, `chapter_link_selector`,
+Required: `name`, `toc_url`, `chapter_link_selector`,
 `chapter_content_selector`. Everything else is optional.
 
 ## 2. Translate
