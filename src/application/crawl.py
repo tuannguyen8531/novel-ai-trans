@@ -318,7 +318,7 @@ def generate_config(
     # Headed mode forces a browser, same as the crawl workflow.
     effective_browser = use_browser or headed
     generator = ConfigGenerator(llm, use_browser=effective_browser, headed=headed)
-    cache_dir = None if no_cache else RUNTIME_OUTPUT_ROOT / ".gen-cache"
+    cache_dir = RUNTIME_OUTPUT_ROOT / ".gen-cache"
     _check_cancel(cancel_event)
     _emit(progress_callback, ProgressEvent(kind="phase", message="Generating config", extra={"url": url}))
 
@@ -326,6 +326,7 @@ def generate_config(
         url,
         name=name,
         cache_dir=cache_dir,
+        use_cache=not no_cache,
         use_samples=not ignore_sample,
     )
     _check_cancel(cancel_event)

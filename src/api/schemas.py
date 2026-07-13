@@ -205,6 +205,7 @@ class NovelMetadataPatch(BaseModel):
     source_language: str | None = None
     source_url: str | None = None
     illustration_url: str | None = None
+    summary: str | None = None
     site_name: str | None = None
     translated: dict[str, str | None] | None = None
 

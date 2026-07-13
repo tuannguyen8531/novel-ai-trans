@@ -129,7 +129,7 @@ The project exposes short console commands through `pyproject.toml`:
 
 ```bash
 uv run crawl <config-or-name>        # download chapters from a site
-uv run generate <toc-url>            # AI-generate a site config
+uv run generate <novel-url>          # AI-generate metadata and a site config
 uv run validate <config-or-name>     # test selectors against live HTML
 uv run import <book.epub>            # import an EPUB into the pipeline
 uv run translate <novel>             # batch translate chapters

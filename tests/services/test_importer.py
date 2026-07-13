@@ -128,6 +128,7 @@ class EpubImporterTest(unittest.TestCase):
                 "author": "Demo Author",
                 "source_url": epub_path.resolve().as_uri(),
                 "illustration_url": None,
+                "summary": None,
                 "site_name": "military-training",
                 "source_language": None,
             },

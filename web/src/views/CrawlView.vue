@@ -301,14 +301,15 @@ function discardDraft() {
     <div class="card">
       <h2>Generate config</h2>
       <p class="muted">
-        Provide a table-of-contents URL and the AI will propose a site config. The result is
-        saved as a draft; review and edit it, then save to <code>configs/</code>.
+        Provide the novel's main information URL. The AI extracts its metadata and table of
+        contents, then proposes a site config. The result is saved as a draft; review and edit it,
+        then save to <code>configs/</code>.
       </p>
 
       <div class="grid">
         <div>
-          <label>Table-of-contents URL</label>
-          <input v-model="generateUrl" placeholder="https://example.com/novel/table-of-contents" />
+          <label>Novel information URL</label>
+          <input v-model="generateUrl" placeholder="https://example.com/novel" />
         </div>
         <div>
           <label>Config name (optional)</label>

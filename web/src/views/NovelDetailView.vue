@@ -2,6 +2,7 @@
 import { onMounted, onUnmounted, ref, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useNovelsStore } from '@/stores/novels'
+import { useSettingsStore } from '@/stores/settings'
 import { api } from '@/api/client'
 import type { NovelChapterStatus, ArtifactInfo } from '@/api/types'
 import GlossaryEditor from '@/components/GlossaryEditor.vue'
@@ -13,6 +14,7 @@ const props = defineProps<{ name: string }>()
 const route = useRoute()
 const router = useRouter()
 const novels = useNovelsStore()
+const settings = useSettingsStore()
 const tab = ref<'chapters' | 'glossary' | 'artifacts' | 'rules'>('chapters')
 const chapters = ref<NovelChapterStatus[]>([])
 const target = ref<'vi' | 'en'>('vi')
@@ -33,6 +35,7 @@ const metaTitle = ref<string>('')
 const metaAuthor = ref<string>('')
 const metaSourceUrl = ref<string>('')
 const metaIllustrationUrl = ref<string>('')
+const metaSummary = ref<string>('')
 const metaSourceLang = ref<string>('')
 const metaTranslatedVi = ref<string>('')
 const metaTranslatedEn = ref<string>('')
@@ -153,7 +156,7 @@ watch(tab, (newTab) => {
 })
 
 onMounted(async () => {
-  await novels.load(novelName.value)
+  await Promise.all([novels.load(novelName.value), settings.refresh()])
   chapters.value = await api.listChapters(novelName.value)
   await loadMetadata()
   if (tab.value === 'artifacts') {
@@ -175,6 +178,7 @@ async function loadMetadata() {
     metaAuthor.value = (inner.author as string) ?? ''
     metaSourceUrl.value = (inner.source_url as string) ?? ''
     metaIllustrationUrl.value = (inner.illustration_url as string) ?? ''
+    metaSummary.value = (inner.summary as string) ?? ''
     metaSourceLang.value = (inner.source_language as string) ?? ''
     const translated = (inner.translated as Record<string, string | null> | undefined) ?? {}
     metaTranslatedVi.value = translated.vi ?? ''
@@ -220,11 +224,21 @@ async function saveNovelRules() {
   }
 }
 
+const displayNovelTitle = computed(() => {
+  const targetLanguage = settings.settings?.target_language
+  const translated = (metadata.value?.translated as Record<string, string | null> | undefined) ?? {}
+  const targetTitle = targetLanguage ? translated[targetLanguage]?.trim() : ''
+  return targetTitle || metaTitle.value.trim() || novels.detail?.title || novelName.value
+})
+
+const displayNovelAuthor = computed(
+  () => metaAuthor.value.trim() || novels.detail?.author?.trim() || 'Not updated'
+)
+
 watch(
-  [metaTitle, () => novels.detail?.title],
-  ([meta, detail]) => {
-    const original = meta.trim() || (detail ? String(detail) : '') || novelName.value
-    document.title = `${original} — Novel AI Translation`
+  displayNovelTitle,
+  (title) => {
+    document.title = `${title} — Novel AI Translation`
   },
   { immediate: true }
 )
@@ -236,6 +250,7 @@ async function saveMetadata() {
     author: metaAuthor.value.trim(),
     source_url: metaSourceUrl.value.trim(),
     illustration_url: metaIllustrationUrl.value.trim(),
+    summary: metaSummary.value.trim(),
     source_language: metaSourceLang.value.trim() || null
   }
   const translated: Record<string, string | null> = {}
@@ -267,6 +282,7 @@ const hasAnyMetadata = computed(() =>
       metaAuthor.value.trim() ||
       metaSourceUrl.value.trim() ||
       metaIllustrationUrl.value.trim() ||
+      metaSummary.value.trim() ||
       metaSourceLang.value.trim() ||
       metaTranslatedVi.value.trim() ||
       metaTranslatedEn.value.trim()
@@ -547,13 +563,16 @@ function cancelDeleteChapter() {
     <div v-else-if="novels.detail" class="flex-col gap-3">
       <div class="card">
         <div class="novel-cover-row">
-          <img class="novel-cover" :src="coverSrc" :alt="`Cover for ${novels.detail.title ?? novelName}`" @error="onCoverError" />
+          <img class="novel-cover" :src="coverSrc" :alt="`Cover for ${displayNovelTitle}`" @error="onCoverError" />
           <div class="novel-cover-info">
-            <h2>{{ novels.detail.title ?? novelName }}</h2>
-            <p class="muted">
-              <span v-if="novels.detail.author">by {{ novels.detail.author }} · </span>
-              <code>{{ novelName }}</code>
+            <h2 :title="displayNovelTitle">{{ displayNovelTitle }}</h2>
+            <p class="novel-author" :title="`Author: ${displayNovelAuthor}`">
+              <span>Author:</span> {{ displayNovelAuthor }}
             </p>
+            <div v-if="metaSummary" class="novel-summary">
+              <span class="novel-summary-label">Summary</span>
+              <div class="novel-summary-content">{{ metaSummary }}</div>
+            </div>
           </div>
         </div>
 
@@ -943,6 +962,14 @@ function cancelDeleteChapter() {
               <input v-model="metaIllustrationUrl" placeholder="https://... (optional)" style="width: 100%;" />
             </div>
             <div>
+              <label>Summary</label>
+              <textarea
+                v-model="metaSummary"
+                class="metadata-summary-input"
+                placeholder="novel synopsis (optional)"
+              ></textarea>
+            </div>
+            <div>
               <label>Source language</label>
               <select v-model="metaSourceLang" style="width: 100%;">
                 <option value="">(Auto-detect)</option>
@@ -999,7 +1026,7 @@ function cancelDeleteChapter() {
 
 <style scoped>
 .actions-row {
-  margin: 1.25rem 0 1rem 0;
+  margin-top: 0.75rem;
 }
 
 .detail-tabs-shell {
@@ -1093,6 +1120,11 @@ function cancelDeleteChapter() {
   padding-top: 0.25rem;
 }
 
+.metadata-summary-input {
+  height: 10rem;
+  resize: none;
+}
+
 .rules-editor {
   display: flex;
   flex-direction: column;
@@ -1137,33 +1169,82 @@ function cancelDeleteChapter() {
 }
 
 .novel-cover-row {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: clamp(7rem, 24vw, 11.25rem) minmax(0, 1fr);
+  height: clamp(10.5rem, 36vw, 16.875rem);
   gap: 1.25rem;
-  align-items: flex-start;
   margin-bottom: 1rem;
 }
 
 .novel-cover {
-  width: 180px;
-  height: auto;
-  max-height: 270px;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
   border-radius: var(--radius);
   background: var(--bg-elev-2);
-  flex-shrink: 0;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
 }
 
 .novel-cover-info {
-  flex: 1 1 18rem;
+  display: flex;
+  height: 100%;
+  flex-direction: column;
   min-width: 0;
-  font-size: 1.1rem;
+  min-height: 0;
 }
 
 .novel-cover-info h2 {
-  margin-top: 0;
-  font-size: 1.6rem;
+  flex-shrink: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: 1.35rem;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.novel-author {
+  flex-shrink: 0;
+  margin: 0.25rem 0 0;
+  overflow: hidden;
+  color: var(--fg-dim);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.novel-author span {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.novel-summary {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  margin-top: 0.75rem;
+  overflow: hidden;
+  padding: 0.6rem 0.75rem;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.novel-summary-label {
+  flex-shrink: 0;
+  margin-bottom: 0.25rem;
+  color: var(--fg-dim);
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.novel-summary-content {
+  min-height: 0;
+  overflow: auto;
+  white-space: pre-wrap;
 }
 
 .pack-form {

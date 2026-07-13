@@ -222,6 +222,11 @@ class SiteConfig:
     chapter_link_selector: str
     chapter_content_selector: str
     version: int = 1
+    source_url: str | None = None
+    title: str | None = None
+    author: str | None = None
+    illustration_url: str | None = None
+    summary: str | None = None
     novel_title_selector: str | None = None
     author_selector: str | None = None
     illustration_selector: str | None = None
@@ -273,6 +278,11 @@ class SiteConfig:
             chapter_link_selector=str(data["chapter_link_selector"]),
             chapter_content_selector=str(data["chapter_content_selector"]),
             version=int(data.get("version", 1)),
+            source_url=_optional_str(data.get("source_url")),
+            title=_optional_str(data.get("title")),
+            author=_optional_str(data.get("author")),
+            illustration_url=_optional_str(data.get("illustration_url")),
+            summary=_optional_str(data.get("summary")),
             novel_title_selector=_optional_str(data.get("novel_title_selector")),
             author_selector=_optional_str(data.get("author_selector")),
             illustration_selector=_optional_str(data.get("illustration_selector")),
