@@ -288,19 +288,6 @@ async function saveTelegramSettings() {
             @change="patchSetting('translation_temperature', Number(($event.target as HTMLInputElement).value))"
           />
         </div>
-        <div>
-          <label>Default behaviour</label>
-          <div class="check-row">
-            <label class="check">
-              <input type="checkbox" :checked="settings.settings.enable_review" @change="patchSetting('enable_review', ($event.target as HTMLInputElement).checked)" />
-              <span>Enable review step by default</span>
-            </label>
-            <label class="check">
-              <input type="checkbox" :checked="settings.settings.enable_summary" @change="patchSetting('enable_summary', ($event.target as HTMLInputElement).checked)" />
-              <span>Generate chapter summaries by default</span>
-            </label>
-          </div>
-        </div>
         <div class="row gap-2" style="margin-top: 0.5rem; align-items: center;">
           <button type="button" :disabled="persisting" @click="saveSettings">
             {{ persisting ? 'Saving…' : 'Save' }}
