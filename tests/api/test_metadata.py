@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+import time
 from pathlib import Path
 from unittest.mock import patch
 
@@ -97,23 +98,13 @@ def test_patch_metadata_empty_body_returns_422(client):
     assert response.status_code == 422
 
 
-def test_patch_metadata_translated_set_and_clear(client):
-    test_client, novel_dir = client
+def test_patch_metadata_rejects_legacy_translated_field(client):
+    test_client, _ = client
     response = test_client.patch(
         "/api/novels/demo/metadata",
         json={"translated": {"vi": "Tiêu đề", "en": "English Title"}},
     )
-    assert response.status_code == 200
-    body = response.json()
-    assert body["data"]["translated"] == {"vi": "Tiêu đề", "en": "English Title"}
-    # Clearing one target keeps the other.
-    response = test_client.patch(
-        "/api/novels/demo/metadata",
-        json={"translated": {"vi": None}},
-    )
-    assert response.status_code == 200
-    body = response.json()
-    assert body["data"]["translated"] == {"en": "English Title"}
+    assert response.status_code == 422
 
 
 def test_patch_metadata_source_language_set_and_clear(client):
@@ -149,3 +140,45 @@ def test_patch_metadata_creates_file_if_missing(client):
     assert (novel_dir / "metadata.json").exists()
     on_disk = json.loads((novel_dir / "metadata.json").read_text(encoding="utf-8"))
     assert on_disk["title"] == "Brand New"
+
+
+def test_patch_metadata_deep_merges_localized_values_and_marks_manual(client):
+    test_client, novel_dir = client
+    response = test_client.patch(
+        "/api/novels/demo/metadata",
+        json={"localized": {"vi": {"title": "Tên truyện", "summary": "Tóm tắt"}}},
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["localized"]["vi"] == {"title": "Tên truyện", "summary": "Tóm tắt"}
+    assert data["localization_meta"]["vi"]["title"]["origin"] == "manual"
+    assert json.loads((novel_dir / "metadata.json").read_text(encoding="utf-8")) == data
+
+
+def test_localize_metadata_endpoint_runs_as_job_with_mocked_llm(client):
+    test_client, novel_dir = client
+    (novel_dir / "metadata.json").write_text(
+        json.dumps({"title": "Original", "summary": "Original summary", "source_language": "english"}),
+        encoding="utf-8",
+    )
+    llm = type("FakeLlm", (), {"generate": lambda self, *_: '{"title":"Tên","summary":"Tóm tắt"}'})()
+
+    with patch("src.application.localization.get_llm", return_value=llm):
+        response = test_client.post(
+            "/api/novels/demo/metadata/localize",
+            json={"target_language": "vi"},
+        )
+        assert response.status_code == 202
+        job_id = response.json()["job_id"]
+        job: dict = {"status": "queued"}
+        deadline = time.time() + 2
+        while time.time() < deadline:
+            job = test_client.get(f"/api/jobs/{job_id}").json()
+            if job["status"] not in {"queued", "running", "cancelling"}:
+                break
+            time.sleep(0.01)
+
+    assert job["status"] == "completed", job
+    data = json.loads((novel_dir / "metadata.json").read_text(encoding="utf-8"))
+    assert data["localized"]["vi"] == {"title": "Tên", "summary": "Tóm tắt"}

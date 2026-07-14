@@ -39,19 +39,56 @@ def test_summary_combines_progress_with_stored_outputs(tmp_path: Path) -> None:
     }
 
 
-def test_update_metadata_merges_and_clears_translated_titles(tmp_path: Path) -> None:
+def test_summary_resolves_title_for_requested_target_language(tmp_path: Path) -> None:
     root = tmp_path / "translated"
     novel_root = root / "demo"
     novel_root.mkdir(parents=True)
     (novel_root / "metadata.json").write_text(
-        json.dumps({"title": "Demo", "translated": {"vi": "Tên", "en": "Title"}}),
+        json.dumps({"title": "Original", "localized": {"vi": {"title": "Tên truyện"}}}),
         encoding="utf-8",
     )
 
-    updated = novels.update_metadata(root, "demo", {"translated": {"vi": None}})
+    assert novels.summarize(root, "demo").title == "Original"
+    assert novels.summarize(root, "demo", target_language="vi").title == "Tên truyện"
 
-    assert updated["translated"] == {"en": "Title"}
+
+def test_update_metadata_merges_and_clears_localized_titles(tmp_path: Path) -> None:
+    root = tmp_path / "translated"
+    novel_root = root / "demo"
+    novel_root.mkdir(parents=True)
+    (novel_root / "metadata.json").write_text(
+        json.dumps({"title": "Demo", "localized": {"vi": {"title": "Tên"}, "en": {"title": "Title"}}}),
+        encoding="utf-8",
+    )
+
+    updated = novels.update_metadata(root, "demo", {"localized": {"vi": {"title": None}}})
+
+    assert updated["localized"] == {"en": {"title": "Title"}}
     assert json.loads((novel_root / "metadata.json").read_text(encoding="utf-8")) == updated
+
+
+def test_update_metadata_deep_merges_localized_fields_as_manual(tmp_path: Path) -> None:
+    root = tmp_path / "translated"
+    novel_root = root / "demo"
+    novel_root.mkdir(parents=True)
+    (novel_root / "metadata.json").write_text(
+        json.dumps({"title": "Demo", "summary": "Source", "localized": {"vi": {"title": "Tên"}}}),
+        encoding="utf-8",
+    )
+
+    updated = novels.update_metadata(
+        root,
+        "demo",
+        {"localized": {"vi": {"summary": "Tóm tắt"}, "en": {"title": "Title"}}},
+        localized_origin="manual",
+    )
+
+    assert updated["localized"] == {
+        "vi": {"title": "Tên", "summary": "Tóm tắt"},
+        "en": {"title": "Title"},
+    }
+    assert updated["localization_meta"]["vi"]["summary"]["origin"] == "manual"
+    assert updated["localization_meta"]["en"]["title"]["origin"] == "manual"
 
 
 @pytest.mark.parametrize(

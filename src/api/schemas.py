@@ -207,7 +207,19 @@ class NovelMetadataPatch(BaseModel):
     illustration_url: str | None = None
     summary: str | None = None
     site_name: str | None = None
-    translated: dict[str, str | None] | None = None
+    localized: dict[Literal["vi", "en"], dict[Literal["title", "summary"], str | None]] | None = None
+
+
+class MetadataLocalizationPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    target_language: Literal["vi", "en"]
+    fields: list[Literal["title", "summary"]] = Field(
+        default_factory=lambda: ["title", "summary"],
+        min_length=1,
+    )
+    provider: Literal["", "ollama", "gemini", "openrouter"] | None = None
+    force: bool = False
 
 
 class NovelRulesPayload(BaseModel):
@@ -230,6 +242,8 @@ class TranslationRequestPayload(BaseModel):
     provider: Literal["", "ollama", "gemini", "openrouter"] | None = None
     enable_review: bool | None = None
     enable_summary: bool | None = None
+    translate_metadata: bool | None = None
+    force_metadata: bool | None = None
     start_chapter: int | None = Field(None, ge=0)
     end_chapter: int | None = Field(None, ge=0)
     force: bool | None = None

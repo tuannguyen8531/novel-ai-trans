@@ -53,8 +53,8 @@ class TestRenderPrompt:
         assert "consistency" in result
         assert "accuracy" in result
 
-    def test_render_summary_template(self):
-        result = render_prompt("summary", target_language="vi")
+    def test_render_summarize_template(self):
+        result = render_prompt("summarize", target_language="vi")
         assert "summary" in result.lower()
         assert "50 words" in result
 

@@ -183,7 +183,7 @@ def log_ai_call(
     Print an AI call to console when verbose mode is enabled.
 
     Args:
-        call_type: Type of call (e.g., "translate", "review", "learn", "summary")
+        call_type: Type of call (e.g., "translate", "review", "learn", "summarize")
         system_prompt: The full system prompt sent to the LLM
         user_prompt: The full user prompt sent to the LLM
         response: The full response from the LLM
