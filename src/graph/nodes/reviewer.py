@@ -28,7 +28,7 @@ def reviewer_node(state: TranslationState) -> dict:
     target_language = state.get("target_language", "vi")
     target_name = target_language_name(target_language)
 
-    system_prompt = render_prompt("reviewer", target_language=target_language, target_name=target_name)
+    system_prompt = render_prompt("review", target_language=target_language, target_name=target_name)
 
     user_prompt = f"""=== SOURCE TEXT ===
 {chunk}

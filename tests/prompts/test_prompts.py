@@ -7,14 +7,14 @@ from src.prompts import render_prompt
 
 class TestRenderPrompt:
     def test_render_simple_template(self):
-        result = render_prompt("detector")
+        result = render_prompt("detect")
         assert "language detector" in result
         assert "chinese" in result
         assert "korean" in result
         assert "japanese" in result
 
     def test_render_with_variables(self):
-        result = render_prompt("translator_system", target_language="vi", lang_name="Chinese", target_name="Vietnamese")
+        result = render_prompt("translate", target_language="vi", lang_name="Chinese", target_name="Vietnamese")
         assert "Chinese" in result
         assert "Vietnamese" in result
         assert "{{lang_name}}" not in result
@@ -22,7 +22,7 @@ class TestRenderPrompt:
 
     def test_render_with_multiple_variables(self):
         result = render_prompt(
-            "learner_extract",
+            "learn",
             target_language="vi",
             translation_rules="- Dịch toàn bộ tên nhân vật sang Hán Việt",
             existing_terms_str="term1 → dịch 1",
@@ -43,22 +43,22 @@ class TestRenderPrompt:
             render_prompt("nonexistent")
 
     def test_render_unknown_variable_left_untouched(self):
-        result = render_prompt("translator_system", target_language="vi", lang_name="Chinese", target_name="Vietnamese")
+        result = render_prompt("translate", target_language="vi", lang_name="Chinese", target_name="Vietnamese")
         assert "{{unknown_var}}" not in result
 
     def test_render_reviewer_template(self):
-        result = render_prompt("reviewer", target_language="vi")
+        result = render_prompt("review", target_language="vi")
         assert "completeness" in result
         assert "naturalness" in result
         assert "consistency" in result
         assert "accuracy" in result
 
-    def test_render_learner_summary_template(self):
-        result = render_prompt("learner_summary", target_language="vi")
+    def test_render_summary_template(self):
+        result = render_prompt("summary", target_language="vi")
         assert "summary" in result.lower()
         assert "50 words" in result
 
     def test_render_target_specific_template(self):
-        result = render_prompt("translator_system", target_language="en", lang_name="Chinese", target_name="English")
+        result = render_prompt("translate", target_language="en", lang_name="Chinese", target_name="English")
         assert "Chinese to English" in result
         assert "English translation" in result

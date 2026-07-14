@@ -67,7 +67,7 @@ def translator_node(state: TranslationState) -> dict:
         )
 
     system_prompt = render_prompt(
-        "translator_system",
+        "translate",
         target_language=target_language,
         lang_name=lang_name,
         target_name=target_name,

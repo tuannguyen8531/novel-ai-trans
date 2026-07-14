@@ -21,14 +21,13 @@ class OllamaProvider(BaseProvider):
             ],
             "stream": False,
             "options": {
-                "temperature": self.temperature,
-                "num_predict": self.max_tokens,
+                "temperature": self.generation_temperature(call_type),
+                "num_predict": self.generation_max_tokens(call_type),
             },
         }
         if call_type in STRUCTURED_JSON_CALL_TYPES:
             payload["format"] = "json"
             payload["think"] = False
-            payload["options"]["temperature"] = 0.0
 
         start = time.monotonic()
         call_id = self._log_request_sent(

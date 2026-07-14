@@ -102,10 +102,18 @@ class TestLLMService:
         assert "Calling ollama (translate)..." in [record.getMessage() for record in caplog.records]
 
     def _ollama_payload_for_call(self, call_type: str) -> dict:
-        with patch("src.services.llm.ollama.config") as mock_config:
-            mock_config.ollama_base_url = "http://localhost:11434"
-            mock_config.ollama_model = "qwen3:14b"
-            provider = OllamaProvider(temperature=0.3, max_tokens=4096)
+        with (
+            patch("src.services.llm.ollama.config") as provider_config,
+            patch("src.services.llm.base.config") as base_config,
+        ):
+            provider_config.ollama_base_url = "http://localhost:11434"
+            provider_config.ollama_model = "qwen3:14b"
+            base_config.translation_temperature = 0.3
+            base_config.translation_max_tokens = 8192
+            base_config.llm_temperature = 0.0
+            base_config.llm_max_tokens = 2048
+            base_config.max_retries = 0
+            provider = OllamaProvider()
             mock_response = MagicMock()
             mock_response.is_success = True
             mock_response.status_code = 200
@@ -127,7 +135,15 @@ class TestLLMService:
 
             assert payload["format"] == "json"
             assert payload["think"] is False
-            assert payload["options"]["temperature"] == 0.0
+
+    def test_calls_choose_generation_settings_by_purpose(self):
+        for call_type in ("translate", "summary"):
+            payload = self._ollama_payload_for_call(call_type)
+            assert payload["options"] == {"temperature": 0.3, "num_predict": 8192}
+
+        for call_type in ("learn", "detect", "review", "gen_novel_info", "gen_config_toc"):
+            payload = self._ollama_payload_for_call(call_type)
+            assert payload["options"] == {"temperature": 0.0, "num_predict": 2048}
 
     def test_ollama_translate_does_not_use_json_mode(self):
         payload = self._ollama_payload_for_call("translate")

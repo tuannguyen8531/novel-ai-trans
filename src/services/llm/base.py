@@ -18,6 +18,7 @@ from src.services.logger import log_api_request_received, log_api_request_sent, 
 
 _SPINNER_CHARS = "⠋⠙⠹⠸⠼⠴⠦⠧"
 STRUCTURED_JSON_CALL_TYPES = {"learn", "review"}
+TRANSLATION_CALL_TYPES = {"translate", "summary"}
 JOB_LOGGER_NAME = "novel_ai_trans.job"
 _job_logger = logging.getLogger(JOB_LOGGER_NAME)
 _job_logger.setLevel(logging.INFO)
@@ -70,9 +71,29 @@ class BaseProvider(ABC):
         temperature: float | None = None,
         max_tokens: int | None = None,
     ):
+        # Explicit constructor values are useful for one-off providers and tests.
+        # Normal factory-created providers choose a profile for every call below.
+        self._temperature_override = temperature
+        self._max_tokens_override = max_tokens
         self.temperature = temperature if temperature is not None else config.translation_temperature
-        self.max_tokens = max_tokens or config.translation_max_tokens
+        self.max_tokens = max_tokens if max_tokens is not None else config.translation_max_tokens
         self._client: httpx.Client | None = None
+
+    def generation_temperature(self, call_type: str) -> float:
+        """Return the temperature for the purpose of this LLM call."""
+        if self._temperature_override is not None:
+            return self._temperature_override
+        if call_type in TRANSLATION_CALL_TYPES:
+            return config.translation_temperature
+        return config.llm_temperature
+
+    def generation_max_tokens(self, call_type: str) -> int:
+        """Return the output-token limit for the purpose of this LLM call."""
+        if self._max_tokens_override is not None:
+            return self._max_tokens_override
+        if call_type in TRANSLATION_CALL_TYPES:
+            return config.translation_max_tokens
+        return config.llm_max_tokens
 
     @property
     @abstractmethod

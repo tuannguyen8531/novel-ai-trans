@@ -41,8 +41,8 @@ class Config:
     max_chapters: int = 0  # 0 = no limit
 
     # --- LLM Provider ---
-    # Crawler uses llm_temperature/llm_max_tokens; translator uses translation_*.
-    # We keep both names; translator uses the translated aliases.
+    # Translation/summary calls use translation_*; structured and analysis calls
+    # (learning, crawler config, detection, review) use llm_*.
     llm_provider: str = "ollama"
     fallback_provider: str = ""  # Empty = no fallback
     llm_temperature: float = 0.0

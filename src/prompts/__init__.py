@@ -4,7 +4,7 @@ Templates live in src/prompts/ as .md files with {{var}} placeholders.
 Target-language prompts can live in src/prompts/{target}/.
 Usage:
     from src.prompts import render_prompt
-    prompt = render_prompt("translator_system", target_language="vi", lang_name="Chinese")
+    prompt = render_prompt("translate", target_language="vi", lang_name="Chinese")
 """
 
 from pathlib import Path
@@ -31,7 +31,7 @@ def render_prompt(template_name: str, target_language: str | None = None, **vari
     """Load a prompt template and replace {{var}} placeholders.
 
     Args:
-        template_name: Filename without extension (e.g. "translator_system")
+        template_name: Filename without extension (e.g. "translate")
         target_language: Optional target language folder (e.g. "vi", "en")
         **variables: Key-value pairs to substitute in the template
 

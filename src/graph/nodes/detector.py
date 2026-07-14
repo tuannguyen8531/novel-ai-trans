@@ -23,16 +23,16 @@ def detector_node(state: TranslationState) -> dict:
     detected = detect_language_heuristic(text_sample)
 
     if detected == "unknown":
-        sys_prompt = render_prompt("detector")
+        sys_prompt = render_prompt("detect")
         usr_prompt = f"What language is this text written in?\n\n{text_sample}"
         response = get_llm().generate(
             system_prompt=sys_prompt,
             user_prompt=usr_prompt,
-            call_type="detect_language",
+            call_type="detect",
         )
         detected = response.strip().lower()
         log_ai_call(
-            "detect_language",
+            "detect",
             system_prompt=sys_prompt,
             user_prompt=usr_prompt,
             response=response,
@@ -43,7 +43,7 @@ def detector_node(state: TranslationState) -> dict:
         if detected not in ("chinese", "korean", "japanese"):
             detected = "chinese"
     else:
-        log_ai_call("detect_language", result=detected, method="heuristic")
+        log_ai_call("detect", result=detected, method="heuristic")
 
     save_source_language(state["novel_name"], detected)
 

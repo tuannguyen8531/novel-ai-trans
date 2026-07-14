@@ -178,10 +178,12 @@ output tends to be slightly more robust on smaller models.
 
 Two temperature/max-token pairs are used:
 
-- **Crawler / config generator** — `LLM_TEMPERATURE` (default `0.0`) and
+- **Structured / analysis calls** — learning, crawler config generation,
+  language detection, and translation review use `LLM_TEMPERATURE` (default `0.0`) and
   `LLM_MAX_TOKENS` (default `4096`). Keep temperature low for deterministic
-  selector generation.
-- **Translator** — `TRANSLATION_TEMPERATURE` (default `0.3`) and
+  structured results.
+- **Translation / summary calls** — `translate` and `summary` use
+  `TRANSLATION_TEMPERATURE` (default `0.3`) and
   `TRANSLATION_MAX_TOKENS` (default `4096`). Slightly higher temperature gives
   more natural prose; lower is more literal.
 

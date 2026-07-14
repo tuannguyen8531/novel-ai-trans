@@ -31,8 +31,8 @@ class GeminiProvider(BaseProvider):
             "system_instruction": {"parts": [{"text": system_prompt}]},
             "contents": [{"parts": [{"text": user_prompt}]}],
             "generationConfig": {
-                "temperature": self.temperature,
-                "maxOutputTokens": self.max_tokens,
+                "temperature": self.generation_temperature(call_type),
+                "maxOutputTokens": self.generation_max_tokens(call_type),
             },
             "safetySettings": [{"category": cat, "threshold": "BLOCK_NONE"} for cat in BLOCKED_CATEGORIES],
         }

@@ -26,8 +26,8 @@ class OpenRouterProvider(BaseProvider):
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
-            "temperature": self.temperature,
-            "max_tokens": self.max_tokens,
+            "temperature": self.generation_temperature(call_type),
+            "max_tokens": self.generation_max_tokens(call_type),
         }
 
         start = time.monotonic()
