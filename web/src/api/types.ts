@@ -128,6 +128,7 @@ export interface JobListResponse {
 export interface ConfigSummary {
   name: string
   version: number
+  source_url: string
   toc_url: string
   updated_at: string | null
 }

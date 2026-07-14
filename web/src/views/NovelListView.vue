@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, computed, ref } from 'vue'
+import { api } from '@/api/client'
 import { useNovelsStore } from '@/stores/novels'
 import { useSettingsStore } from '@/stores/settings'
 import type { NovelSummary, NovelTargetProgress } from '@/api/types'
@@ -11,6 +12,11 @@ const deletingNovel = ref<string | null>(null)
 const deleteError = ref<string | null>(null)
 const showDeleteDialog = ref(false)
 const novelToDelete = ref<NovelSummary | null>(null)
+const showFailedDialog = ref(false)
+const failedNovel = ref<NovelSummary | null>(null)
+const failedChapters = ref<number[]>([])
+const failedChaptersLoading = ref(false)
+const failedChaptersError = ref<string | null>(null)
 
 // Add novel modal state
 const showAddModal = ref(false)
@@ -89,6 +95,29 @@ function cancelDelete() {
   novelToDelete.value = null
 }
 
+async function showFailedChapters(novel: NovelSummary) {
+  failedNovel.value = novel
+  failedChapters.value = []
+  failedChaptersError.value = null
+  failedChaptersLoading.value = true
+  showFailedDialog.value = true
+  try {
+    const progress = await api.getTranslationProgress(novel.name, defaultTarget.value)
+    failedChapters.value = [...progress.failed].sort((a, b) => a - b)
+  } catch (err) {
+    failedChaptersError.value = (err as Error).message
+  } finally {
+    failedChaptersLoading.value = false
+  }
+}
+
+function closeFailedDialog() {
+  showFailedDialog.value = false
+  failedNovel.value = null
+  failedChapters.value = []
+  failedChaptersError.value = null
+}
+
 const deleteMessage = computed(() => {
   if (!novelToDelete.value) return ''
   const label = novelToDelete.value.title
@@ -100,48 +129,60 @@ const deleteMessage = computed(() => {
 
 <template>
   <section>
-    <div class="row gap-3" style="margin-bottom: 1rem; justify-content: space-between;">
-      <h2 style="margin: 0; font-size: 1.2rem;">All Novels</h2>
-      <button type="button" @click="showAddModal = true">Add Novel</button>
-    </div>
-    <div v-if="deleteError" class="error delete-error">{{ deleteError }}</div>
-    <div v-if="novels.error" class="error">{{ novels.error }}</div>
-    <div v-else-if="!novels.novels.length" class="card">
-      <p class="muted">No novels yet. Crawl a site or import an EPUB to get started.</p>
-    </div>
-    <div v-else class="card">
-      <table>
+    <div class="card">
+      <div class="row gap-3" style="margin-bottom: 1rem; justify-content: space-between;">
+        <h2 style="margin: 0; font-size: 1.2rem;">All Novels</h2>
+        <button type="button" @click="showAddModal = true">Add Novel</button>
+      </div>
+      <div v-if="deleteError" class="error delete-error">{{ deleteError }}</div>
+      <div v-if="novels.error" class="error">{{ novels.error }}</div>
+      <p v-else-if="!novels.novels.length" class="muted">
+        No novels yet. Crawl a site or import an EPUB to get started.
+      </p>
+      <div v-else class="novel-table-card">
+        <table>
         <thead>
           <tr>
             <th>Name</th>
             <th>Title</th>
-            <th>Author</th>
-            <th>Total</th>
-            <th>Translated</th>
+            <th>Chapter</th>
+            <th>Status</th>
             <th></th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="novel in novels.novels" :key="novel.name">
             <td class="novel-name-cell">
-              <code class="truncate-cell-text" :title="novel.name">{{ novel.name }}</code>
+              <RouterLink
+                class="novel-cell-link truncate-cell-text"
+                :to="`/novels/${novel.name}`"
+                :title="novel.name"
+              >
+                <code>{{ novel.name }}</code>
+              </RouterLink>
             </td>
             <td class="novel-title-cell">
-              <span class="truncate-cell-text" :title="novel.title ?? undefined">
+              <RouterLink
+                class="novel-cell-link truncate-cell-text"
+                :to="`/novels/${novel.name}`"
+                :title="novel.title ?? undefined"
+              >
                 {{ novel.title ?? '—' }}
-              </span>
+              </RouterLink>
             </td>
-            <td class="novel-author-cell">
-              <span class="truncate-cell-text" :title="novel.author?.trim() || undefined">
-                {{ novel.author?.trim() || '—' }}
-              </span>
-            </td>
-            <td>{{ novel.total_input_chapters }}</td>
             <td>
               {{ translatedProgress(novel)?.completed ?? 0 }} / {{ translatedProgress(novel)?.total ?? novel.total_input_chapters }}
-              <span v-if="(translatedProgress(novel)?.failed ?? 0) > 0" class="badge danger">
+            </td>
+            <td>
+              <button
+                v-if="(translatedProgress(novel)?.failed ?? 0) > 0"
+                type="button"
+                class="badge danger status-badge"
+                @click="showFailedChapters(novel)"
+              >
                 {{ translatedProgress(novel)?.failed }} failed
-              </span>
+              </button>
+              <span v-else class="badge ok">normal</span>
             </td>
             <td class="novel-actions">
               <div class="novel-actions-inner">
@@ -153,14 +194,16 @@ const deleteMessage = computed(() => {
                 >
                   {{ deletingNovel === novel.name ? 'Deleting…' : 'Delete' }}
                 </button>
-                <RouterLink class="action-link" :to="`/novels/${novel.name}`">Open →</RouterLink>
               </div>
             </td>
           </tr>
         </tbody>
-      </table>
+        </table>
+      </div>
+      <p class="muted" style="margin-top: 0.5rem; margin-bottom: 0;">
+        {{ totalNovels }} novels in your library.
+      </p>
     </div>
-    <p class="muted" style="margin-top: 0.5rem;">{{ totalNovels }} novels in your library.</p>
 
     <ConfirmDialog
       :show="showDeleteDialog"
@@ -172,6 +215,35 @@ const deleteMessage = computed(() => {
       @confirm="confirmDelete"
       @cancel="cancelDelete"
     />
+
+    <div v-if="showFailedDialog" class="modal-overlay" @click.self="closeFailedDialog">
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="failed-chapters-title">
+        <div class="modal-header">
+          <h3 id="failed-chapters-title">
+            Failed chapters — {{ failedNovel?.name }}
+          </h3>
+          <button class="modal-close" type="button" aria-label="Close" @click="closeFailedDialog">
+            &times;
+          </button>
+        </div>
+        <div class="modal-body">
+          <p v-if="failedChaptersLoading" class="muted">Loading failed chapters...</p>
+          <p v-else-if="failedChaptersError" class="error">{{ failedChaptersError }}</p>
+          <p v-else-if="!failedChapters.length" class="muted">No failed chapters.</p>
+          <div v-else class="failed-chapter-list">
+            <RouterLink
+              v-for="chapter in failedChapters"
+              :key="chapter"
+              class="failed-chapter-link"
+              :to="`/novels/${failedNovel?.name}/chapters/${chapter}`"
+              @click="closeFailedDialog"
+            >
+              Chapter {{ chapter }}
+            </RouterLink>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- Add Novel Modal -->
     <div v-if="showAddModal" class="modal-overlay" @click.self="closeAddModal">
@@ -219,6 +291,15 @@ const deleteMessage = computed(() => {
 </template>
 
 <style scoped>
+.novel-table-card {
+  overflow-x: auto;
+}
+
+.novel-table-card :deep(th),
+.novel-table-card :deep(td) {
+  white-space: nowrap;
+}
+
 .delete-error {
   margin-bottom: 0.75rem;
 }
@@ -231,15 +312,41 @@ const deleteMessage = computed(() => {
   max-width: clamp(10rem, 32vw, 30rem);
 }
 
-.novel-author-cell {
-  max-width: clamp(8rem, 20vw, 20rem);
-}
-
 .truncate-cell-text {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.novel-cell-link {
+  color: var(--fg);
+}
+
+button.status-badge,
+button.status-badge:hover:not(:disabled) {
+  background: var(--bg-elev-2);
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+button.status-badge:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.failed-chapter-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
+  gap: 0.5rem;
+}
+
+.failed-chapter-link {
+  padding: 0.45rem 0.6rem;
+  color: var(--fg);
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  text-align: center;
 }
 
 .novel-actions {

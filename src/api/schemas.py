@@ -298,6 +298,7 @@ class ArtifactInfoResponse(BaseModel):
 class ConfigSummary(BaseModel):
     name: str
     version: int
+    source_url: str
     toc_url: str
     updated_at: str | None = None
 

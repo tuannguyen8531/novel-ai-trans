@@ -72,6 +72,7 @@ def _list_configs() -> list[ConfigSummary]:
                     ConfigSummary(
                         name=entry.stem,
                         version=int(data.get("version", 1)),
+                        source_url=str(data.get("source_url", "")),
                         toc_url=str(data.get("toc_url", "")),
                         updated_at=None,
                     )

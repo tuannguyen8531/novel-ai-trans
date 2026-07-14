@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { onMounted, ref, computed } from 'vue'
+import { onMounted, ref, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { api } from '@/api/client'
 import { useNovelsStore } from '@/stores/novels'
+import type { NovelSummary } from '@/api/types'
 import JobMonitor from '@/components/JobMonitor.vue'
 
 const novels = useNovelsStore()
@@ -25,14 +26,32 @@ const forceMetadata = ref<boolean>(false)
 const jobId = ref<string | null>(null)
 const error = ref<string | null>(null)
 
-onMounted(() => {
+function syncSourceLanguage(novelName: string) {
+  const language = novels.novels.find((item) => item.name === novelName)?.source_language ?? ''
+  const aliases: Record<string, string> = {
+    zh: 'chinese',
+    ja: 'japanese',
+    ko: 'korean'
+  }
+  source.value = aliases[language] ?? language
+}
+
+onMounted(async () => {
   if (typeof route.query.novel === 'string') {
     novel.value = route.query.novel
   }
-  novels.refresh()
+  await novels.refresh()
+  syncSourceLanguage(novel.value)
 })
 
-const novelOptions = computed(() => novels.novels.map((n) => n.name))
+watch(novel, syncSourceLanguage)
+
+const novelOptions = computed(() => novels.novels)
+
+function remainingChapters(item: NovelSummary): number {
+  const progress = item.targets.find((entry) => entry.target === target.value)
+  return Math.max(0, item.total_input_chapters - (progress?.completed ?? 0))
+}
 
 async function startTranslation() {
   error.value = null
@@ -75,7 +94,9 @@ async function startTranslation() {
           <label>Novel</label>
           <select v-model="novel">
             <option value="" disabled>— select —</option>
-            <option v-for="name in novelOptions" :key="name" :value="name">{{ name }}</option>
+            <option v-for="item in novelOptions" :key="item.name" :value="item.name">
+              {{ item.name }} — {{ remainingChapters(item) }} chapter{{ remainingChapters(item) === 1 ? '' : 's' }} remaining
+            </option>
           </select>
         </div>
         <div>

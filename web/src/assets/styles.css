@@ -182,6 +182,13 @@ label {
   padding: 1rem;
 }
 
+.card > h2:first-child,
+.card > h3:first-child,
+.card > .row:first-child > h2,
+.card > .row:first-child > h3 {
+  margin-top: 0;
+}
+
 .muted {
   color: var(--fg-dim);
 }

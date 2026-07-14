@@ -19,7 +19,6 @@ const settings = useSettingsStore()
 const jobs = useJobsStore()
 const tab = ref<'chapters' | 'glossary' | 'artifacts' | 'rules'>('chapters')
 const chapters = ref<NovelChapterStatus[]>([])
-const target = ref<'vi' | 'en'>('vi')
 const jobId = ref<string | null>(null)
 
 const packFormats = ref<{ epub: boolean; pdf: boolean }>({ epub: true, pdf: true })
@@ -86,6 +85,29 @@ const inputSaving = ref(false)
 const inputError = ref<string | null>(null)
 
 const novelName = computed(() => props.name || String(route.params.name || ''))
+const targetLanguage = computed<'vi' | 'en'>(() =>
+  settings.settings?.target_language === 'en' ? 'en' : 'vi'
+)
+const targetLanguageLabel = computed(() =>
+  targetLanguage.value === 'vi' ? 'Vietnamese' : 'English'
+)
+const targetMetadataTitle = computed({
+  get: () => targetLanguage.value === 'vi' ? metaTranslatedVi.value : metaTranslatedEn.value,
+  set: (value: string) => {
+    if (targetLanguage.value === 'vi') metaTranslatedVi.value = value
+    else metaTranslatedEn.value = value
+  }
+})
+const targetMetadataSummary = computed({
+  get: () => targetLanguage.value === 'vi' ? metaSummaryVi.value : metaSummaryEn.value,
+  set: (value: string) => {
+    if (targetLanguage.value === 'vi') metaSummaryVi.value = value
+    else metaSummaryEn.value = value
+  }
+})
+const translatedChapterCount = computed(() =>
+  novels.detail?.targets.find((progress) => progress.target === targetLanguage.value)?.completed ?? 0
+)
 
 const inputChapterNumbers = computed(() => {
   const sources = new Set<number>()
@@ -139,6 +161,9 @@ watch(containerRef, (el) => {
 
 const artifactsList = ref<ArtifactInfo[]>([])
 const artifactsLoading = ref(false)
+const visibleArtifacts = computed(() =>
+  artifactsList.value.filter((artifact) => artifact.target_language === targetLanguage.value)
+)
 
 async function loadArtifacts() {
   artifactsLoading.value = true
@@ -232,16 +257,11 @@ async function saveNovelRules() {
 }
 
 const displayNovelTitle = computed(() => {
-  const targetLanguage = settings.settings?.target_language
-  const targetTitle = targetLanguage === 'en' ? metaTranslatedEn.value.trim() : metaTranslatedVi.value.trim()
-  return targetTitle || metaTitle.value.trim() || novels.detail?.title || novelName.value
+  return targetMetadataTitle.value.trim() || metaTitle.value.trim() || novels.detail?.title || novelName.value
 })
 
 const displayNovelSummary = computed(() => {
-  const localizedSummary = settings.settings?.target_language === 'en'
-    ? metaSummaryEn.value.trim()
-    : metaSummaryVi.value.trim()
-  return localizedSummary || metaSummary.value.trim()
+  return targetMetadataSummary.value.trim() || metaSummary.value.trim()
 })
 
 const displayNovelAuthor = computed(
@@ -311,7 +331,7 @@ const hasAnyMetadata = computed(() =>
   )
 )
 
-async function translateMetadata(language: 'vi' | 'en') {
+async function translateMetadata() {
   metaError.value = null
   await saveMetadata()
   if (metaError.value) {
@@ -320,7 +340,7 @@ async function translateMetadata(language: 'vi' | 'en') {
   }
   try {
     const result = await api.localizeNovelMetadata(novelName.value, {
-      target_language: language,
+      target_language: targetLanguage.value,
       force: metadataForce.value
     })
     jobId.value = result.job_id
@@ -430,7 +450,7 @@ async function startPack() {
   }
   const payload: Record<string, unknown> = {
     novel: novelName.value,
-    target_language: target.value,
+    target_language: targetLanguage.value,
     formats
   }
   if (packFormats.value.pdf) {
@@ -639,17 +659,17 @@ function cancelDeleteChapter() {
             <span class="meta-label">Language</span>
             <span style="text-transform: capitalize;">{{ metaDisplayValue(metaSourceLang, novels.detail?.source_language) }}</span>
           </div>
-          <div class="meta-row" v-if="metaTranslatedVi">
-            <span class="meta-label">Title (vi)</span>
-            <span>{{ metaTranslatedVi }}</span>
-          </div>
-          <div class="meta-row" v-if="metaTranslatedEn">
-            <span class="meta-label">Title (en)</span>
-            <span>{{ metaTranslatedEn }}</span>
+          <div class="meta-row" v-if="targetMetadataTitle">
+            <span class="meta-label">Title ({{ targetLanguage }})</span>
+            <span>{{ targetMetadataTitle }}</span>
           </div>
           <div class="meta-row">
             <span class="meta-label">Total</span>
             <span>{{ novels.detail.total_input_chapters }} chapter{{ novels.detail.total_input_chapters === 1 ? '' : 's' }}</span>
+          </div>
+          <div class="meta-row">
+            <span class="meta-label">Translated</span>
+            <span>{{ translatedChapterCount }} chapter{{ translatedChapterCount === 1 ? '' : 's' }}</span>
           </div>
           <p v-if="metadataError" class="error meta-empty">Failed to load metadata: {{ metadataError }}</p>
           <p v-else-if="!hasAnyMetadata" class="muted meta-empty">
@@ -799,9 +819,11 @@ function cancelDeleteChapter() {
         >
           <h3>Artifacts</h3>
           <p v-if="artifactError" class="error">{{ artifactError }}</p>
-          <p v-if="!artifactsList.length" class="muted">No artifacts yet.</p>
+          <p v-if="!visibleArtifacts.length" class="muted">
+            No {{ targetLanguage.toUpperCase() }} artifacts yet.
+          </p>
           <div v-else class="artifact-list">
-            <div v-for="artifact in artifactsList" :key="artifact.name" class="artifact-item">
+            <div v-for="artifact in visibleArtifacts" :key="artifact.name" class="artifact-item">
               <div class="artifact-info">
                 <div class="artifact-name">{{ artifact.name }}</div>
                 <div class="artifact-meta">
@@ -924,11 +946,8 @@ function cancelDeleteChapter() {
         </header>
         <div class="modal-body">
           <div class="pack-target">
-            <label for="pack-target-language">Target language</label>
-            <select id="pack-target-language" v-model="target" style="width: 100%;">
-              <option value="vi">Vietnamese (vi)</option>
-              <option value="en">English (en)</option>
-            </select>
+            <label>Target language</label>
+            <div>{{ targetLanguageLabel }} ({{ targetLanguage }})</div>
           </div>
           <div style="margin-top: 0.75rem;">
             <label>Output formats</label>
@@ -1030,28 +1049,21 @@ function cancelDeleteChapter() {
             </div>
             <div class="pack-meta" style="display: flex; flex-direction: column; gap: 0.75rem;">
               <div>
-                <label>Translated title — vi</label>
-                <input v-model="metaTranslatedVi" placeholder="Tiêu đề tiếng Việt" style="width: 100%;" />
+                <label>Translated title — {{ targetLanguage }}</label>
+                <input v-model="targetMetadataTitle" :placeholder="`${targetLanguageLabel} title`" style="width: 100%;" />
               </div>
               <div>
-                <label>Translated summary — vi</label>
-                <textarea v-model="metaSummaryVi" class="metadata-summary-input" placeholder="Tóm tắt tiếng Việt"></textarea>
-              </div>
-              <div>
-                <label>Translated title — en</label>
-                <input v-model="metaTranslatedEn" placeholder="English title" style="width: 100%;" />
-              </div>
-              <div>
-                <label>Translated summary — en</label>
-                <textarea v-model="metaSummaryEn" class="metadata-summary-input" placeholder="English summary"></textarea>
+                <label>Translated summary — {{ targetLanguage }}</label>
+                <textarea v-model="targetMetadataSummary" class="metadata-summary-input" :placeholder="`${targetLanguageLabel} summary`"></textarea>
               </div>
               <label class="check">
                 <input v-model="metadataForce" type="checkbox" />
                 <span>Regenerate existing AI translations</span>
               </label>
               <div class="row gap-2">
-                <button class="secondary" type="button" @click="translateMetadata('vi')">Save and translate Vietnamese</button>
-                <button class="secondary" type="button" @click="translateMetadata('en')">Save and translate English</button>
+                <button class="secondary" type="button" @click="translateMetadata">
+                  Save and translate {{ targetLanguageLabel }}
+                </button>
               </div>
             </div>
           </div>

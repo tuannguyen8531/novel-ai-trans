@@ -73,14 +73,15 @@ const nextChapter = computed(() =>
     : null
 )
 
-const hasVi = computed(() =>
-  chapters.value.some(
-    (s) => s.number === props.chapter && s.target === 'vi' && s.has_translation
-  )
+const targetLanguage = computed<'vi' | 'en'>(() =>
+  settings.settings?.target_language === 'en' ? 'en' : 'vi'
 )
-const hasEn = computed(() =>
+const targetLanguageLabel = computed(() =>
+  targetLanguage.value === 'vi' ? 'Vietnamese' : 'English'
+)
+const hasTargetTranslation = computed(() =>
   chapters.value.some(
-    (s) => s.number === props.chapter && s.target === 'en' && s.has_translation
+    (s) => s.number === props.chapter && s.target === targetLanguage.value && s.has_translation
   )
 )
 
@@ -91,11 +92,8 @@ const displayTitle = computed(() => {
   const title = metadata.value.title || props.name
   const localized = metadata.value.localized || {}
 
-  if (viewMode.value === 'vi' && localized.vi?.title) {
-    return localized.vi.title
-  }
-  if (viewMode.value === 'en' && localized.en?.title) {
-    return localized.en.title
+  if (viewMode.value !== 'source' && localized[targetLanguage.value]?.title) {
+    return localized[targetLanguage.value].title
   }
   return title
 })
@@ -104,19 +102,9 @@ const chapterLabel = computed(() => {
   return viewMode.value === 'vi' ? 'Chương' : 'Chapter'
 })
 
-const targetLanguage = computed(() => {
-  return settings.settings?.target_language as 'vi' | 'en' | undefined
-})
-
 const defaultViewMode = computed<'source' | 'vi' | 'en'>(() => {
-  const lang = targetLanguage.value
-  if (lang) {
-    const hasTranslation = chapters.value.some(
-      (s) => s.number === props.chapter && s.target === lang && s.has_translation
-    )
-    if (hasTranslation) {
-      return lang
-    }
+  if (hasTargetTranslation.value) {
+    return targetLanguage.value
   }
   return 'source'
 })
@@ -336,8 +324,9 @@ watch(
             @change="changeView(($event.target as HTMLSelectElement).value as 'source' | 'vi' | 'en')"
           >
             <option value="source">Origin</option>
-            <option value="vi" :disabled="!hasVi">Vietnamese</option>
-            <option value="en" :disabled="!hasEn">English</option>
+            <option :value="targetLanguage" :disabled="!hasTargetTranslation">
+              {{ targetLanguageLabel }}
+            </option>
           </select>
 
           <!-- Action Menu -->
@@ -484,8 +473,7 @@ watch(
             <label for="toc-lang-select" style="font-weight: 600;">Language:</label>
             <select id="toc-lang-select" v-model="tocLang" class="view-select">
               <option value="source">Origin</option>
-              <option value="vi">Vietnamese</option>
-              <option value="en">English</option>
+              <option :value="targetLanguage">{{ targetLanguageLabel }}</option>
             </select>
           </div>
           <div class="toc-list">

@@ -8,10 +8,15 @@ import JobMonitor from '@/components/JobMonitor.vue'
 
 const router = useRouter()
 const jobs = useJobsStore()
+const activeTab = ref<'crawl' | 'generate'>('crawl')
 
 const configs = ref<ConfigSummary[]>([])
 const configsError = ref<string | null>(null)
 const loadingConfigs = ref(false)
+const selectedConfigText = ref('')
+const selectedConfigError = ref<string | null>(null)
+const loadingSelectedConfig = ref(false)
+let selectedConfigRequest = 0
 
 // --- Crawl form ---
 const configMode = ref<'existing' | 'custom'>('existing')
@@ -78,7 +83,34 @@ async function loadConfigs() {
   }
 }
 
+async function loadSelectedConfig(name: string) {
+  const request = ++selectedConfigRequest
+  selectedConfigText.value = ''
+  selectedConfigError.value = null
+  if (!name) return
+
+  loadingSelectedConfig.value = true
+  try {
+    const detail = await api.getConfig(name)
+    if (request === selectedConfigRequest) {
+      selectedConfigText.value = JSON.stringify(detail, null, 2)
+    }
+  } catch (err) {
+    if (request === selectedConfigRequest) {
+      selectedConfigError.value = (err as Error).message
+    }
+  } finally {
+    if (request === selectedConfigRequest) {
+      loadingSelectedConfig.value = false
+    }
+  }
+}
+
 onMounted(loadConfigs)
+
+watch(selectedConfig, (name) => {
+  void loadSelectedConfig(name)
+})
 
 async function startCrawl() {
   crawlError.value = null
@@ -185,9 +217,40 @@ function discardDraft() {
 
 <template>
   <section class="flex-col gap-3">
-    <!-- Crawl -->
-    <div class="card">
-      <h2>Crawl a site</h2>
+    <nav class="crawl-tabs" aria-label="Crawl tools" role="tablist">
+      <button
+        id="crawl-tab"
+        type="button"
+        class="crawl-tab"
+        role="tab"
+        :aria-selected="activeTab === 'crawl'"
+        aria-controls="crawl-panel"
+        @click="activeTab = 'crawl'"
+      >
+        Crawl Novel Chapters
+      </button>
+      <button
+        id="generate-config-tab"
+        type="button"
+        class="crawl-tab"
+        role="tab"
+        :aria-selected="activeTab === 'generate'"
+        aria-controls="generate-config-panel"
+        @click="activeTab = 'generate'"
+      >
+        Generate Config
+      </button>
+    </nav>
+
+    <div
+      v-if="activeTab === 'crawl'"
+      id="crawl-panel"
+      class="crawl-tab-panel flex-col gap-3"
+      role="tabpanel"
+      aria-labelledby="crawl-tab"
+    >
+      <div class="card">
+      <h2>Crawl Novel Chapters</h2>
       <p class="muted">
         Pick a saved config or enter a custom target. The job fetches chapters, writes them into
         the novel input directory, and streams progress live.
@@ -215,7 +278,7 @@ function discardDraft() {
               {{ loadingConfigs ? 'Loading…' : 'No configs in configs/' }}
             </option>
             <option v-for="cfg in configs" :key="cfg.name" :value="cfg.name">
-              {{ cfg.name }} — {{ cfg.toc_url }}
+              {{ cfg.name }} — {{ cfg.source_url }}
             </option>
           </select>
           <p v-if="configsError" class="error" style="margin-top: 0.25rem;">{{ configsError }}</p>
@@ -290,16 +353,36 @@ function discardDraft() {
         <button class="secondary" type="button" @click="router.push('/jobs')">View jobs</button>
       </div>
       <p v-if="crawlError" class="error" style="margin-top: 0.5rem;">{{ crawlError }}</p>
+      </div>
+
+      <div v-if="configMode === 'existing' && selectedConfig" class="card">
+        <h3>Current config — <code>{{ selectedConfig }}</code></h3>
+        <p v-if="loadingSelectedConfig" class="muted">Loading config...</p>
+        <p v-else-if="selectedConfigError" class="error">{{ selectedConfigError }}</p>
+        <textarea
+          v-else
+          :value="selectedConfigText"
+          class="draft-editor"
+          readonly
+          spellcheck="false"
+        ></textarea>
+      </div>
+
+      <div v-if="crawlJobId" class="card">
+        <h3>Crawl job</h3>
+        <JobMonitor :job-id="crawlJobId" />
+      </div>
     </div>
 
-    <div v-if="crawlJobId" class="card">
-      <h3>Crawl job</h3>
-      <JobMonitor :job-id="crawlJobId" />
-    </div>
-
-    <!-- Generate config -->
-    <div class="card">
-      <h2>Generate config</h2>
+    <div
+      v-else
+      id="generate-config-panel"
+      class="crawl-tab-panel flex-col gap-3"
+      role="tabpanel"
+      aria-labelledby="generate-config-tab"
+    >
+      <div class="card">
+        <h2>Generate config</h2>
       <p class="muted">
         Provide the novel's main information URL. The AI extracts its metadata and table of
         contents, then proposes a site config. The result is saved as a draft; review and edit it,
@@ -368,32 +451,70 @@ function discardDraft() {
         <button class="secondary" type="button" @click="router.push('/jobs')">View jobs</button>
       </div>
       <p v-if="generateError" class="error" style="margin-top: 0.5rem;">{{ generateError }}</p>
-    </div>
+      </div>
 
-    <div v-if="generateJobId" class="card">
-      <h3>Generation job</h3>
-      <JobMonitor :job-id="generateJobId" />
-    </div>
+      <div v-if="generateJobId" class="card">
+        <h3>Generation job</h3>
+        <JobMonitor :job-id="generateJobId" />
+      </div>
 
-    <!-- Draft review -->
-    <div v-if="generatedDraft" class="card">
-      <h3>Review draft — <code>{{ generatedDraft.name }}</code></h3>
-      <p class="muted">
-        Edit the JSON below, then save it to <code>configs/{{ generatedDraft.name }}.json</code>.
-        Extracted novel information will be merged into
-        <code>translated/{{ generatedDraft.name }}/metadata.json</code>.
-        Expires {{ new Date(generatedDraft.expires_at).toLocaleString() }}.
-      </p>
-      <textarea v-model="draftConfigText" class="draft-editor" spellcheck="false"></textarea>
-      <div class="row gap-2" style="margin-top: 0.75rem;">
-        <button type="button" @click="saveGeneratedDraft">Save to configs/</button>
-        <button class="danger" type="button" @click="discardDraft">Discard draft</button>
+      <div v-if="generatedDraft" class="card">
+        <h3>Review draft — <code>{{ generatedDraft.name }}</code></h3>
+        <p class="muted">
+          Edit the JSON below, then save it to <code>configs/{{ generatedDraft.name }}.json</code>.
+          Extracted novel information will be merged into
+          <code>translated/{{ generatedDraft.name }}/metadata.json</code>.
+          Expires {{ new Date(generatedDraft.expires_at).toLocaleString() }}.
+        </p>
+        <textarea v-model="draftConfigText" class="draft-editor" spellcheck="false"></textarea>
+        <div class="row gap-2" style="margin-top: 0.75rem;">
+          <button type="button" @click="saveGeneratedDraft">Save to configs/</button>
+          <button class="danger" type="button" @click="discardDraft">Discard draft</button>
+        </div>
       </div>
     </div>
   </section>
 </template>
 
 <style scoped>
+.crawl-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.crawl-tab {
+  position: relative;
+  padding: 0.65rem 1rem;
+  background: transparent;
+  color: var(--fg-dim);
+  border: 0;
+  border-radius: 0;
+}
+
+.crawl-tab:hover:not(:disabled) {
+  background: var(--bg-elev);
+  color: var(--fg);
+}
+
+.crawl-tab[aria-selected='true'] {
+  color: var(--accent);
+}
+
+.crawl-tab[aria-selected='true']::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  background: var(--accent);
+  content: '';
+}
+
+.crawl-tab-panel {
+  min-width: 0;
+}
+
 .draft-editor {
   min-height: 22rem;
   font-family: ui-monospace, SFMono-Regular, monospace;

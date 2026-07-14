@@ -67,7 +67,7 @@ function applyApiKey() {
 <style scoped>
 .layout {
   display: grid;
-  grid-template-columns: 220px 1fr;
+  grid-template-columns: 200px minmax(0, 1fr);
   min-height: 100vh;
 }
 
@@ -117,6 +117,8 @@ function applyApiKey() {
   padding: 0.45rem 0.7rem;
   border-radius: var(--radius);
   color: var(--fg);
+  font-size: 0.95rem;
+  font-weight: 500;
 }
 
 .nav a.router-link-active,
@@ -138,6 +140,8 @@ function applyApiKey() {
 }
 
 .content {
+  width: 100%;
+  min-width: 0;
   padding: 1.25rem 1.5rem;
   max-width: 1200px;
 }
