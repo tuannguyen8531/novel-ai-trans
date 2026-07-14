@@ -209,6 +209,15 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(patch)
     }),
+  localizeNovelMetadata: (
+    name: string,
+    payload: { target_language: 'vi' | 'en'; fields?: Array<'title' | 'summary'>; provider?: string; force?: boolean }
+  ) =>
+    request<{ job_id: string }>(`/api/novels/${encodeURIComponent(name)}/metadata/localize`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }),
   getNovelRules: (name: string) =>
     request<{ rules: string }>(`/api/novels/${encodeURIComponent(name)}/rules`),
   saveNovelRules: (name: string, rules: string) =>

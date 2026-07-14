@@ -179,13 +179,19 @@ output tends to be slightly more robust on smaller models.
 Two temperature/max-token pairs are used:
 
 - **Structured / analysis calls** — learning, crawler config generation,
-  language detection, and translation review use `LLM_TEMPERATURE` (default `0.0`) and
-  `LLM_MAX_TOKENS` (default `4096`). Keep temperature low for deterministic
-  structured results.
-- **Translation / summary calls** — `translate` and `summary` use
+  language detection, and translation review use `LLM_TEMPERATURE` (default
+  `0.0`) and `LLM_MAX_TOKENS` (default `4096`). Keep temperature low for
+  deterministic structured results. Metadata localization also requests a
+  structured JSON response.
+- **Translation / summarization / metadata localization calls** — `translate`,
+  `summarize`, and `localize` use
   `TRANSLATION_TEMPERATURE` (default `0.3`) and
   `TRANSLATION_MAX_TOKENS` (default `4096`). Slightly higher temperature gives
   more natural prose; lower is more literal.
+
+Metadata localization translates only an existing novel title or synopsis; it
+does not generate a synopsis from chapters. Its prompt contains only glossary
+terms and known characters that occur in the metadata fields being sent.
 
 Chunking is controlled by `CHUNK_MODE` (`chars` by default), `CHUNK_SIZE`
 (default `1500`), and `CHUNK_OVERLAP` (default `100`). In `chars` mode, size

@@ -27,7 +27,8 @@ class NovelMetadata:
     author: str | None
     source_url: str
     site_name: str
-    translated: dict[str, str | None] = field(default_factory=lambda: {"en": None, "vi": None})
+    localized: dict[str, dict[str, str | None]] = field(default_factory=dict)
+    localization_meta: dict[str, dict[str, dict[str, str]]] = field(default_factory=dict)
     illustration_url: str | None = None
     summary: str | None = None
     source_language: str | None = None

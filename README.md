@@ -23,9 +23,13 @@ Website / EPUB
 
 - **Crawl public novel sites** with per-site JSON selector configs, or generate
   and validate configs with an LLM-assisted workflow.
-- **Import EPUB files** into the same chapter pipeline used by the crawler.
+- **Import EPUB files** into the same chapter pipeline used by the crawler,
+  including an original summary from EPUB metadata or labelled front matter
+  when available.
 - **Translate** Chinese, Korean, and Japanese source chapters into Vietnamese
   or English.
+- **Localize novel metadata** — translate the title and original novel summary
+  into Vietnamese or English while preserving manual edits.
 - **Multiple providers** — Ollama (local), Gemini, or OpenRouter, with optional
   fallback provider support.
 - **Per-novel glossary memory** for terms, character names, pronouns, and
@@ -109,6 +113,51 @@ translated/<novel>/
 ```
 
 See [docs/GUIDE.md](docs/GUIDE.md) for the full walkthrough.
+
+## Novel metadata localization
+
+The web GUI can translate a novel's source `title` and `summary` independently
+from its chapters:
+
+1. Open a novel, select **Metadata**, then use **Save and translate
+   Vietnamese** or **Save and translate English**; or
+2. Open **Translate** and leave **Translate title and novel summary** enabled to
+   run metadata localization before chapter translation.
+
+Metadata localization uses only glossary terms and character context that
+appear in the title/summary being sent. AI-generated values are skipped while
+their source hash is current and regenerated when the source changes. Manual
+values are never overwritten by the regenerate option; clear a manual field
+before using **Save and translate...** when it should be replaced by AI.
+
+The chapter `translate` CLI does not currently start metadata localization.
+Use the GUI or the metadata localization API documented in
+[docs/GUI.md](docs/GUI.md#metadata-localization-api).
+
+### Metadata schema compatibility
+
+Localized title and summary values use the nested `localized` schema:
+
+```json
+{
+  "title": "Original title",
+  "summary": "Original synopsis",
+  "localized": {
+    "vi": {"title": "Tên truyện", "summary": "Tóm tắt"},
+    "en": {"title": "English title", "summary": "English synopsis"}
+  },
+  "localization_meta": {
+    "vi": {
+      "title": {"origin": "ai", "source_hash": "...", "updated_at": "..."}
+    }
+  }
+}
+```
+
+The legacy `translated: {"vi": "...", "en": "..."}` title field is no
+longer read by the GUI, API, or packager, and the API rejects it. Existing
+metadata must be migrated to `localized.<language>.title`. Values entered in
+the Metadata editor are recorded with `origin: "manual"`.
 
 ## Providers
 

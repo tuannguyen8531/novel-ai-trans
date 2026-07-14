@@ -3,6 +3,7 @@ import { onMounted, onUnmounted, ref, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useNovelsStore } from '@/stores/novels'
 import { useSettingsStore } from '@/stores/settings'
+import { useJobsStore } from '@/stores/jobs'
 import { api } from '@/api/client'
 import type { NovelChapterStatus, ArtifactInfo } from '@/api/types'
 import GlossaryEditor from '@/components/GlossaryEditor.vue'
@@ -15,6 +16,7 @@ const route = useRoute()
 const router = useRouter()
 const novels = useNovelsStore()
 const settings = useSettingsStore()
+const jobs = useJobsStore()
 const tab = ref<'chapters' | 'glossary' | 'artifacts' | 'rules'>('chapters')
 const chapters = ref<NovelChapterStatus[]>([])
 const target = ref<'vi' | 'en'>('vi')
@@ -39,6 +41,9 @@ const metaSummary = ref<string>('')
 const metaSourceLang = ref<string>('')
 const metaTranslatedVi = ref<string>('')
 const metaTranslatedEn = ref<string>('')
+const metaSummaryVi = ref<string>('')
+const metaSummaryEn = ref<string>('')
+const metadataForce = ref<boolean>(false)
 const metaError = ref<string | null>(null)
 const showMetaForm = ref<boolean>(false)
 const coverBroken = ref<boolean>(false)
@@ -180,9 +185,11 @@ async function loadMetadata() {
     metaIllustrationUrl.value = (inner.illustration_url as string) ?? ''
     metaSummary.value = (inner.summary as string) ?? ''
     metaSourceLang.value = (inner.source_language as string) ?? ''
-    const translated = (inner.translated as Record<string, string | null> | undefined) ?? {}
-    metaTranslatedVi.value = translated.vi ?? ''
-    metaTranslatedEn.value = translated.en ?? ''
+    const localized = (inner.localized as Record<string, Record<string, string | null>> | undefined) ?? {}
+    metaTranslatedVi.value = localized.vi?.title ?? ''
+    metaTranslatedEn.value = localized.en?.title ?? ''
+    metaSummaryVi.value = localized.vi?.summary ?? ''
+    metaSummaryEn.value = localized.en?.summary ?? ''
   } catch (err) {
     metadata.value = null
     metadataError.value = (err as Error).message
@@ -226,9 +233,15 @@ async function saveNovelRules() {
 
 const displayNovelTitle = computed(() => {
   const targetLanguage = settings.settings?.target_language
-  const translated = (metadata.value?.translated as Record<string, string | null> | undefined) ?? {}
-  const targetTitle = targetLanguage ? translated[targetLanguage]?.trim() : ''
+  const targetTitle = targetLanguage === 'en' ? metaTranslatedEn.value.trim() : metaTranslatedVi.value.trim()
   return targetTitle || metaTitle.value.trim() || novels.detail?.title || novelName.value
+})
+
+const displayNovelSummary = computed(() => {
+  const localizedSummary = settings.settings?.target_language === 'en'
+    ? metaSummaryEn.value.trim()
+    : metaSummaryVi.value.trim()
+  return localizedSummary || metaSummary.value.trim()
 })
 
 const displayNovelAuthor = computed(
@@ -253,15 +266,22 @@ async function saveMetadata() {
     summary: metaSummary.value.trim(),
     source_language: metaSourceLang.value.trim() || null
   }
-  const translated: Record<string, string | null> = {}
-  const currentTranslated = (metadata.value?.translated as Record<string, string | null> | undefined) ?? {}
-  const viValue = metaTranslatedVi.value.trim()
-  const enValue = metaTranslatedEn.value.trim()
-  if (viValue) translated.vi = viValue
-  else if (viValue === '' && currentTranslated.vi) translated.vi = null
-  if (enValue) translated.en = enValue
-  else if (enValue === '' && currentTranslated.en) translated.en = null
-  if (Object.keys(translated).length) patch.translated = translated
+  const currentLocalized = (
+    metadata.value?.localized as Record<string, Record<string, string | null>> | undefined
+  ) ?? {}
+  const localized: Record<string, Record<string, string | null>> = {}
+  for (const [language, title, summary] of [
+    ['vi', metaTranslatedVi.value.trim(), metaSummaryVi.value.trim()],
+    ['en', metaTranslatedEn.value.trim(), metaSummaryEn.value.trim()]
+  ] as const) {
+    const changes: Record<string, string | null> = {}
+    const currentTitle = currentLocalized[language]?.title ?? ''
+    const currentSummary = currentLocalized[language]?.summary ?? ''
+    if (title !== currentTitle) changes.title = title || null
+    if (summary !== currentSummary) changes.summary = summary || null
+    if (Object.keys(changes).length) localized[language] = changes
+  }
+  if (Object.keys(localized).length) patch.localized = localized
   try {
     await api.patchNovelMetadata(novelName.value, patch)
     await loadMetadata()
@@ -285,9 +305,39 @@ const hasAnyMetadata = computed(() =>
       metaSummary.value.trim() ||
       metaSourceLang.value.trim() ||
       metaTranslatedVi.value.trim() ||
-      metaTranslatedEn.value.trim()
+      metaTranslatedEn.value.trim() ||
+      metaSummaryVi.value.trim() ||
+      metaSummaryEn.value.trim()
   )
 )
+
+async function translateMetadata(language: 'vi' | 'en') {
+  metaError.value = null
+  await saveMetadata()
+  if (metaError.value) {
+    showMetaForm.value = true
+    return
+  }
+  try {
+    const result = await api.localizeNovelMetadata(novelName.value, {
+      target_language: language,
+      force: metadataForce.value
+    })
+    jobId.value = result.job_id
+    showMetaForm.value = false
+  } catch (err) {
+    metaError.value = (err as Error).message
+  }
+}
+
+const metadataJobStatus = computed(() => jobId.value ? jobs.findJob(jobId.value)?.status : null)
+
+watch(metadataJobStatus, (status, previous) => {
+  if (status === 'completed' && previous !== 'completed') {
+    void loadMetadata()
+    void novels.load(novelName.value)
+  }
+})
 
 const coverSrc = computed(() => {
   if (coverBroken.value) return placeholderCover
@@ -569,9 +619,9 @@ function cancelDeleteChapter() {
             <p class="novel-author" :title="`Author: ${displayNovelAuthor}`">
               <span>Author:</span> {{ displayNovelAuthor }}
             </p>
-            <div v-if="metaSummary" class="novel-summary">
+            <div v-if="displayNovelSummary" class="novel-summary">
               <span class="novel-summary-label">Summary</span>
-              <div class="novel-summary-content">{{ metaSummary }}</div>
+              <div class="novel-summary-content">{{ displayNovelSummary }}</div>
             </div>
           </div>
         </div>
@@ -984,8 +1034,24 @@ function cancelDeleteChapter() {
                 <input v-model="metaTranslatedVi" placeholder="Tiêu đề tiếng Việt" style="width: 100%;" />
               </div>
               <div>
+                <label>Translated summary — vi</label>
+                <textarea v-model="metaSummaryVi" class="metadata-summary-input" placeholder="Tóm tắt tiếng Việt"></textarea>
+              </div>
+              <div>
                 <label>Translated title — en</label>
                 <input v-model="metaTranslatedEn" placeholder="English title" style="width: 100%;" />
+              </div>
+              <div>
+                <label>Translated summary — en</label>
+                <textarea v-model="metaSummaryEn" class="metadata-summary-input" placeholder="English summary"></textarea>
+              </div>
+              <label class="check">
+                <input v-model="metadataForce" type="checkbox" />
+                <span>Regenerate existing AI translations</span>
+              </label>
+              <div class="row gap-2">
+                <button class="secondary" type="button" @click="translateMetadata('vi')">Save and translate Vietnamese</button>
+                <button class="secondary" type="button" @click="translateMetadata('en')">Save and translate English</button>
               </div>
             </div>
           </div>

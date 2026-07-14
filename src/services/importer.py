@@ -14,12 +14,32 @@ from src.models import ChapterResult, NovelMetadata
 from src.services import chapters as chapter_service
 from src.services.chapters import detect_chapter_number, is_obvious_non_chapter_title
 from src.services.metadata import metadata_to_dict
-from src.utils.files import write_bytes_atomic, write_json_atomic, write_text_atomic
+from src.utils.files import merge_json_locked, write_bytes_atomic, write_json_atomic, write_text_atomic
 from src.utils.text import slugify
 
 CONTAINER_PATH = "META-INF/container.xml"
 EPUB_IMAGE_PLACEHOLDER = "[[EPUB_IMAGE:{index}]]"
 ILLUSTRATION_MARKER = "[[ILLUSTRATION:{filename}]]"
+SUMMARY_SECTION_TITLES = frozenset(
+    {
+        "synopsis",
+        "summary",
+        "description",
+        "blurb",
+        "book synopsis",
+        "book summary",
+        "book description",
+        "about the book",
+        "简介",
+        "内容简介",
+        "作品简介",
+        "小说简介",
+        "あらすじ",
+        "줄거리",
+        "책 소개",
+        "작품 소개",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -41,6 +61,7 @@ class ProcessedChapter:
 class EpubBookMetadata:
     title: str | None
     author: str | None
+    description: str | None
 
 
 @dataclass(frozen=True)
@@ -194,6 +215,7 @@ def import_epub(
     fallback_title = name or epub_path.stem
     title = normalize_whitespace(book.metadata.title or fallback_title)
     author = normalize_whitespace(book.metadata.author or "") or None
+    summary = book.metadata.description or extract_summary_from_sections(book.sections)
     if source_url is None:
         source_url = epub_path.resolve().as_uri()
     fallback_slug = slugify(epub_path.stem, fallback="epub")
@@ -216,10 +238,20 @@ def import_epub(
         author=author,
         source_url=source_url,
         site_name=novel_slug,
+        summary=summary,
     )
     metadata_path = novel_dir / "metadata.json"
     if not metadata_path.exists():
         write_json_atomic(metadata_path, metadata_to_dict(metadata))
+    elif summary:
+        merge_json_locked(
+            metadata_path,
+            lambda current: (
+                current
+                if isinstance(current.get("summary"), str) and current["summary"].strip()
+                else {**current, "summary": summary}
+            ),
+        )
 
     chapters: list[ChapterResult] = []
     illustrations: list[EpubIllustration] = []
@@ -360,20 +392,26 @@ def read_epub_metadata(epub: zipfile.ZipFile, opf_path: str) -> EpubBookMetadata
     opf_root = ElementTree.fromstring(epub.read(opf_path))
     metadata_node = opf_root.find(".//{*}metadata")
     if metadata_node is None:
-        return EpubBookMetadata(title=None, author=None)
+        return EpubBookMetadata(title=None, author=None, description=None)
     return EpubBookMetadata(
         title=find_child_text(metadata_node, "title"),
         author=find_child_text(metadata_node, "creator"),
+        description=normalize_epub_summary(find_child_raw_text(metadata_node, "description")),
     )
 
 
 def find_child_text(element: ElementTree.Element, local_name: str) -> str | None:
+    text = find_child_raw_text(element, local_name)
+    return normalize_whitespace(text or "") or None
+
+
+def find_child_raw_text(element: ElementTree.Element, local_name: str) -> str | None:
     for child in element.iter():
         if child is element:
             continue
         if xml_local_name(child.tag) != local_name:
             continue
-        text = normalize_whitespace(child.text or "")
+        text = "".join(child.itertext()).strip()
         if text:
             return text
     return None
@@ -484,11 +522,92 @@ def should_skip_fallback_section(section: EpubSection) -> bool:
 
     if not title:
         return True
+    if is_summary_section(section):
+        return True
     if is_obvious_non_chapter_title(title):
         return True
     if any(name in title_lower or name in source_name for name in front_matter_names):
         return True
     return section.index <= 5 and any(marker in section.text.casefold() for marker in metadata_markers)
+
+
+def normalize_summary_heading(value: str) -> str:
+    value = normalize_whitespace(html.unescape(value)).casefold()
+    return value.strip(" \t\r\n:：.-–—_[](){}")
+
+
+def summary_label_remainder(value: str) -> str | None:
+    text = normalize_whitespace(html.unescape(value)).strip()
+    folded = text.casefold()
+    for heading in SUMMARY_SECTION_TITLES:
+        if folded == heading:
+            return ""
+        if not folded.startswith(heading):
+            continue
+        remainder = text[len(heading) :].lstrip()
+        if remainder.startswith((":", "：")):
+            return remainder[1:].strip()
+    return None
+
+
+def extract_labeled_summary(value: str) -> str | None:
+    lines = value.splitlines()
+    for index, line in enumerate(lines):
+        inline_summary = summary_label_remainder(line)
+        if inline_summary is None:
+            continue
+        remainder = [inline_summary, *lines[index + 1 :]] if inline_summary else lines[index + 1 :]
+        summary = normalize_epub_summary("\n".join(remainder))
+        if summary:
+            return summary
+    return None
+
+
+def is_summary_section(section: EpubSection) -> bool:
+    title = normalize_summary_heading(section.title)
+    source_stem = normalize_summary_heading(Path(section.source_path).stem.replace("_", " ").replace("-", " "))
+    paragraphs = [part.strip() for part in section.text.split("\n\n") if part.strip()]
+    first_paragraph = normalize_summary_heading(paragraphs[0]) if paragraphs else ""
+    explicitly_labelled = any(value in SUMMARY_SECTION_TITLES for value in (title, source_stem, first_paragraph))
+    return explicitly_labelled or (section.index <= 5 and extract_labeled_summary(section.text) is not None)
+
+
+def extract_summary_from_sections(sections: list[EpubSection]) -> str | None:
+    """Extract a synopsis only from a clearly labelled EPUB front-matter section."""
+    for section in sections:
+        if not is_summary_section(section):
+            continue
+
+        labeled_summary = extract_labeled_summary(section.text)
+        if labeled_summary:
+            return labeled_summary
+
+        paragraphs = [part.strip() for part in section.text.split("\n\n") if part.strip()]
+        section_title = normalize_summary_heading(section.title)
+        while paragraphs:
+            heading = normalize_summary_heading(paragraphs[0])
+            if heading == section_title or heading in SUMMARY_SECTION_TITLES:
+                paragraphs.pop(0)
+                continue
+            break
+        summary = normalize_epub_summary("\n\n".join(paragraphs))
+        if summary:
+            return summary
+    return None
+
+
+def normalize_epub_summary(value: str | None) -> str | None:
+    """Normalize plain-text or escaped-HTML EPUB descriptions while preserving paragraphs."""
+    if not value:
+        return None
+    decoded = html.unescape(value).strip()
+    if re.search(r"<\s*[a-z][^>]*>", decoded, re.IGNORECASE):
+        extractor = TextExtractor()
+        extractor.feed(decoded)
+        extractor.close()
+        decoded = extractor.get_text()
+    paragraphs = [normalize_whitespace(part) for part in re.split(r"\n\s*\n", decoded) if part.strip()]
+    return "\n\n".join(paragraphs) or None
 
 
 def clean_existing_illustrations(illustrations_dir: Path) -> None:

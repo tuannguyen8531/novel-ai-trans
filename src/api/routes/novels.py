@@ -2,18 +2,21 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import asdict
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import FileResponse
 
-from src.api.dependencies import AuthenticatedPrincipal, get_state
+from src.api.dependencies import AuthenticatedPrincipal, JobManagerDependency, get_state
 from src.api.schemas import (
     ArtifactInfoResponse,
     ChapterContentPayload,
     ChapterContentResponse,
     CreateNovelPayload,
+    JobStartResponse,
+    MetadataLocalizationPayload,
     NovelChapterStatus,
     NovelDetail,
     NovelMetadataPatch,
@@ -24,6 +27,7 @@ from src.api.schemas import (
 from src.application import config as app_config
 from src.application import novels
 from src.application.errors import PersistenceError
+from src.application.localization import localize_metadata
 from src.domain.language import normalize_source_language
 
 router = APIRouter(tags=["novels"])
@@ -67,8 +71,9 @@ def create_novel(
 def list_novels_endpoint(
     _: AuthenticatedPrincipal,
 ) -> list[NovelSummary]:
-    root = novels.resolve_root(app_config.get_config().translated_dir)
-    return [NovelSummary(**asdict(summary)) for summary in novels.list_summaries(root)]
+    config = app_config.get_config()
+    root = novels.resolve_root(config.translated_dir)
+    return [NovelSummary(**asdict(summary)) for summary in novels.list_summaries(root, target_language=config.target_language)]
 
 
 @router.get("/novels/{name}", response_model=NovelDetail)
@@ -76,8 +81,9 @@ def novel_detail(
     name: str,
     _: AuthenticatedPrincipal,
 ) -> NovelDetail:
-    root = novels.resolve_root(app_config.get_config().translated_dir)
-    return NovelDetail(**asdict(novels.detail(root, name)))
+    config = app_config.get_config()
+    root = novels.resolve_root(config.translated_dir)
+    return NovelDetail(**asdict(novels.detail(root, name, target_language=config.target_language)))
 
 
 @router.get("/novels/{name}/chapters", response_model=list[NovelChapterStatus])
@@ -157,10 +163,54 @@ def patch_novel_metadata(
     _: AuthenticatedPrincipal,
 ) -> NovelMetadataResponse:
     root = novels.resolve_root(app_config.get_config().translated_dir)
-    updates = payload.model_dump(exclude_none=True)
+    updates = payload.model_dump(exclude_unset=True)
     if "source_language" in payload.model_fields_set:
         updates["source_language"] = normalize_source_language(payload.source_language) or None
-    return NovelMetadataResponse(novel=name, data=novels.update_metadata(root, name, updates))
+    return NovelMetadataResponse(
+        novel=name,
+        data=novels.update_metadata(root, name, updates, localized_origin="manual"),
+    )
+
+
+@router.post(
+    "/novels/{name}/metadata/localize",
+    response_model=JobStartResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def localize_novel_metadata(
+    name: str,
+    payload: MetadataLocalizationPayload,
+    _: AuthenticatedPrincipal,
+    jobs: JobManagerDependency,
+) -> JobStartResponse:
+    config = app_config.get_config()
+    root = novels.resolve_root(config.translated_dir)
+    novels.require_path(root, name)
+    snapshot = config.clone(
+        llm_provider=payload.provider or None,
+        target_language=payload.target_language,
+    )
+    loop = asyncio.get_running_loop()
+
+    def _run(job, emit, cancel_event):
+        result = localize_metadata(
+            root,
+            name,
+            payload.target_language,
+            fields=tuple(payload.fields),
+            force=payload.force,
+            cancel_event=cancel_event,
+        )
+        return asdict(result)
+
+    job = jobs.submit(
+        kind="localize",
+        novel=name,
+        snapshot=snapshot,
+        loop=loop,
+        run=_run,
+    )
+    return JobStartResponse(job_id=job.id)
 
 
 @router.delete("/novels/{name}", status_code=204)

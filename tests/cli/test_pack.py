@@ -128,17 +128,22 @@ def test_load_metadata_returns_empty_dict_on_invalid_json(tmp_path):
 # --- resolve_book_title ---
 
 
-def test_resolve_title_uses_translated_name_for_target():
+def test_resolve_title_uses_localized_name_for_target():
     metadata = {
         "title": "原标题",
-        "translated": {"vi": "Tiêu đề", "en": "English Title"},
+        "localized": {"vi": {"title": "Tiêu đề"}, "en": {"title": "English Title"}},
     }
     assert resolve_book_title(metadata, "en", "fallback") == "English Title"
     assert resolve_book_title(metadata, "vi", "fallback") == "Tiêu đề"
 
 
 def test_resolve_title_falls_back_to_original():
-    metadata = {"title": "原标题", "translated": {}}
+    metadata = {"title": "原标题", "localized": {}}
+    assert resolve_book_title(metadata, "en", "fallback") == "原标题"
+
+
+def test_resolve_title_ignores_removed_legacy_translated_field():
+    metadata = {"title": "原标题", "translated": {"en": "Legacy title"}}
     assert resolve_book_title(metadata, "en", "fallback") == "原标题"
 
 
@@ -146,8 +151,8 @@ def test_resolve_title_falls_back_to_novel_name():
     assert resolve_book_title({}, "en", "my-novel") == "My Novel"
 
 
-def test_resolve_title_skips_empty_translated():
-    metadata = {"title": "原标题", "translated": {"en": ""}}
+def test_resolve_title_skips_empty_localized_title():
+    metadata = {"title": "原标题", "localized": {"en": {"title": ""}}}
     assert resolve_book_title(metadata, "en", "fallback") == "原标题"
 
 

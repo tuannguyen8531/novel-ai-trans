@@ -123,9 +123,19 @@ const deleteMessage = computed(() => {
         </thead>
         <tbody>
           <tr v-for="novel in novels.novels" :key="novel.name">
-            <td><code>{{ novel.name }}</code></td>
-            <td>{{ novel.title ?? '—' }}</td>
-            <td>{{ novel.author?.trim() || '—' }}</td>
+            <td class="novel-name-cell">
+              <code class="truncate-cell-text" :title="novel.name">{{ novel.name }}</code>
+            </td>
+            <td class="novel-title-cell">
+              <span class="truncate-cell-text" :title="novel.title ?? undefined">
+                {{ novel.title ?? '—' }}
+              </span>
+            </td>
+            <td class="novel-author-cell">
+              <span class="truncate-cell-text" :title="novel.author?.trim() || undefined">
+                {{ novel.author?.trim() || '—' }}
+              </span>
+            </td>
             <td>{{ novel.total_input_chapters }}</td>
             <td>
               {{ translatedProgress(novel)?.completed ?? 0 }} / {{ translatedProgress(novel)?.total ?? novel.total_input_chapters }}
@@ -211,6 +221,25 @@ const deleteMessage = computed(() => {
 <style scoped>
 .delete-error {
   margin-bottom: 0.75rem;
+}
+
+.novel-name-cell {
+  max-width: clamp(8rem, 18vw, 18rem);
+}
+
+.novel-title-cell {
+  max-width: clamp(10rem, 32vw, 30rem);
+}
+
+.novel-author-cell {
+  max-width: clamp(8rem, 20vw, 20rem);
+}
+
+.truncate-cell-text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .novel-actions {

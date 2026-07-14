@@ -20,6 +20,8 @@ const resume = ref<boolean>(false)
 const failedOnly = ref<boolean>(false)
 const review = ref<boolean>(false)
 const summary = ref<boolean>(false)
+const translateMetadata = ref<boolean>(true)
+const forceMetadata = ref<boolean>(false)
 const jobId = ref<string | null>(null)
 const error = ref<string | null>(null)
 
@@ -48,7 +50,9 @@ async function startTranslation() {
     resume: resume.value,
     failed_only: failedOnly.value,
     enable_review: review.value,
-    enable_summary: summary.value
+    enable_summary: summary.value,
+    translate_metadata: translateMetadata.value,
+    force_metadata: forceMetadata.value
   }
   if (source.value) payload.source_language = source.value
   if (provider.value) payload.provider = provider.value
@@ -138,6 +142,14 @@ async function startTranslation() {
             <label class="check">
               <input v-model="summary" type="checkbox" />
               <span>Enable summary</span>
+            </label>
+            <label class="check">
+              <input v-model="translateMetadata" type="checkbox" />
+              <span>Translate title and novel summary</span>
+            </label>
+            <label v-if="translateMetadata" class="check">
+              <input v-model="forceMetadata" type="checkbox" />
+              <span>Regenerate AI metadata</span>
             </label>
           </div>
         </div>

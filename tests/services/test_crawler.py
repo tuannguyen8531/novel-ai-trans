@@ -518,7 +518,8 @@ class NovelCrawlerTest(unittest.TestCase):
             shared_metadata,
             {
                 "title": "Demo Novel",
-                "translated": {"en": None, "vi": None},
+                "localized": {},
+                "localization_meta": {},
                 "author": "Demo Author",
                 "source_url": "https://public.example/novel",
                 "illustration_url": None,
@@ -546,7 +547,11 @@ class NovelCrawlerTest(unittest.TestCase):
                 json.dumps(
                     {
                         "title": "Old title",
-                        "translated": {"en": "English title", "vi": "Tiêu đề Việt"},
+                        "localized": {
+                            "en": {"title": "English title"},
+                            "vi": {"title": "Tiêu đề Việt"},
+                        },
+                        "localization_meta": {},
                         "author": "Existing author",
                         "source_url": "old-url",
                         "illustration_url": "existing-cover.jpg",
@@ -563,7 +568,10 @@ class NovelCrawlerTest(unittest.TestCase):
             saved = json.loads((novel_dir / "metadata.json").read_text(encoding="utf-8"))
 
         self.assertEqual(saved["title"], "Demo Novel")
-        self.assertEqual(saved["translated"], {"en": "English title", "vi": "Tiêu đề Việt"})
+        self.assertEqual(
+            saved["localized"],
+            {"en": {"title": "English title"}, "vi": {"title": "Tiêu đề Việt"}},
+        )
         self.assertEqual(saved["author"], "Demo Author")
         self.assertEqual(saved["illustration_url"], "existing-cover.jpg")
         self.assertEqual(saved["summary"], "Existing summary")
@@ -588,7 +596,8 @@ class NovelCrawlerTest(unittest.TestCase):
                 json.dumps(
                     {
                         "title": "Canonical Novel",
-                        "translated": {"vi": "Tiểu thuyết mẫu"},
+                        "localized": {"vi": {"title": "Tiểu thuyết mẫu"}},
+                        "localization_meta": {},
                         "author": "Canonical Author",
                         "source_url": "https://public.example/book",
                         "illustration_url": "https://public.example/cover.jpg",
@@ -611,7 +620,7 @@ class NovelCrawlerTest(unittest.TestCase):
         self.assertEqual(result.metadata.author, "Canonical Author")
         self.assertEqual(result.metadata.summary, "Canonical summary.")
         self.assertEqual(saved["title"], "Canonical Novel")
-        self.assertEqual(saved["translated"], {"vi": "Tiểu thuyết mẫu"})
+        self.assertEqual(saved["localized"], {"vi": {"title": "Tiểu thuyết mẫu"}})
 
     def test_crawl_uses_config_name_for_output_slug(self) -> None:
         config = replace(demo_config(), name="flower-1981")

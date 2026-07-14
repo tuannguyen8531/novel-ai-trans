@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from dataclasses import asdict
 from typing import Literal
 
 from fastapi import APIRouter
@@ -12,6 +13,9 @@ from src.api.dependencies import AuthenticatedPrincipal, JobManagerDependency
 from src.api.jobs import build_progress_emitter
 from src.api.schemas import JobStartResponse, TranslationRequestPayload
 from src.application import config as app_config
+from src.application import novels
+from src.application.localization import localize_metadata
+from src.application.progress import ProgressEvent
 from src.application.translate import (
     TranslationRequest,
     run_translation,
@@ -41,6 +45,22 @@ async def post_translate(
     def _run(job, emit, cancel_event):
         started_at = time.time()
         progress_cb = build_progress_emitter(job, emit)
+        metadata_result = None
+        if payload.translate_metadata is not False:
+            progress_cb(
+                ProgressEvent(
+                    kind="phase",
+                    novel=payload.novel,
+                    message=f"Translating title and summary to {payload.target_language or snapshot.target_language}...",
+                )
+            )
+            metadata_result = localize_metadata(
+                novels.resolve_root(snapshot.translated_dir),
+                payload.novel,
+                payload.target_language or snapshot.target_language,
+                force=payload.force_metadata or False,
+                cancel_event=cancel_event,
+            )
         request = TranslationRequest(
             novel=payload.novel,
             source_language=payload.source_language or "",
@@ -104,6 +124,7 @@ async def post_translate(
             "chapters_attempted": result.chapters_attempted,
             "failures": result.failures,
             "cancelled": result.cancelled,
+            "metadata": asdict(metadata_result) if metadata_result is not None else None,
         }
 
     job = jobs.submit(

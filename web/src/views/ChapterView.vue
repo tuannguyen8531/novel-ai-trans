@@ -86,13 +86,13 @@ const chapterCount = computed(() => chapterNumbers.value.length)
 const displayTitle = computed(() => {
   if (!metadata.value) return props.name
   const title = metadata.value.title || props.name
-  const translated = metadata.value.translated || {}
-  
-  if (viewMode.value === 'vi' && translated.vi) {
-    return translated.vi
+  const localized = metadata.value.localized || {}
+
+  if (viewMode.value === 'vi' && localized.vi?.title) {
+    return localized.vi.title
   }
-  if (viewMode.value === 'en' && translated.en) {
-    return translated.en
+  if (viewMode.value === 'en' && localized.en?.title) {
+    return localized.en.title
   }
   return title
 })

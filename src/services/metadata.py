@@ -12,10 +12,25 @@ METADATA_FALLBACK_DIR = _paths.GLOSSARY_DIR
 LEGACY_GLOSSARY_FALLBACK_DIR = _paths.GLOSSARY_DIR
 
 
+def localized_value(metadata: dict[str, object], target_language: str, field: str) -> str:
+    """Resolve a localized metadata field, falling back to the source value."""
+    localized = metadata.get("localized")
+    if isinstance(localized, dict):
+        target = localized.get(target_language)
+        if isinstance(target, dict):
+            value = target.get(field)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+
+    source = metadata.get(field)
+    return source.strip() if isinstance(source, str) and source.strip() else ""
+
+
 def metadata_to_dict(metadata: NovelMetadata) -> dict[str, object]:
     return {
         "title": metadata.title,
-        "translated": metadata.translated,
+        "localized": metadata.localized,
+        "localization_meta": metadata.localization_meta,
         "author": metadata.author,
         "source_url": metadata.source_url,
         "illustration_url": metadata.illustration_url,

@@ -17,8 +17,8 @@ from src.config import config
 from src.services.logger import log_api_request_received, log_api_request_sent, log_error
 
 _SPINNER_CHARS = "⠋⠙⠹⠸⠼⠴⠦⠧"
-STRUCTURED_JSON_CALL_TYPES = {"learn", "review"}
-TRANSLATION_CALL_TYPES = {"translate", "summary"}
+STRUCTURED_JSON_CALL_TYPES = {"learn", "review", "localize"}
+TRANSLATION_CALL_TYPES = {"translate", "summarize", "localize"}
 JOB_LOGGER_NAME = "novel_ai_trans.job"
 _job_logger = logging.getLogger(JOB_LOGGER_NAME)
 _job_logger.setLevel(logging.INFO)

@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import shutil
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 
@@ -20,6 +21,8 @@ from src.application.errors import (
 from src.domain.language import SUPPORTED_TARGET_LANGUAGES, normalize_source_language, normalize_target_language
 from src.paths import DEFAULT_TRANSLATED_ROOT, PROGRESS_DIR
 from src.services import chapters
+from src.services.metadata import localized_value
+from src.utils import files as file_utils
 
 SLUG_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 ARTIFACT_SUFFIXES = frozenset({".epub", ".pdf"})
@@ -142,7 +145,8 @@ def create(
             "title": title or None,
             "author": author or None,
             "source_language": normalize_source_language(source_language) or None,
-            "translated": {"en": None, "vi": None},
+            "localized": {},
+            "localization_meta": {},
             "source_url": None,
             "illustration_url": illustration_url or None,
             "summary": None,
@@ -202,7 +206,13 @@ def _write_metadata(novel_root: Path, metadata: dict[str, Any], *, trailing_newl
     )
 
 
-def summarize(root: Path, name: str, *, progress_root: Path | None = None) -> Summary:
+def summarize(
+    root: Path,
+    name: str,
+    *,
+    progress_root: Path | None = None,
+    target_language: str | None = None,
+) -> Summary:
     novel_root = resolve_path(root, name)
     input_dir = paths.novel_input_dir_from_root(novel_root)
     metadata = _load_metadata(novel_root)
@@ -218,9 +228,12 @@ def summarize(root: Path, name: str, *, progress_root: Path | None = None) -> Su
         targets.append(Progress(target=target, completed=len(completed), failed=len(failed), total=total))
 
     illustrations_dir = novel_root / "illustrations"
+    display_title = metadata.get("title")
+    if target_language:
+        display_title = localized_value(metadata, normalize_target_language(target_language), "title") or None
     return Summary(
         name=name,
-        title=metadata.get("title"),
+        title=display_title,
         author=metadata.get("author"),
         source_language=metadata.get("source_language"),
         total_input_chapters=total,
@@ -229,8 +242,13 @@ def summarize(root: Path, name: str, *, progress_root: Path | None = None) -> Su
     )
 
 
-def list_summaries(root: Path, *, progress_root: Path | None = None) -> list[Summary]:
-    return [summarize(root, name, progress_root=progress_root) for name in list_names(root)]
+def list_summaries(
+    root: Path,
+    *,
+    progress_root: Path | None = None,
+    target_language: str | None = None,
+) -> list[Summary]:
+    return [summarize(root, name, progress_root=progress_root, target_language=target_language) for name in list_names(root)]
 
 
 def progress(
@@ -251,9 +269,15 @@ def progress(
     )
 
 
-def detail(root: Path, name: str, *, progress_root: Path | None = None) -> Detail:
+def detail(
+    root: Path,
+    name: str,
+    *,
+    progress_root: Path | None = None,
+    target_language: str | None = None,
+) -> Detail:
     novel_root = require_path(root, name)
-    base = summarize(root, name, progress_root=progress_root)
+    base = summarize(root, name, progress_root=progress_root, target_language=target_language)
     terms = entities = edges = 0
     glossary_path = novel_root / "glossary.json"
     if glossary_path.exists():
@@ -361,23 +385,68 @@ def metadata(root: Path, name: str) -> dict[str, Any]:
     return _load_metadata(require_path(root, name))
 
 
-def update_metadata(root: Path, name: str, updates: dict[str, Any]) -> dict[str, Any]:
+def _metadata_source_hash(value: object) -> str:
+    text = " ".join(value.split()) if isinstance(value, str) else ""
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def update_metadata(
+    root: Path,
+    name: str,
+    updates: dict[str, Any],
+    *,
+    localized_origin: str | None = None,
+) -> dict[str, Any]:
     novel_root = require_path(root, name)
     if not updates:
         raise ApplicationValidationError("At least one metadata field must be provided.")
-    current = _load_metadata(novel_root)
-    translated = updates.get("translated")
-    if isinstance(translated, dict) and isinstance(current.get("translated"), dict):
-        merged = dict(current["translated"])
-        for key, value in translated.items():
-            if value is None:
-                merged.pop(key, None)
-            else:
-                merged[key] = value
-        updates = {**updates, "translated": merged}
-    current.update(updates)
-    _write_metadata(novel_root, current)
-    return current
+
+    def updater(current: dict[str, Any]) -> dict[str, Any]:
+        next_data = dict(current)
+        shallow_updates = {key: value for key, value in updates.items() if key != "localized"}
+        next_data.update(shallow_updates)
+
+        localized_updates = updates.get("localized")
+        if isinstance(localized_updates, dict):
+            localized = dict(current.get("localized", {})) if isinstance(current.get("localized"), dict) else {}
+            localization_meta = (
+                dict(current.get("localization_meta", {})) if isinstance(current.get("localization_meta"), dict) else {}
+            )
+            for target, target_updates in localized_updates.items():
+                if not isinstance(target_updates, dict):
+                    continue
+                target_values = dict(localized.get(target, {})) if isinstance(localized.get(target), dict) else {}
+                target_meta = dict(localization_meta.get(target, {})) if isinstance(localization_meta.get(target), dict) else {}
+                for field, value in target_updates.items():
+                    if field not in {"title", "summary"}:
+                        continue
+                    if value is None:
+                        target_values.pop(field, None)
+                        target_meta.pop(field, None)
+                        continue
+                    target_values[field] = value
+                    if localized_origin:
+                        target_meta[field] = {
+                            "source_hash": _metadata_source_hash(next_data.get(field)),
+                            "origin": localized_origin,
+                            "updated_at": datetime.now(UTC).isoformat(),
+                        }
+                if target_values:
+                    localized[target] = target_values
+                else:
+                    localized.pop(target, None)
+                if target_meta:
+                    localization_meta[target] = target_meta
+                else:
+                    localization_meta.pop(target, None)
+            next_data["localized"] = localized
+            next_data["localization_meta"] = localization_meta
+        return next_data
+
+    try:
+        return file_utils.merge_json_locked(novel_root / "metadata.json", updater)
+    except OSError as error:
+        raise PersistenceError(f"Failed to update novel metadata: {error}") from error
 
 
 def delete(root: Path, name: str) -> None:

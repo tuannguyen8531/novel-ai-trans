@@ -111,12 +111,12 @@ def test_generate_config_separates_novel_metadata_from_crawler_config() -> None:
         assert key not in result.config
 
 
-def test_save_generated_config_merges_metadata_without_losing_translations(tmp_path: Path) -> None:
+def test_save_generated_config_merges_metadata_without_losing_localizations(tmp_path: Path) -> None:
     translated_root = tmp_path / "translated"
     novel_root = translated_root / "demo"
     novel_root.mkdir(parents=True)
     (novel_root / "metadata.json").write_text(
-        '{"translated":{"vi":"Tên Việt"},"source_language":"chinese"}',
+        '{"localized":{"vi":{"title":"Tên Việt"}},"localization_meta":{},"source_language":"chinese"}',
         encoding="utf-8",
     )
     config = {
@@ -146,7 +146,7 @@ def test_save_generated_config_merges_metadata_without_losing_translations(tmp_p
     saved_metadata = json.loads((novel_root / "metadata.json").read_text(encoding="utf-8"))
     assert "title" not in saved_config
     assert saved_metadata["title"] == "Demo Novel"
-    assert saved_metadata["translated"] == {"vi": "Tên Việt"}
+    assert saved_metadata["localized"] == {"vi": {"title": "Tên Việt"}}
     assert saved_metadata["source_language"] == "chinese"
 
 

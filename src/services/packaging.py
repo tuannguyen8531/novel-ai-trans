@@ -24,6 +24,7 @@ from src import paths as _paths
 from src.config import config
 from src.domain.illustrations import parse_illustration_marker
 from src.domain.language import normalize_target_language
+from src.services.metadata import localized_value
 
 # ---------------------------------------------------------------------------
 # Path helpers
@@ -76,12 +77,10 @@ def load_metadata(novel_name: str) -> dict:
 
 def resolve_book_title(metadata: dict, target_language: str, fallback_novel_name: str) -> str:
     """Resolve book title from metadata with target-language fallback chain."""
-    translated = metadata.get("translated", {})
     target = normalize_target_language(target_language)
-    if target in translated and translated[target]:
-        return translated[target]
-    if metadata.get("title"):
-        return metadata["title"]
+    title = localized_value(metadata, target, "title")
+    if title:
+        return title
     return fallback_novel_name.replace("-", " ").title()
 
 

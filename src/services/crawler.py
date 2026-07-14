@@ -601,13 +601,17 @@ class NovelCrawler:
         if not isinstance(existing, dict):
             return metadata
 
-        translated = existing.get("translated")
-        if not isinstance(translated, dict):
-            translated = metadata.translated
+        localized = existing.get("localized")
+        if not isinstance(localized, dict):
+            localized = metadata.localized
+        localization_meta = existing.get("localization_meta")
+        if not isinstance(localization_meta, dict):
+            localization_meta = metadata.localization_meta
         use_existing_title = not self.config.title and not self.config.novel_title_selector
         return NovelMetadata(
             title=(existing.get("title") if use_existing_title else None) or metadata.title,
-            translated=translated,
+            localized=localized,
+            localization_meta=localization_meta,
             author=metadata.author or existing.get("author"),
             source_url=self.config.source_url or existing.get("source_url") or metadata.source_url,
             illustration_url=metadata.illustration_url or existing.get("illustration_url"),
@@ -784,12 +788,14 @@ class NovelCrawler:
             except (OSError, json.JSONDecodeError):
                 existing = {}
             if isinstance(existing, dict):
-                # Crawling refreshes canonical source metadata, but translated
-                # titles and detected language are managed by later pipeline
-                # stages and must survive a re-crawl.
-                translated = existing.get("translated")
-                if isinstance(translated, dict):
-                    data["translated"] = translated
+                # Crawling refreshes source metadata, while localized values
+                # and their provenance are managed by the localization workflow.
+                localized = existing.get("localized")
+                if isinstance(localized, dict):
+                    data["localized"] = localized
+                localization_meta = existing.get("localization_meta")
+                if isinstance(localization_meta, dict):
+                    data["localization_meta"] = localization_meta
                 source_language = existing.get("source_language")
                 if source_language and not data.get("source_language"):
                     data["source_language"] = source_language

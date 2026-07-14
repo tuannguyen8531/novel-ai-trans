@@ -343,7 +343,8 @@ def generate_config(
     detected_language = detect_language_heuristic(title)
     metadata = {
         "title": title,
-        "translated": {"en": None, "vi": None},
+        "localized": {},
+        "localization_meta": {},
         "author": config_dict.pop("author", None),
         "source_url": config_dict.get("source_url") or url,
         "illustration_url": config_dict.pop("illustration_url", None),
@@ -396,13 +397,17 @@ def save_generated_metadata(
     path = root / name / "metadata.json"
 
     def _merge(existing: dict) -> dict:
-        translated = existing.get("translated")
-        if not isinstance(translated, dict):
-            translated = {"en": None, "vi": None}
+        localized = existing.get("localized")
+        if not isinstance(localized, dict):
+            localized = {}
+        localization_meta = existing.get("localization_meta")
+        if not isinstance(localization_meta, dict):
+            localization_meta = {}
         merged = {
             **existing,
             "title": metadata.get("title") or existing.get("title") or name,
-            "translated": translated,
+            "localized": localized,
+            "localization_meta": localization_meta,
             "author": metadata.get("author") or existing.get("author"),
             "source_url": metadata.get("source_url") or existing.get("source_url"),
             "illustration_url": metadata.get("illustration_url") or existing.get("illustration_url"),

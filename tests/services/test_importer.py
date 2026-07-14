@@ -124,7 +124,8 @@ class EpubImporterTest(unittest.TestCase):
             metadata,
             {
                 "title": "Demo EPUB Title",
-                "translated": {"en": None, "vi": None},
+                "localized": {},
+                "localization_meta": {},
                 "author": "Demo Author",
                 "source_url": epub_path.resolve().as_uri(),
                 "illustration_url": None,
@@ -160,6 +161,93 @@ class EpubImporterTest(unittest.TestCase):
 
         self.assertEqual(metadata["source_url"], "epub://my-custom-file.epub")
 
+    def test_import_reads_summary_from_epub_description(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            epub_path = root / "described.epub"
+            write_epub(
+                epub_path,
+                title="Demo",
+                author=None,
+                description="<p>First summary paragraph.</p><p>Second summary paragraph.</p>",
+                sections=[("chapter-1.xhtml", "Chapter 1", "Chapter body.")],
+            )
+
+            import_epub(epub_path, root / "translated")
+            metadata = json.loads((root / "translated" / "described" / "metadata.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(metadata["summary"], "First summary paragraph.\n\nSecond summary paragraph.")
+
+    def test_import_falls_back_to_clearly_labelled_summary_section(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            epub_path = root / "front-matter.epub"
+            write_epub(
+                epub_path,
+                title="Demo",
+                author=None,
+                sections=[
+                    ("synopsis.xhtml", "Synopsis", "The original novel synopsis."),
+                    ("chapter-1.xhtml", "Chapter 1", "Chapter body."),
+                ],
+            )
+
+            result = import_epub(epub_path, root / "translated")
+            metadata = json.loads((root / "translated" / "front-matter" / "metadata.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(metadata["summary"], "The original novel synopsis.")
+        self.assertEqual(len(result.chapters), 1)
+        self.assertEqual(result.chapters[0].title, "Chapter 1")
+
+    def test_import_extracts_summary_from_combined_metadata_page(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            epub_path = root / "metadata-page.epub"
+            write_epub(
+                epub_path,
+                title="Demo",
+                author=None,
+                sections=[
+                    (
+                        "info.xhtml",
+                        "Demo",
+                        "Author: Example\nTags: Romance\nStatus: Complete\nSynopsis\nThe synopsis from the metadata page.",
+                    ),
+                    ("chapter-1.xhtml", "Chapter 1", "Chapter body."),
+                ],
+            )
+
+            result = import_epub(epub_path, root / "translated")
+            metadata = json.loads((root / "translated" / "metadata-page" / "metadata.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(metadata["summary"], "The synopsis from the metadata page.")
+        self.assertEqual(len(result.chapters), 1)
+
+    def test_reimport_fills_missing_summary_without_overwriting_existing_summary(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            epub_path = root / "demo.epub"
+            write_epub(
+                epub_path,
+                title="Demo",
+                author=None,
+                description="Summary from EPUB.",
+                sections=[("chapter-1.xhtml", "Chapter 1", "Chapter body.")],
+            )
+            novel_dir = root / "translated" / "demo"
+            novel_dir.mkdir(parents=True)
+            metadata_path = novel_dir / "metadata.json"
+            metadata_path.write_text(json.dumps({"title": "Existing", "summary": None}), encoding="utf-8")
+
+            import_epub(epub_path, root / "translated", name="demo")
+            filled = json.loads(metadata_path.read_text(encoding="utf-8"))
+            metadata_path.write_text(json.dumps({**filled, "summary": "Manual summary"}), encoding="utf-8")
+            import_epub(epub_path, root / "translated", name="demo")
+            preserved = json.loads(metadata_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(filled["summary"], "Summary from EPUB.")
+        self.assertEqual(preserved["summary"], "Manual summary")
+
     def test_import_defaults_output_slug_to_filename_not_epub_title(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             root = Path(tempdir)
@@ -190,7 +278,11 @@ class EpubImporterTest(unittest.TestCase):
             novel_dir.mkdir(parents=True)
             existing_metadata = {
                 "title": "Existing Title",
-                "translated": {"en": "Existing English Title", "vi": "Tiêu đề hiện tại"},
+                "localized": {
+                    "en": {"title": "Existing English Title"},
+                    "vi": {"title": "Tiêu đề hiện tại"},
+                },
+                "localization_meta": {},
                 "author": "Existing Author",
                 "source_url": "https://example.com/original",
                 "illustration_url": "https://example.com/cover.jpg",
@@ -346,6 +438,7 @@ def write_epub(
     *,
     title: str | None,
     author: str | None,
+    description: str | None = None,
     sections: list[tuple[str, str, str]],
     section_images: dict[str, list[str]] | None = None,
     image_files: dict[str, bytes] | None = None,
@@ -357,6 +450,8 @@ def write_epub(
         metadata.append(f"<dc:title>{escape(title)}</dc:title>")
     if author is not None:
         metadata.append(f"<dc:creator>{escape(author)}</dc:creator>")
+    if description is not None:
+        metadata.append(f"<dc:description>{escape(description)}</dc:description>")
 
     manifest = []
     spine = []

@@ -607,15 +607,15 @@ def learner_node(state: TranslationState) -> dict:
     if not config.enable_summary:
         summary_response = ""
     else:
-        summary_system_prompt = render_prompt("summary", target_language=target_language, target_name=target_name)
+        summary_system_prompt = render_prompt("summarize", target_language=target_language, target_name=target_name)
         summary_user_prompt = f"Summarize chapter {chapter_number}:\n\n{full_translation[:4000]}"
 
         try:
-            summary_response = get_llm().generate(summary_system_prompt, summary_user_prompt, "summary")
+            summary_response = get_llm().generate(summary_system_prompt, summary_user_prompt, "summarize")
             save_chapter_summary(novel_name, chapter_number, summary_response)
 
             log_ai_call(
-                "summary",
+                "summarize",
                 system_prompt=summary_system_prompt,
                 user_prompt=summary_user_prompt,
                 response=summary_response,
