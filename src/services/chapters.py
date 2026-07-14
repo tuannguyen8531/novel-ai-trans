@@ -107,7 +107,7 @@ def read_title(file_path: Path, fallback: str, *, keep_cjk: bool = True) -> str:
 
         headers: list[str] = []
         for line in lines:
-            if line.startswith("Chương ") or "Chương" in line or line.lower().startswith("chapter"):
+            if is_translated_chapter_heading(line):
                 headers.append(line)
             else:
                 break
@@ -119,6 +119,12 @@ def read_title(file_path: Path, fallback: str, *, keep_cjk: bool = True) -> str:
         return re.sub(r" +", " ", title).strip() or fallback
     except (OSError, UnicodeError):
         return fallback
+
+
+def is_translated_chapter_heading(title: str) -> bool:
+    """Return whether a translated line starts with a numbered chapter marker."""
+    normalized = title.lstrip("\ufeff").strip()
+    return bool(re.match(r"^(?:chương|chuong|chapter)\s*#?\s*\d+\b", normalized, re.IGNORECASE))
 
 
 def detect_chapter_number(title: str) -> int | None:

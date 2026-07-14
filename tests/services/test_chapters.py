@@ -55,3 +55,15 @@ def test_read_title_returns_fallback_for_missing_or_empty_file(tmp_path: Path) -
 
     assert chapters.read_title(empty, "Chapter 1") == "Chapter 1"
     assert chapters.read_title(tmp_path / "missing.txt", "Chapter 2") == "Chapter 2"
+
+
+def test_read_title_does_not_treat_author_note_as_chapter_heading(tmp_path: Path) -> None:
+    chapter = tmp_path / "chapter_13.txt"
+    chapter.write_text(
+        "Chương 13: Làm anh em, khắc ghi trong lòng!\n\n"
+        "【PS: Chương này không mô tả chi tiết hành vi bạo lực học đường.】\n\n"
+        "Nội dung",
+        encoding="utf-8",
+    )
+
+    assert chapters.read_title(chapter, "fallback") == "Chương 13: Làm anh em, khắc ghi trong lòng!"

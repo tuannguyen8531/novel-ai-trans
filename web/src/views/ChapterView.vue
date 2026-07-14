@@ -52,11 +52,14 @@ const filteredChapters = computed(() => {
 })
 
 const chapterNumbers = computed(() => {
-  const sources = new Set<number>()
-  for (const s of chapters.value) {
-    if (s.has_source) sources.add(s.number)
+  const available = new Set<number>()
+  for (const status of chapters.value) {
+    const canRead = viewMode.value === 'source'
+      ? status.has_source
+      : status.target === viewMode.value && status.has_translation
+    if (canRead) available.add(status.number)
   }
-  return [...sources].sort((a, b) => a - b)
+  return [...available].sort((a, b) => a - b)
 })
 
 const currentIndex = computed(() => chapterNumbers.value.indexOf(props.chapter))

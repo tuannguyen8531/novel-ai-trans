@@ -24,6 +24,7 @@ from src import paths as _paths
 from src.config import config
 from src.domain.illustrations import parse_illustration_marker
 from src.domain.language import normalize_target_language
+from src.services.chapters import is_translated_chapter_heading
 from src.services.metadata import localized_value
 
 # ---------------------------------------------------------------------------
@@ -258,7 +259,7 @@ def parse_chapter_file(file_path: Path) -> tuple[str, list[str]]:
 
     header_lines = []
     for idx, line in enumerate(lines[:5]):
-        if line.startswith("Chương ") or "Chương" in line or line.lower().startswith("chapter"):
+        if is_translated_chapter_heading(line):
             header_lines.append((idx, line))
         else:
             break

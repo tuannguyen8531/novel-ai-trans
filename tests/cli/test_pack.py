@@ -6,10 +6,26 @@ from unittest.mock import patch
 from src.services.packaging import (
     EPUBBuilder,
     load_metadata,
+    parse_chapter_file,
     resolve_book_author,
     resolve_book_title,
     resolve_cover_image,
 )
+
+
+def test_parse_chapter_file_keeps_author_note_out_of_title(tmp_path):
+    chapter = tmp_path / "chapter_013.txt"
+    chapter.write_text(
+        "Chương 13: Làm anh em, khắc ghi trong lòng!\n\n"
+        "【PS: Chương này không mô tả chi tiết hành vi bạo lực học đường.】\n\n"
+        "Nội dung",
+        encoding="utf-8",
+    )
+
+    title, paragraphs = parse_chapter_file(chapter)
+
+    assert title == "Chương 13: Làm anh em, khắc ghi trong lòng!"
+    assert paragraphs == ["[PS: Chương này không mô tả chi tiết hành vi bạo lực học đường.]", "Nội dung"]
 
 
 def test_pack_output_dir_defaults_to_legacy_vietnamese_path():

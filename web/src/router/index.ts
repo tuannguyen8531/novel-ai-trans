@@ -20,6 +20,9 @@ export function pageTitle(route: RouteLocationNormalized): string {
 
 export const router = createRouter({
   history: createWebHistory(),
+  scrollBehavior(_to, _from, savedPosition) {
+    return savedPosition ?? { top: 0 }
+  },
   routes: [
     { path: '/', name: 'dashboard', component: () => import('@/views/DashboardView.vue') },
     { path: '/novels', name: 'novels', component: () => import('@/views/NovelListView.vue') },
