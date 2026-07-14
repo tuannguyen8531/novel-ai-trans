@@ -15,6 +15,7 @@ For provider setup, see [PROVIDERS.md](PROVIDERS.md).
   - [Validate a config](#validate-a-config)
   - [Import an EPUB](#import-an-epub)
 - [2. Translate](#2-translate)
+  - [Localize title and novel summary](#localize-title-and-novel-summary)
 - [3. Glossary](#3-glossary)
 - [4. Package](#4-package)
 - [Review and summary steps](#review-and-summary-steps)
@@ -176,12 +177,21 @@ uv run import ./book.epub --name my-novel --translated-output ./translated
 
 The importer splits the EPUB into `chapter_NNN.txt` files, extracts illustrations
 into `translated/<novel>/illustrations/`, and creates `metadata.json` with the
-title, author, and cover URL on the first import. Re-importing the same novel
-preserves its existing metadata. Import results report retained chapters,
-unchanged chapters skipped without rewriting, chapters overwritten because
-their content changed, newly added chapters, and chapters removed when
-`--keep-existing` is not enabled. Changed overwritten chapters are listed by
-number and title.
+title, author, and original summary when available. Summary extraction prefers
+the OPF `dc:description` value, including escaped HTML descriptions, then falls
+back to clearly labelled front matter such as `Synopsis`, `Summary`,
+`Description`, `简介`, `あらすじ`, or `줄거리`. A combined
+`Author / Tags / Status / Synopsis` information page is also supported. A
+summary/front-matter page is not imported as a chapter, and ordinary chapter
+text is never treated as the novel summary.
+
+Re-importing the same novel preserves existing metadata. An extracted EPUB
+summary fills `summary` only when that field is missing or blank; it never
+overwrites an existing or manually edited summary. Import results report
+retained chapters, unchanged chapters skipped without rewriting, chapters
+overwritten because their content changed, newly added chapters, and chapters
+removed when `--keep-existing` is not enabled. Changed overwritten chapters are
+listed by number and title.
 
 #### Site config schema
 
@@ -300,6 +310,66 @@ uv run translate my-novel --verbose
 | `-F, --failed-only` | Translate only chapters marked failed | off |
 | `-m, --limit` | Translate at most N chapters (`0` = no limit) | `0` |
 
+### Localize title and novel summary
+
+Novel-level metadata localization is currently available through the GUI and
+HTTP API, not through the `translate` CLI. It translates the source `title`
+and/or `summary` stored in `translated/<novel>/metadata.json` into `vi` or `en`.
+A missing source field is skipped, so a novel with only an original summary can
+still localize that summary.
+
+In the GUI, either:
+
+- Open the novel's **Metadata** dialog and click **Save and translate
+  Vietnamese** or **Save and translate English**; or
+- Start a translation job with **Translate title and novel summary** enabled.
+  This option is on by default and runs before chapter translation.
+
+The localizer filters glossary terms and character memory against only the
+title/summary fields being sent. Character aliases are considered, and a
+relationship is included only when both characters are active in the source
+metadata. This keeps the prompt concise while preserving the same terminology
+and character names used by translated chapters.
+
+Each localized field stores provenance in `localization_meta`:
+
+- `origin: "ai"` plus `source_hash` identifies an AI value. It is skipped when
+  the normalized source is unchanged and automatically refreshed when the
+  source changes.
+- `origin: "manual"` identifies a value saved through the Metadata editor. It
+  is never overwritten by AI.
+- A pre-existing localized value with no provenance is conservatively treated
+  like a manual value and skipped.
+- **Regenerate AI metadata** ignores a matching source hash for AI values, but
+  still preserves manual values. To replace a manual value with AI, clear that
+  localized field and use **Save and translate...**.
+
+The persisted schema is:
+
+```json
+{
+  "title": "Original title",
+  "summary": "Original synopsis",
+  "localized": {
+    "vi": {"title": "Tên truyện", "summary": "Tóm tắt"},
+    "en": {"title": "English title", "summary": "English synopsis"}
+  },
+  "localization_meta": {
+    "vi": {
+      "summary": {
+        "origin": "ai",
+        "source_hash": "sha256...",
+        "updated_at": "2026-07-14T00:00:00+00:00"
+      }
+    }
+  }
+}
+```
+
+The old `translated: {"vi": "...", "en": "..."}` title-only structure is
+not read and is rejected by the metadata API. Migrate it to
+`localized.<language>.title` before relying on the GUI or packager.
+
 ### Progress and reports
 
 Chapter-level progress is stored in `runtime/progress/{novel}.json` (Vietnamese)
@@ -412,7 +482,7 @@ uv run pack my-novel --title "My Novel" --author "Author Name" --output ./dist
 | --- | --- | --- |
 | `novel` | Novel name (directory in `translated/`) | required |
 | `-f, --format` | `epub`, `pdf`, or `all` | `all` |
-| `-t, --title` | Custom book title | from `metadata.json` or novel name |
+| `-t, --title` | Custom book title | localized target title, source title, or novel name |
 | `-a, --author` | Author name in metadata | `AI Translator` or `metadata.json` |
 | `--target` | Target language to package | `TARGET_LANGUAGE` env |
 | `-o, --output` | Custom output directory | per-novel root |
@@ -421,9 +491,11 @@ uv run pack my-novel --title "My Novel" --author "Author Name" --output ./dist
 ### Metadata and cover
 
 `pack` reads `translated/<novel>/metadata.json` for the title, author, and
-cover image. The cover can be a local path or a URL (`illustration_url`) — URL
-covers are downloaded to a temp file and embedded. Illustrations referenced by
-markers in the translated text are pulled from
+cover image. Unless `--title` is supplied, it prefers
+`localized.<target>.title`, then the source `title`, then the novel directory
+name. The cover can be a local path or a URL (`illustration_url`) — URL covers
+are downloaded to a temp file and embedded. Illustrations referenced by markers
+in the translated text are pulled from
 `translated/<novel>/illustrations/` and embedded in both EPUB and PDF.
 
 PDF output uses DejaVu Serif fonts for Vietnamese diacritics. On Linux install
@@ -443,6 +515,8 @@ token-heavier steps are optional:
 
 The LLM review and summary calls are off by default to keep cost down. Turn them
 on for higher-quality literary output, especially with cloud providers.
+This chapter-summary step is separate from translating the novel-level
+`metadata.json` summary described above.
 
 ## Notifications
 
@@ -472,3 +546,5 @@ Set `TELEGRAM_SILENT=true` to send without a notification sound.
 | Gemini blocked content | Provider sets `BLOCK_NONE` for all safety categories by default |
 | Translation stops mid-run | Use `Ctrl+C` for graceful stop, then `--resume` to continue |
 | Names inconsistent across chapters | Check `glossary list` and `glossary audit`; add fixed terms with `glossary add` |
+| Imported novel has no summary | The EPUB has no `dc:description` or clearly labelled synopsis page; enter the source summary in the GUI Metadata dialog |
+| Old translated title is ignored | Move `translated.<language>` to `localized.<language>.title` in `metadata.json` |
