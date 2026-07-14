@@ -130,26 +130,43 @@ _SAMPLE_FULL = {
 
 
 class ConfigGeneratorTest(unittest.TestCase):
+    def test_save_writes_config_inside_novel_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            translated_root = Path(tempdir)
+
+            path = ConfigGenerator.save({"name": "demo"}, translated_root)
+
+            self.assertEqual(path, translated_root / "demo" / "config.json")
+            self.assertTrue(path.is_file())
+
+    def test_save_rejects_non_slug_name(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir, self.assertRaises(ValueError):
+            ConfigGenerator.save({"name": "../demo"}, Path(tempdir))
+
     def test_load_known_domain_config_finds_match(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
-            configs_dir = Path(tempdir)
-            (configs_dir / "known.json").write_text(
+            translated_root = Path(tempdir)
+            config_path = translated_root / "known" / "config.json"
+            config_path.parent.mkdir()
+            config_path.write_text(
                 '{"toc_url": "https://example.com/book/1/", "chapter_link_selector": "a"}',
                 encoding="utf-8",
             )
-            result = ConfigGenerator._load_known_domain_config("example.com", configs_dir)
+            result = ConfigGenerator._load_known_domain_config("example.com", translated_root)
             self.assertIsNotNone(result)
             assert result is not None
             self.assertEqual(result["chapter_link_selector"], "a")
 
     def test_load_known_domain_config_returns_none_for_unknown(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
-            configs_dir = Path(tempdir)
-            (configs_dir / "known.json").write_text(
+            translated_root = Path(tempdir)
+            config_path = translated_root / "known" / "config.json"
+            config_path.parent.mkdir()
+            config_path.write_text(
                 '{"toc_url": "https://example.com/book/1/"}',
                 encoding="utf-8",
             )
-            result = ConfigGenerator._load_known_domain_config("other.com", configs_dir)
+            result = ConfigGenerator._load_known_domain_config("other.com", translated_root)
             self.assertIsNone(result)
 
     def test_html_cache_round_trip(self) -> None:
@@ -324,11 +341,13 @@ class ConfigGeneratorTest(unittest.TestCase):
     def test_generate_can_ignore_samples_and_known_domain_config(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             root = Path(tempdir)
-            configs_dir = root / "configs"
-            samples_dir = configs_dir / "samples"
+            translated_root = root / "translated"
+            samples_dir = root / "configs" / "samples"
             samples_dir.mkdir(parents=True)
             (samples_dir / "ixdzs8.json").write_text(json.dumps(_SAMPLE_FULL), encoding="utf-8")
-            (configs_dir / "known.json").write_text(
+            known_path = translated_root / "known" / "config.json"
+            known_path.parent.mkdir(parents=True)
+            known_path.write_text(
                 json.dumps(
                     {
                         **_SAMPLE_FULL,
@@ -365,7 +384,7 @@ class ConfigGeneratorTest(unittest.TestCase):
 
             result = generator.generate(
                 source_url,
-                configs_dir=configs_dir,
+                translated_root=translated_root,
                 samples_dir=samples_dir,
                 cache_dir=root / "cache",
                 use_samples=False,
@@ -408,7 +427,7 @@ class SiteSampleFilesTest(unittest.TestCase):
     def test_all_samples_have_every_field(self) -> None:
         import json
 
-        samples_dir = Path("configs") / "samples"
+        samples_dir = Path("configs")
         self.assertTrue(samples_dir.is_dir(), f"Missing samples dir: {samples_dir}")
         sample_files = sorted(samples_dir.glob("*.json"))
         self.assertGreaterEqual(len(sample_files), 4)
@@ -422,7 +441,7 @@ class SiteSampleFilesTest(unittest.TestCase):
                 SiteConfig.from_dict(data)
 
     def test_samples_cover_all_supported_non_8book_sites(self) -> None:
-        samples_dir = Path("configs") / "samples"
+        samples_dir = Path("configs")
         domains = set()
         for path in samples_dir.glob("*.json"):
             import json

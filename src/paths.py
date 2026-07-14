@@ -46,6 +46,10 @@ def novel_artifact_dir_from_root(novel_root: Path) -> Path:
     return novel_root / "artifacts"
 
 
+def novel_config_path_from_root(novel_root: Path) -> Path:
+    return novel_root / "config.json"
+
+
 def novel_glossary_path(
     config: Any,
     novel_name: str,
@@ -73,6 +77,10 @@ def novel_output_dir(config: Any, novel_name: str, target_language: str | None =
 
 def novel_artifact_dir(config: Any, novel_name: str) -> Path:
     return novel_artifact_dir_from_root(novel_root_dir(config, novel_name))
+
+
+def novel_config_path(config: Any, novel_name: str) -> Path:
+    return novel_config_path_from_root(novel_root_dir(config, novel_name))
 
 
 def translation_progress_path_for_target(
@@ -131,10 +139,12 @@ __all__ = [
     "novel_input_dir_from_root",
     "novel_output_dir_from_root",
     "novel_artifact_dir_from_root",
+    "novel_config_path_from_root",
     "novel_glossary_path",
     "novel_input_dir",
     "novel_output_dir",
     "novel_artifact_dir",
+    "novel_config_path",
     "translation_progress_path_for_target",
     "translation_progress_path",
     "translation_report_path",

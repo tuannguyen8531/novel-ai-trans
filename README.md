@@ -21,7 +21,7 @@ Website / EPUB
 
 ## Features
 
-- **Crawl public novel sites** with per-site JSON selector configs, or generate
+- **Crawl public novel sites** with per-novel JSON selector configs, or generate
   and validate configs with an LLM-assisted workflow.
 - **Import EPUB files** into the same chapter pipeline used by the crawler,
   including an original summary from EPUB metadata or labelled front matter
@@ -90,7 +90,7 @@ uv run pack my-novel --target vi
 ### Option 2: crawl from a configured site
 
 ```bash
-uv run generate https://example.com/novel/table-of-contents --name my-novel
+uv run generate https://example.com/novel --name my-novel
 uv run validate my-novel
 uv run crawl my-novel --max 5
 uv run translate my-novel --target vi
@@ -101,6 +101,7 @@ Generated files are written under:
 
 ```text
 translated/<novel>/
+├── config.json             crawl settings for this novel
 ├── input/                  source chapter_*.txt files
 ├── output/                 Vietnamese translated chapters
 ├── output/en/              English translated chapters
@@ -177,9 +178,9 @@ See [docs/PROVIDERS.md](docs/PROVIDERS.md) for detailed setup instructions.
 The project exposes short console commands through `pyproject.toml`:
 
 ```bash
-uv run crawl <config-or-name>        # download chapters from a site
-uv run generate <novel-url>          # AI-generate metadata and a site config
-uv run validate <config-or-name>     # test selectors against live HTML
+uv run crawl <novel>                 # use translated/<novel>/config.json
+uv run generate <novel-url>          # AI-generate metadata and a crawl config
+uv run validate <novel>              # test the novel config against live HTML
 uv run import <book.epub>            # import an EPUB into the pipeline
 uv run translate <novel>             # batch translate chapters
 uv run glossary <command> <novel>    # manage per-novel glossary
@@ -203,7 +204,7 @@ Settings are loaded from `.env`. Copy `.env.example` to `.env` and edit.
 
 | Key | Default | Purpose |
 | --- | --- | --- |
-| `TRANSLATED_DIR` | `translated` | Per-novel input, output, metadata, and package root |
+| `TRANSLATED_DIR` | `translated` | Per-novel config, input, output, metadata, and package root |
 | `LOG_RETENTION_DAYS` | `30` | Number of most recent daily folders to keep under `logs/` |
 | `MAX_CHAPTERS` | `0` | Crawler chapter cap, `0` means unlimited |
 | `LLM_PROVIDER` | `ollama` | Primary provider: `ollama`, `gemini`, or `openrouter` |
@@ -230,7 +231,7 @@ Settings are loaded from `.env`. Copy `.env.example` to `.env` and edit.
 
 ```text
 novel-ai-trans/
-├── configs/              crawler site profiles
+├── configs/              reusable crawler config samples
 ├── rules/                source-language rules per target language
 ├── src/
 │   ├── cli/              command entry points
@@ -240,7 +241,7 @@ novel-ai-trans/
 │   ├── services/         crawler, importer, metadata, LLM providers
 │   └── utils/            display, logging, text, JSON, HTML helpers
 ├── tests/                pytest suite
-├── translated/           local generated books and chapters
+├── translated/           local per-novel config, books, and chapters
 └── runtime/              progress, reports, crawler state, logs
 ```
 

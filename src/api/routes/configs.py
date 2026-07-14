@@ -1,4 +1,4 @@
-"""Crawler config endpoints."""
+"""Per-novel crawler config endpoints."""
 
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ from src.application.crawl import (
     validate_config as application_validate_config,
 )
 from src.config import SiteConfig
-from src.paths import CONFIG_DIR as _CONFIG_DIR
+from src.paths import novel_config_path_from_root
 
 router = APIRouter(tags=["configs"])
 
@@ -50,27 +50,27 @@ def _is_valid_slug(name: str) -> bool:
 def _config_path(name: str) -> Path:
     if not _is_valid_slug(name):
         raise _ApiValidationError(f"Invalid config name: {name!r}")
-    # The slug regex (``[A-Za-z0-9._-]``) excludes path separators, ``..`` and
-    # absolute paths, so interpolating it into a filename is safe. CodeQL's
-    # py/path-injection cannot trace the regex check, so we suppress the
-    # alert at this exact interpolation point.
-    path = _CONFIG_DIR / f"{name}.json"  # codeql[py/path-injection]: validated by _is_valid_slug above
-    return path
+    root = Path(app_config.get_config().translated_dir)
+    return novel_config_path_from_root(root / name)
 
 
 def _list_configs() -> list[ConfigSummary]:
-    if not _CONFIG_DIR.exists():
+    root = Path(app_config.get_config().translated_dir)
+    if not root.exists():
         return []
     out: list[ConfigSummary] = []
-    for entry in sorted(_CONFIG_DIR.iterdir()):
-        if entry.suffix == ".json" and entry.is_file():
+    for entry in sorted(root.iterdir()):
+        path = novel_config_path_from_root(entry)
+        if entry.is_dir() and _is_valid_slug(entry.name) and path.is_file():
             try:
-                data = json.loads(entry.read_text(encoding="utf-8"))
+                data = json.loads(path.read_text(encoding="utf-8"))
                 if not isinstance(data, dict):
+                    continue
+                if data.get("name") != entry.name:
                     continue
                 out.append(
                     ConfigSummary(
-                        name=entry.stem,
+                        name=entry.name,
                         version=int(data.get("version", 1)),
                         source_url=str(data.get("source_url", "")),
                         toc_url=str(data.get("toc_url", "")),
@@ -116,12 +116,14 @@ def save_config(
     if draft is not None and draft.name != name:
         raise _ApiValidationError("Draft name does not match the target config name.")
     try:
-        SiteConfig.from_dict(payload.config)
+        site_config = SiteConfig.from_dict(payload.config)
     except (ValueError, KeyError) as error:
         raise _ApiValidationError(f"Invalid config: {error}") from error
+    if site_config.name != name:
+        raise _ApiValidationError(f"Config name {site_config.name!r} does not match novel {name!r}.")
 
-    _CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     target = _config_path(name)
+    target.parent.mkdir(parents=True, exist_ok=True)
     tmp = target.with_suffix(target.suffix + ".tmp")
     tmp.write_text(
         json.dumps(payload.config, ensure_ascii=False, indent=2) + "\n",
@@ -194,28 +196,24 @@ async def post_generate_config(
 async def post_validate_config(
     name: str,
     payload: ConfigValidateRequest,
-    request: Request,
     _: AuthenticatedPrincipal,
     jobs: JobManagerDependency,
 ) -> JobStartResponse:
     snapshot = app_config.get_config().clone()
-    import asyncio
-
     loop = asyncio.get_running_loop()
-    target = payload.target or name
 
     def _run(job, emit, cancel_event):
         from src.api.jobs import build_progress_emitter as _bpe
 
         progress_cb = _bpe(job, emit)
         result: ConfigValidationResult = application_validate_config(
-            target=target,
+            novel=name,
             use_browser=payload.browser,
             progress_callback=progress_cb,
             cancel_event=cancel_event,
         )
         return {
-            "target": target,
+            "novel": name,
             "ok": result.ok,
             "issues": [vars(issue) for issue in result.issues],
             "metadata": result.metadata,
@@ -223,7 +221,7 @@ async def post_validate_config(
 
     job = jobs.submit(
         kind="validate",
-        novel=None,
+        novel=name,
         snapshot=snapshot,
         loop=loop,
         run=_run,

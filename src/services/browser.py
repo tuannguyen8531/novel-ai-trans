@@ -14,6 +14,7 @@ from typing import Any, TypeVar
 from playwright.async_api import (
     Browser,
     BrowserContext,
+    Page,
     Playwright,
     async_playwright,
 )
@@ -71,6 +72,7 @@ class BrowserFetcher:
     _pw: Playwright | None = field(default=None, init=False)
     _browser: Browser | None = field(default=None, init=False)
     _context: BrowserContext | None = field(default=None, init=False)
+    _shared_page: Page | None = field(default=None, init=False)
     _semaphore: asyncio.Semaphore | None = field(default=None, init=False)
     _throttle_lock: asyncio.Lock | None = field(default=None, init=False)
 
@@ -217,6 +219,7 @@ class BrowserFetcher:
             if self._context is not None:
                 await self._context.close()
         finally:
+            self._shared_page = None
             self._context = None
             try:
                 if self._browser is not None:
@@ -279,7 +282,12 @@ class BrowserFetcher:
             raise RuntimeError("Browser fetcher is not running.")
 
         async with semaphore:
-            page = await context.new_page()
+            reuse_page = self.profile_dir is not None and self.max_concurrency == 1
+            page = self._shared_page if reuse_page else None
+            if page is None or page.is_closed():
+                page = await context.new_page()
+                if reuse_page:
+                    self._shared_page = page
             try:
                 attempts = max(1, self.retry_attempts)
                 final_url = url
@@ -341,7 +349,8 @@ class BrowserFetcher:
                     content_type="text/html",
                 )
             finally:
-                await page.close()
+                if not reuse_page:
+                    await page.close()
 
     async def _read_after_challenge(self, page: Any, url: str) -> str:
         if self.challenge_timeout_seconds is None:

@@ -11,6 +11,7 @@ import unittest.mock
 from pathlib import Path
 
 from src.application.crawl import CrawlResult, browser_profile_dir, resolve_config_path
+from src.application.errors import ResourceNotFoundError
 from src.application.progress import ProgressEvent
 from src.cli import crawl
 from src.cli.crawl import (
@@ -19,7 +20,7 @@ from src.cli.crawl import (
     build_parser,
     build_short_parser,
 )
-from src.paths import CONFIG_DIR, RUNTIME_DIR
+from src.paths import RUNTIME_DIR
 from src.utils.logging import get_logger, setup_logging
 
 
@@ -42,7 +43,7 @@ def _dry_crawl_result() -> CrawlResult:
 
 def _crawl_args(**overrides: object) -> argparse.Namespace:
     values = {
-        "target": "example",
+        "novel": "example",
         "workers": 1,
         "browser": False,
         "headed": False,
@@ -61,7 +62,7 @@ class CliTest(unittest.TestCase):
     def test_short_parser_accepts_novel_and_max_alias(self) -> None:
         args = build_short_parser().parse_args(["sfacg-760079", "--max", "5"])
 
-        self.assertEqual(args.target, "sfacg-760079")
+        self.assertEqual(args.novel, "sfacg-760079")
         self.assertEqual(args.max_chapters, 5)
 
     def test_short_parser_accepts_headed_browser(self) -> None:
@@ -80,24 +81,41 @@ class CliTest(unittest.TestCase):
         )
 
     def test_resolve_config_path_accepts_novel_name(self) -> None:
-        self.assertEqual(resolve_config_path("example"), CONFIG_DIR / "example.json")
+        with tempfile.TemporaryDirectory() as tempdir:
+            translated_root = Path(tempdir)
+            config_path = translated_root / "example" / "config.json"
+            config_path.parent.mkdir()
+            config_path.write_text("{}", encoding="utf-8")
 
-    def test_resolve_config_path_accepts_direct_path(self) -> None:
+            self.assertEqual(
+                resolve_config_path("example", translated_root=translated_root),
+                config_path,
+            )
+
+    def test_resolve_config_path_rejects_direct_path(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             config_path = Path(tempdir) / "config.json"
             config_path.write_text("{}", encoding="utf-8")
 
-            self.assertEqual(resolve_config_path(str(config_path)), config_path)
+            with self.assertRaises(ResourceNotFoundError):
+                resolve_config_path(str(config_path))
 
     def test_validate_parser_exists(self) -> None:
         args = build_parser().parse_args(["validate", "demo"])
         self.assertEqual(args.command, "validate")
-        self.assertEqual(args.target, "demo")
+        self.assertEqual(args.novel, "demo")
 
     def test_generate_parser_accepts_ignore_sample(self) -> None:
         args = build_parser().parse_args(["generate", "https://example.com/book/", "--ignore-sample"])
         self.assertEqual(args.command, "generate")
         self.assertTrue(args.ignore_sample)
+
+    def test_generate_parser_uses_translated_output_only(self) -> None:
+        args = build_generate_parser().parse_args(["https://example.com/book/", "--translated-output", "/tmp/books"])
+        self.assertEqual(args.translated_output, Path("/tmp/books"))
+
+        with self.assertRaises(SystemExit):
+            build_generate_parser().parse_args(["https://example.com/book/", "--output", "/tmp/configs"])
 
     def test_generate_parser_accepts_headed_browser(self) -> None:
         args = build_generate_parser().parse_args(["https://example.com/book/", "-h"])
@@ -215,7 +233,7 @@ class CliTest(unittest.TestCase):
             finished_at=0.0,
         )
         args = _crawl_args(
-            target="demo",
+            novel="demo",
             dry_run=False,
         )
 

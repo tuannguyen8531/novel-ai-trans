@@ -25,14 +25,13 @@ from src.application.errors import (
 from src.application.progress import ProgressEvent
 from src.config import SiteConfig
 from src.domain.language import detect_language_heuristic
-from src.paths import CONFIG_DIR, RUNTIME_DIR, RUNTIME_OUTPUT_ROOT
+from src.paths import CONFIG_DIR, RUNTIME_DIR, RUNTIME_OUTPUT_ROOT, novel_config_path_from_root
 from src.services.configs import ConfigGenerator
 from src.services.crawler import ConsecutiveFailureError, NovelCrawler
 from src.services.http import FetchError
 from src.services.importer import ChapterImportChange, EpubImportError, import_epub
 from src.services.llm import get_llm
 from src.utils.files import merge_json_locked
-from src.utils.text import slugify
 
 _DRAFT_TTL = timedelta(days=7)
 _SLUG_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
@@ -45,7 +44,7 @@ _SLUG_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 
 @dataclass
 class CrawlRequest:
-    target: str
+    novel: str
     translated_output: Path | None = None
     max_chapters: int | None = None
     fail_fast: bool = False
@@ -93,21 +92,14 @@ def _check_cancel(event: Event | None) -> None:
         raise OperationCancelledError("Crawl cancelled.")
 
 
-def resolve_config_path(target: str) -> Path:
-    path = Path(target)
-    if path.is_file():
-        return path
-    candidates = []
-    if path.suffix == ".json":
-        candidates.append(CONFIG_DIR / path)
-    else:
-        candidates.append(CONFIG_DIR / f"{target}.json")
-        candidates.append(CONFIG_DIR / target / "config.json")
-    for candidate in candidates:
-        if candidate.is_file():
-            return candidate
-    checked = ", ".join(str(c) for c in candidates)
-    raise ResourceNotFoundError(f"Config not found for {target!r}. Checked: {checked}")
+def resolve_config_path(novel: str, *, translated_root: Path | None = None) -> Path:
+    if not _SLUG_PATTERN.fullmatch(novel) or novel in {".", ".."}:
+        raise ResourceNotFoundError(f"Invalid novel slug: {novel!r}")
+    root = translated_root or Path(app_config.get_config().translated_dir)
+    path = novel_config_path_from_root(root / novel)
+    if not path.is_file():
+        raise ResourceNotFoundError(f"Config not found for novel {novel!r}: {path}")
+    return path
 
 
 def run_crawl(
@@ -119,11 +111,14 @@ def run_crawl(
     """Run the crawler with cooperative cancellation."""
     config = app_config.get_config()
     started_at = time.time()
+    share_root = request.translated_output or Path(config.translated_dir)
     try:
-        config_path = resolve_config_path(request.target)
+        config_path = resolve_config_path(request.novel, translated_root=share_root)
         site_config = SiteConfig.from_file(config_path)
     except (OSError, ValueError) as error:
         raise ApplicationValidationError(str(error)) from error
+    if site_config.name != request.novel:
+        raise ApplicationValidationError(f"Config name {site_config.name!r} does not match novel directory {request.novel!r}.")
     # Headed mode forces a browser with the host's real Chrome identity and
     # a reusable profile, so challenge clearance is device-bound. The
     # headless path keeps the legacy ephemeral fingerprint.
@@ -136,13 +131,13 @@ def run_crawl(
     workers = request.workers
     if workers < 1:
         raise ApplicationValidationError("Number of workers must be at least 1.")
+    if request.headed:
+        workers = 1
     max_chapters = request.max_chapters
     if max_chapters == 0:
         max_chapters = None
     elif max_chapters is None and config.max_chapters > 0:
         max_chapters = config.max_chapters
-    share_root = request.translated_output or (Path(config.translated_dir) if config.translated_dir else None)
-
     _emit(
         progress_callback,
         ProgressEvent(
@@ -213,10 +208,9 @@ def run_crawl(
     try:
         if request.dry_run:
             metadata, discovered = crawler.discover_chapters()
-            if share_root is not None:
-                metadata_path = share_root / slugify(site_config.name) / "metadata.json"
-                if metadata_path.is_file():
-                    metadata = crawler.merge_metadata_from_file(metadata_path, metadata)
+            metadata_path = share_root / request.novel / "metadata.json"
+            if metadata_path.is_file():
+                metadata = crawler.merge_metadata_from_file(metadata_path, metadata)
             if max_chapters is not None:
                 discovered = discovered[:max_chapters]
             return CrawlResult(
@@ -313,7 +307,7 @@ def generate_config(
     cancel_event: Event | None = None,
     drafts_dir: Path | None = None,
 ) -> ConfigGenerationResult:
-    """Generate a site config using AI and persist it as a draft."""
+    """Generate a novel crawl config using AI and persist it as a draft."""
     if drafts_dir is not None:
         drafts_dir.mkdir(parents=True, exist_ok=True)
     if provider:
@@ -333,6 +327,8 @@ def generate_config(
     config_dict = generator.generate(
         url,
         name=name,
+        translated_root=Path(app_config.get_config().translated_dir),
+        samples_dir=CONFIG_DIR,
         cache_dir=cache_dir,
         use_cache=not no_cache,
         use_samples=not ignore_sample,
@@ -423,14 +419,14 @@ def save_generated_metadata(
 
 def save_generated_config(
     config: dict,
-    output_dir: Path,
     *,
     metadata: dict | None = None,
     translated_root: Path | None = None,
 ) -> Path:
     """Persist a confirmed generated config and its extracted metadata."""
     try:
-        path = ConfigGenerator.save(config, output_dir)
+        root = translated_root or Path(app_config.get_config().translated_dir)
+        path = ConfigGenerator.save(config, root)
         if metadata:
             save_generated_metadata(
                 str(config.get("name", "generated")),
@@ -458,7 +454,7 @@ class ConfigIssue:
 @dataclass
 class ConfigValidationResult:
     ok: bool
-    target: str
+    novel: str
     config_path: str = ""
     toc_url: str = ""
     fetcher: str = "http"
@@ -471,7 +467,7 @@ class ConfigValidationResult:
 
 def validate_config(
     *,
-    target: str,
+    novel: str,
     use_browser: bool | None = None,
     progress_callback: Callable[[ProgressEvent], None] | None = None,
     cancel_event: Event | None = None,
@@ -479,10 +475,12 @@ def validate_config(
     """Test selectors from a config against live HTML."""
 
     try:
-        config_path = resolve_config_path(target)
+        config_path = resolve_config_path(novel)
         site_config = SiteConfig.from_file(config_path)
     except (OSError, ValueError) as error:
         raise ApplicationValidationError(str(error)) from error
+    if site_config.name != novel:
+        raise ApplicationValidationError(f"Config name {site_config.name!r} does not match novel directory {novel!r}.")
     use_browser = use_browser if use_browser is not None else False
     _check_cancel(cancel_event)
     _emit(progress_callback, ProgressEvent(kind="phase", message=f"Validating {site_config.name}"))
@@ -609,7 +607,7 @@ def _validate_with_fetcher(
 
     return ConfigValidationResult(
         ok=ok,
-        target=site_config.name,
+        novel=site_config.name,
         config_path=str(config_path),
         toc_url=site_config.toc_url,
         fetcher=fetcher_name,

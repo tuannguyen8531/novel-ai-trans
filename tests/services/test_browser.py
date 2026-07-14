@@ -66,6 +66,9 @@ class FakePage:
     async def close(self) -> None:
         self.closed = True
 
+    def is_closed(self) -> bool:
+        return self.closed
+
     def locator(self, selector: str) -> FakeLocator:
         return FakeLocator(self, selector)
 
@@ -260,6 +263,29 @@ class BrowserFetcherTest(unittest.TestCase):
         self.assertNotIn("user_agent", options)
         self.assertTrue(playwright.browser.context.closed)
         self.assertTrue(playwright.stopped)
+
+    def test_persistent_profile_reuses_one_page_across_fetches(self) -> None:
+        playwright = FakePlaywright()
+        starter = FakePlaywrightStarter(playwright)
+
+        with (
+            tempfile.TemporaryDirectory() as tempdir,
+            patch("src.services.browser.async_playwright", return_value=starter),
+            BrowserFetcher(
+                profile_dir=Path(tempdir) / "example.test",
+                headless=False,
+                delay_seconds=0,
+                max_concurrency=1,
+            ) as fetcher,
+        ):
+            first = fetcher.fetch("https://example.test/toc")
+            second = fetcher.fetch("https://example.test/chapter-1")
+
+            self.assertEqual(len(playwright.browser.context.pages), 1)
+            self.assertFalse(playwright.browser.context.pages[0].closed)
+
+        self.assertEqual(first.url, "https://example.test/toc")
+        self.assertEqual(second.url, "https://example.test/chapter-1")
 
     def test_waits_for_cloudflare_challenge_to_clear(self) -> None:
         playwright = FakePlaywright()

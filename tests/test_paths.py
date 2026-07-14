@@ -20,6 +20,14 @@ def test_novel_directories_from_root() -> None:
     assert paths.novel_output_dir_from_root(novel_root, "vi") == novel_root / "output"
     assert paths.novel_output_dir_from_root(novel_root, "en") == novel_root / "output" / "en"
     assert paths.novel_artifact_dir_from_root(novel_root) == novel_root / "artifacts"
+    assert paths.novel_config_path_from_root(novel_root) == novel_root / "config.json"
+
+
+def test_novel_config_path_uses_translated_root(tmp_path: Path) -> None:
+    class Config:
+        translated_dir = str(tmp_path / "translated")
+
+    assert paths.novel_config_path(Config(), "demo") == tmp_path / "translated" / "demo" / "config.json"
 
 
 def test_translation_progress_path_for_target(tmp_path: Path) -> None:
