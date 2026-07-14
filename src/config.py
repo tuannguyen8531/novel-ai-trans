@@ -36,6 +36,7 @@ class Config:
     # Translator: directory holding per-novel {input,output,glossary,...}.
     # Crawler: same directory; crawler writes novel input/ here.
     translated_dir: str = "translated"
+    log_retention_days: int = 30  # Number of most recent daily log folders to keep
 
     # --- Crawler settings ---
     max_chapters: int = 0  # 0 = no limit
@@ -85,6 +86,8 @@ class Config:
         """Validate configuration values."""
         if not self.translated_dir or not self.translated_dir.strip():
             raise ValueError("TRANSLATED_DIR configuration must not be empty.")
+        if self.log_retention_days < 1:
+            raise ValueError(f"log_retention_days must be >= 1, got {self.log_retention_days}")
         if self.fallback_provider and self.fallback_provider == self.llm_provider:
             raise ValueError(f"fallback_provider ({self.fallback_provider}) must differ from llm_provider")
         if not 0.0 <= self.translation_temperature <= 1.0:
@@ -115,6 +118,7 @@ class Config:
 
         return cls(
             translated_dir=os.getenv("TRANSLATED_DIR", "translated"),
+            log_retention_days=int(os.getenv("LOG_RETENTION_DAYS") or "30"),
             max_chapters=int(os.getenv("MAX_CHAPTERS") or "0"),
             llm_provider=os.getenv("LLM_PROVIDER", "ollama"),
             fallback_provider=os.getenv("FALLBACK_PROVIDER", ""),

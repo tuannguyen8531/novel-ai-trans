@@ -34,6 +34,7 @@ def test_config_to_env_dict_includes_nonempty_secrets():
     assert env["TRANSLATION_TEMPERATURE"] == "0.42"
     assert env["CHUNK_MODE"] == "tokens"
     assert env["CHUNK_SIZE"] == "2000"
+    assert env["LOG_RETENTION_DAYS"] == "30"
     # Non-empty secrets are persisted when the user has set them.
     assert env["GEMINI_API_KEY"] == "sk-test"
     assert env["OPENROUTER_API_KEY"] == "sk-or-test"

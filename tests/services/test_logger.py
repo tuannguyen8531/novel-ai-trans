@@ -1,8 +1,40 @@
 """Tests for API logging format."""
 
 import json
+from datetime import datetime
 
 from src.services import logger as logger_module
+
+
+def test_new_daily_folder_removes_old_logs_beyond_retention(tmp_path, monkeypatch):
+    log_dir = tmp_path / "logs"
+    for name in ("2026-05-01", "2026-05-02", "2026-05-03"):
+        daily_dir = log_dir / name
+        daily_dir.mkdir(parents=True)
+        (daily_dir / "request.log").write_text(name, encoding="utf-8")
+    unrelated_dir = log_dir / "archive"
+    unrelated_dir.mkdir()
+
+    monkeypatch.setattr(logger_module, "LOG_DIR", log_dir)
+    monkeypatch.setattr(logger_module.config, "log_retention_days", 3)
+
+    path = logger_module._daily_log_path(datetime(2026, 5, 4), "request.log")
+
+    assert path == log_dir / "2026-05-04" / "request.log"
+    assert sorted(entry.name for entry in log_dir.iterdir()) == ["2026-05-02", "2026-05-03", "2026-05-04", "archive"]
+
+
+def test_existing_daily_folder_does_not_run_rotation(tmp_path, monkeypatch):
+    log_dir = tmp_path / "logs"
+    for name in ("2026-05-01", "2026-05-02"):
+        (log_dir / name).mkdir(parents=True)
+
+    monkeypatch.setattr(logger_module, "LOG_DIR", log_dir)
+    monkeypatch.setattr(logger_module.config, "log_retention_days", 1)
+
+    logger_module._daily_log_path(datetime(2026, 5, 2), "request.log")
+
+    assert sorted(entry.name for entry in log_dir.iterdir()) == ["2026-05-01", "2026-05-02"]
 
 
 def test_log_api_request_writes_separate_request_and_response_records(tmp_path, monkeypatch):

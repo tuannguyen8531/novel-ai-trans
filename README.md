@@ -155,6 +155,7 @@ Settings are loaded from `.env`. Copy `.env.example` to `.env` and edit.
 | Key | Default | Purpose |
 | --- | --- | --- |
 | `TRANSLATED_DIR` | `translated` | Per-novel input, output, metadata, and package root |
+| `LOG_RETENTION_DAYS` | `30` | Number of most recent daily folders to keep under `logs/` |
 | `MAX_CHAPTERS` | `0` | Crawler chapter cap, `0` means unlimited |
 | `LLM_PROVIDER` | `ollama` | Primary provider: `ollama`, `gemini`, or `openrouter` |
 | `FALLBACK_PROVIDER` | empty | Optional fallback provider |

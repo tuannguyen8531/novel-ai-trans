@@ -8,16 +8,21 @@ Three daily log files:
 """
 
 import json
+import shutil
 import sys
+import threading
 import traceback
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from uuid import uuid4
+
+from src.config import config
 
 LOG_DIR = Path(".pytest_cache/logs") if "pytest" in sys.modules else Path("logs")
 LOG_REQUEST_NAME = "request.log"
 LOG_RESPONSE_NAME = "response.log"
 LOG_ERROR_NAME = "error.log"
+_DAILY_DIR_LOCK = threading.Lock()
 
 _verbose = False
 
@@ -43,8 +48,33 @@ def _normalize_call_type(call_type: str) -> str:
 def _daily_log_path(now: datetime, filename: str) -> Path:
     """Return the log path for the local calendar day."""
     daily_dir = LOG_DIR / now.strftime("%Y-%m-%d")
-    daily_dir.mkdir(parents=True, exist_ok=True)
+    if not daily_dir.exists():
+        with _DAILY_DIR_LOCK:
+            if not daily_dir.exists():
+                daily_dir.mkdir(parents=True, exist_ok=True)
+                _remove_expired_daily_logs(config.log_retention_days)
     return daily_dir / filename
+
+
+def _remove_expired_daily_logs(retention_days: int) -> None:
+    """Keep only the newest configured number of ISO-dated log folders."""
+    dated_dirs: list[Path] = []
+    for path in LOG_DIR.iterdir():
+        if not path.is_dir() or path.is_symlink():
+            continue
+        try:
+            parsed = date.fromisoformat(path.name)
+        except ValueError:
+            continue
+        if parsed.isoformat() == path.name:
+            dated_dirs.append(path)
+
+    for expired_dir in sorted(dated_dirs, key=lambda path: path.name, reverse=True)[retention_days:]:
+        try:
+            shutil.rmtree(expired_dir)
+        except OSError:
+            # Log writes must continue even if an old directory cannot be removed.
+            continue
 
 
 def log_api_request_sent(

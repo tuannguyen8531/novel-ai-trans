@@ -32,6 +32,7 @@ SECRET_FIELD_NAMES: frozenset[str] = frozenset(
 # ``Config.from_env`` in src/config.py.
 _FIELD_TO_ENV: dict[str, str] = {
     "translated_dir": "TRANSLATED_DIR",
+    "log_retention_days": "LOG_RETENTION_DAYS",
     "max_chapters": "MAX_CHAPTERS",
     "llm_provider": "LLM_PROVIDER",
     "fallback_provider": "FALLBACK_PROVIDER",

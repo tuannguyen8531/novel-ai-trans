@@ -15,6 +15,7 @@ class TestConfig:
             config = Config()
             assert config.llm_provider == "ollama"
             assert config.ollama_model == "qwen3:8b"
+            assert config.log_retention_days == 30
             assert config.translation_temperature == 0.3
             assert config.target_language == "vi"
             assert config.chunk_mode == "chars"
@@ -39,6 +40,7 @@ class TestConfig:
             "ENABLE_REVIEW": "true",
             "ENABLE_SUMMARY": "true",
             "TELEGRAM_ENABLED": "true",
+            "LOG_RETENTION_DAYS": "14",
         }
         with patch.dict(os.environ, env, clear=True), patch("src.config.load_dotenv"):
             config = Config.from_env()
@@ -50,6 +52,11 @@ class TestConfig:
             assert config.enable_review is True
             assert config.enable_summary is True
             assert config.telegram_enabled is True
+            assert config.log_retention_days == 14
+
+    def test_rejects_non_positive_log_retention(self):
+        with pytest.raises(ValueError, match="log_retention_days"):
+            Config(log_retention_days=0)
 
     def test_from_env_reads_crawler_settings(self):
         with (
