@@ -10,8 +10,9 @@ from pathlib import Path
 from threading import Event
 from typing import Literal
 
-from src.application import novels
 from src.application.errors import ExternalServiceError, OperationCancelledError
+from src.application.metadata import metadata
+from src.application.novel import require_path
 from src.domain.characters import format_relationships_shorthand
 from src.domain.glossary import format_glossary_for_prompt, select_active_glossary_terms
 from src.domain.language import normalize_source_language, normalize_target_language, target_language_name
@@ -100,9 +101,9 @@ def localize_metadata(
     cancel_event: Event | None = None,
 ) -> LocalizationResult:
     """Translate missing/stale AI metadata fields for one target language."""
-    novel_root = novels.require_path(root, novel_name)
+    novel_root = require_path(root, novel_name)
     target = normalize_target_language(target_language)
-    metadata = novels.metadata(root, novel_name)
+    novel_metadata = metadata(root, novel_name)
     requested = tuple(dict.fromkeys(fields))
     invalid = [field for field in requested if field not in SUPPORTED_FIELDS]
     if invalid:
@@ -111,10 +112,10 @@ def localize_metadata(
     source_values: dict[str, str] = {}
     pending: dict[str, str] = {}
     skipped: list[str] = []
-    existing_target = _target_data(metadata, target)
+    existing_target = _target_data(novel_metadata, target)
 
     for field in requested:
-        source = metadata.get(field)
+        source = novel_metadata.get(field)
         source_text = source.strip() if isinstance(source, str) else ""
         if not source_text:
             skipped.append(field)
@@ -123,7 +124,7 @@ def localize_metadata(
 
         existing = existing_target.get(field)
         existing_text = existing.strip() if isinstance(existing, str) else ""
-        field_meta = _field_meta(metadata, target, field)
+        field_meta = _field_meta(novel_metadata, target, field)
         if existing_text:
             origin = field_meta.get("origin")
             if not field_meta or origin == "manual":
@@ -146,7 +147,7 @@ def localize_metadata(
     active_entities, active_edges, _ = get_active_context(novel_name, source_context)
     characters = format_relationships_shorthand(active_entities, active_edges)
     system_prompt = render_prompt("localize", target_language=target)
-    source_language = normalize_source_language(metadata.get("source_language") if isinstance(metadata, dict) else "")
+    source_language = normalize_source_language(novel_metadata.get("source_language") if isinstance(novel_metadata, dict) else "")
     user_payload = {
         "source_language": source_language or "auto",
         "target_language": target_language_name(target),

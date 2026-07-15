@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from src.application import novels
+from src.application import artifacts, catalog, chapters, metadata, rules
 from src.application.errors import ResourceNotFoundError
 
 
@@ -27,13 +27,13 @@ def test_summary_combines_progress_with_stored_outputs(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    summary = novels.summarize(root, "demo", progress_root=progress_root)
+    summary = catalog.summarize(root, "demo", progress_root=progress_root)
 
     vietnamese = next(progress for progress in summary.targets if progress.target == "vi")
     assert vietnamese.total == 2
     assert vietnamese.completed == 2
     assert vietnamese.failed == 1
-    assert novels.progress(root, "demo", "vi", progress_root=progress_root) == {
+    assert catalog.progress(root, "demo", "vi", progress_root=progress_root) == {
         "completed": [2],
         "failed": [3],
     }
@@ -48,8 +48,8 @@ def test_summary_resolves_title_for_requested_target_language(tmp_path: Path) ->
         encoding="utf-8",
     )
 
-    assert novels.summarize(root, "demo").title == "Original"
-    assert novels.summarize(root, "demo", target_language="vi").title == "Tên truyện"
+    assert catalog.summarize(root, "demo").title == "Original"
+    assert catalog.summarize(root, "demo", target_language="vi").title == "Tên truyện"
 
 
 def test_update_metadata_merges_and_clears_localized_titles(tmp_path: Path) -> None:
@@ -61,7 +61,7 @@ def test_update_metadata_merges_and_clears_localized_titles(tmp_path: Path) -> N
         encoding="utf-8",
     )
 
-    updated = novels.update_metadata(root, "demo", {"localized": {"vi": {"title": None}}})
+    updated = metadata.update_metadata(root, "demo", {"localized": {"vi": {"title": None}}})
 
     assert updated["localized"] == {"en": {"title": "Title"}}
     assert json.loads((novel_root / "metadata.json").read_text(encoding="utf-8")) == updated
@@ -76,7 +76,7 @@ def test_update_metadata_deep_merges_localized_fields_as_manual(tmp_path: Path) 
         encoding="utf-8",
     )
 
-    updated = novels.update_metadata(
+    updated = metadata.update_metadata(
         root,
         "demo",
         {"localized": {"vi": {"summary": "Tóm tắt"}, "en": {"title": "Title"}}},
@@ -103,7 +103,7 @@ def test_write_chapter_can_update_translation(tmp_path: Path, target: str, relat
     novel_root = root / "demo"
     novel_root.mkdir(parents=True)
 
-    result = novels.write_chapter(
+    result = chapters.write_chapter(
         root,
         "demo",
         7,
@@ -115,7 +115,7 @@ def test_write_chapter_can_update_translation(tmp_path: Path, target: str, relat
     assert result.view == "translation"
     assert result.target == target
     assert (novel_root / relative_path).read_text(encoding="utf-8") == "Translated chapter"
-    assert novels.read_chapter(root, "demo", 7, view="translation", target=target).content == "Translated chapter"
+    assert chapters.read_chapter(root, "demo", 7, view="translation", target=target).content == "Translated chapter"
 
 
 def test_write_chapter_preserves_legacy_unpadded_translation_filename(tmp_path: Path) -> None:
@@ -124,7 +124,7 @@ def test_write_chapter_preserves_legacy_unpadded_translation_filename(tmp_path: 
     legacy_path.parent.mkdir(parents=True)
     legacy_path.write_text("Old translation", encoding="utf-8")
 
-    novels.write_chapter(root, "demo", 7, "Updated translation", view="translation", target="vi")
+    chapters.write_chapter(root, "demo", 7, "Updated translation", view="translation", target="vi")
 
     assert legacy_path.read_text(encoding="utf-8") == "Updated translation"
     assert not (legacy_path.parent / "chapter_007.txt").exists()
@@ -136,13 +136,13 @@ def test_source_chapter_operations_preserve_legacy_unpadded_filename(tmp_path: P
     legacy_path.parent.mkdir(parents=True)
     legacy_path.write_text("Old source", encoding="utf-8")
 
-    assert novels.read_chapter(root, "demo", 7, view="source").content == "Old source"
-    novels.write_chapter(root, "demo", 7, "Updated source")
+    assert chapters.read_chapter(root, "demo", 7, view="source").content == "Old source"
+    chapters.write_chapter(root, "demo", 7, "Updated source")
 
     assert legacy_path.read_text(encoding="utf-8") == "Updated source"
     assert not (legacy_path.parent / "chapter_007.txt").exists()
 
-    novels.delete_chapter(root, "demo", 7)
+    chapters.delete_chapter(root, "demo", 7)
     assert not legacy_path.exists()
 
 
@@ -150,11 +150,11 @@ def test_rules_round_trip_and_default_to_empty(tmp_path: Path) -> None:
     root = tmp_path / "translated"
     (root / "demo").mkdir(parents=True)
 
-    assert novels.rules(root, "demo") == ""
+    assert rules.rules(root, "demo") == ""
 
-    novels.save_rules(root, "demo", "Keep names consistent.")
+    rules.save_rules(root, "demo", "Keep names consistent.")
 
-    assert novels.rules(root, "demo") == "Keep names consistent."
+    assert rules.rules(root, "demo") == "Keep names consistent."
 
 
 def test_artifact_paths_prefer_artifacts_directory_and_ignore_unsupported_formats(tmp_path: Path) -> None:
@@ -167,13 +167,13 @@ def test_artifact_paths_prefer_artifacts_directory_and_ignore_unsupported_format
     unsupported = novel_root / "demo.en.mobi"
     unsupported.write_bytes(b"unsupported")
 
-    assert [path.name for path in novels.list_artifact_paths(novel_root)] == ["demo.vi.epub"]
-    assert novels.resolve_artifact_path(novel_root, "demo.vi.epub") == current.resolve()
+    assert [path.name for path in artifacts.list_artifact_paths(novel_root)] == ["demo.vi.epub"]
+    assert artifacts.resolve_artifact_path(novel_root, "demo.vi.epub") == current.resolve()
     with pytest.raises(ResourceNotFoundError, match="Artifact not found"):
-        novels.resolve_artifact_path(novel_root, "demo.en.mobi")
+        artifacts.resolve_artifact_path(novel_root, "demo.en.mobi")
 
 
 @pytest.mark.parametrize("filename", ["../demo.epub", "subdir/demo.epub", ".hidden.epub"])
 def test_resolve_artifact_rejects_unsafe_filename(tmp_path: Path, filename: str) -> None:
     with pytest.raises(ResourceNotFoundError, match="Invalid artifact name"):
-        novels.resolve_artifact_path(tmp_path / "demo", filename)
+        artifacts.resolve_artifact_path(tmp_path / "demo", filename)

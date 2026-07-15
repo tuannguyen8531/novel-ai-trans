@@ -12,8 +12,8 @@ from fastapi import APIRouter
 from src.api.dependencies import AuthenticatedPrincipal, JobManagerDependency
 from src.api.jobs import build_progress_emitter
 from src.api.schemas import JobStartResponse, TranslationRequestPayload
+from src.application import catalog, novel
 from src.application import config as app_config
-from src.application import novels
 from src.application.localization import localize_metadata
 from src.application.progress import ProgressEvent
 from src.application.translate import (
@@ -55,7 +55,7 @@ async def post_translate(
                 )
             )
             metadata_result = localize_metadata(
-                novels.resolve_root(snapshot.translated_dir),
+                novel.resolve_root(snapshot.translated_dir),
                 payload.novel,
                 payload.target_language or snapshot.target_language,
                 force=payload.force_metadata or False,
@@ -143,16 +143,14 @@ def translation_progress(
     _: AuthenticatedPrincipal,
     target: Literal["vi", "en"] | None = None,
 ) -> dict:
-    from src.application import novels
-
     config = app_config.get_config()
-    root = novels.resolve_root(config.translated_dir)
-    if not novels.is_valid_slug(name):
+    root = novel.resolve_root(config.translated_dir)
+    if not novel.is_valid_slug(name):
         from src.api.errors import ResourceNotFoundError
 
         raise ResourceNotFoundError(f"Invalid novel name: {name!r}")
     resolved_target: Literal["vi", "en"] = target or ("en" if config.target_language == "en" else "vi")
-    saved = novels.progress(root, name, resolved_target)
+    saved = catalog.progress(root, name, resolved_target)
     return {
         "novel": name,
         "target": resolved_target,
