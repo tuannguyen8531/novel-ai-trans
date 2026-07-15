@@ -1,0 +1,1 @@
+"""Novel application services."""

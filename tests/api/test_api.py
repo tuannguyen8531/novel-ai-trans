@@ -557,7 +557,7 @@ def test_spa_fallback_rejects_paths_outside_dist(tmp_path):
 
 def test_apply_glossary_endpoint_success(client):
     with (
-        patch("src.api.routes.glossary.glossary.apply_pending_replacements") as mock_apply,
+        patch("src.api.routes.glossary.replacements.apply_pending_replacements") as mock_apply,
         patch("src.api.routes.glossary._validate_novel"),
     ):
         mock_apply.return_value = {
@@ -587,7 +587,7 @@ def test_apply_glossary_endpoint_success(client):
 
 def test_dismiss_glossary_endpoint_success(client):
     with (
-        patch("src.api.routes.glossary.glossary.dismiss_pending_replacements") as mock_dismiss,
+        patch("src.api.routes.glossary.replacements.dismiss_pending_replacements") as mock_dismiss,
         patch("src.api.routes.glossary._validate_novel"),
     ):
         response = client.post(
@@ -603,7 +603,7 @@ def test_dismiss_glossary_endpoint_success(client):
 
 def test_rollback_glossary_endpoint_success(client):
     with (
-        patch("src.api.routes.glossary.glossary.rollback_replacements") as mock_rollback,
+        patch("src.api.routes.glossary.replacements.rollback_replacements") as mock_rollback,
         patch("src.api.routes.glossary._validate_novel"),
     ):
         response = client.post(

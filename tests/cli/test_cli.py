@@ -14,10 +14,10 @@ from src.cli.translate import (
     _print_progress_callback,
     find_untranslated,
     load_progress,
+    main,
     save_progress,
     scan_chapters,
     translate_file,
-    translate_main,
 )
 from src.config import Config
 from src.utils.progress import ProgressTracker
@@ -177,7 +177,7 @@ class TestDryRun:
             _patch_config(translated_dir=str(self.base), target_language="vi"),
             patch("src.cli.translate.check_provider") as mock_check_provider,
         ):
-            translate_main()
+            main()
 
         mock_check_provider.assert_not_called()
         output = capsys.readouterr().out
@@ -363,7 +363,7 @@ class TestGlossaryCli:
         self.lock_patcher = patch("src.services.glossary.LOCK_DIR", self.base / "locks")
         self.lock_patcher.start()
         self.backup_patcher = patch(
-            "src.application.glossary.GLOSSARY_BACKUP_DIR",
+            "src.application.glossary.replacements.GLOSSARY_BACKUP_DIR",
             self.base / "backups",
         )
         self.backup_patcher.start()
@@ -378,13 +378,13 @@ class TestGlossaryCli:
             patch("sys.argv", ["translate", "glossary", "add", "my-novel", "李白", "Lý Bạch"]),
             patch("src.services.glossary.GLOSSARY_DIR", self.base / "glossary"),
         ):
-            translate_main()
+            main()
 
         with (
             patch("sys.argv", ["translate", "glossary", "list", "my-novel"]),
             patch("src.services.glossary.GLOSSARY_DIR", self.base / "glossary"),
         ):
-            translate_main()
+            main()
 
         output = capsys.readouterr().out
         assert "李白\tLý Bạch" in output
@@ -431,7 +431,7 @@ class TestGlossaryCli:
             ),
             patch("src.services.glossary.GLOSSARY_DIR", glossary_dir),
         ):
-            translate_main()
+            main()
 
         with (
             patch(
@@ -450,13 +450,13 @@ class TestGlossaryCli:
             ),
             patch("src.services.glossary.GLOSSARY_DIR", glossary_dir),
         ):
-            translate_main()
+            main()
 
         with (
             patch("sys.argv", ["translate", "glossary", "validate", "my-novel"]),
             patch("src.services.glossary.GLOSSARY_DIR", glossary_dir),
         ):
-            translate_main()
+            main()
 
         with (
             patch("sys.argv", ["translate", "glossary", "audit", "my-novel"]),
@@ -464,7 +464,7 @@ class TestGlossaryCli:
             _patch_config(translated_dir=str(self.base), target_language="vi"),
             pytest.raises(SystemExit),
         ):
-            translate_main()
+            main()
 
         data = json.loads(glossary_file.read_text(encoding="utf-8"))
         output = capsys.readouterr().out
@@ -511,7 +511,7 @@ class TestGlossaryCli:
 
                 # Run apply preview
                 with patch("sys.argv", ["translate", "glossary", "apply", "my-novel"]):
-                    translate_main()
+                    main()
 
                 output = capsys.readouterr().out
                 assert "SAFE" in output
@@ -520,7 +520,7 @@ class TestGlossaryCli:
 
                 # Run apply --write
                 with patch("sys.argv", ["translate", "glossary", "apply", "my-novel", "--write"]):
-                    translate_main()
+                    main()
 
                 output = capsys.readouterr().out
                 assert "APPLIED" in output
@@ -535,13 +535,13 @@ class TestGlossaryCli:
                 assert load_glossary_data("my-novel")[PENDING_REPLACEMENTS_KEY] != []
 
                 with patch("sys.argv", ["translate", "glossary", "dismiss", "my-novel"]):
-                    translate_main()
+                    main()
 
                 assert load_glossary_data("my-novel")[PENDING_REPLACEMENTS_KEY] == []
 
                 # Rollback command test
                 with patch("sys.argv", ["translate", "glossary", "rollback", "my-novel", backup_id]):
-                    translate_main()
+                    main()
 
                 assert output_path.read_text(encoding="utf-8") == 'Ma thuật cũ. "ma thuật" mới.'
         finally:

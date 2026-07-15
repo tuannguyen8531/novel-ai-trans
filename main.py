@@ -6,7 +6,7 @@ Gemini, OpenRouter), and packages the result as EPUB.
 
 Each subcommand lives in its own module under `src/cli/`:
 
-  - src.cli.crawl        → crawl, generate, validate, import
+  - src.cli.crawl        → crawl-related command adapters
   - src.cli.translate    → translate, translate glossary <subcmd>
   - src.cli.pack         → pack
   - src.cli.test         → test (ruff + pyright + pytest)
@@ -52,43 +52,39 @@ def main() -> int:
         return 2
 
     if subcommand in {"crawl", "generate", "validate", "import"}:
-        from src.cli import crawl as crawl_module
+        from src.cli.crawl import crawler, generator, importer, validator
 
         if subcommand == "crawl":
-            sys.argv = [sys.argv[0], "crawl", *sys.argv[2:]]
-            return crawl_module.main()
+            return crawler.main(sys.argv[2:])
         if subcommand == "generate":
-            return crawl_module.generate_main(sys.argv[2:])
+            return generator.main(sys.argv[2:])
         if subcommand == "validate":
-            return crawl_module.validate_main(sys.argv[2:])
+            return validator.main(sys.argv[2:])
         if subcommand == "import":
-            return crawl_module.import_main(sys.argv[2:])
+            return importer.main(sys.argv[2:])
 
     if subcommand == "translate":
         from src.cli import translate as translate_module
 
-        if len(sys.argv) >= 3 and sys.argv[2] == "glossary":
-            translate_module.glossary_main(sys.argv[3:])
-            return 0
-        translate_module.translate_main()
+        translate_module.main(sys.argv[2:])
         return 0
 
     if subcommand == "pack":
         from src.cli import pack as pack_module
 
-        pack_module.pack_main()
+        pack_module.main(sys.argv[2:])
         return 0
 
     if subcommand == "glossary":
-        from src.cli.translate import glossary_main
+        from src.cli import glossary as glossary_module
 
-        glossary_main(sys.argv[2:])
+        glossary_module.main(sys.argv[2:])
         return 0
 
     if subcommand == "test":
         from src.cli import test as test_module
 
-        return test_module.test_main(sys.argv[2:])
+        return test_module.main(sys.argv[2:])
 
     if subcommand == "build":
         from src.cli.build import main as build_main

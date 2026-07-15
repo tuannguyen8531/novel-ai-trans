@@ -126,7 +126,7 @@ def test_failed_count_reads_runtime_progress_written_by_translation(client, tmp_
         encoding="utf-8",
     )
 
-    with patch("src.application.novels.PROGRESS_DIR", progress_dir):
+    with patch("src.application.novel.catalog.PROGRESS_DIR", progress_dir):
         response = test_client.get("/api/novels")
 
     targets = {item["target"]: item for item in response.json()[0]["targets"]}
