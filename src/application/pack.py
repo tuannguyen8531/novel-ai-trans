@@ -22,7 +22,6 @@ from threading import Event
 from src import paths as _paths
 from src.application.config import get_config
 from src.application.errors import (
-    ApplicationValidationError,
     OperationCancelledError,
     PersistenceError,
     ResourceNotFoundError,
@@ -31,9 +30,7 @@ from src.application.progress import ProgressEvent
 from src.domain.language import normalize_target_language
 from src.services.packaging import (  # type: ignore[attr-defined]
     EPUBBuilder,
-    NovelPDF,
     clean_text,
-    find_serif_fonts,
     image_media_type,
     load_metadata,
     package_file_stem,
@@ -48,9 +45,7 @@ from src.services.packaging import (  # type: ignore[attr-defined]
 # importing them from ``src.cli.pack`` without changing all call sites.
 __all__ = [
     "EPUBBuilder",
-    "NovelPDF",
     "clean_text",
-    "find_serif_fonts",
     "image_media_type",
     "load_metadata",
     "parse_chapter_file",
@@ -70,10 +65,8 @@ __all__ = [
 class PackRequest:
     novel: str
     target_language: str | None = None
-    formats: tuple[str, ...] = ("epub", "pdf")
     title: str = ""
     author: str = "AI Translator"
-    dark_mode: bool = False
     output_dir: Path | None = None
 
 
@@ -137,20 +130,11 @@ def run_pack(
     progress_callback: Callable[[ProgressEvent], None] | None = None,
     cancel_event: Event | None = None,
 ) -> PackResult:
-    """Build EPUB and/or PDF artifacts for *request.novel*."""
+    """Build an EPUB artifact for *request.novel*."""
     config = get_config()
     started_at = time.time()
     target_language = request.target_language or config.target_language
     target_normalized = normalize_target_language(target_language)
-
-    if not request.formats:
-        raise ApplicationValidationError("At least one pack format must be requested.")
-    for fmt in request.formats:
-        if fmt not in {"epub", "pdf", "all"}:
-            raise ApplicationValidationError(f"Unsupported pack format: {fmt}")
-
-    normalized_formats: list[str] = []
-    normalized_formats = ["epub", "pdf"] if "all" in request.formats else list(request.formats)
 
     output_dir = _paths.novel_output_dir(config, request.novel, target_normalized)
     chapter_files = _find_chapter_files(output_dir)
@@ -185,70 +169,34 @@ def run_pack(
 
     artifacts: list[ArtifactInfo] = []
     try:
-        if "epub" in normalized_formats:
-            _check_cancel(cancel_event)
-            _emit(
-                progress_callback,
-                ProgressEvent(
-                    kind="phase",
-                    novel=request.novel,
-                    message="Packaging EPUB",
-                    extra={"format": "epub"},
-                ),
-            )
-            epub_path = package_dir / f"{package_stem}.epub"
-            builder = EPUBBuilder(
-                title=book_title,
-                author=book_author,
-                language=target_normalized,
-                cover_image=cover_image,
-                illustrations_dir=illustrations_dir,
-            )
-            for title, paragraphs in loaded_chapters:
-                builder.add_chapter(title, paragraphs)
-            builder.write(epub_path)
-            artifacts.append(
-                ArtifactInfo(
-                    format="epub",
-                    path=str(epub_path),
-                    size=epub_path.stat().st_size,
-                )
-            )
-
         _check_cancel(cancel_event)
-
-        if "pdf" in normalized_formats:
-            _check_cancel(cancel_event)
-            _emit(
-                progress_callback,
-                ProgressEvent(
-                    kind="phase",
-                    novel=request.novel,
-                    message="Packaging PDF",
-                    extra={"format": "pdf"},
-                ),
+        _emit(
+            progress_callback,
+            ProgressEvent(
+                kind="phase",
+                novel=request.novel,
+                message="Packaging EPUB",
+                extra={"format": "epub"},
+            ),
+        )
+        epub_path = package_dir / f"{package_stem}.epub"
+        builder = EPUBBuilder(
+            title=book_title,
+            author=book_author,
+            language=target_normalized,
+            cover_image=cover_image,
+            illustrations_dir=illustrations_dir,
+        )
+        for title, paragraphs in loaded_chapters:
+            builder.add_chapter(title, paragraphs)
+        builder.write(epub_path)
+        artifacts.append(
+            ArtifactInfo(
+                format="epub",
+                path=str(epub_path),
+                size=epub_path.stat().st_size,
             )
-            pdf_path = package_dir / f"{package_stem}.pdf"
-            font_reg, font_bold = find_serif_fonts()
-            pdf = NovelPDF(
-                title=book_title,
-                author=book_author,
-                font_reg=font_reg,
-                font_bold=font_bold,
-                dark_mode=request.dark_mode,
-                illustrations_dir=illustrations_dir,
-            )
-            pdf.create_cover()
-            for title, paragraphs in loaded_chapters:
-                pdf.add_chapter(title, paragraphs)
-            pdf.output(str(pdf_path))
-            artifacts.append(
-                ArtifactInfo(
-                    format="pdf",
-                    path=str(pdf_path),
-                    size=pdf_path.stat().st_size,
-                )
-            )
+        )
     except OperationCancelledError:
         raise
     except OSError as error:

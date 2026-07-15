@@ -1,7 +1,7 @@
 """Reusable packaging building blocks used by the CLI and API adapters.
 
-The pure EPUB/PDF builders, metadata resolvers, text cleanup helpers and
-font discovery live here. The CLI command keeps its argparse entry point
+The EPUB builder, metadata resolvers, and text cleanup helpers live here.
+The CLI command keeps its argparse entry point
 in :mod:`src.cli.pack`; the application workflow in :mod:`src.application.pack`
 delegates the file construction to this module.
 """
@@ -9,7 +9,6 @@ delegates the file construction to this module.
 from __future__ import annotations
 
 import html
-import os
 import re
 import tempfile
 import uuid
@@ -17,8 +16,6 @@ import zipfile
 from pathlib import Path
 from urllib.error import URLError
 from urllib.request import Request, urlopen
-
-from fpdf import FPDF
 
 from src import paths as _paths
 from src.config import config
@@ -37,7 +34,7 @@ def _get_output_dir(novel_name: str, target_language: str | None = None) -> Path
 
 
 def _get_default_package_dir(novel_name: str, target_language: str | None = None) -> Path:
-    """Return the default directory where EPUB/PDF files are written."""
+    """Return the default directory where EPUB files are written."""
     return _paths.novel_artifact_dir(config, novel_name)
 
 
@@ -154,57 +151,6 @@ def image_media_type(path: Path) -> str:
         ".webp": "image/webp",
         ".svg": "image/svg+xml",
     }.get(path.suffix.lower(), "application/octet-stream")
-
-
-def find_serif_fonts() -> tuple[str, str]:
-    """Find appropriate serif fonts supporting Vietnamese on Linux or Windows."""
-    import sys
-
-    if sys.platform == "win32":
-        windir = os.environ.get("SYSTEMROOT", "C:\\Windows")
-        win_font_dir = Path(windir) / "Fonts"
-        win_candidates = [
-            ("times.ttf", "timesbd.ttf"),
-            ("georgia.ttf", "georgiab.ttf"),
-        ]
-        for reg, bold in win_candidates:
-            reg_path = win_font_dir / reg
-            bold_path = win_font_dir / bold
-            if reg_path.exists() and bold_path.exists():
-                return str(reg_path), str(bold_path)
-
-    font_dir = "/usr/share/fonts"
-    candidates = [
-        (
-            f"{font_dir}/truetype/dejavu/DejaVuSerif.ttf",
-            f"{font_dir}/truetype/dejavu/DejaVuSerif-Bold.ttf",
-        ),
-        (
-            f"{font_dir}/dejavu-serif-fonts/DejaVuSerif.ttf",
-            f"{font_dir}/dejavu-serif-fonts/DejaVuSerif-Bold.ttf",
-        ),
-        (
-            f"{font_dir}/TTF/DejaVuSerif.ttf",
-            f"{font_dir}/TTF/DejaVuSerif-Bold.ttf",
-        ),
-        (
-            f"{font_dir}/truetype/liberation/LiberationSerif-Regular.ttf",
-            f"{font_dir}/truetype/liberation/LiberationSerif-Bold.ttf",
-        ),
-    ]
-    for reg, bold in candidates:
-        if os.path.exists(reg) and os.path.exists(bold):
-            return reg, bold
-
-    for font_path in Path(font_dir).glob("**/DejaVuSerif.ttf"):
-        bold_path = font_path.parent / "DejaVuSerif-Bold.ttf"
-        if bold_path.exists():
-            return str(font_path), str(bold_path)
-
-    return (
-        "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf",
-    )
 
 
 def clean_text(text: str) -> str:
@@ -470,115 +416,3 @@ p {
 {"\n".join(spine_items)}
   </spine>
 </package>"""
-
-
-# ---------------------------------------------------------------------------
-# PDF builder
-# ---------------------------------------------------------------------------
-
-
-class NovelPDF(FPDF):
-    """FPDF subclass for formatting novels with customized footers and headers."""
-
-    def __init__(
-        self,
-        title: str,
-        author: str,
-        font_reg: str,
-        font_bold: str,
-        dark_mode: bool = False,
-        illustrations_dir: Path | None = None,
-    ):
-        super().__init__()
-        self.book_title = title
-        self.book_author = author
-        self.font_reg_path = font_reg
-        self.font_bold_path = font_bold
-        self.dark_mode = dark_mode
-        self.illustrations_dir = illustrations_dir
-
-        self.set_margins(20, 20, 20)
-        self.set_auto_page_break(auto=True, margin=20)
-
-    def header(self):
-        if self.dark_mode:
-            self.set_fill_color(30, 30, 30)
-            self.rect(0, 0, self.w, self.h, "F")
-
-        if self.page_no() > 1:
-            self.set_font("DejaVuSerif", size=8)
-            if self.dark_mode:
-                self.set_text_color(160, 160, 160)
-            else:
-                self.set_text_color(128, 128, 128)
-            self.cell(0, 10, self.book_title, align="R", new_x="LMARGIN", new_y="NEXT")
-            self.ln(2)
-
-    def footer(self):
-        if self.page_no() > 1:
-            self.set_y(-15)
-            self.set_font("DejaVuSerif", size=9)
-            if self.dark_mode:
-                self.set_text_color(160, 160, 160)
-            else:
-                self.set_text_color(128, 128, 128)
-            self.cell(0, 10, f"Trang {self.page_no()}", align="C")
-
-    def create_cover(self):
-        self.add_page()
-        self.add_font("DejaVuSerif", fname=self.font_reg_path)
-        self.add_font("DejaVuSerif-Bold", fname=self.font_bold_path)
-
-        if self.dark_mode:
-            self.set_text_color(240, 240, 240)
-        else:
-            self.set_text_color(0, 0, 0)
-
-        self.set_y(80)
-        self.set_font("DejaVuSerif-Bold", size=24)
-        self.multi_cell(0, 12, self.book_title, align="C", new_x="LMARGIN", new_y="NEXT")
-
-        self.ln(15)
-        self.set_font("DejaVuSerif", size=14)
-        if self.dark_mode:
-            self.set_text_color(200, 200, 200)
-        self.cell(0, 10, f"Tác giả: {self.book_author}", align="C", new_x="LMARGIN", new_y="NEXT")
-
-        self.set_y(-40)
-        self.set_font("DejaVuSerif", size=10)
-        if self.dark_mode:
-            self.set_text_color(160, 160, 160)
-        else:
-            self.set_text_color(128, 128, 128)
-        self.cell(0, 10, "Được đóng gói tự động bằng AI Novel Translator", align="C")
-
-    def add_chapter(self, title: str, paragraphs: list[str]):
-        self.add_page()
-        self.set_font("DejaVuSerif-Bold", size=16)
-        if self.dark_mode:
-            self.set_text_color(245, 230, 211)
-        else:
-            self.set_text_color(0, 0, 0)
-        self.multi_cell(0, 10, title, align="C", new_x="LMARGIN", new_y="NEXT")
-        self.ln(10)
-
-        self.set_font("DejaVuSerif", size=11)
-        if self.dark_mode:
-            self.set_text_color(220, 220, 220)
-        else:
-            self.set_text_color(0, 0, 0)
-
-        for p in paragraphs:
-            text = p.strip()
-            if not text:
-                continue
-            illustration_name = parse_illustration_marker(text)
-            if illustration_name:
-                illustration_path = resolve_illustration(self.illustrations_dir, illustration_name)
-                if illustration_path:
-                    available_width = self.w - self.l_margin - self.r_margin
-                    self.image(str(illustration_path), w=available_width)
-                    self.ln(3.5)
-                    continue
-            self.multi_cell(w=0, h=6.5, text=text, align="J", new_x="LMARGIN", new_y="NEXT")
-            self.ln(3.5)

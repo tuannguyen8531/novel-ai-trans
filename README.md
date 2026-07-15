@@ -5,10 +5,10 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 An end-to-end toolkit for turning web novels or EPUB files into translated EPUB
-and PDF books with LLMs. Crawl, translate, package — one pipeline.
+books with LLMs. Crawl, translate, package — one pipeline.
 
 `novel-ai-trans` combines a configurable crawler, an LLM translation pipeline
-with glossary memory and quality checks, and EPUB/PDF packaging in one
+with glossary memory and quality checks, and EPUB packaging in one
 repository.
 
 ```text
@@ -16,7 +16,7 @@ Website / EPUB
     -> translated/<novel>/input/
     -> translate with Ollama, Gemini, or OpenRouter
     -> translated/<novel>/output/
-    -> <novel>.<target>.epub / <novel>.<target>.pdf
+    -> <novel>.<target>.epub
 ```
 
 ## Features
@@ -36,8 +36,7 @@ Website / EPUB
   relationships — kept consistent across the whole book.
 - **Preserve EPUB illustrations** through source markers and restore them during
   packaging.
-- **EPUB and PDF output** from translated chapter text, with cover image and
-  dark-mode PDF support.
+- **EPUB output** from translated chapter text, with cover image support.
 - **Resume anytime** — chapter-level progress tracking, retry failed chapters,
   retranslate ranges.
 - **Token-free quality checks** on every translated chunk, with automatic retry
@@ -107,10 +106,9 @@ translated/<novel>/
 ├── output/en/              English translated chapters
 ├── illustrations/          imported or crawled images
 ├── metadata.json
-├── <novel>.vi.epub
-├── <novel>.vi.pdf
-├── <novel>.en.epub
-└── <novel>.en.pdf
+└── artifacts/
+    ├── <novel>.vi.epub
+    └── <novel>.en.epub
 ```
 
 See [docs/GUIDE.md](docs/GUIDE.md) for the full walkthrough.
@@ -184,7 +182,7 @@ uv run validate <novel>              # test the novel config against live HTML
 uv run import <book.epub>            # import an EPUB into the pipeline
 uv run translate <novel>             # batch translate chapters
 uv run glossary <command> <novel>    # manage per-novel glossary
-uv run pack <novel>                  # build EPUB / PDF
+uv run pack <novel>                  # build EPUB
 uv run test                          # ruff + pyright + pytest
 uv run build                         # build the web UI
 uv run serve                         # start the API + built GUI server

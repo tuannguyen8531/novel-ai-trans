@@ -25,7 +25,7 @@ from src.services.metadata import localized_value
 from src.utils import files as file_utils
 
 SLUG_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
-ARTIFACT_SUFFIXES = frozenset({".epub", ".pdf"})
+ARTIFACT_SUFFIXES = frozenset({".epub"})
 IMAGE_SUFFIXES = frozenset({".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif"})
 
 

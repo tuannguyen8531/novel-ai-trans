@@ -21,8 +21,6 @@ const tab = ref<'chapters' | 'glossary' | 'artifacts' | 'rules'>('chapters')
 const chapters = ref<NovelChapterStatus[]>([])
 const jobId = ref<string | null>(null)
 
-const packFormats = ref<{ epub: boolean; pdf: boolean }>({ epub: true, pdf: true })
-const packDarkMode = ref<boolean>(false)
 const packTitle = ref<string>('')
 const packAuthor = ref<string>('')
 const packError = ref<string | null>(null)
@@ -441,20 +439,9 @@ function cancelDeleteArtifact() {
 
 async function startPack() {
   packError.value = null
-  const formats: string[] = []
-  if (packFormats.value.epub) formats.push('epub')
-  if (packFormats.value.pdf) formats.push('pdf')
-  if (!formats.length) {
-    packError.value = 'Pick at least one format.'
-    return
-  }
   const payload: Record<string, unknown> = {
     novel: novelName.value,
-    target_language: targetLanguage.value,
-    formats
-  }
-  if (packFormats.value.pdf) {
-    payload.dark_mode = packDarkMode.value
+    target_language: targetLanguage.value
   }
   if (packTitle.value.trim()) payload.title = packTitle.value.trim()
   if (packAuthor.value.trim()) payload.author = packAuthor.value.trim()
@@ -948,28 +935,6 @@ function cancelDeleteChapter() {
           <div class="pack-target">
             <label>Target language</label>
             <div>{{ targetLanguageLabel }} ({{ targetLanguage }})</div>
-          </div>
-          <div style="margin-top: 0.75rem;">
-            <label>Output formats</label>
-            <div class="check-row">
-              <label class="check">
-                <input v-model="packFormats.epub" type="checkbox" />
-                <span>EPUB</span>
-              </label>
-              <label class="check">
-                <input v-model="packFormats.pdf" type="checkbox" />
-                <span>PDF</span>
-              </label>
-            </div>
-          </div>
-          <div v-if="packFormats.pdf" style="margin-top: 0.75rem;">
-            <label>PDF options</label>
-            <div class="check-row">
-              <label class="check">
-                <input v-model="packDarkMode" type="checkbox" />
-                <span>Dark mode (dark background, light text)</span>
-              </label>
-            </div>
           </div>
           <div class="pack-meta" style="margin-top: 0.75rem; display: flex; flex-direction: column; gap: 0.75rem;">
             <div>

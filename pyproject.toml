@@ -10,7 +10,7 @@ keywords = [
     "crawler", "translation", "novel", "lightnovel", "webnovel",
     "llm", "ollama", "gemini", "openrouter",
     "chinese", "korean", "japanese", "vietnamese", "english",
-    "epub", "pdf", "langgraph",
+    "epub", "langgraph",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -26,7 +26,6 @@ classifiers = [
 dependencies = [
     "beautifulsoup4>=4.12.3",
     "fastapi>=0.138.1",
-    "fpdf2>=2.8.7",
     "httpx2>=2.0.0",
     "langchain-core>=1.3.3",
     "langgraph>=1.1.10",

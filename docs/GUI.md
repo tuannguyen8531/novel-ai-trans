@@ -180,13 +180,13 @@ The workhorse page. Tabs cover:
   the same atomic helpers the CLI uses; bulk term PUT is a merge, not a
   replace. Validation and audit are available through the API and CLI, but are
   not exposed as buttons in the current GUI.
-- **Artifacts**: list and download generated EPUB and PDF files for the
+- **Artifacts**: list and download generated EPUB files for the
   novel.
 
 Pack options are displayed above the tabs rather than as a fourth tab. They can
-start an EPUB, PDF, or combined pack job; title, author, target language, and
-dark-mode PDF can be overridden per job. The **Translate** action opens the
-Translate page with the current novel selected.
+start an EPUB pack job; title, author, and target language can be overridden per
+job. The **Translate** action opens the Translate page with the current novel
+selected.
 
 The **Metadata** action edits the source title, author, source URL, cover URL,
 source novel summary, source language, and localized title/summary values for

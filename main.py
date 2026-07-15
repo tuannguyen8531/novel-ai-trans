@@ -2,7 +2,7 @@
 Novel AI Trans — single command-line entry point for the whole pipeline.
 
 Crawls public novel websites, translates chapters with LLMs (Ollama,
-Gemini, OpenRouter), and packages the result as EPUB/PDF.
+Gemini, OpenRouter), and packages the result as EPUB.
 
 Each subcommand lives in its own module under `src/cli/`:
 

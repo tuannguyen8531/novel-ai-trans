@@ -2,7 +2,7 @@
 
 End-to-end walkthrough of the `novel-ai-trans` pipeline: crawl a site (or import
 an EPUB), translate chapters, manage the glossary, and package the result as
-EPUB/PDF.
+EPUB.
 
 For provider setup, see [PROVIDERS.md](PROVIDERS.md).
 
@@ -35,14 +35,14 @@ For provider setup, see [PROVIDERS.md](PROVIDERS.md).
                   translated/<novel>/output/chapter_*.txt
                                  │
                                  ▼
-                          pack ──> EPUB / PDF
+                          pack ──> EPUB
 ```
 
 Source chapters live as zero-padded `chapter_NNN.txt` files under
 `translated/<novel>/input/`. Translation output is written to
 `translated/<novel>/output/` (Vietnamese) or `translated/<novel>/output/en/`
-(English). Packaging reads the output dir and writes `<novel>.<target>.epub`
-and `<novel>.<target>.pdf` next to it.
+(English). Packaging reads the output directory and writes
+`translated/<novel>/artifacts/<novel>.<target>.epub`.
 
 ## 1. Get source chapters
 
@@ -450,7 +450,7 @@ ambiguous, or conflicting matches remain pending for manual review. A successful
 write prints a backup ID that can be passed to `rollback`. Use `dismiss` only to
 discard pending replacements without changing chapter files. Terms are
 capitalized at sentence starts; character names preserve the casing stored in
-the glossary. Rebuild EPUB/PDF artifacts afterward.
+the glossary. Rebuild EPUB artifacts afterward.
 
 The translator automatically grows the glossary while translating — new terms
 and characters detected in each chapter are merged in and reused for later
@@ -458,17 +458,10 @@ chapters, keeping names consistent across the whole book.
 
 ## 4. Package
 
-Build both EPUB and PDF:
+Build an EPUB:
 
 ```bash
 uv run pack my-novel --target vi
-```
-
-Build one format:
-
-```bash
-uv run pack my-novel --format epub
-uv run pack my-novel --format pdf --dark
 ```
 
 Override metadata or output directory:
@@ -482,12 +475,10 @@ uv run pack my-novel --title "My Novel" --author "Author Name" --output ./dist
 | Flag | Description | Default |
 | --- | --- | --- |
 | `novel` | Novel name (directory in `translated/`) | required |
-| `-f, --format` | `epub`, `pdf`, or `all` | `all` |
 | `-t, --title` | Custom book title | localized target title, source title, or novel name |
 | `-a, --author` | Author name in metadata | `AI Translator` or `metadata.json` |
 | `--target` | Target language to package | `TARGET_LANGUAGE` env |
 | `-o, --output` | Custom output directory | per-novel root |
-| `--dark` | Dark mode PDF | off |
 
 ### Metadata and cover
 
@@ -497,10 +488,7 @@ cover image. Unless `--title` is supplied, it prefers
 name. The cover can be a local path or a URL (`illustration_url`) — URL covers
 are downloaded to a temp file and embedded. Illustrations referenced by markers
 in the translated text are pulled from
-`translated/<novel>/illustrations/` and embedded in both EPUB and PDF.
-
-PDF output uses DejaVu Serif fonts for Vietnamese diacritics. On Linux install
-`fonts-dejavu` (or `dejavu-serif-fonts`) if missing.
+`translated/<novel>/illustrations/` and embedded in the EPUB.
 
 ## Review and summary steps
 
@@ -543,7 +531,6 @@ Set `TELEGRAM_SILENT=true` to send without a notification sound.
 | Model not found | Run `ollama list`, then `ollama pull <model-name>` |
 | Crawler gets 0 chapters | Run `validate` to check selectors; try `--browser` for JS sites |
 | Content extracted too short | Check `chapter_content_selector` and `remove_selectors` with `validate` |
-| Vietnamese PDF crashes | Install DejaVu Serif fonts: `apt install fonts-dejavu` |
 | Gemini blocked content | Provider sets `BLOCK_NONE` for all safety categories by default |
 | Translation stops mid-run | Use `Ctrl+C` for graceful stop, then `--resume` to continue |
 | Names inconsistent across chapters | Check `glossary list` and `glossary audit`; add fixed terms with `glossary add` |

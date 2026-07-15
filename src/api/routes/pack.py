@@ -28,14 +28,11 @@ async def post_pack(
 
     def _run(job, emit, cancel_event):
         progress_cb = build_progress_emitter(job, emit)
-        formats = tuple(payload.formats) if payload.formats else ("epub", "pdf")
         request = PackRequest(
             novel=payload.novel,
             target_language=payload.target_language or snapshot.target_language,
-            formats=formats,
             title=payload.title or "",
             author=payload.author or "AI Translator",
-            dark_mode=payload.dark_mode or False,
         )
         result = run_pack(
             request,

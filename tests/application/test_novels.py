@@ -157,19 +157,20 @@ def test_rules_round_trip_and_default_to_empty(tmp_path: Path) -> None:
     assert novels.rules(root, "demo") == "Keep names consistent."
 
 
-def test_artifact_paths_prefer_artifacts_directory_and_support_legacy_root(tmp_path: Path) -> None:
+def test_artifact_paths_prefer_artifacts_directory_and_ignore_unsupported_formats(tmp_path: Path) -> None:
     novel_root = tmp_path / "demo"
     artifacts_dir = novel_root / "artifacts"
     artifacts_dir.mkdir(parents=True)
     current = artifacts_dir / "demo.vi.epub"
     current.write_bytes(b"current")
     (novel_root / "demo.vi.epub").write_bytes(b"duplicate-legacy")
-    legacy = novel_root / "demo.en.pdf"
-    legacy.write_bytes(b"legacy")
+    unsupported = novel_root / "demo.en.mobi"
+    unsupported.write_bytes(b"unsupported")
 
-    assert [path.name for path in novels.list_artifact_paths(novel_root)] == ["demo.en.pdf", "demo.vi.epub"]
+    assert [path.name for path in novels.list_artifact_paths(novel_root)] == ["demo.vi.epub"]
     assert novels.resolve_artifact_path(novel_root, "demo.vi.epub") == current.resolve()
-    assert novels.resolve_artifact_path(novel_root, "demo.en.pdf") == legacy.resolve()
+    with pytest.raises(ResourceNotFoundError, match="Artifact not found"):
+        novels.resolve_artifact_path(novel_root, "demo.en.mobi")
 
 
 @pytest.mark.parametrize("filename", ["../demo.epub", "subdir/demo.epub", ".hidden.epub"])

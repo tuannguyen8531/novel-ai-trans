@@ -257,10 +257,8 @@ class PackRequestPayload(BaseModel):
 
     novel: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
     target_language: Literal["vi", "en"] | None = None
-    formats: list[Literal["epub", "pdf"]] = Field(default_factory=lambda: ["epub", "pdf"], min_length=1)
     title: str | None = None
     author: str | None = None
-    dark_mode: bool | None = None
 
 
 class CrawlRequestPayload(BaseModel):

@@ -1,4 +1,4 @@
-"""Packager CLI: turn translated output into EPUB / PDF.
+"""Packager CLI: turn translated output into EPUB.
 
 Re-exports the reusable building blocks from :mod:`src.services.packaging`
 and keeps the argparse entry point :func:`pack_main`. The application
@@ -39,19 +39,12 @@ def _print_progress(event: ProgressEvent) -> None:
 
 def pack_main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
-        description="📦 Novel Translator Packager — Package output text files into EPUB/PDF",
+        description="📦 Novel Translator Packager — Package output text files into EPUB",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
         "novel",
         help="Novel name (must match directory in translated/ or output/)",
-    )
-    parser.add_argument(
-        "-f",
-        "--format",
-        choices=["epub", "pdf", "all"],
-        default="all",
-        help="Packaging format (default: all)",
     )
     parser.add_argument(
         "-t",
@@ -75,12 +68,7 @@ def pack_main(argv: list[str] | None = None) -> None:
         "-o",
         "--output",
         default="",
-        help="Custom output directory to save EPUB/PDF",
-    )
-    parser.add_argument(
-        "--dark",
-        action="store_true",
-        help="Enable dark mode for PDF (dark background, light text)",
+        help="Custom output directory to save EPUB",
     )
 
     args = parser.parse_args(argv) if argv is not None else parser.parse_args()
@@ -89,15 +77,11 @@ def pack_main(argv: list[str] | None = None) -> None:
     config = get_config()
     config.target_language = args.target
 
-    formats = ("all",) if args.format == "all" else (args.format,)
-
     request = PackRequest(
         novel=novel_name,
         target_language=args.target,
-        formats=formats,
         title=args.title,
         author=args.author,
-        dark_mode=args.dark,
         output_dir=Path(args.output) if args.output else None,
     )
 
