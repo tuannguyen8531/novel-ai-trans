@@ -1,4 +1,4 @@
-"""Shared helpers for crawl-related application workflows."""
+"""Shared helpers for crawl application workflows."""
 
 from __future__ import annotations
 

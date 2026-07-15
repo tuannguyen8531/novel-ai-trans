@@ -24,17 +24,17 @@ from src.api.schemas import (
     JobStartResponse,
 )
 from src.application import config as app_config
-from src.application.generator import (
+from src.application.crawl.generator import (
     ConfigGenerationResult,
     save_generated_metadata,
 )
-from src.application.generator import (
+from src.application.crawl.generator import (
     generate_config as application_generate_config,
 )
-from src.application.validator import (
+from src.application.crawl.validator import (
     ConfigValidationResult,
 )
-from src.application.validator import (
+from src.application.crawl.validator import (
     validate_config as application_validate_config,
 )
 from src.config import SiteConfig

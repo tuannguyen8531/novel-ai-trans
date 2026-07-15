@@ -10,8 +10,8 @@ import unittest
 import unittest.mock
 from pathlib import Path
 
-from src.application.common import resolve_config_path
-from src.application.crawler import CrawlResult, browser_profile_dir
+from src.application.crawl.common import resolve_config_path
+from src.application.crawl.crawler import CrawlResult, browser_profile_dir
 from src.application.errors import ResourceNotFoundError
 from src.application.progress import ProgressEvent
 from src.cli import crawl

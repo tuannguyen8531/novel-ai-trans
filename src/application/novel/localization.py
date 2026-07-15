@@ -11,8 +11,8 @@ from threading import Event
 from typing import Literal
 
 from src.application.errors import ExternalServiceError, OperationCancelledError
-from src.application.metadata import metadata
-from src.application.novel import require_path
+from src.application.novel.identity import require_path
+from src.application.novel.metadata import metadata
 from src.domain.characters import format_relationships_shorthand
 from src.domain.glossary import format_glossary_for_prompt, select_active_glossary_terms
 from src.domain.language import normalize_source_language, normalize_target_language, target_language_name

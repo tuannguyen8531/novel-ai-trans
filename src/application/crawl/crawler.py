@@ -1,4 +1,4 @@
-"""Application workflow for crawling novels."""
+"""Workflow for crawling novels."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from threading import Event
 from urllib.parse import urlparse
 
 from src.application import config as app_config
-from src.application.common import emit, resolve_config_path
+from src.application.crawl.common import emit, resolve_config_path
 from src.application.errors import ApplicationValidationError, ExternalServiceError
 from src.application.progress import ProgressEvent
 from src.config import SiteConfig

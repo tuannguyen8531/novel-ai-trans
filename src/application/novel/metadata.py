@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from src.application.errors import ApplicationValidationError, PersistenceError
-from src.application.novel import require_path
+from src.application.novel.identity import require_path
 from src.utils import files as file_utils
 
 

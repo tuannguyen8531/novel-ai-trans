@@ -24,20 +24,21 @@ from src.api.schemas import (
     JobStartResponse,
 )
 from src.application import config as app_config
-from src.application import glossary, novel
+from src.application import glossary
+from src.application.novel import identity
 
 router = APIRouter(tags=["glossary"])
 
 
 def _validate_novel(name: str) -> None:
     config = app_config.get_config()
-    root = novel.resolve_root(config.translated_dir)
-    if not novel.is_valid_slug(name):
+    root = identity.resolve_root(config.translated_dir)
+    if not identity.is_valid_slug(name):
         raise HTTPException(
             status_code=404,
             detail={"code": "not_found", "message": f"Invalid novel name: {name!r}"},
         )
-    novel_root = novel.resolve_path(root, name)
+    novel_root = identity.resolve_path(root, name)
     if not novel_root.exists():
         raise HTTPException(
             status_code=404,

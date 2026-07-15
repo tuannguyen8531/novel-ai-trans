@@ -12,9 +12,9 @@ from fastapi import APIRouter
 from src.api.dependencies import AuthenticatedPrincipal, JobManagerDependency
 from src.api.jobs import build_progress_emitter
 from src.api.schemas import JobStartResponse, TranslationRequestPayload
-from src.application import catalog, novel
 from src.application import config as app_config
-from src.application.localization import localize_metadata
+from src.application.novel import catalog, identity
+from src.application.novel.localization import localize_metadata
 from src.application.progress import ProgressEvent
 from src.application.translate import (
     TranslationRequest,
@@ -55,7 +55,7 @@ async def post_translate(
                 )
             )
             metadata_result = localize_metadata(
-                novel.resolve_root(snapshot.translated_dir),
+                identity.resolve_root(snapshot.translated_dir),
                 payload.novel,
                 payload.target_language or snapshot.target_language,
                 force=payload.force_metadata or False,
@@ -144,8 +144,8 @@ def translation_progress(
     target: Literal["vi", "en"] | None = None,
 ) -> dict:
     config = app_config.get_config()
-    root = novel.resolve_root(config.translated_dir)
-    if not novel.is_valid_slug(name):
+    root = identity.resolve_root(config.translated_dir)
+    if not identity.is_valid_slug(name):
         from src.api.errors import ResourceNotFoundError
 
         raise ResourceNotFoundError(f"Invalid novel name: {name!r}")

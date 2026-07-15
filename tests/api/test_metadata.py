@@ -164,7 +164,7 @@ def test_localize_metadata_endpoint_runs_as_job_with_mocked_llm(client):
     )
     llm = type("FakeLlm", (), {"generate": lambda self, *_: '{"title":"Tên","summary":"Tóm tắt"}'})()
 
-    with patch("src.application.localization.get_llm", return_value=llm):
+    with patch("src.application.novel.localization.get_llm", return_value=llm):
         response = test_client.post(
             "/api/novels/demo/metadata/localize",
             json={"target_language": "vi"},

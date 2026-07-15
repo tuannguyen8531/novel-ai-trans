@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from src.application.errors import PersistenceError
-from src.application.novel import require_path
+from src.application.novel.identity import require_path
 
 
 def rules(root: Path, name: str) -> str:

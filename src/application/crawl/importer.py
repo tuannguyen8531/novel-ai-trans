@@ -1,4 +1,4 @@
-"""Application workflow for importing EPUB books."""
+"""Workflow for importing EPUB books."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from pathlib import Path
 from threading import Event
 
 from src.application import config as app_config
-from src.application.common import check_cancel, emit
+from src.application.crawl.common import check_cancel, emit
 from src.application.errors import ApplicationValidationError, PersistenceError
 from src.application.progress import ProgressEvent
 from src.services.importer import ChapterImportChange, EpubImportError, import_epub

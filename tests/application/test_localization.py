@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from src.application.errors import ExternalServiceError
-from src.application.localization import localize_metadata
+from src.application.novel.localization import localize_metadata
 from src.config import Config, active_config_scope
 
 
@@ -38,7 +38,7 @@ def test_localize_metadata_translates_title_and_summary(tmp_path: Path) -> None:
 
     with (
         active_config_scope(Config(translated_dir=str(root), target_language="vi")),
-        patch("src.application.localization.get_llm", return_value=llm),
+        patch("src.application.novel.localization.get_llm", return_value=llm),
     ):
         result = localize_metadata(root, "demo", "vi")
 
@@ -83,7 +83,7 @@ def test_localize_metadata_uses_only_active_terms_and_characters(tmp_path: Path)
 
     with (
         active_config_scope(Config(translated_dir=str(root), target_language="vi")),
-        patch("src.application.localization.get_llm", return_value=llm),
+        patch("src.application.novel.localization.get_llm", return_value=llm),
     ):
         localize_metadata(root, "demo", "vi")
 
@@ -102,7 +102,7 @@ def test_localize_metadata_skips_fresh_ai_values(tmp_path: Path) -> None:
 
     with (
         active_config_scope(Config(translated_dir=str(root), target_language="vi")),
-        patch("src.application.localization.get_llm", return_value=llm),
+        patch("src.application.novel.localization.get_llm", return_value=llm),
     ):
         localize_metadata(root, "demo", "vi")
         second = localize_metadata(root, "demo", "vi")
@@ -118,7 +118,7 @@ def test_localize_metadata_preserves_manual_value_but_updates_stale_ai_value(tmp
     first_llm = _llm('{"title":"AI title","summary":"AI summary"}')
     with (
         active_config_scope(Config(translated_dir=str(root), target_language="en")),
-        patch("src.application.localization.get_llm", return_value=first_llm),
+        patch("src.application.novel.localization.get_llm", return_value=first_llm),
     ):
         localize_metadata(root, "demo", "en")
 
@@ -131,7 +131,7 @@ def test_localize_metadata_preserves_manual_value_but_updates_stale_ai_value(tmp
 
     with (
         active_config_scope(Config(translated_dir=str(root), target_language="en")),
-        patch("src.application.localization.get_llm", return_value=second_llm),
+        patch("src.application.novel.localization.get_llm", return_value=second_llm),
     ):
         result = localize_metadata(root, "demo", "en")
 
@@ -146,7 +146,7 @@ def test_force_regenerates_ai_value_without_overwriting_manual_value(tmp_path: P
     initial_llm = _llm('{"title":"AI title","summary":"AI summary"}')
     with (
         active_config_scope(Config(translated_dir=str(root), target_language="en")),
-        patch("src.application.localization.get_llm", return_value=initial_llm),
+        patch("src.application.novel.localization.get_llm", return_value=initial_llm),
     ):
         localize_metadata(root, "demo", "en")
 
@@ -158,7 +158,7 @@ def test_force_regenerates_ai_value_without_overwriting_manual_value(tmp_path: P
 
     with (
         active_config_scope(Config(translated_dir=str(root), target_language="en")),
-        patch("src.application.localization.get_llm", return_value=forced_llm),
+        patch("src.application.novel.localization.get_llm", return_value=forced_llm),
     ):
         result = localize_metadata(root, "demo", "en", force=True)
 
@@ -173,7 +173,7 @@ def test_localize_metadata_does_not_write_partial_invalid_response(tmp_path: Pat
 
     with (
         active_config_scope(Config(translated_dir=str(root), target_language="vi")),
-        patch("src.application.localization.get_llm", return_value=_llm('{"title":"Tên"}')),
+        patch("src.application.novel.localization.get_llm", return_value=_llm('{"title":"Tên"}')),
         pytest.raises(ExternalServiceError, match="summary"),
     ):
         localize_metadata(root, "demo", "vi")

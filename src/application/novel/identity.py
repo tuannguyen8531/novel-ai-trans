@@ -1,4 +1,4 @@
-"""Novel identity and path validation."""
+"""Novel identity, root, and path validation."""
 
 from __future__ import annotations
 

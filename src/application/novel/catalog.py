@@ -8,11 +8,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from src import paths
-from src.application.artifacts import list_artifact_paths
 from src.application.errors import ApplicationValidationError, PersistenceError, ResourceConflictError
-from src.application.metadata import load as load_metadata
-from src.application.metadata import write as write_metadata
-from src.application.novel import is_valid_slug, require_path, resolve_path
+from src.application.novel.artifacts import list_artifact_paths
+from src.application.novel.identity import is_valid_slug, require_path, resolve_path
+from src.application.novel.metadata import load as load_metadata
+from src.application.novel.metadata import write as write_metadata
 from src.domain.language import SUPPORTED_TARGET_LANGUAGES, normalize_source_language, normalize_target_language
 from src.paths import PROGRESS_DIR
 from src.services import chapters as chapter_service

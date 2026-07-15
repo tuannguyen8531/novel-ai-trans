@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from src.application import artifacts, catalog, chapters, metadata, rules
 from src.application.errors import ResourceNotFoundError
+from src.application.novel import artifacts, catalog, chapters, metadata, rules
 
 
 def _write_chapter(directory: Path, number: int, content: str = "content") -> None:

@@ -24,10 +24,10 @@ from src.api.schemas import (
     NovelRulesPayload,
     NovelSummary,
 )
-from src.application import artifacts, catalog, chapters, metadata, novel, rules
 from src.application import config as app_config
 from src.application.errors import PersistenceError
-from src.application.localization import localize_metadata
+from src.application.novel import artifacts, catalog, chapters, identity, metadata, rules
+from src.application.novel.localization import localize_metadata
 from src.domain.language import normalize_source_language
 
 router = APIRouter(tags=["novels"])
@@ -38,7 +38,7 @@ def create_novel(
     payload: CreateNovelPayload,
     _: AuthenticatedPrincipal,
 ) -> dict[str, str]:
-    if not novel.is_valid_slug(payload.name):
+    if not identity.is_valid_slug(payload.name):
         raise HTTPException(
             status_code=400,
             detail=(
@@ -47,8 +47,8 @@ def create_novel(
             ),
         )
 
-    root = novel.resolve_root(app_config.get_config().translated_dir)
-    if novel.resolve_path(root, payload.name).exists():
+    root = identity.resolve_root(app_config.get_config().translated_dir)
+    if identity.resolve_path(root, payload.name).exists():
         raise HTTPException(
             status_code=400,
             detail=f"Novel directory '{payload.name}' already exists.",
@@ -72,7 +72,7 @@ def list_novels_endpoint(
     _: AuthenticatedPrincipal,
 ) -> list[NovelSummary]:
     config = app_config.get_config()
-    root = novel.resolve_root(config.translated_dir)
+    root = identity.resolve_root(config.translated_dir)
     return [NovelSummary(**asdict(summary)) for summary in catalog.list_summaries(root, target_language=config.target_language)]
 
 
@@ -82,7 +82,7 @@ def novel_detail(
     _: AuthenticatedPrincipal,
 ) -> NovelDetail:
     config = app_config.get_config()
-    root = novel.resolve_root(config.translated_dir)
+    root = identity.resolve_root(config.translated_dir)
     return NovelDetail(**asdict(catalog.detail(root, name, target_language=config.target_language)))
 
 
@@ -91,7 +91,7 @@ def novel_chapters(
     name: str,
     _: AuthenticatedPrincipal,
 ) -> list[NovelChapterStatus]:
-    root = novel.resolve_root(app_config.get_config().translated_dir)
+    root = identity.resolve_root(app_config.get_config().translated_dir)
     return [NovelChapterStatus(**asdict(chapter)) for chapter in chapters.list_chapters(root, name)]
 
 
@@ -104,7 +104,7 @@ def novel_chapter_content(
     target: Annotated[Literal["vi", "en"] | None, Query()] = None,
 ) -> ChapterContentResponse:
     config = app_config.get_config()
-    root = novel.resolve_root(config.translated_dir)
+    root = identity.resolve_root(config.translated_dir)
     content = chapters.read_chapter(
         root,
         name,
@@ -125,7 +125,7 @@ def put_chapter_content(
     target: Annotated[Literal["vi", "en"] | None, Query()] = None,
 ) -> ChapterContentResponse:
     config = app_config.get_config()
-    root = novel.resolve_root(config.translated_dir)
+    root = identity.resolve_root(config.translated_dir)
     content = chapters.write_chapter(
         root,
         name,
@@ -143,7 +143,7 @@ def delete_chapter(
     number: int,
     _: AuthenticatedPrincipal,
 ) -> None:
-    root = novel.resolve_root(app_config.get_config().translated_dir)
+    root = identity.resolve_root(app_config.get_config().translated_dir)
     chapters.delete_chapter(root, name, number)
 
 
@@ -152,7 +152,7 @@ def get_novel_metadata(
     name: str,
     _: AuthenticatedPrincipal,
 ) -> NovelMetadataResponse:
-    root = novel.resolve_root(app_config.get_config().translated_dir)
+    root = identity.resolve_root(app_config.get_config().translated_dir)
     return NovelMetadataResponse(novel=name, data=metadata.metadata(root, name))
 
 
@@ -162,7 +162,7 @@ def patch_novel_metadata(
     payload: NovelMetadataPatch,
     _: AuthenticatedPrincipal,
 ) -> NovelMetadataResponse:
-    root = novel.resolve_root(app_config.get_config().translated_dir)
+    root = identity.resolve_root(app_config.get_config().translated_dir)
     updates = payload.model_dump(exclude_unset=True)
     if "source_language" in payload.model_fields_set:
         updates["source_language"] = normalize_source_language(payload.source_language) or None
@@ -184,8 +184,8 @@ async def localize_novel_metadata(
     jobs: JobManagerDependency,
 ) -> JobStartResponse:
     config = app_config.get_config()
-    root = novel.resolve_root(config.translated_dir)
-    novel.require_path(root, name)
+    root = identity.resolve_root(config.translated_dir)
+    identity.require_path(root, name)
     snapshot = config.clone(
         llm_provider=payload.provider or None,
         target_language=payload.target_language,
@@ -218,8 +218,8 @@ def delete_novel(
     name: str,
     _: AuthenticatedPrincipal,
 ) -> None:
-    root = novel.resolve_root(app_config.get_config().translated_dir)
-    novel.require_path(root, name)
+    root = identity.resolve_root(app_config.get_config().translated_dir)
+    identity.require_path(root, name)
     state = get_state()
     active_job = next(
         (
@@ -246,7 +246,7 @@ def list_artifacts(
     name: str,
     _: AuthenticatedPrincipal,
 ) -> list[ArtifactInfoResponse]:
-    root = novel.resolve_root(app_config.get_config().translated_dir)
+    root = identity.resolve_root(app_config.get_config().translated_dir)
     return [ArtifactInfoResponse(**asdict(artifact)) for artifact in artifacts.list_artifacts(root, name)]
 
 
@@ -256,7 +256,7 @@ def download_artifact(
     filename: str,
     _: AuthenticatedPrincipal,
 ) -> FileResponse:
-    root = novel.resolve_root(app_config.get_config().translated_dir)
+    root = identity.resolve_root(app_config.get_config().translated_dir)
     return FileResponse(artifacts.artifact(root, name, filename), filename=filename)
 
 
@@ -266,7 +266,7 @@ def delete_artifact(
     filename: str,
     _: AuthenticatedPrincipal,
 ) -> None:
-    root = novel.resolve_root(app_config.get_config().translated_dir)
+    root = identity.resolve_root(app_config.get_config().translated_dir)
     artifacts.delete_artifact(root, name, filename)
 
 
@@ -276,7 +276,7 @@ def get_illustration(
     filename: str,
     _: AuthenticatedPrincipal,
 ) -> FileResponse:
-    root = novel.resolve_root(app_config.get_config().translated_dir)
+    root = identity.resolve_root(app_config.get_config().translated_dir)
     return FileResponse(artifacts.illustration(root, name, filename))
 
 
@@ -285,7 +285,7 @@ def get_novel_rules(
     name: str,
     _: AuthenticatedPrincipal,
 ) -> dict[str, str]:
-    root = novel.resolve_root(app_config.get_config().translated_dir)
+    root = identity.resolve_root(app_config.get_config().translated_dir)
     try:
         return {"rules": rules.rules(root, name)}
     except PersistenceError as error:
@@ -298,7 +298,7 @@ def put_novel_rules(
     payload: NovelRulesPayload,
     _: AuthenticatedPrincipal,
 ) -> dict[str, str]:
-    root = novel.resolve_root(app_config.get_config().translated_dir)
+    root = identity.resolve_root(app_config.get_config().translated_dir)
     try:
         rules.save_rules(root, name, payload.rules)
     except PersistenceError as error:

@@ -8,7 +8,7 @@ from typing import Literal
 
 from src import paths
 from src.application.errors import ResourceNotFoundError
-from src.application.novel import require_path
+from src.application.novel.identity import require_path
 from src.domain.language import SUPPORTED_TARGET_LANGUAGES, normalize_target_language
 from src.services import chapters as chapter_service
 

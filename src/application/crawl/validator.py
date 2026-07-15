@@ -1,4 +1,4 @@
-"""Application workflow for validating crawler configurations."""
+"""Workflow for validating crawler configurations."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from threading import Event
 
-from src.application.common import check_cancel, emit, resolve_config_path
+from src.application.crawl.common import check_cancel, emit, resolve_config_path
 from src.application.errors import ApplicationValidationError
 from src.application.progress import ProgressEvent
 from src.config import SiteConfig
