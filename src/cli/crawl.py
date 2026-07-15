@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from src.application.config import get_config
 from src.application.crawl import (
     ConfigIssue,
     CrawlRequest,
@@ -19,7 +20,6 @@ from src.application.crawl import (
 )
 from src.application.errors import ApplicationError, ExternalServiceError
 from src.application.progress import ProgressEvent
-from src.paths import CONFIG_DIR
 from src.services.notifier import format_run_footer, get_notifier
 from src.utils.logging import get_logger, setup_logging
 
@@ -29,7 +29,7 @@ _quiet_output = False
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="novel-crawler",
-        description="Download chapters from public novel websites using a per-site JSON config.",
+        description="Download chapters using the selected novel's config.json.",
     )
     parser.add_argument(
         "-v",
@@ -50,11 +50,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Download a novel into text files.",
         add_help=False,
     )
-    _add_crawl_arguments(crawl, target_help="Config path or novel name from configs/{novel}.json.")
+    _add_crawl_arguments(crawl)
 
     gen = subparsers.add_parser(
         "generate",
-        help="Use AI to generate a site config from a novel information URL.",
+        help="Use AI to generate a novel crawl config from an information URL.",
         add_help=False,
     )
     _add_generate_arguments(gen)
@@ -80,14 +80,14 @@ def build_short_parser() -> argparse.ArgumentParser:
         description="Download chapters from public novel websites.",
         add_help=False,
     )
-    _add_crawl_arguments(parser, target_help="Config path or novel name from configs/{novel}.json.")
+    _add_crawl_arguments(parser)
     return parser
 
 
 def build_generate_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="generate",
-        description="Use AI to generate a site config from a novel information URL.",
+        description="Use AI to generate a novel crawl config from an information URL.",
         add_help=False,
     )
     _add_generate_arguments(parser)
@@ -112,13 +112,13 @@ def build_import_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _add_crawl_arguments(parser: argparse.ArgumentParser, *, target_help: str) -> None:
+def _add_crawl_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--help",
         action="help",
         help="Show this help message and exit.",
     )
-    parser.add_argument("target", type=str, help=target_help)
+    parser.add_argument("novel", type=str, help="Novel slug from translated/<slug>/config.json.")
     parser.add_argument(
         "--translated-output",
         type=Path,
@@ -188,7 +188,7 @@ def _add_generate_arguments(parser: argparse.ArgumentParser) -> None:
         "--name",
         type=str,
         default=None,
-        help="Config name (default: derived from URL).",
+        help="Novel slug (default: derived from URL).",
     )
     parser.add_argument(
         "--provider",
@@ -220,18 +220,18 @@ def _add_generate_arguments(parser: argparse.ArgumentParser) -> None:
         help="Ignore bundled samples and known-domain configs; analyze live HTML with the LLM.",
     )
     parser.add_argument(
-        "--output",
+        "--translated-output",
         type=Path,
-        default=CONFIG_DIR,
-        help=f"Output directory (default: {CONFIG_DIR}).",
+        default=None,
+        help="Translated root. Default: TRANSLATED_DIR or ./translated.",
     )
 
 
 def _add_validate_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
-        "target",
+        "novel",
         type=str,
-        help="Config path or novel name from configs/{novel}.json.",
+        help="Novel slug from translated/<slug>/config.json.",
     )
     parser.add_argument(
         "-b",
@@ -327,7 +327,7 @@ def _crawl(args: argparse.Namespace) -> int:
     try:
         result = run_crawl(
             CrawlRequest(
-                target=args.target,
+                novel=args.novel,
                 translated_output=args.translated_output,
                 max_chapters=args.max_chapters,
                 fail_fast=args.fail_fast,
@@ -345,7 +345,7 @@ def _crawl(args: argparse.Namespace) -> int:
         get_notifier().send(
             "Status: Failed\n"
             "Task: Crawl\n"
-            f"Novel: {_notifier_escape(str(error.details.get('novel') or args.target))}\n"
+            f"Novel: {_notifier_escape(str(error.details.get('novel') or args.novel))}\n"
             f"Detail: {_notifier_escape(str(error))}\n"
             f"{format_run_footer(started_at)}"
         )
@@ -442,7 +442,7 @@ def _notifier_escape(text: str) -> str:
 
 
 def _generate(args: argparse.Namespace) -> int:
-    """Generate a site config using AI."""
+    """Generate a novel crawl config using AI."""
     try:
         result = generate_config(
             url=args.url,
@@ -461,14 +461,18 @@ def _generate(args: argparse.Namespace) -> int:
         print(json.dumps(result.config, ensure_ascii=False, indent=2))
         print(f"{'═' * 60}")
 
-        output_dir: Path = args.output
         name = result.config.get("name", "generated")
-        dest = output_dir / f"{name}.json"
+        translated_root = args.translated_output or Path(get_config().translated_dir)
+        dest = translated_root / str(name) / "config.json"
         answer = input(f"\nSave to {dest}? [Y/n] ").strip().lower()
         if answer in ("", "y", "yes"):
-            path = save_generated_config(result.config, output_dir, metadata=result.metadata)
+            path = save_generated_config(
+                result.config,
+                metadata=result.metadata,
+                translated_root=translated_root,
+            )
             print(f"✅ Config saved to {path}")
-            print(f"✅ Metadata saved to translated/{name}/metadata.json")
+            print(f"✅ Metadata saved to {translated_root / str(name) / 'metadata.json'}")
             return 0
 
         print("Cancelled.")
@@ -493,7 +497,7 @@ def _print_generation_progress(event: ProgressEvent) -> None:
 def _validate(args: argparse.Namespace) -> int:
     """Test a config's selectors against live HTML."""
     try:
-        result = validate_config(target=args.target, use_browser=args.browser)
+        result = validate_config(novel=args.novel, use_browser=args.browser)
     except ApplicationError as error:
         get_logger().error("Error: %s", error)
         return 1

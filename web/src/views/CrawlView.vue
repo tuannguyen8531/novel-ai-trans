@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '@/api/client'
 import { useJobsStore } from '@/stores/jobs'
@@ -19,9 +19,7 @@ const loadingSelectedConfig = ref(false)
 let selectedConfigRequest = 0
 
 // --- Crawl form ---
-const configMode = ref<'existing' | 'custom'>('existing')
 const selectedConfig = ref<string>('')
-const customTarget = ref<string>('')
 const browser = ref<boolean>(false)
 const headed = ref<boolean>(false)
 const ignoreRobots = ref<boolean>(false)
@@ -40,10 +38,6 @@ const workers = ref<number>(1)
 const maxChapters = ref<number | null>(null)
 const crawlError = ref<string | null>(null)
 const crawlJobId = ref<string | null>(null)
-
-const crawlTarget = computed<string>(() =>
-  configMode.value === 'existing' ? selectedConfig.value : customTarget.value.trim()
-)
 
 // --- Generate form ---
 const generateUrl = ref<string>('')
@@ -114,14 +108,13 @@ watch(selectedConfig, (name) => {
 
 async function startCrawl() {
   crawlError.value = null
-  const target = crawlTarget.value
-  if (!target) {
-    crawlError.value = 'Choose an existing config or enter a custom target.'
+  if (!selectedConfig.value) {
+    crawlError.value = 'Choose a novel config.'
     return
   }
   try {
     const payload: Record<string, unknown> = {
-      target,
+      novel: selectedConfig.value,
       browser: browser.value,
       headed: headed.value,
       ignore_robots: ignoreRobots.value,
@@ -252,41 +245,22 @@ function discardDraft() {
       <div class="card">
       <h2>Crawl Novel Chapters</h2>
       <p class="muted">
-        Pick a saved config or enter a custom target. The job fetches chapters, writes them into
+        Pick a novel config. The job fetches chapters, writes them into
         the novel input directory, and streams progress live.
       </p>
 
       <div class="grid">
         <div>
-          <label>Config source</label>
-          <div class="row gap-1">
-            <label class="check" style="flex: 1 1 auto;">
-              <input v-model="configMode" type="radio" value="existing" />
-              <span>Use existing</span>
-            </label>
-            <label class="check" style="flex: 1 1 auto;">
-              <input v-model="configMode" type="radio" value="custom" />
-              <span>Custom target / path</span>
-            </label>
-          </div>
-        </div>
-
-        <div v-if="configMode === 'existing'">
           <label>Config</label>
           <select v-model="selectedConfig" :disabled="!configs.length">
             <option v-if="!configs.length" disabled value="">
-              {{ loadingConfigs ? 'Loading…' : 'No configs in configs/' }}
+              {{ loadingConfigs ? 'Loading…' : 'No novel configs found' }}
             </option>
             <option v-for="cfg in configs" :key="cfg.name" :value="cfg.name">
               {{ cfg.name }} — {{ cfg.source_url }}
             </option>
           </select>
           <p v-if="configsError" class="error" style="margin-top: 0.25rem;">{{ configsError }}</p>
-        </div>
-
-        <div v-else>
-          <label>Target</label>
-          <input v-model="customTarget" placeholder="e.g. configs/my-novel.json or /abs/path.json" />
         </div>
 
         <div>
@@ -349,13 +323,13 @@ function discardDraft() {
       </div>
 
       <div class="row gap-2" style="margin-top: 1rem;">
-        <button type="button" :disabled="!crawlTarget" @click="startCrawl">Start crawl</button>
+        <button type="button" :disabled="!selectedConfig" @click="startCrawl">Start crawl</button>
         <button class="secondary" type="button" @click="router.push('/jobs')">View jobs</button>
       </div>
       <p v-if="crawlError" class="error" style="margin-top: 0.5rem;">{{ crawlError }}</p>
       </div>
 
-      <div v-if="configMode === 'existing' && selectedConfig" class="card">
+      <div v-if="selectedConfig" class="card">
         <h3>Current config — <code>{{ selectedConfig }}</code></h3>
         <p v-if="loadingSelectedConfig" class="muted">Loading config...</p>
         <p v-else-if="selectedConfigError" class="error">{{ selectedConfigError }}</p>
@@ -386,8 +360,8 @@ function discardDraft() {
       <p class="muted">
         Provide the novel's main information URL. The AI extracts its metadata and table of
         contents, then proposes a site config. The result is saved as a draft; review and edit it,
-        then save the crawl settings to <code>configs/</code> and the novel information to
-        <code>translated/&lt;name&gt;/metadata.json</code>.
+        then save the crawl settings to <code>translated/&lt;name&gt;/config.json</code> and the novel
+        information to <code>translated/&lt;name&gt;/metadata.json</code>.
       </p>
 
       <div class="grid">
@@ -461,14 +435,15 @@ function discardDraft() {
       <div v-if="generatedDraft" class="card">
         <h3>Review draft — <code>{{ generatedDraft.name }}</code></h3>
         <p class="muted">
-          Edit the JSON below, then save it to <code>configs/{{ generatedDraft.name }}.json</code>.
+          Edit the JSON below, then save it to
+          <code>translated/{{ generatedDraft.name }}/config.json</code>.
           Extracted novel information will be merged into
           <code>translated/{{ generatedDraft.name }}/metadata.json</code>.
           Expires {{ new Date(generatedDraft.expires_at).toLocaleString() }}.
         </p>
         <textarea v-model="draftConfigText" class="draft-editor" spellcheck="false"></textarea>
         <div class="row gap-2" style="margin-top: 0.75rem;">
-          <button type="button" @click="saveGeneratedDraft">Save to configs/</button>
+          <button type="button" @click="saveGeneratedDraft">Save config</button>
           <button class="danger" type="button" @click="discardDraft">Discard draft</button>
         </div>
       </div>

@@ -294,7 +294,7 @@ class CliNotificationWiringTest(unittest.TestCase):
             import argparse
 
             args = argparse.Namespace(
-                target="demo",
+                novel="demo",
                 browser=False,
                 headed=False,
                 workers=1,

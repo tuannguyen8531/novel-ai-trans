@@ -16,7 +16,7 @@ from src.application.crawl import (
 from src.services.importer import ChapterImportChange
 
 
-def test_run_crawl_dry_run_returns_preview_without_crawling() -> None:
+def test_run_crawl_dry_run_returns_preview_without_crawling(tmp_path: Path) -> None:
     crawler = Mock()
     crawler.discover_chapters.return_value = (
         SimpleNamespace(title="Demo Novel", author="Demo Author"),
@@ -26,8 +26,29 @@ def test_run_crawl_dry_run_returns_preview_without_crawling() -> None:
         ],
     )
 
+    novel_root = tmp_path / "example"
+    novel_root.mkdir()
+    (novel_root / "config.json").write_text(
+        json.dumps(
+            {
+                "name": "example",
+                "toc_url": "https://example.com/book/",
+                "chapter_link_selector": "a.chapter",
+                "chapter_content_selector": ".content",
+            }
+        ),
+        encoding="utf-8",
+    )
+
     with patch("src.application.crawl.NovelCrawler", return_value=crawler):
-        result = run_crawl(CrawlRequest(target="example", dry_run=True, max_chapters=1))
+        result = run_crawl(
+            CrawlRequest(
+                novel="example",
+                translated_output=tmp_path,
+                dry_run=True,
+                max_chapters=1,
+            )
+        )
 
     assert result.dry_run is True
     assert result.title == "Demo Novel"
@@ -36,6 +57,45 @@ def test_run_crawl_dry_run_returns_preview_without_crawling() -> None:
     assert [(item.index, item.title, item.url) for item in result.preview] == [(1, "Chapter 1", "https://example.com/c1")]
     crawler.discover_chapters.assert_called_once_with()
     assert not crawler.crawl.called
+
+
+def test_headed_crawl_forces_one_worker_for_shared_browser_page(tmp_path: Path) -> None:
+    novel_root = tmp_path / "example"
+    novel_root.mkdir()
+    (novel_root / "config.json").write_text(
+        json.dumps(
+            {
+                "name": "example",
+                "toc_url": "https://example.com/book/",
+                "chapter_link_selector": "a.chapter",
+                "chapter_content_selector": ".content",
+            }
+        ),
+        encoding="utf-8",
+    )
+    crawler = Mock()
+    crawler.discover_chapters.return_value = (
+        SimpleNamespace(title="Demo Novel", author=None),
+        [],
+    )
+    fetcher = Mock()
+
+    with (
+        patch("src.application.crawl.NovelCrawler", return_value=crawler),
+        patch("src.services.browser.BrowserFetcher", return_value=fetcher) as fetcher_class,
+    ):
+        run_crawl(
+            CrawlRequest(
+                novel="example",
+                translated_output=tmp_path,
+                headed=True,
+                workers=4,
+                dry_run=True,
+            )
+        )
+
+    assert fetcher_class.call_args.kwargs["max_concurrency"] == 1
+    fetcher.close.assert_called_once_with(suppress_errors=True)
 
 
 def test_generate_config_without_drafts_dir_does_not_create_draft() -> None:
@@ -137,12 +197,11 @@ def test_save_generated_config_merges_metadata_without_losing_localizations(tmp_
 
     save_generated_config(
         config,
-        tmp_path / "configs",
         metadata=metadata,
         translated_root=translated_root,
     )
 
-    saved_config = json.loads((tmp_path / "configs" / "demo.json").read_text(encoding="utf-8"))
+    saved_config = json.loads((novel_root / "config.json").read_text(encoding="utf-8"))
     saved_metadata = json.loads((novel_root / "metadata.json").read_text(encoding="utf-8"))
     assert "title" not in saved_config
     assert saved_metadata["title"] == "Demo Novel"

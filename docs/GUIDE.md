@@ -11,7 +11,7 @@ For provider setup, see [PROVIDERS.md](PROVIDERS.md).
 - [Pipeline overview](#pipeline-overview)
 - [1. Get source chapters](#1-get-source-chapters)
   - [Crawl a configured site](#crawl-a-configured-site)
-  - [Generate a site config](#generate-a-site-config)
+  - [Generate a novel config](#generate-a-novel-config)
   - [Validate a config](#validate-a-config)
   - [Import an EPUB](#import-an-epub)
 - [2. Translate](#2-translate)
@@ -51,54 +51,54 @@ import an existing EPUB.
 
 ### Crawl a configured site
 
-Use a config from `configs/<name>.json`. For example, `configs/example.json`
-is loaded as `example`:
+Each novel owns its crawl config at `translated/<name>/config.json`. Pass only
+the novel slug; paths and files outside that location are not accepted:
 
 ```bash
-uv run crawl example
+uv run crawl my-novel
 ```
 
 Limit chapters:
 
 ```bash
-uv run crawl example --max 10
+uv run crawl my-novel --max 10
 ```
 
 Use Playwright browser mode for JavaScript-heavy pages:
 
 ```bash
-uv run crawl example --browser --workers 1
+uv run crawl my-novel --browser --workers 1
 ```
 
 Preview discovered chapters without writing files:
 
 ```bash
-uv run crawl example --dry-run
+uv run crawl my-novel --dry-run
 ```
 
 Re-download chapter files even if they already exist:
 
 ```bash
-uv run crawl example --overwrite
+uv run crawl my-novel --overwrite
 ```
 
 Ignore `robots.txt` only when you have permission:
 
 ```bash
-uv run crawl example --ignore-robots
+uv run crawl my-novel --ignore-robots
 ```
 
 Stop on the first chapter error instead of writing partial output:
 
 ```bash
-uv run crawl example --fail-fast
+uv run crawl my-novel --fail-fast
 ```
 
 #### Crawl flags
 
 | Flag | Description | Default |
 | --- | --- | --- |
-| `target` | Config path or novel name from `configs/{novel}.json` | required |
+| `novel` | Novel slug from `translated/{novel}/config.json` | required |
 | `--translated-output` | Per-novel translated root | `TRANSLATED_DIR` |
 | `-m, --max` | Stop after this many new chapters | `MAX_CHAPTERS` env or unlimited |
 | `--fail-fast` | Stop on first chapter error | off |
@@ -116,9 +116,9 @@ uses a temporary profile on every run. `-h` reuses state per source domain under
 sessions differently, use `-h` for the entire crawl instead of expecting its
 profile to unblock later `-b` runs.
 
-### Generate a site config
+### Generate a novel config
 
-If no config exists for a site, let the LLM build one from the novel's main
+If no config exists for a novel, let the LLM build one from the novel's main
 information/detail URL:
 
 ```bash
@@ -130,8 +130,8 @@ uv run crawl my-novel
 The generator first extracts the title, author, cover, summary, and TOC URL from
 the novel page. It then inspects the TOC and a sample chapter and proposes a JSON
 config with CSS selectors. Review the printed JSON and confirm to save the crawl
-settings to `configs/<name>.json` and the extracted novel information to
-`translated/<name>/metadata.json`. The config keeps only `source_url` so the
+settings to `translated/<name>/config.json` and the extracted novel information
+to `translated/<name>/metadata.json`. The config keeps only `source_url` so the
 crawler can distinguish the main novel page from its `toc_url` TOC page.
 
 ```bash
@@ -139,7 +139,7 @@ uv run generate <url> --provider gemini        # override provider for generatio
 uv run generate <url> --browser                # fetch with headless browser
 uv run generate <url> --no-cache               # always re-fetch pages
 uv run generate <url> --ignore-sample          # ignore bundled templates
-uv run generate <url> --output ./configs       # output directory
+uv run generate <url> --translated-output ./translated  # override novel root
 ```
 
 ### Validate a config
@@ -193,9 +193,10 @@ overwritten because their content changed, newly added chapters, and chapters
 removed when `--keep-existing` is not enabled. Changed overwritten chapters are
 listed by number and title.
 
-#### Site config schema
+#### Novel config schema
 
-Site configs live in `configs/` and use CSS selectors:
+Novel configs live at `translated/<name>/config.json` and use CSS selectors.
+Reusable examples remain directly under `configs/`:
 
 ```json
 {
@@ -537,7 +538,7 @@ Set `TELEGRAM_SILENT=true` to send without a notification sound.
 
 | Problem | Solution |
 | --- | --- |
-| `Config not found for '...'` | Put a JSON config in `configs/{name}.json`, or pass a file path |
+| `Config not found for novel '...'` | Create `translated/{name}/config.json`, then pass `{name}` to `crawl` or `validate` |
 | Ollama won't connect | Check Ollama is running, test `curl http://localhost:11434/api/tags` |
 | Model not found | Run `ollama list`, then `ollama pull <model-name>` |
 | Crawler gets 0 chapters | Run `validate` to check selectors; try `--browser` for JS sites |

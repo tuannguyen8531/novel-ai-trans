@@ -474,8 +474,7 @@ def test_crawl_job_console_hides_skipped_and_started_progress():
     assert events[-1].payload["message"] == "[1/3] Chapter 22"
 
 
-def test_config_save_rejects_traversal_draft_id(client, tmp_path):
-    config_dir = tmp_path / "configs"
+def test_config_save_rejects_traversal_draft_id(client):
     payload = {
         "config": {
             "name": "demo",
@@ -485,17 +484,16 @@ def test_config_save_rejects_traversal_draft_id(client, tmp_path):
         },
         "draft_id": "../../victim",
     }
-    with patch("src.api.routes.configs._CONFIG_DIR", config_dir):
-        response = client.put("/api/configs/demo", json=payload)
+    response = client.put("/api/configs/demo", json=payload)
     assert response.status_code == 422
-    assert not (config_dir / "demo.json").exists()
+    translated_root = Path(_config.get_config().translated_dir)
+    assert not (translated_root / "demo" / "config.json").exists()
 
 
-def test_config_save_persists_draft_metadata_separately(client, tmp_path):
+def test_config_save_persists_draft_metadata_separately(client):
     import json
     from datetime import datetime, timedelta
 
-    config_dir = tmp_path / "configs"
     drafts_dir = client.app.state.app_state.drafts_dir
     draft_id = "generated-demo"
     draft = {
@@ -526,12 +524,11 @@ def test_config_save_persists_draft_metadata_separately(client, tmp_path):
         "draft_id": draft_id,
     }
 
-    with patch("src.api.routes.configs._CONFIG_DIR", config_dir):
-        response = client.put("/api/configs/demo", json=payload)
+    response = client.put("/api/configs/demo", json=payload)
 
     assert response.status_code == 200
-    saved_config = json.loads((config_dir / "demo.json").read_text(encoding="utf-8"))
     translated_root = Path(_config.get_config().translated_dir)
+    saved_config = json.loads((translated_root / "demo" / "config.json").read_text(encoding="utf-8"))
     saved_metadata = json.loads((translated_root / "demo" / "metadata.json").read_text(encoding="utf-8"))
     assert "title" not in saved_config
     assert saved_metadata["title"] == "Demo Novel"

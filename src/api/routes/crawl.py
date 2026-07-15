@@ -38,7 +38,7 @@ async def post_crawl(
         started_at = time.time()
         progress_cb = build_progress_emitter(job, emit)
         request = CrawlRequest(
-            target=payload.target,
+            novel=payload.novel,
             translated_output=Path(payload.translated_output) if payload.translated_output else None,
             max_chapters=payload.max_chapters,
             fail_fast=payload.fail_fast or False,
@@ -55,7 +55,7 @@ async def post_crawl(
             send_run_notification(
                 status="Success" if interrupted else "Failed",
                 task="Crawl",
-                novel=payload.target,
+                novel=payload.novel,
                 detail="Crawl interrupted." if interrupted else (str(error) or type(error).__name__),
                 started_at=started_at,
             )
@@ -93,7 +93,7 @@ async def post_crawl(
 
     job = jobs.submit(
         kind="crawl",
-        novel=payload.target,
+        novel=payload.novel,
         snapshot=snapshot,
         loop=loop,
         run=_run,

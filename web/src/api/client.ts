@@ -241,7 +241,7 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     }),
-  validateConfig: (name: string, payload: { target?: string; browser?: boolean }) =>
+  validateConfig: (name: string, payload: { browser?: boolean }) =>
     request<{ job_id: string }>(`/api/configs/${encodeURIComponent(name)}/validate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

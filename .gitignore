@@ -29,9 +29,7 @@ runtime/
 
 # Local-only configs
 configs/*
-!configs/.gitkeep
-!configs/example.json
-!configs/samples/
+!configs/*.json
 
 # Translation rule templates
 rules/*

@@ -117,7 +117,7 @@ def find_untranslated(
 
 
 def _progress_path(novel_name: str, target_language: str | None = None) -> Path:
-    config = get_config()
+    config = app_config.get_config()
     return _paths.translation_progress_path(config, novel_name, target_language, progress_root=PROGRESS_DIR)
 
 
@@ -130,7 +130,7 @@ def save_progress(novel_name: str, progress: dict, target_language: str | None =
 
 
 def _report_path(novel_name: str, chapter_number: int, target_language: str | None = None) -> Path:
-    config = get_config()
+    config = app_config.get_config()
     return _paths.translation_report_path(config, novel_name, chapter_number, target_language, report_root=REPORT_DIR)
 
 

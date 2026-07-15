@@ -266,7 +266,7 @@ class PackRequestPayload(BaseModel):
 class CrawlRequestPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    target: str
+    novel: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
     translated_output: str | None = None
     max_chapters: int | None = Field(None, ge=0)
     fail_fast: bool | None = None
@@ -318,7 +318,6 @@ class ConfigGenerateRequest(BaseModel):
 class ConfigValidateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    target: str | None = None
     browser: bool | None = None
 
 

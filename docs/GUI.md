@@ -204,14 +204,14 @@ title when needed.
 
 ### Crawl
 
-Three entry points, all in one place:
+The Crawl page keeps both config workflows in one place:
 
-1. Pick an existing `configs/<name>.json`.
-2. Generate a new one with `POST /api/configs/generate` from a table-of-
-   contents URL. The job returns a draft id; the draft is loaded into the
-   editor for review, and `PUT /api/configs/{name}` writes it back and
-   consumes the draft.
-3. Start a crawl from the saved config or an explicit config path.
+1. Pick an existing `translated/<name>/config.json` by novel name.
+2. Generate a new one with `POST /api/configs/generate` from the novel's main
+   information URL. The job returns a draft id; the draft is loaded into the
+   editor for review, and `PUT /api/configs/{name}` writes it to that novel
+   directory and consumes the draft.
+3. Start a crawl by novel slug. Explicit config paths are not accepted.
 
 The current Crawl page does not expose config validation. Use
 `uv run validate <name>` or `POST /api/configs/{name}/validate` when selectors
@@ -427,9 +427,8 @@ Removing provider keys, changing Telegram credentials, or changing
 - Novel names and config names used by resource endpoints are validated as
   slugs. Absolute paths, `..`, symlink escapes, and embedded separators are
   rejected by those endpoints.
-- A crawl target is different: it may be a saved config name or an explicit
-  config file path, including an absolute path. Treat this operator-provided
-  path as trusted input, especially in remote mode.
+- Crawl and validation requests accept only a novel slug and resolve its config
+  as `translated/<slug>/config.json`.
 - Artifact downloads use a filename selected from the server-generated
   list; the client cannot ask for an arbitrary path.
 - DELETE for a novel returns 409 while the active job's novel matches,

@@ -19,6 +19,7 @@ from urllib.parse import urljoin, urlparse
 from bs4 import BeautifulSoup
 
 from src.config import DEFAULT_USER_AGENT, SiteConfig
+from src.paths import CONFIG_DIR, DEFAULT_TRANSLATED_ROOT
 from src.services.http import FetchResponse, HttpClient
 from src.services.llm.base import BaseProvider
 from src.utils.html import clean_html_for_analysis
@@ -262,7 +263,7 @@ class ConfigGenerator:
         source_url: str,
         *,
         name: str | None = None,
-        configs_dir: Path | None = None,
+        translated_root: Path | None = None,
         samples_dir: Path | None = None,
         cache_dir: Path | None = None,
         use_cache: bool = True,
@@ -276,8 +277,8 @@ class ConfigGenerator:
         Disabling samples forces live HTML selector analysis. Returns the raw
         dict (not yet a SiteConfig) so the caller can review it before saving.
         """
-        configs_dir = configs_dir or Path("configs")
-        effective_samples_dir = samples_dir or self._samples_dir or (configs_dir / "samples")
+        translated_root = translated_root or DEFAULT_TRANSLATED_ROOT
+        effective_samples_dir = samples_dir or self._samples_dir or CONFIG_DIR
         cache = _HtmlCache(
             cache_dir or Path("runtime/crawler") / ".gen-cache",
             enabled=use_cache,
@@ -309,7 +310,7 @@ class ConfigGenerator:
                     result["toc_url"] = toc_url
                     return self._add_novel_info(result, source_url, novel_info)
 
-            known = self._load_known_domain_config(domain, configs_dir) if use_samples else None
+            known = self._load_known_domain_config(domain, translated_root) if use_samples else None
 
             # Phase 2: TOC and sample chapter selector analysis.
             toc_html = self._fetch_or_cache(fetcher, cache, toc_url, "TOC")
@@ -406,12 +407,13 @@ class ConfigGenerator:
         return SiteConfig.from_dict(config_dict)
 
     @staticmethod
-    def save(config_dict: dict[str, Any], output_dir: Path) -> Path:
-        """Write config JSON to disk and return the path."""
-        name = config_dict.get("name", "generated")
-        filename = f"{name}.json"
-        path = output_dir / filename
-        output_dir.mkdir(parents=True, exist_ok=True)
+    def save(config_dict: dict[str, Any], translated_root: Path) -> Path:
+        """Write a novel-owned config JSON and return its path."""
+        name = str(config_dict.get("name", "generated"))
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", name) or name in {".", ".."}:
+            raise ValueError(f"Invalid novel slug: {name!r}")
+        path = translated_root / name / "config.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
         content = json.dumps(config_dict, ensure_ascii=False, indent=2) + "\n"
         path.write_text(content, encoding="utf-8")
         return path
@@ -609,11 +611,11 @@ class ConfigGenerator:
         return None
 
     @staticmethod
-    def _load_known_domain_config(domain: str, configs_dir: Path) -> dict[str, Any] | None:
-        """Scan configs_dir for a config whose toc_url netloc matches domain."""
-        if not configs_dir.is_dir():
+    def _load_known_domain_config(domain: str, translated_root: Path) -> dict[str, Any] | None:
+        """Scan novel directories for a config whose toc_url netloc matches domain."""
+        if not translated_root.is_dir():
             return None
-        for path in sorted(configs_dir.glob("*.json")):
+        for path in sorted(translated_root.glob("*/config.json")):
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
                 toc_url = data.get("toc_url", "")
