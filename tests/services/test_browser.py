@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import tempfile
 import threading
 import unittest
@@ -10,7 +11,7 @@ from unittest.mock import patch
 
 from playwright.async_api import Error as PlaywrightError
 
-from src.services.browser import BrowserChallengeError, BrowserFetcher
+from src.services.browser import BrowserChallengeError, BrowserFetcher, _find_system_browser
 
 
 class FakeResponse:
@@ -163,6 +164,21 @@ class FakePlaywrightStarter:
 
 
 class BrowserFetcherTest(unittest.TestCase):
+    def test_finds_chrome_in_standard_windows_install_location(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            chrome_path = Path(tempdir) / "Google" / "Chrome" / "Application" / "chrome.exe"
+            chrome_path.parent.mkdir(parents=True)
+            chrome_path.touch()
+
+            with (
+                patch("src.services.browser.sys.platform", "win32"),
+                patch("src.services.browser.which", return_value=None),
+                patch.dict(os.environ, {"PROGRAMFILES": tempdir}, clear=True),
+            ):
+                executable_path = _find_system_browser()
+
+        self.assertEqual(executable_path, str(chrome_path))
+
     def test_fetch_uses_shared_context_with_concurrent_pages(self) -> None:
         playwright = FakePlaywright()
         starter = FakePlaywrightStarter(playwright)

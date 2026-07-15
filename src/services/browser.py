@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import re
+import sys
 import threading
 import time
 from collections.abc import Coroutine
@@ -31,6 +33,12 @@ _SYSTEM_BROWSER_COMMANDS = (
     "google-chrome",
     "chromium",
     "chromium-browser",
+)
+_WINDOWS_BROWSER_COMMANDS = ("chrome", "chrome.exe")
+_WINDOWS_CHROME_LOCATIONS = (
+    ("PROGRAMFILES", Path("Google/Chrome/Application/chrome.exe")),
+    ("PROGRAMFILES(X86)", Path("Google/Chrome/Application/chrome.exe")),
+    ("LOCALAPPDATA", Path("Google/Chrome/Application/chrome.exe")),
 )
 _CHALLENGE_TITLE_RE = re.compile(
     r"<title[^>]*>\s*(?:just a moment|attention required)",
@@ -443,10 +451,19 @@ class BrowserFetcher:
 
 
 def _find_system_browser() -> str | None:
-    for command in _SYSTEM_BROWSER_COMMANDS:
+    commands = _WINDOWS_BROWSER_COMMANDS + _SYSTEM_BROWSER_COMMANDS if sys.platform == "win32" else _SYSTEM_BROWSER_COMMANDS
+    for command in commands:
         executable_path = which(command)
         if executable_path is not None:
             return executable_path
+
+    if sys.platform == "win32":
+        for environment_variable, relative_path in _WINDOWS_CHROME_LOCATIONS:
+            root = os.environ.get(environment_variable)
+            if root:
+                executable_path = Path(root) / relative_path
+                if executable_path.is_file():
+                    return str(executable_path)
     return None
 
 
