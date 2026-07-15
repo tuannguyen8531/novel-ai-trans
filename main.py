@@ -66,28 +66,25 @@ def main() -> int:
     if subcommand == "translate":
         from src.cli import translate as translate_module
 
-        if len(sys.argv) >= 3 and sys.argv[2] == "glossary":
-            translate_module.glossary_main(sys.argv[3:])
-            return 0
-        translate_module.translate_main()
+        translate_module.main(sys.argv[2:])
         return 0
 
     if subcommand == "pack":
         from src.cli import pack as pack_module
 
-        pack_module.pack_main()
+        pack_module.main(sys.argv[2:])
         return 0
 
     if subcommand == "glossary":
-        from src.cli.translate import glossary_main
+        from src.cli import glossary as glossary_module
 
-        glossary_main(sys.argv[2:])
+        glossary_module.main(sys.argv[2:])
         return 0
 
     if subcommand == "test":
         from src.cli import test as test_module
 
-        return test_module.test_main(sys.argv[2:])
+        return test_module.main(sys.argv[2:])
 
     if subcommand == "build":
         from src.cli.build import main as build_main

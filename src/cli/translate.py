@@ -1,8 +1,7 @@
 """Batch translate + glossary CLI commands.
 
-- :func:`translate_main` runs the batch translation pipeline for a single
+- :func:`main` runs the batch translation pipeline for a single
   novel. It is a thin argparse adapter over :func:`src.application.translate.run_translation`.
-- :func:`glossary_main` is the per-novel glossary manager.
 
 The translation logic itself lives in :mod:`src.application.translate`. The
 helpers :func:`scan_chapters`, :func:`find_untranslated`, :func:`load_progress`,
@@ -31,7 +30,7 @@ from src.application.translate import (
     notify_translation_result,
     run_translation,
 )
-from src.cli.glossary import glossary_main
+from src.cli import glossary as glossary_cli
 from src.domain.language import (
     SUPPORTED_TARGET_LANGUAGES,
     target_language_name,
@@ -50,12 +49,11 @@ from src.utils.progress import ProgressTracker
 # Re-exported helpers for tests and external callers.
 __all__ = [
     "find_untranslated",
-    "glossary_main",
     "load_progress",
     "save_progress",
     "scan_chapters",
     "translate_file",
-    "translate_main",
+    "main",
     "audit_glossary_outputs",
     "INPUT_DIR",
     "OUTPUT_DIR",
@@ -293,12 +291,13 @@ def _print_progress_callback(event: ProgressEvent) -> None:
         progress.print_summary()
 
 
-def translate_main() -> None:
+def main(argv: list[str] | None = None) -> None:
     global _progress_tracker, _shutdown_requested
     _shutdown_requested = False
     _cancel_event.clear()
-    if len(sys.argv) > 1 and sys.argv[1] == "glossary":
-        glossary_main(sys.argv[2:])
+    resolved_argv = sys.argv[1:] if argv is None else argv
+    if resolved_argv[:1] == ["glossary"]:
+        glossary_cli.main(resolved_argv[1:])
         return
 
     parser = argparse.ArgumentParser(
@@ -403,7 +402,7 @@ Examples:
         help="Translate at most N chapters (0 = no limit)",
     )
 
-    args = parser.parse_args()
+    args = parser.parse_args(resolved_argv)
     config = get_config()
 
     if args.provider:

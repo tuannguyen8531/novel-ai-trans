@@ -1,7 +1,7 @@
 """Packager CLI: turn translated output into EPUB.
 
 Re-exports the reusable building blocks from :mod:`src.services.packaging`
-and keeps the argparse entry point :func:`pack_main`. The application
+and keeps the argparse entry point :func:`main`. The application
 workflow in :mod:`src.application.pack` performs the actual work.
 """
 
@@ -24,7 +24,7 @@ from src.utils.display import GREEN, RED, RESET, YELLOW
 
 # Re-exported for tests and external callers.
 __all__ = [
-    "pack_main",
+    "main",
     "package_file_stem",
 ]
 
@@ -37,7 +37,7 @@ def _print_progress(event: ProgressEvent) -> None:
         print(f"  {event.message}")
 
 
-def pack_main(argv: list[str] | None = None) -> None:
+def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         description="📦 Novel Translator Packager — Package output text files into EPUB",
         formatter_class=argparse.RawDescriptionHelpFormatter,

@@ -34,7 +34,7 @@ def _run(label: str, command: list[str], project_root: Path) -> bool:
     return False
 
 
-def test_main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     """Run all Python lint, formatting, type, and test checks."""
     parser = argparse.ArgumentParser(
         prog="novel-ai-trans test",

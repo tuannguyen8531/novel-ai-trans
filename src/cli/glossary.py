@@ -117,7 +117,7 @@ def _print_replacements(result: dict, *, requested_write: bool) -> None:
         print(f"{DIM}Run again with --write to apply these changes.{RESET}")
 
 
-def glossary_main(argv: list[str] | None = None) -> None:
+def main(argv: list[str] | None = None) -> None:
     """Manage per-novel glossary data."""
     args = _build_parser().parse_args(argv)
 
