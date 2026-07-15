@@ -174,7 +174,7 @@ def _load_progress(path: Path) -> dict[str, list[int]]:
         return {"completed": [], "failed": []}
     try:
         return json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
+    except json.JSONDecodeError, OSError:
         return {"completed": [], "failed": []}
 
 
@@ -194,7 +194,7 @@ def _load_metadata(novel_root: Path) -> dict[str, Any]:
         return {}
     try:
         return json.loads(metadata_path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
+    except json.JSONDecodeError, OSError:
         return {}
 
 
@@ -286,7 +286,7 @@ def detail(
             terms = len(glossary.get("terms", {}))
             entities = len(glossary.get("entities", {}))
             edges = len(glossary.get("edges", []))
-        except (json.JSONDecodeError, OSError):
+        except json.JSONDecodeError, OSError:
             pass
     return Detail(
         **base.__dict__,

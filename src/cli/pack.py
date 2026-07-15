@@ -103,7 +103,7 @@ def pack_main(argv: list[str] | None = None) -> None:
 
     try:
         result: PackResult = run_pack(request, progress_callback=_print_progress)
-    except (SystemExit, KeyboardInterrupt):
+    except SystemExit, KeyboardInterrupt:
         raise
     except Exception as error:
         print(f"{RED}✗ {error}{RESET}")

@@ -113,7 +113,7 @@ def merge_json_locked(path: Path, updater: Callable[[JsonObject], JsonObject]) -
             target.seek(0)
             try:
                 existing_data = json.load(target)
-            except (json.JSONDecodeError, ValueError):
+            except json.JSONDecodeError, ValueError:
                 existing_data = {}
             if not isinstance(existing_data, dict):
                 existing_data = {}

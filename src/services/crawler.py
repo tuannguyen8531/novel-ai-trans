@@ -596,7 +596,7 @@ class NovelCrawler:
             return metadata
         try:
             existing = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
+        except OSError, json.JSONDecodeError:
             return metadata
         if not isinstance(existing, dict):
             return metadata
@@ -785,7 +785,7 @@ class NovelCrawler:
         if path.is_file():
             try:
                 existing = json.loads(path.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
+            except OSError, json.JSONDecodeError:
                 existing = {}
             if isinstance(existing, dict):
                 # Crawling refreshes source metadata, while localized values

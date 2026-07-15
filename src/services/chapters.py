@@ -117,7 +117,7 @@ def read_title(file_path: Path, fallback: str, *, keep_cjk: bool = True) -> str:
         if not keep_cjk:
             title = _CJK_PATTERN.sub("", title)
         return re.sub(r" +", " ", title).strip() or fallback
-    except (OSError, UnicodeError):
+    except OSError, UnicodeError:
         return fallback
 
 

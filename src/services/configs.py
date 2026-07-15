@@ -606,7 +606,7 @@ class ConfigGenerator:
                 toc_url = data.get("toc_url", "")
                 if urlparse(toc_url).netloc == domain:
                     return json.loads(json.dumps(data))
-            except (OSError, ValueError):
+            except OSError, ValueError:
                 continue
         return None
 
@@ -621,7 +621,7 @@ class ConfigGenerator:
                 toc_url = data.get("toc_url", "")
                 if urlparse(toc_url).netloc == domain:
                     return data
-            except (OSError, ValueError):
+            except OSError, ValueError:
                 continue
         return None
 

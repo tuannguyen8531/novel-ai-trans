@@ -77,7 +77,7 @@ def _list_configs() -> list[ConfigSummary]:
                         updated_at=None,
                     )
                 )
-            except (OSError, json.JSONDecodeError):
+            except OSError, json.JSONDecodeError:
                 continue
     return out
 
@@ -274,7 +274,7 @@ def _cleanup_expired_drafts(now: datetime | None = None) -> None:
             continue
         try:
             data = json.loads(entry.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
+        except OSError, json.JSONDecodeError:
             continue
         expires = datetime.fromisoformat(data.get("expires_at"))
         if expires <= now:
@@ -293,7 +293,7 @@ def list_drafts(_: AuthenticatedPrincipal) -> list[DraftSummary]:
             continue
         try:
             data = json.loads(entry.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
+        except OSError, json.JSONDecodeError:
             continue
         out.append(
             DraftSummary(

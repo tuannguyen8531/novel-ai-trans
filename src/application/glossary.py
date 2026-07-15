@@ -62,7 +62,7 @@ def load_glossary(novel_name: str) -> dict:
         if not path.exists() or path.stat().st_size == 0:
             return _empty_glossary()
         return glossary_service.load_glossary_data(novel_name)
-    except (OSError, json.JSONDecodeError, ValueError):
+    except OSError, json.JSONDecodeError, ValueError:
         return _empty_glossary()
 
 
@@ -287,7 +287,7 @@ def apply_pending_replacements(
                 try:
                     chapter_number = int(source_path.stem.split("_")[-1])
                     source_text = source_path.read_text(encoding="utf-8")
-                except (OSError, ValueError):
+                except OSError, ValueError:
                     continue
 
                 source_counts = [

@@ -136,7 +136,7 @@ def list_provider_models(provider: str) -> ProviderModelsResponse:
                     }
                 ),
             )
-    except (httpx.HTTPError, OSError, ValueError):
+    except httpx.HTTPError, OSError, ValueError:
         return ProviderModelsResponse(provider=provider, models=[])
     return ProviderModelsResponse(provider=provider, models=[])
 

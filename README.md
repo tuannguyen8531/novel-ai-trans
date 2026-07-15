@@ -1,6 +1,6 @@
 # novel-ai-trans
 
-[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/)
+[![Python 3.14+](https://img.shields.io/badge/python-3.14%2B-blue.svg)](https://www.python.org/)
 [![uv](https://img.shields.io/badge/package%20manager-uv-2b2b2b.svg)](https://docs.astral.sh/uv/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
@@ -47,7 +47,7 @@ Website / EPUB
 
 ## Requirements
 
-- Python 3.12+
+- Python 3.14+
 - [uv](https://docs.astral.sh/uv/)
 - One supported LLM provider:
   - local [Ollama](https://ollama.com/) server, or

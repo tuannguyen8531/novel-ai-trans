@@ -72,7 +72,7 @@ def load_metadata(novel_name: str) -> dict:
         return {}
     try:
         return json.loads(metadata_path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
+    except json.JSONDecodeError, OSError:
         return {}
 
 
@@ -132,7 +132,7 @@ def resolve_cover_image(metadata: dict, novel_root: Path | None = None) -> Path 
             with tempfile.NamedTemporaryFile(delete=False, suffix=suffix, prefix="novel_cover_") as tmp:
                 tmp.write(resp.read())
                 return Path(tmp.name)
-    except (URLError, OSError):
+    except URLError, OSError:
         return None
 
 

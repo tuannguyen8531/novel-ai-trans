@@ -77,7 +77,7 @@ def load_progress(progress_path: Path) -> dict:
         return {"completed": [], "failed": []}
     try:
         return json.loads(progress_path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
+    except json.JSONDecodeError, OSError:
         return {"completed": [], "failed": []}
 
 
