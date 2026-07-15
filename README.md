@@ -264,6 +264,13 @@ Run the full validation pipeline:
 uv run test
 ```
 
+Apply automatically fixable Ruff lint changes and format the code before
+running the remaining validation steps:
+
+```bash
+uv run test --fix
+```
+
 Run individual checks:
 
 ```bash

@@ -39,4 +39,5 @@ Or, use the unified validation entry point from the project root:
 
 ```bash
 uv run python main.py test          # ruff lint + ruff format + pyright + pytest
+uv run python main.py test --fix    # apply ruff fixes and formatting first
 ```

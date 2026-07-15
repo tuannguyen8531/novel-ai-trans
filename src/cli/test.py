@@ -40,6 +40,11 @@ def test_main(argv: list[str] | None = None) -> int:
         prog="novel-ai-trans test",
         description="Run ruff, pyright, and pytest checks.",
     )
+    parser.add_argument(
+        "--fix",
+        action="store_true",
+        help="Apply safe ruff lint fixes and format files before validation.",
+    )
     parser.add_argument("--no-lint", action="store_true", help="Skip ruff lint check.")
     parser.add_argument("--no-format", action="store_true", help="Skip ruff format check.")
     parser.add_argument("--no-pyright", action="store_true", help="Skip pyright check.")
@@ -54,9 +59,13 @@ def test_main(argv: list[str] | None = None) -> int:
     project_root = Path(__file__).resolve().parents[2]
     commands: list[tuple[str, list[str]]] = []
     if not args.no_lint:
-        commands.append(("ruff check", [sys.executable, "-m", "ruff", "check", "."]))
+        lint_command = [sys.executable, "-m", "ruff", "check"]
+        if args.fix:
+            lint_command.append("--fix")
+        commands.append(("ruff check", [*lint_command, "."]))
     if not args.no_format:
-        commands.append(("ruff format", [sys.executable, "-m", "ruff", "format", "--check", "."]))
+        format_mode = ["--quiet"] if args.fix else ["--check"]
+        commands.append(("ruff format", [sys.executable, "-m", "ruff", "format", *format_mode, "."]))
     if not args.no_pyright:
         commands.append(("pyright", [sys.executable, "-m", "pyright"]))
     if not args.no_pytest:
