@@ -5,14 +5,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from src.application.crawl import (
-    CrawlRequest,
-    ImportRequest,
-    generate_config,
-    import_epub_workflow,
-    run_crawl,
-    save_generated_config,
-)
+from src.application.crawler import CrawlRequest, run_crawl
+from src.application.generator import generate_config, save_generated_config
+from src.application.importer import ImportRequest, import_epub_workflow
 from src.services.importer import ChapterImportChange
 
 
@@ -40,7 +35,7 @@ def test_run_crawl_dry_run_returns_preview_without_crawling(tmp_path: Path) -> N
         encoding="utf-8",
     )
 
-    with patch("src.application.crawl.NovelCrawler", return_value=crawler):
+    with patch("src.application.crawler.NovelCrawler", return_value=crawler):
         result = run_crawl(
             CrawlRequest(
                 novel="example",
@@ -81,7 +76,7 @@ def test_headed_crawl_forces_one_worker_for_shared_browser_page(tmp_path: Path) 
     fetcher = Mock()
 
     with (
-        patch("src.application.crawl.NovelCrawler", return_value=crawler),
+        patch("src.application.crawler.NovelCrawler", return_value=crawler),
         patch("src.services.browser.BrowserFetcher", return_value=fetcher) as fetcher_class,
     ):
         run_crawl(
@@ -108,8 +103,8 @@ def test_generate_config_without_drafts_dir_does_not_create_draft() -> None:
     }
 
     with (
-        patch("src.application.crawl.get_llm", return_value=llm),
-        patch("src.application.crawl.ConfigGenerator") as generator_cls,
+        patch("src.application.generator.get_llm", return_value=llm),
+        patch("src.application.generator.ConfigGenerator") as generator_cls,
     ):
         generator_cls.return_value = generator
         result = generate_config(url="https://example.com/book/", headed=True)
@@ -132,8 +127,8 @@ def test_generate_config_no_cache_disables_generator_cache() -> None:
     }
 
     with (
-        patch("src.application.crawl.get_llm", return_value=object()),
-        patch("src.application.crawl.ConfigGenerator", return_value=generator),
+        patch("src.application.generator.get_llm", return_value=object()),
+        patch("src.application.generator.ConfigGenerator", return_value=generator),
     ):
         generate_config(url="https://example.com/book", no_cache=True)
 
@@ -155,8 +150,8 @@ def test_generate_config_separates_novel_metadata_from_crawler_config() -> None:
     }
 
     with (
-        patch("src.application.crawl.get_llm", return_value=object()),
-        patch("src.application.crawl.ConfigGenerator", return_value=generator),
+        patch("src.application.generator.get_llm", return_value=object()),
+        patch("src.application.generator.ConfigGenerator", return_value=generator),
     ):
         result = generate_config(url="https://example.com/book")
 
@@ -224,7 +219,7 @@ def test_import_workflow_reports_chapter_changes_in_result_and_logs() -> None:
     )
     events = []
 
-    with patch("src.application.crawl.import_epub", return_value=imported):
+    with patch("src.application.importer.import_epub", return_value=imported):
         result = import_epub_workflow(ImportRequest(epub_path=Path("demo.epub")), progress_callback=events.append)
 
     assert (result.retained, result.unchanged, result.overwritten, result.added, result.removed) == (1, 1, 1, 1, 0)

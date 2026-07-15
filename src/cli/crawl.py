@@ -8,18 +8,12 @@ from pathlib import Path
 from typing import Any
 
 from src.application.config import get_config
-from src.application.crawl import (
-    ConfigIssue,
-    CrawlRequest,
-    ImportRequest,
-    generate_config,
-    import_epub_workflow,
-    run_crawl,
-    save_generated_config,
-    validate_config,
-)
+from src.application.crawler import CrawlRequest, run_crawl
 from src.application.errors import ApplicationError, ExternalServiceError
+from src.application.generator import generate_config, save_generated_config
+from src.application.importer import ImportRequest, import_epub_workflow
 from src.application.progress import ProgressEvent
+from src.application.validator import ConfigIssue, validate_config
 from src.services.notifier import format_run_footer, get_notifier
 from src.utils.logging import get_logger, setup_logging
 
