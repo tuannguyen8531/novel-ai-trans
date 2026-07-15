@@ -8,7 +8,7 @@ from unittest.mock import patch
 import pytest
 
 from src.application.errors import ResourceConflictError
-from src.application.glossary import (
+from src.application.glossary.replacements import (
     apply_pending_replacements,
     dismiss_pending_replacements,
     rollback_glossary_replacement,
@@ -40,7 +40,7 @@ class TestGlossary:
         self.patcher = patch("src.services.glossary.GLOSSARY_DIR", Path(self.temp_dir.name))
         self.patcher.start()
         self.backup_patcher = patch(
-            "src.application.glossary.GLOSSARY_BACKUP_DIR",
+            "src.application.glossary.replacements.GLOSSARY_BACKUP_DIR",
             Path(self.temp_dir.name) / "backups",
         )
         self.backup_patcher.start()
@@ -371,7 +371,7 @@ class TestGlossaryTranslatedDir:
         self.patcher_lock_dir = patch("src.services.glossary.LOCK_DIR", self.base / "locks")
         self.patcher_lock_dir.start()
         self.patcher_backup_dir = patch(
-            "src.application.glossary.GLOSSARY_BACKUP_DIR",
+            "src.application.glossary.replacements.GLOSSARY_BACKUP_DIR",
             self.base / "backups",
         )
         self.patcher_backup_dir.start()

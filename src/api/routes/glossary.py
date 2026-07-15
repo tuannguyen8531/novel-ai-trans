@@ -24,7 +24,7 @@ from src.api.schemas import (
     JobStartResponse,
 )
 from src.application import config as app_config
-from src.application import glossary
+from src.application.glossary import audit, replacements, storage
 from src.application.novel import identity
 
 router = APIRouter(tags=["glossary"])
@@ -52,7 +52,7 @@ def get_glossary(
     _: AuthenticatedPrincipal,
 ) -> GlossaryResponse:
     _validate_novel(name)
-    return GlossaryResponse(novel=name, data=glossary.load_glossary(name))
+    return GlossaryResponse(novel=name, data=storage.load_glossary(name))
 
 
 @router.put("/novels/{name}/glossary/terms", response_model=GlossaryResponse)
@@ -62,7 +62,7 @@ def put_terms(
     _: AuthenticatedPrincipal,
 ) -> GlossaryResponse:
     _validate_novel(name)
-    data = glossary.save_terms(name, payload.terms)
+    data = storage.save_terms(name, payload.terms)
     return GlossaryResponse(novel=name, data=data)
 
 
@@ -73,7 +73,7 @@ def post_term(
     _: AuthenticatedPrincipal,
 ) -> GlossaryResponse:
     _validate_novel(name)
-    data = glossary.save_term(name, payload.original, payload.translated)
+    data = storage.save_term(name, payload.original, payload.translated)
     return GlossaryResponse(novel=name, data=data)
 
 
@@ -84,7 +84,7 @@ def delete_term(
     _: AuthenticatedPrincipal,
 ) -> GlossaryResponse:
     _validate_novel(name)
-    data = glossary.remove_term(name, original)
+    data = storage.remove_term(name, original)
     return GlossaryResponse(novel=name, data=data)
 
 
@@ -96,7 +96,7 @@ def patch_term(
     _: AuthenticatedPrincipal,
 ) -> GlossaryResponse:
     _validate_novel(name)
-    data = glossary.update_term(
+    data = storage.update_term(
         name,
         original,
         payload.original,
@@ -112,7 +112,7 @@ def list_characters(
     _: AuthenticatedPrincipal,
 ) -> GlossaryCharactersResponse:
     _validate_novel(name)
-    data = glossary.load_glossary(name)
+    data = storage.load_glossary(name)
     entities = data.get("entities", {}) if isinstance(data, dict) else {}
     characters = [
         GlossaryCharacterSummary(
@@ -134,7 +134,7 @@ def update_character(
     _: AuthenticatedPrincipal,
 ) -> GlossaryResponse:
     _validate_novel(name)
-    data = glossary.save_character(
+    data = storage.save_character(
         name,
         original,
         translated_name=payload.translated_name or "",
@@ -150,7 +150,7 @@ def delete_character(
     _: AuthenticatedPrincipal,
 ) -> GlossaryResponse:
     _validate_novel(name)
-    data = glossary.remove_character(name, original)
+    data = storage.remove_character(name, original)
     return GlossaryResponse(novel=name, data=data)
 
 
@@ -161,7 +161,7 @@ def add_relationship(
     _: AuthenticatedPrincipal,
 ) -> GlossaryResponse:
     _validate_novel(name)
-    data = glossary.save_relationship(
+    data = storage.save_relationship(
         name,
         from_char=payload.from_char,
         to_char=payload.to_char,
@@ -180,7 +180,7 @@ def delete_relationship(
     _: AuthenticatedPrincipal,
 ) -> GlossaryResponse:
     _validate_novel(name)
-    data = glossary.remove_relationship(name, from_char, to_char)
+    data = storage.remove_relationship(name, from_char, to_char)
     return GlossaryResponse(novel=name, data=data)
 
 
@@ -196,7 +196,7 @@ async def post_validate_glossary(
 
     def _run(job, emit, cancel_event):
         progress_cb = build_progress_emitter(job, emit)
-        issues = glossary.validate_glossary(name, progress_callback=progress_cb, cancel_event=cancel_event)
+        issues = audit.validate_glossary(name, progress_callback=progress_cb, cancel_event=cancel_event)
         return {"novel": name, "issues": issues}
 
     job = jobs.submit(
@@ -223,7 +223,7 @@ async def post_audit_glossary(
 
     def _run(job, emit, cancel_event):
         progress_cb = build_progress_emitter(job, emit)
-        issues = glossary.audit_glossary(
+        issues = audit.audit_glossary(
             name,
             target=resolved_target,
             progress_callback=progress_cb,
@@ -248,7 +248,7 @@ def post_apply_glossary(
     _: AuthenticatedPrincipal,
 ) -> dict:
     _validate_novel(name)
-    return glossary.apply_pending_replacements(
+    return replacements.apply_pending_replacements(
         name,
         target_language=payload.target,
         write=payload.write,
@@ -262,7 +262,7 @@ def post_dismiss_glossary(
     _: AuthenticatedPrincipal,
 ) -> dict:
     _validate_novel(name)
-    glossary.dismiss_pending_replacements(name, target_language=payload.target)
+    replacements.dismiss_pending_replacements(name, target_language=payload.target)
     return {"status": "ok"}
 
 
@@ -273,5 +273,5 @@ def post_rollback_glossary(
     _: AuthenticatedPrincipal,
 ) -> dict:
     _validate_novel(name)
-    glossary.rollback_replacements(name, payload.backup_id)
+    replacements.rollback_replacements(name, payload.backup_id)
     return {"status": "ok"}

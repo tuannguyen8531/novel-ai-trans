@@ -5,8 +5,8 @@ from __future__ import annotations
 import argparse
 import json
 
-from src.application import glossary
 from src.application.errors import ResourceConflictError
+from src.application.glossary import audit, replacements, storage
 from src.domain.language import SUPPORTED_TARGET_LANGUAGES
 from src.utils.display import DIM, GREEN, RED, RESET, YELLOW
 
@@ -122,7 +122,7 @@ def glossary_main(argv: list[str] | None = None) -> None:
     args = _build_parser().parse_args(argv)
 
     if args.command == "list":
-        terms = glossary.load_glossary(args.novel).get("terms", {})
+        terms = storage.load_glossary(args.novel).get("terms", {})
         if not terms:
             print(f"{DIM}No glossary terms for {args.novel}.{RESET}")
             return
@@ -131,25 +131,25 @@ def glossary_main(argv: list[str] | None = None) -> None:
         return
 
     if args.command == "add":
-        glossary.save_term(args.novel, args.original, args.translated)
+        storage.save_term(args.novel, args.original, args.translated)
         print(f"{GREEN}✓ Added glossary term:{RESET} {args.original} → {args.translated}")
         return
 
     if args.command == "remove":
-        terms = glossary.load_glossary(args.novel).get("terms", {})
+        terms = storage.load_glossary(args.novel).get("terms", {})
         if args.original not in terms:
             print(f"{YELLOW}Term not found:{RESET} {args.original}")
             return
-        glossary.remove_term(args.novel, args.original)
+        storage.remove_term(args.novel, args.original)
         print(f"{GREEN}✓ Removed glossary term:{RESET} {args.original}")
         return
 
     if args.command == "export":
-        print(json.dumps(glossary.load_glossary(args.novel), ensure_ascii=False, indent=2))
+        print(json.dumps(storage.load_glossary(args.novel), ensure_ascii=False, indent=2))
         return
 
     if args.command == "characters":
-        entities = glossary.load_glossary(args.novel).get("entities", {})
+        entities = storage.load_glossary(args.novel).get("entities", {})
         if not entities:
             print(f"{DIM}No characters for {args.novel}.{RESET}")
             return
@@ -159,7 +159,7 @@ def glossary_main(argv: list[str] | None = None) -> None:
         return
 
     if args.command == "pronoun":
-        updated = glossary.save_character_pronoun(args.novel, args.original, args.pronoun)
+        updated = storage.save_character_pronoun(args.novel, args.original, args.pronoun)
         if updated:
             print(f"{GREEN}✓ Updated pronoun:{RESET} {args.original} → {args.pronoun}")
         else:
@@ -171,11 +171,11 @@ def glossary_main(argv: list[str] | None = None) -> None:
         if not translated_name and not args.role:
             print(f"{YELLOW}Nothing to update. Use --translated-name and/or --role.{RESET}")
             return
-        entities = glossary.load_glossary(args.novel).get("entities", {})
+        entities = storage.load_glossary(args.novel).get("entities", {})
         if args.original not in entities:
             print(f"{YELLOW}Character not found:{RESET} {args.original}")
             return
-        glossary.save_character(
+        storage.save_character(
             args.novel,
             args.original,
             translated_name=translated_name,
@@ -185,11 +185,11 @@ def glossary_main(argv: list[str] | None = None) -> None:
         return
 
     if args.command == "relationship":
-        entities = glossary.load_glossary(args.novel).get("entities", {})
+        entities = storage.load_glossary(args.novel).get("entities", {})
         if args.from_char not in entities or args.to_char not in entities:
             print(f"{YELLOW}Relationship not updated; both characters must exist.{RESET}")
             return
-        glossary.save_relationship(
+        storage.save_relationship(
             args.novel,
             from_char=args.from_char,
             to_char=args.to_char,
@@ -200,7 +200,7 @@ def glossary_main(argv: list[str] | None = None) -> None:
         return
 
     if args.command == "validate":
-        issues = glossary.validate_glossary(args.novel)
+        issues = audit.validate_glossary(args.novel)
         if not issues:
             print(f"{GREEN}✓ Glossary valid:{RESET} {args.novel}")
             return
@@ -209,7 +209,7 @@ def glossary_main(argv: list[str] | None = None) -> None:
         raise SystemExit(1)
 
     if args.command == "clean":
-        stats = glossary.clean_glossary(args.novel)
+        stats = storage.clean_glossary(args.novel)
         print(
             f"{GREEN}✓ Cleaned glossary:{RESET} {args.novel} "
             f"{DIM}entities={stats['entities']} edges={stats['edges_before']}→{stats['edges_after']} "
@@ -219,7 +219,7 @@ def glossary_main(argv: list[str] | None = None) -> None:
         return
 
     if args.command == "audit":
-        issues = glossary.audit_glossary(args.novel)
+        issues = audit.audit_glossary(args.novel)
         if not issues:
             print(f"{GREEN}✓ No glossary audit issues found:{RESET} {args.novel}")
             return
@@ -229,7 +229,7 @@ def glossary_main(argv: list[str] | None = None) -> None:
 
     if args.command == "apply":
         try:
-            result = glossary.apply_pending_replacements(
+            result = replacements.apply_pending_replacements(
                 args.novel,
                 target_language=args.target,
                 write=args.write,
@@ -242,7 +242,7 @@ def glossary_main(argv: list[str] | None = None) -> None:
 
     if args.command == "dismiss":
         try:
-            glossary.dismiss_pending_replacements(args.novel, target_language=args.target)
+            replacements.dismiss_pending_replacements(args.novel, target_language=args.target)
         except ResourceConflictError as error:
             print(f"{RED}✗ Lock acquisition failed: {error}{RESET}")
             raise SystemExit(1) from error
@@ -251,7 +251,7 @@ def glossary_main(argv: list[str] | None = None) -> None:
 
     if args.command == "rollback":
         try:
-            glossary.rollback_glossary_replacement(args.novel, args.backup_id)
+            replacements.rollback_glossary_replacement(args.novel, args.backup_id)
         except FileNotFoundError as error:
             print(f"{RED}✗ Rollback failed: {error}{RESET}")
             raise SystemExit(1) from error

@@ -363,7 +363,7 @@ class TestGlossaryCli:
         self.lock_patcher = patch("src.services.glossary.LOCK_DIR", self.base / "locks")
         self.lock_patcher.start()
         self.backup_patcher = patch(
-            "src.application.glossary.GLOSSARY_BACKUP_DIR",
+            "src.application.glossary.replacements.GLOSSARY_BACKUP_DIR",
             self.base / "backups",
         )
         self.backup_patcher.start()

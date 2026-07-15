@@ -221,7 +221,7 @@ def novel_locked(func):
 
     @functools.wraps(func)
     def wrapper(request, *args, **kwargs):
-        from src.application.glossary import novel_lock
+        from src.application.glossary.replacements import novel_lock
 
         with novel_lock(request.novel):
             return func(request, *args, **kwargs)

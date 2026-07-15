@@ -14,13 +14,11 @@ from src.application.crawl.common import resolve_config_path
 from src.application.crawl.crawler import CrawlResult, browser_profile_dir
 from src.application.errors import ResourceNotFoundError
 from src.application.progress import ProgressEvent
-from src.cli import crawl
-from src.cli.crawl import (
-    build_generate_parser,
-    build_import_parser,
-    build_parser,
-    build_short_parser,
-)
+from src.cli.crawl import common, crawler
+from src.cli.crawl.crawler import build_parser as build_short_parser
+from src.cli.crawl.dispatcher import build_parser
+from src.cli.crawl.generator import build_parser as build_generate_parser
+from src.cli.crawl.importer import build_parser as build_import_parser
 from src.paths import RUNTIME_DIR
 from src.utils.logging import get_logger, setup_logging
 
@@ -143,36 +141,28 @@ class CliTest(unittest.TestCase):
         self.assertTrue(short_args.keep_existing)
 
     def test_crawl_validation_rejects_zero_workers(self) -> None:
-        from src.cli.crawl import _crawl
+        self.assertEqual(crawler.run(_crawl_args(workers=0)), 1)
 
-        self.assertEqual(_crawl(_crawl_args(workers=0)), 1)
-
-    @unittest.mock.patch("src.cli.crawl.run_crawl")
+    @unittest.mock.patch("src.cli.crawl.crawler.run_crawl")
     def test_crawl_browser_passes_worker_count_to_application(self, mock_run_crawl) -> None:
-        from src.cli.crawl import _crawl
-
         mock_run_crawl.return_value = _dry_crawl_result()
-        _crawl(_crawl_args(workers=4, browser=True, dry_run=True))
+        crawler.run(_crawl_args(workers=4, browser=True, dry_run=True))
         request = mock_run_crawl.call_args.args[0]
         self.assertEqual(request.workers, 4)
         self.assertTrue(request.use_browser)
         self.assertFalse(request.headed)
 
-    @unittest.mock.patch("src.cli.crawl.run_crawl")
+    @unittest.mock.patch("src.cli.crawl.crawler.run_crawl")
     def test_crawl_defaults_to_one_worker(self, mock_run_crawl) -> None:
-        from src.cli.crawl import _crawl
-
         mock_run_crawl.return_value = _dry_crawl_result()
-        _crawl(_crawl_args(workers=None, browser=True, dry_run=True))
+        crawler.run(_crawl_args(workers=None, browser=True, dry_run=True))
         request = mock_run_crawl.call_args.args[0]
         self.assertEqual(request.workers, 1)
 
-    @unittest.mock.patch("src.cli.crawl.run_crawl")
+    @unittest.mock.patch("src.cli.crawl.crawler.run_crawl")
     def test_headed_implies_browser_mode(self, mock_run_crawl) -> None:
-        from src.cli.crawl import _crawl
-
         mock_run_crawl.return_value = _dry_crawl_result()
-        _crawl(_crawl_args(workers=None, browser=None, headed=True, dry_run=True))
+        crawler.run(_crawl_args(workers=None, browser=None, headed=True, dry_run=True))
         request = mock_run_crawl.call_args.args[0]
         self.assertEqual(request.workers, 1)
         self.assertIsNone(request.use_browser)
@@ -187,10 +177,10 @@ class CliTest(unittest.TestCase):
         assert isinstance(handler, logging.StreamHandler)
         self.assertEqual(handler.stream, sys.stderr)
 
-        crawl._setup_cli_logging(quiet=True)
+        common.configure_logging(quiet=True)
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
-            crawl._print_progress(
+            crawler.print_progress(
                 ProgressEvent(
                     kind="chapter",
                     current=1,
@@ -204,7 +194,7 @@ class CliTest(unittest.TestCase):
     def test_short_crawl_entrypoint_configures_logging(self) -> None:
         error_output = io.StringIO()
         with contextlib.redirect_stderr(error_output):
-            result = crawl.crawl_main(["missing-config"])
+            result = crawler.main(["missing-config"])
         self.assertEqual(result, 1)
         self.assertIn("Config not found", error_output.getvalue())
 
@@ -239,11 +229,14 @@ class CliTest(unittest.TestCase):
         )
 
         with (
-            unittest.mock.patch("src.cli.crawl.get_notifier", return_value=_StubNotifier()),
-            unittest.mock.patch("src.cli.crawl.format_run_footer", return_value="Time: 2026-01-01 00:00\nRuntime: 0s"),
-            unittest.mock.patch("src.cli.crawl.run_crawl", return_value=crawl_result),
+            unittest.mock.patch("src.cli.crawl.crawler.get_notifier", return_value=_StubNotifier()),
+            unittest.mock.patch(
+                "src.cli.crawl.crawler.format_run_footer",
+                return_value="Time: 2026-01-01 00:00\nRuntime: 0s",
+            ),
+            unittest.mock.patch("src.cli.crawl.crawler.run_crawl", return_value=crawl_result),
         ):
-            result = crawl._crawl(args)
+            result = crawler.run(args)
 
         self.assertEqual(result, 0)
         self.assertEqual(len(sent), 1)

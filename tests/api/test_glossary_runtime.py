@@ -4,7 +4,8 @@ from unittest.mock import patch
 
 from src.api.auth import Principal
 from src.api.routes.glossary import get_glossary
-from src.application.glossary import audit_glossary, load_glossary
+from src.application.glossary.audit import audit_glossary
+from src.application.glossary.storage import load_glossary
 from src.config import Config, active_config_scope
 
 EMPTY_GLOSSARY = {"terms": {}, "entities": {}, "edges": []}
@@ -44,9 +45,9 @@ def test_vietnamese_audit_reads_legacy_output_directory(tmp_path):
     (output_dir / "chapter_001.txt").write_text("cat", encoding="utf-8")
 
     with (
-        patch("src.application.glossary.load_glossary", return_value={"terms": {"猫": "mèo"}}),
+        patch("src.application.glossary.audit.load_glossary", return_value={"terms": {"猫": "mèo"}}),
         patch(
-            "src.application.glossary.app_config.get_config",
+            "src.application.glossary.audit.app_config.get_config",
             return_value=Config(translated_dir=str(tmp_path)),
         ),
     ):

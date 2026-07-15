@@ -21,10 +21,10 @@ from pathlib import Path
 
 from src import paths as _paths
 from src.application import config as app_config
-from src.application import glossary as app_glossary
 from src.application import translate as _app_translate
 from src.application.config import get_config  # legacy reference for patches
 from src.application.errors import ResourceNotFoundError as _ApplicationNotFoundError
+from src.application.glossary.audit import audit_terms
 from src.application.progress import ProgressEvent
 from src.application.translate import (
     TranslationRequest,
@@ -149,7 +149,7 @@ def audit_glossary_outputs(
     target_language: str | None = None,
 ) -> list[dict]:
     """Audit translated chapters for obvious glossary consistency problems."""
-    return app_glossary.audit_terms(novel_name, terms, target=target_language)
+    return audit_terms(novel_name, terms, target=target_language)
 
 
 def translate_file(

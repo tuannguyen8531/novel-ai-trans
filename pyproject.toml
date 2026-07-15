@@ -38,10 +38,10 @@ dependencies = [
 ]
 
 [project.scripts]
-crawl     = "src.cli.crawl:crawl_main"
-generate  = "src.cli.crawl:generate_main"
-validate  = "src.cli.crawl:validate_main"
-import    = "src.cli.crawl:import_main"
+crawl     = "src.cli.crawl.crawler:main"
+generate  = "src.cli.crawl.generator:main"
+validate  = "src.cli.crawl.validator:main"
+import    = "src.cli.crawl.importer:main"
 translate = "src.cli.translate:translate_main"
 pack      = "src.cli.pack:pack_main"
 glossary  = "src.cli.glossary:glossary_main"

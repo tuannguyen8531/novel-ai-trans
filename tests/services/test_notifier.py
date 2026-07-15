@@ -262,7 +262,7 @@ class CliNotificationWiringTest(unittest.TestCase):
     """The CLI modules should call get_notifier().send() on key events."""
 
     def test_crawl_cli_sends_on_consecutive_failure(self) -> None:
-        from src.cli import crawl as crawl_module
+        from src.cli.crawl import crawler as crawl_module
 
         sent: list[str] = []
 
@@ -305,7 +305,7 @@ class CliNotificationWiringTest(unittest.TestCase):
                 overwrite=False,
                 dry_run=False,
             )
-            rc = crawl_module._crawl(args)
+            rc = crawl_module.run(args)
 
         self.assertEqual(rc, 1)
         self.assertEqual(len(sent), 1)
