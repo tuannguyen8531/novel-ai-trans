@@ -319,6 +319,11 @@ const deleteMessage = computed(() => {
   white-space: nowrap;
 }
 
+.novel-title-cell .truncate-cell-text {
+  padding-block: 0.08em;
+  line-height: 1.4;
+}
+
 .novel-cell-link {
   color: var(--fg);
 }

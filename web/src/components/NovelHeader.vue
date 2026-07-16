@@ -186,9 +186,10 @@ function metaDisplayValue(current: string, fallback: string | null | undefined):
 .novel-cover-info h2 {
   flex-shrink: 0;
   margin: 0;
+  padding-block: 0.08em;
   overflow: hidden;
   font-size: 1.35rem;
-  line-height: 1.25;
+  line-height: 1.4;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
