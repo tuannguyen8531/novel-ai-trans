@@ -420,6 +420,7 @@ class EpubImporterTest(unittest.TestCase):
 
             self.assertEqual(result.metadata.title, "Manual Name")
             self.assertEqual(metadata["title"], "Manual Name")
+            self.assertEqual(result.removed_chapters, (99,))
             self.assertFalse(stale_path.exists())
             self.assertTrue((stale_path.parent / "chapter_001.txt").is_file())
 

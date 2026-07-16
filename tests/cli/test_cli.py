@@ -355,6 +355,53 @@ class TestTranslationWorkflow:
         assert result.chapters_attempted == [1]
         mocked_translate.assert_called_once()
 
+    @pytest.mark.parametrize(
+        ("request_options", "progress", "expected_chapters"),
+        [
+            ({"resume": True}, {"completed": [1, 3], "failed": []}, [2]),
+            ({"failed_only": True}, {"completed": [2], "failed": [1, 3]}, [1, 3]),
+        ],
+        ids=["resume-skips-completed", "failed-only-selects-failures"],
+    )
+    def test_progress_state_filters_the_translation_selection(
+        self,
+        tmp_path,
+        request_options,
+        progress,
+        expected_chapters,
+    ):
+        translated_root = tmp_path / "translated"
+        input_dir = translated_root / "novel" / "input"
+        input_dir.mkdir(parents=True)
+        for chapter_number in (1, 2, 3):
+            (input_dir / f"chapter_{chapter_number}.txt").write_text(
+                f"source {chapter_number}",
+                encoding="utf-8",
+            )
+        progress_path = tmp_path / "progress" / "novel.json"
+        progress_path.parent.mkdir()
+        progress_path.write_text(json.dumps(progress), encoding="utf-8")
+        config = Config(translated_dir=str(translated_root))
+
+        with (
+            patch("src.application.translate.app_config.get_config", return_value=config),
+            patch("src.application.translate._paths.translation_progress_path", return_value=progress_path),
+            patch("src.application.translate._validate_provider"),
+            patch("src.application.translate.build_graph", return_value=object()),
+            patch("src.application.translate.translate_file", return_value=(True, 10, 1.0, 0)),
+        ):
+            result = run_translation(
+                TranslationRequest(
+                    novel="novel",
+                    source_language="chinese",
+                    **request_options,
+                )
+            )
+
+        assert result.chapters_attempted == expected_chapters
+        assert result.total == len(expected_chapters)
+        assert result.success == len(expected_chapters)
+
 
 class TestGlossaryCli:
     def setup_method(self):

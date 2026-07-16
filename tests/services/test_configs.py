@@ -6,6 +6,9 @@ import unittest
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
+
+from bs4 import BeautifulSoup
 
 from src.services.configs import ConfigGenerator, _HtmlCache
 from src.services.http import FetchResponse
@@ -87,6 +90,20 @@ class _SampleLLM:
                 "toc_url": self.toc_url,
             }
         )
+
+
+class _RetryLLM:
+    def __init__(self) -> None:
+        self.call_types: list[str] = []
+
+    @property
+    def provider_name(self) -> str:
+        return "retry"
+
+    def generate(self, system_prompt: str, user_prompt: str, call_type: str) -> str:
+        self.call_types.append(call_type)
+        selector = ".missing" if call_type == "gen_config_toc" else ".chapters a"
+        return json.dumps({"chapter_link_selector": selector})
 
 
 class _StaticFetcher:
@@ -200,6 +217,62 @@ class ConfigGeneratorTest(unittest.TestCase):
 
         self.assertEqual(html, challenge)
         self.assertIsNone(soup)
+
+    def test_chapter_fetch_uses_browser_fallback_for_challenge(self) -> None:
+        url = "https://example.com/chapter-1"
+        challenge = "<html><title>Just a moment...</title><div id='cf-wrapper'></div></html>"
+        browser_html = f"<html><body><section class='content'>Chapter body. {'x' * 300}</section></body></html>"
+        generator = ConfigGenerator(_BoomLLM(), use_browser=False)  # type: ignore[arg-type]
+
+        class _Browser:
+            def __init__(self) -> None:
+                self.assert_url: str | None = None
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return None
+
+            def fetch(self, requested_url: str) -> FetchResponse:
+                self.assert_url = requested_url
+                return FetchResponse(url=requested_url, body=browser_html, content_type="text/html")
+
+        browser = _Browser()
+        with tempfile.TemporaryDirectory() as tempdir:
+            cache = _HtmlCache(Path(tempdir))
+            with patch("src.services.browser.BrowserFetcher", return_value=browser):
+                html, soup = generator._fetch_chapter_with_fallback(
+                    _StaticFetcher({url: challenge}),
+                    url,
+                    cache,
+                )
+
+            self.assertEqual(cache.get(url), browser_html)
+
+        self.assertEqual(html, browser_html)
+        self.assertIsNotNone(soup)
+        assert soup is not None
+        content = soup.select_one(".content")
+        assert content is not None
+        self.assertTrue(content.get_text(strip=True).startswith("Chapter body."))
+        self.assertEqual(browser.assert_url, url)
+
+    def test_selector_validation_retries_once_with_feedback(self) -> None:
+        llm = _RetryLLM()
+        generator = ConfigGenerator(llm)  # type: ignore[arg-type]
+        soup = BeautifulSoup("<html><body><div class='chapters'><a href='1'>One</a></div></body></html>", "html.parser")
+
+        result = generator._ask_llm_with_retry(
+            system="initial",
+            user="HTML",
+            call_type="gen_config_toc",
+            soup=soup,
+            retry_system="retry",
+        )
+
+        self.assertEqual(result["chapter_link_selector"], ".chapters a")
+        self.assertEqual(llm.call_types, ["gen_config_toc", "gen_config_toc_retry"])
 
     def test_html_cache_invalidates_bad_html(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
