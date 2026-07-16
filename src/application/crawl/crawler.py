@@ -14,8 +14,11 @@ from src.application.crawl.common import emit, resolve_config_path
 from src.application.errors import ApplicationValidationError, ExternalServiceError
 from src.application.progress import ProgressEvent
 from src.config import SiteConfig
+from src.models import CrawlProgress
 from src.paths import RUNTIME_DIR, RUNTIME_OUTPUT_ROOT
-from src.services.crawler import ConsecutiveFailureError, NovelCrawler
+from src.services.crawling.crawler import NovelCrawler
+from src.services.crawling.execution import ConsecutiveFailureError
+from src.services.crawling.storage import merge_metadata
 from src.services.http import FetchError
 
 
@@ -129,8 +132,6 @@ def run_crawl(
         )
 
     def _crawl_progress(event) -> None:
-        from src.services.crawler import CrawlProgress
-
         if not isinstance(event, CrawlProgress):
             return
         emit(
@@ -156,7 +157,7 @@ def run_crawl(
             metadata, discovered = crawler.discover_chapters()
             metadata_path = share_root / request.novel / "metadata.json"
             if metadata_path.is_file():
-                metadata = crawler.merge_metadata_from_file(metadata_path, metadata)
+                metadata = merge_metadata(metadata_path, metadata, site_config)
             if max_chapters is not None:
                 discovered = discovered[:max_chapters]
             return CrawlResult(

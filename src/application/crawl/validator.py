@@ -11,7 +11,7 @@ from src.application.crawl.common import check_cancel, emit, resolve_config_path
 from src.application.errors import ApplicationValidationError
 from src.application.progress import ProgressEvent
 from src.config import SiteConfig
-from src.services.crawler import NovelCrawler
+from src.services.crawling.crawler import NovelCrawler
 
 
 @dataclass
