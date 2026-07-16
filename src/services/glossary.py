@@ -38,9 +38,7 @@ Character schema:
   Non-overlapping per-pair direct address/reference timelines in the target language.
 """
 
-import hashlib
 from collections.abc import Callable
-from contextlib import contextmanager
 from pathlib import Path
 
 from src import paths as _paths
@@ -66,12 +64,7 @@ _read_json_locked = file_utils.read_json_locked
 _merge_json_locked = file_utils.merge_json_locked
 
 GLOSSARY_DIR = _paths.GLOSSARY_DIR
-LOCK_DIR = _paths.LOCK_DIR
 PENDING_REPLACEMENTS_KEY = glossary_domain.PENDING_REPLACEMENTS_KEY
-
-
-class GlossaryLockError(RuntimeError):
-    """Raised when a novel glossary lock cannot be acquired."""
 
 
 def current_target_language() -> str:
@@ -110,33 +103,6 @@ def load_glossary_data(novel_name: str) -> dict:
 def update_glossary_data(novel_name: str, updater: Callable[[dict], dict]) -> dict:
     """Atomically update the full glossary document for a novel."""
     return _merge_json_locked(_glossary_path(novel_name), updater)
-
-
-_ACTIVE_LOCKS: set[str] = set()
-
-
-@contextmanager
-def novel_lock(novel_name: str):
-    """Acquire an exclusive lock on a novel to prevent concurrent modifications."""
-    if novel_name in _ACTIVE_LOCKS:
-        raise GlossaryLockError(f"Novel {novel_name!r} is currently locked by another translation or glossary apply operation.")
-    _ACTIVE_LOCKS.add(novel_name)
-    try:
-        LOCK_DIR.mkdir(parents=True, exist_ok=True)
-        lock_path = LOCK_DIR / f"{novel_runtime_key(novel_name)}.lock"
-        try:
-            with file_utils.exclusive_file_lock(lock_path, blocking=False):
-                yield
-        except BlockingIOError as err:
-            raise GlossaryLockError(
-                f"Novel {novel_name!r} is currently locked by another translation or glossary apply operation."
-            ) from err
-    finally:
-        _ACTIVE_LOCKS.discard(novel_name)
-
-
-def novel_runtime_key(novel_name: str) -> str:
-    return hashlib.sha256(novel_name.encode("utf-8")).hexdigest()
 
 
 # ---------------------------------------------------------------------------

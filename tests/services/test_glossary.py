@@ -13,14 +13,13 @@ from src.application.glossary.replacements import (
     dismiss_pending_replacements,
     rollback_glossary_replacement,
 )
+from src.application.locks import novel_lock
 from src.domain.glossary import PENDING_REPLACEMENTS_KEY
 from src.services.glossary import (
-    GlossaryLockError,
     clean_glossary,
     get_active_context,
     load_glossary,
     load_glossary_data,
-    novel_lock,
     remove_character,
     remove_glossary_term,
     remove_relationship,
@@ -368,7 +367,7 @@ class TestGlossaryTranslatedDir:
 
         self.patcher_glossary_dir = patch("src.services.glossary.GLOSSARY_DIR", self.project_glossary)
         self.patcher_glossary_dir.start()
-        self.patcher_lock_dir = patch("src.services.glossary.LOCK_DIR", self.base / "locks")
+        self.patcher_lock_dir = patch("src.application.locks.LOCK_DIR", self.base / "locks")
         self.patcher_lock_dir.start()
         self.patcher_backup_dir = patch(
             "src.application.glossary.replacements.GLOSSARY_BACKUP_DIR",
@@ -507,7 +506,7 @@ class TestGlossaryTranslatedDir:
             update_glossary_term("test-novel", "魔法", "魔法", "ma pháp", is_user_edit=True)
 
             with novel_lock("test-novel"):
-                with pytest.raises(GlossaryLockError, match="locked"), novel_lock("test-novel"):
+                with pytest.raises(ResourceConflictError, match="locked"), novel_lock("test-novel"):
                     pass
                 with pytest.raises(ResourceConflictError, match="locked"):
                     apply_pending_replacements("test-novel")

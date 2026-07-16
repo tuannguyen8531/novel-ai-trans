@@ -16,10 +16,8 @@ from src.application import config as app_config
 from src.application.novel import catalog, identity
 from src.application.novel.localization import localize_metadata
 from src.application.progress import ProgressEvent
-from src.application.translate import (
-    TranslationRequest,
-    run_translation,
-)
+from src.application.translation.models import TranslationRequest
+from src.application.translation.workflow import run_translation
 from src.services.notifier import send_run_notification
 
 router = APIRouter(tags=["translate"])

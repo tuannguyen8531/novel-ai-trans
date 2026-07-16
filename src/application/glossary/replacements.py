@@ -6,12 +6,12 @@ import json
 import re
 import secrets
 import shutil
-from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
 from src import paths as _paths
-from src.application.errors import ResourceConflictError, ResourceNotFoundError
+from src.application.errors import ResourceNotFoundError
+from src.application.locks import novel_lock, novel_runtime_key
 from src.config import active_config_scope, config
 from src.domain.characters import count_name_occurrences
 from src.domain.glossary import (
@@ -28,16 +28,6 @@ from src.utils import files as file_utils
 
 GLOSSARY_BACKUP_DIR = _paths.GLOSSARY_BACKUP_DIR
 _BACKUP_ID_PATTERN = re.compile(r"^\d{8}T\d{6}_\d{6}Z_[0-9a-f]{8}$")
-
-
-@contextmanager
-def novel_lock(novel_name: str):
-    """Map a service lock failure to the application error contract."""
-    try:
-        with glossary_service.novel_lock(novel_name):
-            yield
-    except glossary_service.GlossaryLockError as error:
-        raise ResourceConflictError(str(error)) from error
 
 
 def apply_pending_replacements(
@@ -184,7 +174,7 @@ def apply_pending_replacements(
         manifest_path: Path | None = None
         if effective_write and files_to_write:
             backup_id = f"{datetime.now(UTC).strftime('%Y%m%dT%H%M%S_%fZ')}_{secrets.token_hex(4)}"
-            backup_dir = GLOSSARY_BACKUP_DIR / glossary_service.novel_runtime_key(novel_name) / backup_id
+            backup_dir = GLOSSARY_BACKUP_DIR / novel_runtime_key(novel_name) / backup_id
             backup_dir.mkdir(parents=True, exist_ok=False)
 
             backup_files: list[str] = []
@@ -237,7 +227,7 @@ def rollback_glossary_replacement(novel_name: str, backup_id: str) -> None:
     """Rollback a previous glossary replacement using the backup manifest."""
     if not _BACKUP_ID_PATTERN.fullmatch(backup_id):
         raise FileNotFoundError(f"Invalid glossary backup id: {backup_id!r}")
-    backup_dir = GLOSSARY_BACKUP_DIR / glossary_service.novel_runtime_key(novel_name) / backup_id
+    backup_dir = GLOSSARY_BACKUP_DIR / novel_runtime_key(novel_name) / backup_id
     manifest_path = backup_dir / "manifest.json"
     if not manifest_path.exists():
         raise FileNotFoundError(f"Glossary backup not found: {backup_id}")
