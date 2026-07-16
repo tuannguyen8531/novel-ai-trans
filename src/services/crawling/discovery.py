@@ -75,7 +75,16 @@ class ChapterDiscovery:
             if metadata is None:
                 metadata = self.extractor.metadata(response.body, response.url)
 
-            for chapter in self.page_chapters(soup, response.url):
+            for chapter in self.dom_chapters(soup, response.url):
+                if self.config.same_domain and urlparse(chapter.url).netloc != toc_netloc:
+                    continue
+                if chapter.url in seen_chapters:
+                    continue
+                chapters.append(chapter)
+                seen_chapters.add(chapter.url)
+                chapter_index_by_url[chapter.url] = len(chapters) - 1
+
+            for chapter in self.next_data_chapters(soup, response.url):
                 if self.config.same_domain and urlparse(chapter.url).netloc != toc_netloc:
                     continue
                 if chapter.url in seen_chapters:
@@ -108,7 +117,7 @@ class ChapterDiscovery:
             )
         return metadata, chapters
 
-    def page_chapters(self, soup: BeautifulSoup, page_url: str) -> list[ChapterLink]:
+    def dom_chapters(self, soup: BeautifulSoup, page_url: str) -> list[ChapterLink]:
         chapters: list[ChapterLink] = []
         for anchor in soup.select(self.config.chapter_link_selector):
             href = anchor.get("href")
@@ -117,7 +126,6 @@ class ChapterDiscovery:
             url = urljoin(page_url, href)
             title = normalize_text(anchor.get_text(" ", strip=True)) or url
             chapters.append(ChapterLink(title=title, url=url))
-        chapters.extend(self.next_data_chapters(soup, page_url))
         return chapters
 
     def order(self, chapters: list[ChapterLink]) -> list[ChapterLink]:
