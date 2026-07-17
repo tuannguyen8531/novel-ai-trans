@@ -94,33 +94,30 @@ def test_headed_crawl_forces_one_worker_for_shared_browser_page(tmp_path: Path) 
 
 
 def test_generate_config_without_drafts_dir_does_not_create_draft() -> None:
-    llm = object()
-    generator = Mock()
-    generator.generate.return_value = {
+    generated = {
         "name": "demo",
         "toc_url": "https://example.com/book/",
         "chapter_link_selector": "a.chapter",
     }
 
     with (
-        patch("src.application.crawl.generator.get_llm", return_value=llm),
-        patch("src.application.crawl.generator.ConfigGenerator") as generator_cls,
+        patch("src.application.crawl.generator.get_llm", return_value=object()),
+        patch("src.application.crawl.generator.open_acquirer") as open_acquirer,
+        patch("src.application.crawl.generator._generate_config_data", return_value=generated),
+        patch("src.application.crawl.generator.ConfigRepository") as repository_cls,
     ):
-        generator_cls.return_value = generator
         result = generate_config(url="https://example.com/book/", headed=True)
 
-    generator_cls.assert_called_once_with(llm, use_browser=True, headed=True)
-    generator.generate.assert_called_once()
-    assert generator.generate.call_args.kwargs["use_cache"] is True
-    generator_cls.validate.assert_called_once_with(generator.generate.return_value)
+    open_acquirer.assert_called_once()
+    assert open_acquirer.call_args.kwargs == {"use_browser": False, "headed": True}
+    repository_cls.return_value.validate.assert_called_once_with(generated)
     assert result.draft_id == ""
     assert result.expires_at is None
-    assert result.config == generator.generate.return_value
+    assert result.config == generated
 
 
 def test_generate_config_no_cache_disables_generator_cache() -> None:
-    generator = Mock()
-    generator.generate.return_value = {
+    generated = {
         "name": "demo",
         "toc_url": "https://example.com/book/toc",
         "chapter_link_selector": "a.chapter",
@@ -128,16 +125,18 @@ def test_generate_config_no_cache_disables_generator_cache() -> None:
 
     with (
         patch("src.application.crawl.generator.get_llm", return_value=object()),
-        patch("src.application.crawl.generator.ConfigGenerator", return_value=generator),
+        patch("src.application.crawl.generator.HtmlCache") as cache_cls,
+        patch("src.application.crawl.generator.open_acquirer"),
+        patch("src.application.crawl.generator._generate_config_data", return_value=generated),
+        patch("src.application.crawl.generator.ConfigRepository"),
     ):
         generate_config(url="https://example.com/book", no_cache=True)
 
-    assert generator.generate.call_args.kwargs["use_cache"] is False
+    assert cache_cls.call_args.kwargs["enabled"] is False
 
 
 def test_generate_config_separates_novel_metadata_from_crawler_config() -> None:
-    generator = Mock()
-    generator.generate.return_value = {
+    generated = {
         "name": "demo",
         "toc_url": "https://example.com/book/toc",
         "source_url": "https://example.com/book",
@@ -151,7 +150,9 @@ def test_generate_config_separates_novel_metadata_from_crawler_config() -> None:
 
     with (
         patch("src.application.crawl.generator.get_llm", return_value=object()),
-        patch("src.application.crawl.generator.ConfigGenerator", return_value=generator),
+        patch("src.application.crawl.generator.open_acquirer"),
+        patch("src.application.crawl.generator._generate_config_data", return_value=generated),
+        patch("src.application.crawl.generator.ConfigRepository"),
     ):
         result = generate_config(url="https://example.com/book")
 
