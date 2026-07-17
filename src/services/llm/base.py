@@ -6,8 +6,6 @@ Shared logic (HTTP client, retry, logging) lives here.
 """
 
 import logging
-import sys
-import threading
 import time
 from abc import ABC, abstractmethod
 
@@ -16,7 +14,6 @@ import httpx2 as httpx
 from src.config import config
 from src.services.logger import log_api_request_received, log_api_request_sent, log_error
 
-_SPINNER_CHARS = "⠋⠙⠹⠸⠼⠴⠦⠧"
 STRUCTURED_JSON_CALL_TYPES = {"learn", "review", "localize"}
 TRANSLATION_CALL_TYPES = {"translate", "summarize", "localize"}
 JOB_LOGGER_NAME = "novel_ai_trans.job"
@@ -34,33 +31,6 @@ _RETRYABLE_ERROR_MARKERS = (
     "connection",
     "network",
 )
-
-
-class _Spinner:
-    """Simple terminal spinner running on a background thread."""
-
-    def __init__(self, message: str):
-        self._message = message
-        self._stop = threading.Event()
-        self._thread = threading.Thread(target=self._spin, daemon=True)
-
-    def _spin(self):
-        idx = 0
-        while not self._stop.is_set():
-            sys.stdout.write(f"\r  {_SPINNER_CHARS[idx]} {self._message}")
-            sys.stdout.flush()
-            idx = (idx + 1) % len(_SPINNER_CHARS)
-            self._stop.wait(0.1)
-        sys.stdout.write("\r" + " " * (len(self._message) + 4) + "\r")
-        sys.stdout.flush()
-
-    def __enter__(self):
-        self._thread.start()
-        return self
-
-    def __exit__(self, *args):
-        self._stop.set()
-        self._thread.join()
 
 
 class BaseProvider(ABC):
@@ -118,8 +88,7 @@ class BaseProvider(ABC):
                 message = f"Calling {self.provider_name} ({call_type})..."
                 _job_logger.info(message)
                 started = time.monotonic()
-                with _Spinner(message):
-                    result = self._do_generate(system_prompt, user_prompt, call_type)
+                result = self._do_generate(system_prompt, user_prompt, call_type)
                 _job_logger.info("Done %s (%s) in %.1fs", self.provider_name, call_type, time.monotonic() - started)
                 return result
             except (RuntimeError, httpx.HTTPError) as e:
@@ -143,7 +112,6 @@ class BaseProvider(ABC):
                         attempt + 1,
                         max_retries,
                     )
-                    print(f"  {self.provider_name} error — waiting {delay}s before retry ({attempt + 1}/{max_retries})...")
                     time.sleep(delay)
                     continue
                 if isinstance(e, httpx.HTTPError):

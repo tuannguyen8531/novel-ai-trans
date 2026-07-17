@@ -6,12 +6,16 @@ Falls back to LLM detection only if heuristic returns "unknown".
 Saves detected language to glossary immediately.
 """
 
+import logging
+
 from src.domain.language import detect_language_heuristic
 from src.models.state import TranslationState
 from src.prompts import render_prompt
 from src.services.llm import get_llm
 from src.services.logger import log_ai_call
 from src.services.metadata import save_source_language
+
+_logger = logging.getLogger("novel_ai_trans.job")
 
 
 def detector_node(state: TranslationState) -> dict:
@@ -47,5 +51,5 @@ def detector_node(state: TranslationState) -> dict:
 
     save_source_language(state["novel_name"], detected)
 
-    print(f"  📝 Language: {detected}")
+    _logger.info("Language: %s", detected)
     return {"source_language": detected}

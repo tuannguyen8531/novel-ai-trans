@@ -1,7 +1,14 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { api } from '@/api/client'
-import type { ProviderSettings, Settings, TelegramSettings } from '@/api/types'
+import type {
+  OllamaAccount,
+  ProviderCheckSettings,
+  ProviderInfo,
+  ProviderSettings,
+  Settings,
+  TelegramSettings
+} from '@/api/types'
 
 export const useSettingsStore = defineStore('settings', () => {
   const settings = ref<Settings | null>(null)
@@ -75,5 +82,23 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
-  return { settings, error, loading, refresh, patch, persist, persistTelegram, persistProviders }
+  async function listProviders(): Promise<ProviderInfo[]> {
+    return (await api.listProviders()).providers
+  }
+
+  async function ollamaAccount(): Promise<OllamaAccount> {
+    return api.getOllamaAccount()
+  }
+
+  async function checkProvider(
+    provider: string,
+    payload: ProviderCheckSettings
+  ): Promise<{ provider: string; ok: boolean; detail: string | null }> {
+    return api.checkProvider(provider, payload)
+  }
+
+  return {
+    settings, error, loading, refresh, patch, persist, persistTelegram, persistProviders,
+    listProviders, ollamaAccount, checkProvider
+  }
 })

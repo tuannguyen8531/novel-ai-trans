@@ -229,9 +229,9 @@ class CliTest(unittest.TestCase):
         )
 
         with (
-            unittest.mock.patch("src.cli.crawl.crawler.get_notifier", return_value=_StubNotifier()),
+            unittest.mock.patch("src.cli.notifications.get_notifier", return_value=_StubNotifier()),
             unittest.mock.patch(
-                "src.cli.crawl.crawler.format_run_footer",
+                "src.cli.notifications.format_run_footer",
                 return_value="Time: 2026-01-01 00:00\nRuntime: 0s",
             ),
             unittest.mock.patch("src.cli.crawl.crawler.run_crawl", return_value=crawl_result),

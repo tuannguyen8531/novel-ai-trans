@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useJobsStore } from '@/stores/jobs'
-import { useNovelsStore } from '@/stores/novels'
-import { useSettingsStore } from '@/stores/settings'
+import { useJobsStore } from '@/composables/jobs'
+import { useNovelsStore } from '@/composables/novels'
+import { useSettingsStore } from '@/composables/settings'
 import type { MetadataDisplay, TargetLanguage } from '@/composables/metadata'
 import ArtifactPanel from '@/components/ArtifactPanel.vue'
 import ChapterPanel from '@/components/ChapterPanel.vue'

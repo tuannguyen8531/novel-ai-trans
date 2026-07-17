@@ -1,6 +1,6 @@
 import { computed, ref, toValue, type MaybeRefOrGetter } from 'vue'
 import { api } from '@/api/client'
-import { useNovelsStore } from '@/stores/novels'
+import { useNovelsStore } from '@/composables/novels'
 
 export type TargetLanguage = 'vi' | 'en'
 

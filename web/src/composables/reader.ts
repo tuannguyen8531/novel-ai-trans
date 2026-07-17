@@ -2,7 +2,7 @@ import { computed, onMounted, onUnmounted, ref, toValue, watch, type MaybeRefOrG
 import { useRouter } from 'vue-router'
 import { api } from '@/api/client'
 import type { NovelChapterStatus } from '@/api/types'
-import { useSettingsStore } from '@/stores/settings'
+import { useSettingsStore } from '@/composables/settings'
 
 export type ReaderLanguage = 'source' | 'vi' | 'en'
 

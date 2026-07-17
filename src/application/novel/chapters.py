@@ -74,13 +74,13 @@ def read_chapter(
         chapter_path = chapter_service.chapter_path(paths.novel_input_dir_from_root(novel_root), number)
         if not chapter_path.exists():
             raise ResourceNotFoundError(f"Source chapter not found: chapter {number}")
-        return Content(name, number, view, None, chapter_path.read_text(encoding="utf-8"))
+        return Content(name, number, view, None, chapter_service.read(paths.novel_input_dir_from_root(novel_root), number))
 
     normalized_target = normalize_target_language(target)
     output_dir = paths.novel_output_dir_from_root(novel_root, normalized_target)
     chapter_path = chapter_service.chapter_path(output_dir, number)
     if chapter_path.exists():
-        return Content(name, number, view, normalized_target, chapter_path.read_text(encoding="utf-8"))
+        return Content(name, number, view, normalized_target, chapter_service.read(output_dir, number))
     raise ResourceNotFoundError(f"Translated chapter not found: chapter {number}")
 
 
@@ -96,14 +96,12 @@ def write_chapter(
     novel_root = require_path(root, name)
     if view == "source":
         input_dir = paths.novel_input_dir_from_root(novel_root)
-        input_dir.mkdir(parents=True, exist_ok=True)
-        chapter_service.chapter_path(input_dir, number).write_text(content, encoding="utf-8")
+        chapter_service.write(input_dir, number, content)
         return Content(name, number, view, None, content)
 
     normalized_target = normalize_target_language(target)
     output_dir = paths.novel_output_dir_from_root(novel_root, normalized_target)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    chapter_service.chapter_path(output_dir, number).write_text(content, encoding="utf-8")
+    chapter_service.write(output_dir, number, content)
     return Content(name, number, view, normalized_target, content)
 
 
@@ -112,7 +110,7 @@ def delete_chapter(root: Path, name: str, number: int) -> None:
     chapter_path = chapter_service.chapter_path(paths.novel_input_dir_from_root(novel_root), number)
     if not chapter_path.exists():
         raise ResourceNotFoundError(f"Input chapter not found: chapter {number}")
-    chapter_path.unlink()
+    chapter_service.delete(paths.novel_input_dir_from_root(novel_root), number)
 
 
 __all__ = ["Chapter", "Content", "delete_chapter", "list_chapters", "read_chapter", "write_chapter"]

@@ -26,9 +26,9 @@ from src.api.schemas import (
 )
 from src.application import config as app_config
 from src.application.errors import PersistenceError
+from src.application.languages import normalize_source_language
 from src.application.novel import artifacts, catalog, chapters, identity, metadata, rules
 from src.application.novel.localization import localize_metadata
-from src.domain.language import normalize_source_language
 
 router = APIRouter(tags=["novels"])
 

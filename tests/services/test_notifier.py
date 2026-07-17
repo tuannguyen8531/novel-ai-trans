@@ -280,8 +280,8 @@ class CliNotificationWiringTest(unittest.TestCase):
                 return text
 
         with (
-            patch.object(crawl_module, "get_notifier", return_value=_Stub()),
-            patch.object(crawl_module, "format_run_footer", return_value="Time: 2026-01-01 00:00\nRuntime: 0s"),
+            patch("src.cli.notifications.get_notifier", return_value=_Stub()),
+            patch("src.cli.notifications.format_run_footer", return_value="Time: 2026-01-01 00:00\nRuntime: 0s"),
             patch.object(
                 crawl_module,
                 "run_crawl",

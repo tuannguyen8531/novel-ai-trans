@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -15,6 +13,7 @@ from src.application.novel.metadata import load as load_metadata
 from src.application.novel.metadata import write as write_metadata
 from src.domain.language import SUPPORTED_TARGET_LANGUAGES, normalize_source_language, normalize_target_language
 from src.paths import PROGRESS_DIR
+from src.services import catalog as catalog_repository
 from src.services import chapters as chapter_service
 from src.services.metadata import localized_value
 
@@ -47,9 +46,7 @@ class Detail(Summary):
 
 
 def list_names(root: Path) -> list[str]:
-    if not root.exists():
-        return []
-    return sorted(entry.name for entry in root.iterdir() if entry.is_dir() and is_valid_slug(entry.name))
+    return [entry.name for entry in catalog_repository.list_directories(root) if is_valid_slug(entry.name)]
 
 
 def create(
@@ -67,10 +64,7 @@ def create(
     if novel_root.exists():
         raise ResourceConflictError(f"Novel directory {name!r} already exists.")
     try:
-        novel_root.mkdir(parents=True)
-        paths.novel_input_dir_from_root(novel_root).mkdir(parents=True)
-        paths.novel_output_dir_from_root(novel_root, "vi").mkdir(parents=True)
-        paths.novel_artifact_dir_from_root(novel_root).mkdir(parents=True)
+        catalog_repository.create_directories(novel_root)
         metadata = {
             "title": title or None,
             "author": author or None,
@@ -84,7 +78,7 @@ def create(
         }
         write_metadata(novel_root, metadata, trailing_newline=False)
     except Exception as error:
-        shutil.rmtree(novel_root, ignore_errors=True)
+        catalog_repository.delete_directory(novel_root, ignore_errors=True)
         raise PersistenceError(f"Failed to create novel: {error}") from error
     return novel_root
 
@@ -100,12 +94,7 @@ def _progress_paths(novel_root: Path, name: str, target: str, progress_root: Pat
 
 
 def _load_progress(path: Path) -> dict[str, list[int]]:
-    if not path.exists():
-        return {"completed": [], "failed": []}
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError, OSError:
-        return {"completed": [], "failed": []}
+    return catalog_repository.load_progress(path)
 
 
 def _merge_progress(progress_paths: tuple[Path, ...]) -> dict[str, list[int]]:
@@ -149,7 +138,7 @@ def summarize(
         source_language=metadata.get("source_language"),
         total_input_chapters=total,
         targets=targets,
-        has_illustrations=illustrations_dir.exists() and any(illustrations_dir.iterdir()),
+        has_illustrations=catalog_repository.has_files(illustrations_dir),
     )
 
 
@@ -189,16 +178,7 @@ def detail(
 ) -> Detail:
     novel_root = require_path(root, name)
     base = summarize(root, name, progress_root=progress_root, target_language=target_language)
-    terms = entities = edges = 0
-    glossary_path = novel_root / "glossary.json"
-    if glossary_path.exists():
-        try:
-            glossary = json.loads(glossary_path.read_text(encoding="utf-8"))
-            terms = len(glossary.get("terms", {}))
-            entities = len(glossary.get("entities", {}))
-            edges = len(glossary.get("edges", []))
-        except json.JSONDecodeError, OSError:
-            pass
+    terms, entities, edges = catalog_repository.glossary_counts(novel_root / "glossary.json")
     return Detail(
         **base.__dict__,
         glossary_terms=terms,
@@ -209,7 +189,7 @@ def detail(
 
 
 def delete(root: Path, name: str) -> None:
-    shutil.rmtree(require_path(root, name))
+    catalog_repository.delete_directory(require_path(root, name))
 
 
 __all__ = [

@@ -7,14 +7,16 @@ import sys
 from pathlib import Path
 
 from src.application.config import get_config
+from src.application.languages import SUPPORTED_TARGET_LANGUAGES
 from src.application.pack import (
     PackRequest,
     PackResult,
     run_pack,
 )
+from src.application.pack import (
+    package_file_stem as _package_file_stem,
+)
 from src.application.progress import ProgressEvent
-from src.domain.language import SUPPORTED_TARGET_LANGUAGES
-from src.services.packaging.builder import package_file_stem as _package_file_stem
 from src.utils.display import GREEN, RED, RESET, YELLOW
 
 # Re-exported for tests and external callers.

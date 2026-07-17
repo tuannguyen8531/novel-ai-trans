@@ -47,5 +47,9 @@ export const useNovelsStore = defineStore('novels', () => {
     await refresh()
   }
 
-  return { novels, detail, error, loading, refresh, load, remove, create }
+  async function progress(name: string, target: string): Promise<{ completed: number[]; failed: number[] }> {
+    return api.getTranslationProgress(name, target)
+  }
+
+  return { novels, detail, error, loading, refresh, load, remove, create, progress }
 })

@@ -11,7 +11,7 @@ from src.application.crawl.crawler import CrawlRequest, run_crawl
 from src.application.errors import ApplicationError, ExternalServiceError
 from src.application.progress import ProgressEvent
 from src.cli.crawl import common
-from src.services.notifier import format_run_footer, get_notifier
+from src.cli.notifications import escape_notification, notify_crawl_failure, notify_crawl_result
 from src.utils.logging import get_logger
 
 
@@ -116,12 +116,10 @@ def run(args: argparse.Namespace) -> int:
         )
     except ExternalServiceError as error:
         get_logger().error("Error: %s", error)
-        get_notifier().send(
-            "Status: Failed\n"
-            "Task: Crawl\n"
-            f"Novel: {notifier_escape(str(error.details.get('novel') or args.novel))}\n"
-            f"Detail: {notifier_escape(str(error))}\n"
-            f"{format_run_footer(started_at)}"
+        notify_crawl_failure(
+            str(error.details.get("novel") or args.novel),
+            str(error),
+            started_at=started_at,
         )
         return 1
     except ApplicationError as error:
@@ -143,16 +141,13 @@ def run(args: argparse.Namespace) -> int:
         return 0
 
     common.print_output(f"Done: {result.title} ({result.fetched}/{result.total} new, {result.skipped}/{result.total} skipped)")
-    status = "Success" if result.failed == 0 else "Failed"
-    detail = "Crawl finished." if result.failed == 0 else "Crawl finished with chapter errors."
-    get_notifier().send(
-        f"Status: {status}\n"
-        "Task: Crawl\n"
-        f"Novel: {notifier_escape(result.novel)}\n"
-        f"Detail: {detail}\n"
-        f"Stats: New: {result.fetched}/{result.total} · "
-        f"Skipped: {result.skipped}/{result.total} · Failed: {result.failed}/{result.total}\n"
-        f"{format_run_footer(started_at)}"
+    notify_crawl_result(
+        result.novel,
+        failed=result.failed,
+        fetched=result.fetched,
+        skipped=result.skipped,
+        total=result.total,
+        started_at=started_at,
     )
     return 0
 
@@ -184,4 +179,4 @@ def print_progress(event: ProgressEvent) -> None:
 
 def notifier_escape(text: str) -> str:
     """HTML-escape text for Telegram HTML parse mode."""
-    return get_notifier().escape(text)
+    return escape_notification(text)

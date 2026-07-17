@@ -10,15 +10,14 @@ import time
 
 from src import paths
 from src.application import config as app_config
+from src.application.languages import SUPPORTED_TARGET_LANGUAGES, target_language_name
 from src.application.progress import ProgressEvent
+from src.application.translation.inspection import scan_input, source_language
 from src.application.translation.models import TranslationRequest
 from src.application.translation.workflow import run_translation
 from src.cli import glossary as glossary_cli
+from src.cli.logging import enable_verbose
 from src.cli.notifications import notify_translation_failure, notify_translation_result
-from src.domain.language import SUPPORTED_TARGET_LANGUAGES, target_language_name
-from src.services.logger import set_verbose
-from src.services.metadata import load_source_language
-from src.services.translations import TranslationStorage
 from src.utils.display import DIM, GREEN, RED, RESET, YELLOW, check_provider
 from src.utils.progress import ProgressTracker
 
@@ -171,19 +170,12 @@ def main(argv: list[str] | None = None) -> None:
     if args.summary:
         config.enable_summary = True
     if args.verbose:
-        set_verbose(True)
+        enable_verbose()
 
     started_at = time.time()
     novel = args.novel
     input_dir = paths.novel_input_dir(config, novel)
-    storage = TranslationStorage()
-    if not storage.directory_exists(input_dir):
-        message = f"Input directory not found: {input_dir}"
-        print(f"{RED}✗ {message}{RESET}")
-        notify_translation_failure(novel, "No input chapters found.", started_at=started_at)
-        raise SystemExit(1)
-
-    chapters = storage.scan(input_dir)
+    chapters = scan_input(input_dir)
     if not chapters:
         print(f"{RED}✗ No chapter files found in {input_dir}{RESET}")
         print(f"  Expected format: {input_dir}/chapter_001.txt{RESET}")
@@ -193,7 +185,7 @@ def main(argv: list[str] | None = None) -> None:
     total = len(chapters)
     print(f"{DIM}📕 {novel}: {total} chapters found{RESET}")
 
-    language = args.lang or load_source_language(novel)
+    language = args.lang or source_language(novel)
     if args.lang:
         print(f"{DIM}🌐 Language: {language} (specified){RESET}")
     elif language:

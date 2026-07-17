@@ -7,7 +7,7 @@ import json
 
 from src.application.errors import ResourceConflictError
 from src.application.glossary import audit, replacements, storage
-from src.domain.language import SUPPORTED_TARGET_LANGUAGES
+from src.application.languages import SUPPORTED_TARGET_LANGUAGES
 from src.utils.display import DIM, GREEN, RED, RESET, YELLOW
 
 

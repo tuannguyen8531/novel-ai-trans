@@ -6,7 +6,6 @@ import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -20,20 +19,9 @@ from starlette.exceptions import HTTPException
 from src.api.auth import is_remote_mode, require_secret_key_configured
 from src.api.background.manager import JobManager
 from src.api.background.registry import JobConflictError
+from src.api.state import AppState
 
 _logger = logging.getLogger(__name__)
-
-
-@dataclass
-class AppState:
-    job_manager: JobManager
-    history_root: Path
-    dist_dir: Path
-    drafts_dir: Path
-    config_drafts_dir: Path
-    jobs_dir: Path
-    shutdown_event: asyncio.Event
-    max_upload_bytes: int = 100 * 1024 * 1024
 
 
 @asynccontextmanager

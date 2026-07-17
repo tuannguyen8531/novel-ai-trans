@@ -112,6 +112,8 @@ translated/<novel>/
 ```
 
 See [docs/GUIDE.md](docs/GUIDE.md) for the full walkthrough.
+Contributor-facing dependency direction and module ownership are documented in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Novel metadata localization
 

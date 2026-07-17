@@ -1,10 +1,8 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, computed, ref } from 'vue'
-import { useJobsStore } from '@/stores/jobs'
+import { useJobsStore } from '@/composables/jobs'
 import JobMonitor from '@/components/JobMonitor.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
-
-import { api } from '@/api/client'
 
 const jobs = useJobsStore()
 const selectedId = ref<string | null>(null)
@@ -87,12 +85,11 @@ async function handleDelete() {
   if (!deleteJobId.value) return
   deleteJobSaving.value = true
   try {
-    await api.deleteJob(deleteJobId.value)
+    await jobs.remove(deleteJobId.value)
     if (selectedId.value === deleteJobId.value) {
       selectedId.value = null
     }
     showDeleteDialog.value = false
-    await jobs.refresh()
   } catch (err) {
     alert((err as Error).message)
   } finally {
@@ -119,9 +116,8 @@ function cancelClearAll() {
 async function handleClearAll() {
   clearSaving.value = true
   try {
-    await api.clearJobs()
+    await jobs.clear()
     showClearDialog.value = false
-    await jobs.refresh()
     if (selectedId.value && !rows.value.some((r) => r.id === selectedId.value)) {
       selectedId.value = null
     }

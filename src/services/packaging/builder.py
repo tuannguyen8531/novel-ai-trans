@@ -53,6 +53,7 @@ class EPUBBuilder:
         self.chapters.append({"id": chapter_id, "title": title, "content_html": content_html})
 
     def write(self, output_path: Path) -> None:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(output_path, "w", zipfile.ZIP_DEFLATED) as archive:
             archive.writestr("mimetype", "application/epub+zip", compress_type=zipfile.ZIP_STORED)
 

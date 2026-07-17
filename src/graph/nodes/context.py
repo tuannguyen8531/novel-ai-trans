@@ -8,6 +8,7 @@ Loads rules in order:
 For chapter summaries, only loads the last 3 chapters for conciseness.
 """
 
+import logging
 from pathlib import Path
 
 from src.config import config
@@ -22,6 +23,7 @@ from src.services.metadata import load_source_language
 
 RULES_DIR = Path("rules")
 MAX_RECENT_SUMMARIES = 3  # Only keep context from last 3 chapters
+_logger = logging.getLogger("novel_ai_trans.job")
 
 
 def context_node(state: TranslationState) -> dict:
@@ -36,7 +38,7 @@ def context_node(state: TranslationState) -> dict:
     if not language:
         language = load_source_language(novel_name)
         if language:
-            print(f"  🌐 Loaded source language from metadata: {language}")
+            _logger.info("Loaded source language from metadata: %s", language)
 
     # 1. Load translation rules (common + language-specific)
     rules_parts = []
@@ -76,9 +78,11 @@ def context_node(state: TranslationState) -> dict:
     # 4. Load character context — only characters directly active in this chapter.
     entities, edges, address_rules = get_active_context(novel_name, source_text, chapter_number)
     if entities:
-        print(
-            f"  👥 Loaded {len(entities)} active character(s) with "
-            f"{len(edges)} relationship(s), {len(address_rules)} address rule(s)"
+        _logger.info(
+            "Loaded %s active character(s) with %s relationship(s), %s address rule(s)",
+            len(entities),
+            len(edges),
+            len(address_rules),
         )
 
     return {

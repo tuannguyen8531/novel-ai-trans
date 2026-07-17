@@ -8,6 +8,7 @@ Three daily log files:
 """
 
 import json
+import logging
 import shutil
 import sys
 import threading
@@ -25,6 +26,7 @@ LOG_ERROR_NAME = "error.log"
 _DAILY_DIR_LOCK = threading.Lock()
 
 _verbose = False
+_console_logger = logging.getLogger("novel_ai_trans.verbose")
 
 
 def set_verbose(enabled: bool):
@@ -200,13 +202,18 @@ def log_ai_call(
     elif "chapter" in kwargs:
         label += f" (chapter {kwargs['chapter']})"
 
-    print(f"\n{'═' * 60}")
-    print(f"[{timestamp}] {label}")
-    print(f"{'═' * 60}")
-    print(f"--- SYSTEM ({len(system_prompt)} chars) ---")
-    print(_truncate(system_prompt))
-    print(f"--- USER ({len(user_prompt)} chars) ---")
-    print(_truncate(user_prompt))
-    print(f"--- RESPONSE ({len(response)} chars) ---")
-    print(_truncate(response))
-    print(f"{'═' * 60}\n")
+    separator = "═" * 60
+    _console_logger.info(
+        "\n%s\n[%s] %s\n%s\n--- SYSTEM (%s chars) ---\n%s\n--- USER (%s chars) ---\n%s\n--- RESPONSE (%s chars) ---\n%s\n%s",
+        separator,
+        timestamp,
+        label,
+        separator,
+        len(system_prompt),
+        _truncate(system_prompt),
+        len(user_prompt),
+        _truncate(user_prompt),
+        len(response),
+        _truncate(response),
+        separator,
+    )

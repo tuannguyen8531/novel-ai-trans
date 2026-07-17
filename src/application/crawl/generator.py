@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -20,6 +19,8 @@ from src.application.errors import PersistenceError
 from src.application.progress import ProgressEvent
 from src.domain.language import detect_language_heuristic
 from src.paths import CONFIG_DIR, RUNTIME_OUTPUT_ROOT
+from src.services import documents
+from src.services.drafts import DraftRepository
 from src.services.generation import prompts
 from src.services.generation.analysis import ConfigAnalyzer, clean_novel_html, normalize_novel_info
 from src.services.generation.cache import HtmlCache
@@ -34,7 +35,6 @@ from src.services.generation.selectors import (
     resolve_selectors,
 )
 from src.services.llm import get_llm
-from src.utils.files import merge_json_locked
 from src.utils.html import clean_html_for_analysis
 from src.utils.logging import get_logger
 
@@ -64,8 +64,6 @@ def generate_config(
     drafts_dir: Path | None = None,
 ) -> ConfigGenerationResult:
     """Generate a novel crawl config using AI and persist it as a draft."""
-    if drafts_dir is not None:
-        drafts_dir.mkdir(parents=True, exist_ok=True)
     if provider:
         from src.services.llm.factory import _create_provider
 
@@ -125,11 +123,7 @@ def generate_config(
             "config": config_dict,
             "metadata": metadata,
         }
-        draft_path = drafts_dir / f"{draft_id}.json"
-        draft_path.write_text(
-            json.dumps(draft, ensure_ascii=False, indent=2) + "\n",
-            encoding="utf-8",
-        )
+        DraftRepository(drafts_dir).save(draft)
     return ConfigGenerationResult(
         draft_id=draft_id,
         suggested_name=suggested_name,
@@ -169,7 +163,7 @@ def save_generated_metadata(
             "source_language": existing.get("source_language") or metadata.get("source_language"),
         }
 
-    merge_json_locked(path, _merge)
+    documents.update(path.parent, _merge)
     return path
 
 

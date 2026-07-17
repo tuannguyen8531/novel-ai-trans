@@ -171,6 +171,16 @@ export const useJobsStore = defineStore('jobs', () => {
     }
   }
 
+  async function remove(jobId: string) {
+    await api.deleteJob(jobId)
+    await refresh()
+  }
+
+  async function clear() {
+    await api.clearJobs()
+    await refresh()
+  }
+
   return {
     current,
     active,
@@ -185,6 +195,8 @@ export const useJobsStore = defineStore('jobs', () => {
     stopPolling,
     follow,
     cancel,
+    remove,
+    clear,
     closeStream,
     findJob
   }

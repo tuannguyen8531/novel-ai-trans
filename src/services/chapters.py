@@ -89,6 +89,24 @@ def chapter_path(directory: Path, number: int) -> Path:
     return canonical
 
 
+def read(directory: Path, number: int) -> str:
+    """Read one chapter using canonical and legacy filename resolution."""
+    return chapter_path(directory, number).read_text(encoding="utf-8")
+
+
+def write(directory: Path, number: int, content: str) -> Path:
+    """Persist one chapter, creating its owning directory when needed."""
+    directory.mkdir(parents=True, exist_ok=True)
+    path = chapter_path(directory, number)
+    path.write_text(content, encoding="utf-8")
+    return path
+
+
+def delete(directory: Path, number: int) -> None:
+    """Delete one existing chapter."""
+    chapter_path(directory, number).unlink()
+
+
 def read_title(file_path: Path, fallback: str, *, keep_cjk: bool = True) -> str:
     """Read and normalize a chapter title from the first non-empty lines."""
     if not file_path.exists():

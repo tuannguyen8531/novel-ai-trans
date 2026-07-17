@@ -6,6 +6,43 @@ from src.application.translation.models import TranslationResult
 from src.services.notifier import format_run_footer, get_notifier
 
 
+def escape_notification(value: str) -> str:
+    return get_notifier().escape(value)
+
+
+def notify_crawl_failure(novel: str, detail: str, *, started_at: float) -> None:
+    notifier = get_notifier()
+    notifier.send(
+        "Status: Failed\n"
+        "Task: Crawl\n"
+        f"Novel: {notifier.escape(novel)}\n"
+        f"Detail: {notifier.escape(detail)}\n"
+        f"{format_run_footer(started_at)}"
+    )
+
+
+def notify_crawl_result(
+    novel: str,
+    *,
+    failed: int,
+    fetched: int,
+    skipped: int,
+    total: int,
+    started_at: float,
+) -> None:
+    notifier = get_notifier()
+    status = "Success" if failed == 0 else "Failed"
+    detail = "Crawl finished." if failed == 0 else "Crawl finished with chapter errors."
+    notifier.send(
+        f"Status: {status}\n"
+        "Task: Crawl\n"
+        f"Novel: {notifier.escape(novel)}\n"
+        f"Detail: {detail}\n"
+        f"Stats: New: {fetched}/{total} · Skipped: {skipped}/{total} · Failed: {failed}/{total}\n"
+        f"{format_run_footer(started_at)}"
+    )
+
+
 def notify_translation_result(result: TranslationResult, *, started_at: float | None = None) -> None:
     """Notify the configured chat about a completed translation result."""
     if result.skipped:
@@ -52,3 +89,12 @@ def notify_translation_failure(novel: str, detail: str, *, started_at: float) ->
         f"Detail: {notifier.escape(detail) if detail else 'Translation failed.'}"
     )
     notifier.send(message + "\n" + format_run_footer(started_at))
+
+
+__all__ = [
+    "escape_notification",
+    "notify_crawl_failure",
+    "notify_crawl_result",
+    "notify_translation_failure",
+    "notify_translation_result",
+]

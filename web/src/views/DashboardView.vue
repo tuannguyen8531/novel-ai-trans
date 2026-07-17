@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, computed } from 'vue'
-import { useNovelsStore } from '@/stores/novels'
-import { useJobsStore } from '@/stores/jobs'
+import { useNovelsStore } from '@/composables/novels'
+import { useJobsStore } from '@/composables/jobs'
 import JobMonitor from '@/components/JobMonitor.vue'
 
 const novels = useNovelsStore()

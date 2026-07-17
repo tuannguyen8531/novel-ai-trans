@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { onMounted, computed, ref } from 'vue'
-import { api } from '@/api/client'
-import { useNovelsStore } from '@/stores/novels'
-import { useSettingsStore } from '@/stores/settings'
+import { useNovelsStore } from '@/composables/novels'
+import { useSettingsStore } from '@/composables/settings'
 import type { NovelSummary, NovelTargetProgress } from '@/api/types'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 
@@ -102,7 +101,7 @@ async function showFailedChapters(novel: NovelSummary) {
   failedChaptersLoading.value = true
   showFailedDialog.value = true
   try {
-    const progress = await api.getTranslationProgress(novel.name, defaultTarget.value)
+    const progress = await novels.progress(novel.name, defaultTarget.value)
     failedChapters.value = [...progress.failed].sort((a, b) => a - b)
   } catch (err) {
     failedChaptersError.value = (err as Error).message

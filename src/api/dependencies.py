@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Annotated
+from typing import Annotated
 
 from fastapi import Depends, Request
 
 from src.api.auth import Principal, authenticate, health_authenticate
 from src.api.background.manager import JobManager
-
-if TYPE_CHECKING:
-    from src.api.factory import AppState
+from src.api.state import AppState
 
 # Module-level reference to the current app, set by ``register_routes`` so
 # module-level helpers (e.g. background job runners) can reach the app state

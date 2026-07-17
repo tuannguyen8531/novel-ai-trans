@@ -2,11 +2,7 @@
 
 from __future__ import annotations
 
-import json
 import re
-import secrets
-import shutil
-from datetime import UTC, datetime
 from pathlib import Path
 
 from src import paths as _paths
@@ -22,9 +18,9 @@ from src.domain.glossary import (
     uppercase_first_cased,
 )
 from src.domain.language import normalize_target_language
+from src.services import backups as backup_repository
 from src.services import chapters as chapter_service
 from src.services import glossary as glossary_service
-from src.utils import files as file_utils
 
 GLOSSARY_BACKUP_DIR = _paths.GLOSSARY_BACKUP_DIR
 _BACKUP_ID_PATTERN = re.compile(r"^\d{8}T\d{6}_\d{6}Z_[0-9a-f]{8}$")
@@ -71,7 +67,7 @@ def apply_pending_replacements(
             for source_path in chapter_service.scan(input_dir).values():
                 try:
                     chapter_number = int(source_path.stem.split("_")[-1])
-                    source_text = source_path.read_text(encoding="utf-8")
+                    source_text = chapter_service.read(input_dir, chapter_number)
                 except OSError, ValueError:
                     continue
 
@@ -86,7 +82,7 @@ def apply_pending_replacements(
                 if not output_path.exists():
                     continue
 
-                translated_text = output_path.read_text(encoding="utf-8")
+                translated_text = chapter_service.read(output_dir, chapter_number)
                 nonconflicting_indexes = [index for index in applicable_indexes if index not in conflicts]
                 planned_counts: dict[str, int] = {}
                 if nonconflicting_indexes:
@@ -173,44 +169,26 @@ def apply_pending_replacements(
         manifest: dict | None = None
         manifest_path: Path | None = None
         if effective_write and files_to_write:
-            backup_id = f"{datetime.now(UTC).strftime('%Y%m%dT%H%M%S_%fZ')}_{secrets.token_hex(4)}"
-            backup_dir = GLOSSARY_BACKUP_DIR / novel_runtime_key(novel_name) / backup_id
-            backup_dir.mkdir(parents=True, exist_ok=False)
-
-            backup_files: list[str] = []
-            for path in files_to_write:
-                rel_path = path.relative_to(novel_root)
-                backup_file_path = backup_dir / rel_path
-                backup_file_path.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(path, backup_file_path)
-                backup_files.append(str(rel_path))
-
-            manifest = {
-                "id": backup_id,
-                "status": "prepared",
-                "novel": novel_name,
-                "target": target,
-                "files": backup_files,
-                "pending_before": pending,
-            }
-            manifest_path = backup_dir / "manifest.json"
-            file_utils.write_text_atomic(manifest_path, json.dumps(manifest, ensure_ascii=False, indent=2))
-
-            for path, content in files_to_write.items():
-                file_utils.write_text_atomic(path, content)
-                changed_files += 1
+            backup_id = backup_repository.generate_id()
+            manifest, manifest_path = backup_repository.prepare(
+                GLOSSARY_BACKUP_DIR / novel_runtime_key(novel_name),
+                backup_id,
+                novel=novel_name,
+                target=target,
+                novel_root=novel_root,
+                files=list(files_to_write),
+                pending=pending,
+            )
+            changed_files = backup_repository.write_chapters(files_to_write)
 
         if effective_write and new_pending != pending:
-            glossary_path = glossary_service.resolve_glossary_path(novel_name)
-            file_utils.merge_json_locked(
-                glossary_path,
+            glossary_service.update_glossary_data(
+                novel_name,
                 lambda current: {**current, PENDING_REPLACEMENTS_KEY: new_pending},
             )
 
         if effective_write and manifest is not None and manifest_path is not None:
-            manifest["status"] = "completed"
-            manifest["pending_after"] = new_pending
-            file_utils.write_text_atomic(manifest_path, json.dumps(manifest, ensure_ascii=False, indent=2))
+            backup_repository.complete(manifest_path, manifest, new_pending)
 
         return {
             "novel": novel_name,
@@ -227,12 +205,10 @@ def rollback_glossary_replacement(novel_name: str, backup_id: str) -> None:
     """Rollback a previous glossary replacement using the backup manifest."""
     if not _BACKUP_ID_PATTERN.fullmatch(backup_id):
         raise FileNotFoundError(f"Invalid glossary backup id: {backup_id!r}")
-    backup_dir = GLOSSARY_BACKUP_DIR / novel_runtime_key(novel_name) / backup_id
-    manifest_path = backup_dir / "manifest.json"
-    if not manifest_path.exists():
-        raise FileNotFoundError(f"Glossary backup not found: {backup_id}")
-
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest, backup_dir = backup_repository.load(
+        GLOSSARY_BACKUP_DIR / novel_runtime_key(novel_name),
+        backup_id,
+    )
     if manifest.get("novel") != novel_name:
         raise FileNotFoundError(f"Glossary backup does not belong to novel {novel_name!r}")
     target = normalize_target_language(manifest.get("target") or "vi")
@@ -244,19 +220,9 @@ def rollback_glossary_replacement(novel_name: str, backup_id: str) -> None:
     novel_root = glossary_service.translated_novel_root(novel_name).resolve()
 
     with novel_lock(novel_name):
-        for rel_file_path in manifest.get("files", []):
-            backup_file_path = (backup_dir / rel_file_path).resolve()
-            target_file_path = (novel_root / rel_file_path).resolve()
-            try:
-                backup_file_path.relative_to(backup_dir.resolve())
-                target_file_path.relative_to(novel_root)
-            except ValueError as error:
-                raise FileNotFoundError("Glossary backup contains an invalid file path") from error
-            if backup_file_path.exists():
-                file_utils.write_text_atomic(target_file_path, backup_file_path.read_text(encoding="utf-8"))
+        backup_repository.restore_files(backup_dir, novel_root, list(manifest.get("files", [])))
 
         pending_before = [item for item in manifest.get("pending_before", []) if isinstance(item, dict)]
-        glossary_path = glossary_service.resolve_glossary_path(novel_name)
 
         def restore_pending(current_data: dict) -> dict:
             current_pending = [item for item in current_data.get(PENDING_REPLACEMENTS_KEY, []) if isinstance(item, dict)]
@@ -265,7 +231,7 @@ def rollback_glossary_replacement(novel_name: str, backup_id: str) -> None:
                 PENDING_REPLACEMENTS_KEY: merge_pending_replacements(pending_before, current_pending),
             }
 
-        file_utils.merge_json_locked(glossary_path, restore_pending)
+        glossary_service.update_glossary_data(novel_name, restore_pending)
 
 
 def rollback_replacements(novel_name: str, backup_id: str) -> None:
@@ -284,9 +250,8 @@ def dismiss_pending_replacements(novel_name: str, *, target_language: str | None
         with active_config_scope(config.clone(target_language=target)):
             dismiss_pending_replacements(novel_name)
         return
-    glossary_path = glossary_service.resolve_glossary_path(novel_name)
     with novel_lock(novel_name):
-        file_utils.merge_json_locked(
-            glossary_path,
+        glossary_service.update_glossary_data(
+            novel_name,
             lambda current: {**current, PENDING_REPLACEMENTS_KEY: []},
         )

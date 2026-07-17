@@ -27,6 +27,7 @@ from src.application.errors import (
 )
 from src.application.progress import ProgressEvent
 from src.domain.language import normalize_target_language
+from src.services import chapters as chapter_service
 from src.services.packaging.builder import EPUBBuilder, package_file_stem
 from src.services.packaging.chapters import parse_chapter_file
 from src.services.packaging.covers import cleanup_cover_image, resolve_cover_image
@@ -37,6 +38,7 @@ __all__ = [
     "PackRequest",
     "PackResult",
     "ArtifactInfo",
+    "package_file_stem",
     "run_pack",
 ]
 
@@ -88,17 +90,9 @@ def _check_cancel(cancel_event: Event | None) -> None:
 
 
 def _find_chapter_files(output_dir: Path) -> dict[int, Path]:
-    import re
-
     if not output_dir.exists():
         raise ResourceNotFoundError(f"Translation output folder not found: {output_dir}")
-    pattern = re.compile(r"^chapter_(\d+)\.txt$")
-    files: dict[int, Path] = {}
-    for f in output_dir.iterdir():
-        if f.is_file():
-            match = pattern.match(f.name)
-            if match:
-                files[int(match.group(1))] = f
+    files = chapter_service.scan(output_dir)
     if not files:
         raise ResourceNotFoundError(f"No translated chapter files (chapter_*.txt) found in {output_dir}")
     return files
@@ -129,7 +123,6 @@ def run_pack(
     illustrations_dir = novel_root / "illustrations"
 
     package_dir = request.output_dir or _paths.novel_artifact_dir(config, request.novel)
-    package_dir.mkdir(parents=True, exist_ok=True)
     package_stem = package_file_stem(request.novel, target_normalized)
 
     loaded_chapters: list[tuple[str, list[str]]] = []

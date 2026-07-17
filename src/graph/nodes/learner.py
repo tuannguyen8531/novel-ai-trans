@@ -7,6 +7,7 @@ Runs after all chunks are translated. Responsible for:
 3. Saving both to the glossary JSON file
 """
 
+import logging
 import re
 
 from src.config import config
@@ -28,6 +29,8 @@ from src.services.logger import log_ai_call, log_error
 from src.services.memory import save_chapter_summary
 from src.services.metadata import save_source_language
 from src.utils.json import parse_json_object
+
+_logger = logging.getLogger("novel_ai_trans.job")
 
 KINSHIP_TERMS = {
     # English
@@ -293,7 +296,7 @@ def _sanitize_entity_keys(characters: dict) -> dict:
     for old_key, info in entities.items():
         new_key = _strip_entity_key_annotation(old_key)
         if new_key != old_key:
-            print(f"  ⚠ Cleaned entity key: '{old_key}' → '{new_key}'")
+            _logger.warning("Cleaned entity key: %r -> %r", old_key, new_key)
         key_map[old_key] = new_key
         # If two old keys map to the same new key, merge (keep last)
         if new_key in cleaned_entities:
@@ -538,7 +541,7 @@ def learner_node(state: TranslationState) -> dict:
         new_characters = learn_data.get("characters", {})
     except Exception as e:
         log_error("Failed to extract terms and characters", e, chapter=chapter_number)
-        print(f"\n  [Warning] Failed to extract terms and characters: {e}")
+        _logger.warning("Failed to extract terms and characters: %s", e)
 
     # Sanitize entity keys: strip parenthetical annotations from keys/edges/rules
     new_characters = _sanitize_entity_keys(new_characters)
@@ -550,7 +553,7 @@ def learner_node(state: TranslationState) -> dict:
         if not _is_kinship_or_role(name):
             filtered_entities[name] = info
         else:
-            print(f"  ⚠ Skipped kinship/role term as entity: {name}")
+            _logger.warning("Skipped kinship/role term as entity: %s", name)
     new_characters["entities"] = filtered_entities
 
     # Normalize and validate edge relationship types
@@ -562,7 +565,7 @@ def learner_node(state: TranslationState) -> dict:
             continue
         from_char, to_char, rel_type = edge[0], edge[1], edge[2]
         if _is_kinship_or_role(from_char) or _is_kinship_or_role(to_char):
-            print(f"  ⚠ Skipped edge with kinship term: {from_char} -> {to_char}")
+            _logger.warning("Skipped edge with kinship term: %s -> %s", from_char, to_char)
             continue
         normalized_rel = _normalize_relationship(rel_type)
         cleaned_edges.append([from_char, to_char, normalized_rel] + edge[3:])
@@ -585,9 +588,11 @@ def learner_node(state: TranslationState) -> dict:
 
     if new_entities or new_edges or new_address_rules:
         save_characters_batch(novel_name, new_entities, new_edges, address_rules=new_address_rules, chapter=chapter_number)
-        print(
-            f"  📝 Updated {len(new_entities)} character(s), {len(new_edges)} relationship(s), "
-            f"{len(new_address_rules)} address rule(s)"
+        _logger.info(
+            "Updated %s character(s), %s relationship(s), %s address rule(s)",
+            len(new_entities),
+            len(new_edges),
+            len(new_address_rules),
         )
 
     save_source_language(novel_name, state["source_language"])
@@ -624,7 +629,7 @@ def learner_node(state: TranslationState) -> dict:
             )
         except Exception as e:
             log_error("Failed to generate summary", e, chapter=chapter_number)
-            print(f"\n  [Warning] Failed to generate summary: {e}")
+            _logger.warning("Failed to generate summary: %s", e)
             summary_response = ""
 
     return {

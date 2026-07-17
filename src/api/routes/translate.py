@@ -13,12 +13,12 @@ from src.api.dependencies import AuthenticatedPrincipal, JobManagerDependency
 from src.api.events import build_progress_emitter
 from src.api.schemas import JobStartResponse, TranslationRequestPayload
 from src.application import config as app_config
+from src.application.notifications import send_run_notification
 from src.application.novel import catalog, identity
 from src.application.novel.localization import localize_metadata
 from src.application.progress import ProgressEvent
 from src.application.translation.models import TranslationRequest
 from src.application.translation.workflow import run_translation
-from src.services.notifier import send_run_notification
 
 router = APIRouter(tags=["translate"])
 
