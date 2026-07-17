@@ -8,7 +8,7 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException
 
 from src.api.dependencies import AuthenticatedPrincipal, JobManagerDependency
-from src.api.jobs import build_progress_emitter
+from src.api.events import build_progress_emitter
 from src.api.schemas import (
     GlossaryApplyRequest,
     GlossaryCharactersResponse,

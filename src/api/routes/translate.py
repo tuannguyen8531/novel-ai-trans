@@ -10,7 +10,7 @@ from typing import Literal
 from fastapi import APIRouter
 
 from src.api.dependencies import AuthenticatedPrincipal, JobManagerDependency
-from src.api.jobs import build_progress_emitter
+from src.api.events import build_progress_emitter
 from src.api.schemas import JobStartResponse, TranslationRequestPayload
 from src.application import config as app_config
 from src.application.novel import catalog, identity

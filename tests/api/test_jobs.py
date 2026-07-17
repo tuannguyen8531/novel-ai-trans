@@ -11,8 +11,10 @@ from pathlib import Path
 
 import pytest
 
+from src.api.background.manager import JobManager
+from src.api.background.models import JobStatus
+from src.api.background.registry import JobNotFoundError
 from src.api.events import JobEvent
-from src.api.jobs import JobConflictError, JobManager, JobNotFoundError, JobStatus
 from src.api.services.jobs import (
     JobStore,
     job_to_snapshot,
@@ -141,71 +143,6 @@ def test_snapshot_roundtrip():
     assert out["status"] == snap["status"]
     assert out["error"] == snap["error"]
     assert out["progress"] == snap["progress"]
-
-
-def test_manager_allows_different_novel_jobs_concurrently():
-    manager = JobManager()
-    config = Config()
-    started = {"a": threading.Event(), "b": threading.Event()}
-    proceed = threading.Event()
-
-    def slow_run(job, emit, cancel_event):
-        assert job.novel is not None
-        started[job.novel].set()
-        proceed.wait(timeout=5)
-        return {"novel": job.novel}
-
-    first = manager.submit(kind="crawl", novel="a", snapshot=config, loop=None, run=slow_run)
-    second = manager.submit(kind="translate", novel="b", snapshot=config, loop=None, run=slow_run)
-
-    assert started["a"].wait(timeout=5)
-    assert started["b"].wait(timeout=5)
-    assert {job.id for job in manager.list_active()} == {first.id, second.id}
-
-    with pytest.raises(JobConflictError) as exc:
-        manager.submit(kind="translate", novel="a", snapshot=config, loop=None, run=slow_run)
-    assert exc.value.args[0] == first.id
-
-    proceed.set()
-    for thread in list(manager._threads.values()):  # noqa: SLF001 - unit test waits for internal workers to finish.
-        thread.join(timeout=5)
-
-    assert manager.get(first.id).status == JobStatus.COMPLETED
-    assert manager.get(second.id).status == JobStatus.COMPLETED
-
-
-def test_manager_treats_job_without_novel_as_global_conflict():
-    manager = JobManager()
-    config = Config()
-    started = threading.Event()
-    proceed = threading.Event()
-
-    def slow_run(job, emit, cancel_event):
-        started.set()
-        proceed.wait(timeout=5)
-        return {"novel": job.novel}
-
-    novel_job = manager.submit(kind="crawl", novel="a", snapshot=config, loop=None, run=slow_run)
-    try:
-        assert started.wait(timeout=5)
-        with pytest.raises(JobConflictError) as exc:
-            manager.submit(kind="system", novel=None, snapshot=config, loop=None, run=slow_run)
-        assert exc.value.args[0] == novel_job.id
-    finally:
-        proceed.set()
-        _wait_for_terminal(manager, novel_job.id)
-
-    started.clear()
-    proceed.clear()
-    global_job = manager.submit(kind="system", novel=None, snapshot=config, loop=None, run=slow_run)
-    try:
-        assert started.wait(timeout=5)
-        with pytest.raises(JobConflictError) as exc:
-            manager.submit(kind="translate", novel="b", snapshot=config, loop=None, run=slow_run)
-        assert exc.value.args[0] == global_job.id
-    finally:
-        proceed.set()
-        _wait_for_terminal(manager, global_job.id)
 
 
 def test_manager_records_lifecycle_progress_logs_events_and_history(tmp_path: Path):

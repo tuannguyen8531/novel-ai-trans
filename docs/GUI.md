@@ -46,11 +46,19 @@ Development commands such as `build`, `serve`, and `test` are CLI-only.
  Domain / services / graph        src/domain/, src/services/, src/graph/
 ```
 
-Only one top-level long job runs at a time (crawl, config generation, import,
+At most one top-level long job may run for a given novel (crawl, import,
 translate, metadata localization, pack, glossary validate, glossary audit).
-Read-only endpoints stay available while a job is running. Starting a second
-job while one is active returns HTTP 409 with the active job id. The current GUI
-displays the conflict; open the Jobs page to inspect or cancel the active job.
+Jobs for different novels may run concurrently. A job without a novel, such as
+config generation, is global: it conflicts with every active job, and every job
+conflicts while it is active. A conflicting submission returns HTTP 409 with
+the active job id. Read-only endpoints stay available while jobs are running.
+The GUI displays conflicts; open the Jobs page to inspect or cancel the active
+job.
+
+Background job ownership lives under `src/api/background/`: the registry owns
+active/history state and conflict rules, the runner owns worker threads and log
+capture, streaming owns SSE fan-out, and the manager coordinates those pieces
+with the filesystem-backed `JobStore`.
 
 The GUI does not replace the CLI; the two share the same `.env`, the same
 `translated/` directory, and the same progress files. Stop the server, run

@@ -11,7 +11,7 @@ from typing import Annotated
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from src.api.dependencies import AuthenticatedPrincipal, JobManagerDependency, get_state
-from src.api.jobs import build_progress_emitter
+from src.api.events import build_progress_emitter
 from src.api.schemas import CrawlRequestPayload, JobStartResponse
 from src.application import config as app_config
 from src.application.crawl.crawler import CrawlRequest, run_crawl

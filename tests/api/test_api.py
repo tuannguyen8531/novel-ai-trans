@@ -118,7 +118,8 @@ def test_provider_check_rejects_unknown(client):
 def test_job_lifecycle_with_deterministic_job(client):
     app_state = client.app.state.app_state
     manager = app_state.job_manager
-    from src.api.jobs import JobEvent, JobStatus
+    from src.api.background.models import JobStatus
+    from src.api.events import JobEvent
     from src.config import config as global_config
 
     snapshot = global_config.clone()
@@ -159,7 +160,7 @@ def test_job_lifecycle_with_deterministic_job(client):
 def test_concurrent_job_returns_409(client):
     app_state = client.app.state.app_state
     manager = app_state.job_manager
-    from src.api.jobs import JobConflictError
+    from src.api.background.registry import JobConflictError
     from src.config import config as global_config
 
     snapshot = global_config.clone()
@@ -317,7 +318,7 @@ def test_jobs_are_persisted_to_disk(client):
 
 def test_jobs_survive_restart(tmp_path):
     """A second JobManager pointed at the same jobs dir must see the prior job."""
-    from src.api.jobs import JobManager
+    from src.api.background.manager import JobManager
     from src.api.services.jobs import JobStore
 
     jobs_dir = tmp_path / "jobs"
@@ -353,8 +354,8 @@ def test_jobs_survive_restart(tmp_path):
 def test_job_progress_emitter_adds_console_log_lines():
     from datetime import datetime
 
-    from src.api.events import JobEvent
-    from src.api.jobs import Job, JobStatus, build_progress_emitter
+    from src.api.background.models import Job, JobStatus
+    from src.api.events import JobEvent, build_progress_emitter
     from src.application.progress import ProgressEvent
 
     job = Job(
@@ -398,8 +399,8 @@ def test_job_progress_emitter_adds_console_log_lines():
 def test_job_progress_log_events_are_not_duplicated():
     from datetime import datetime
 
-    from src.api.events import JobEvent
-    from src.api.jobs import Job, JobStatus, build_progress_emitter
+    from src.api.background.models import Job, JobStatus
+    from src.api.events import JobEvent, build_progress_emitter
     from src.application.progress import ProgressEvent
 
     job = Job(
@@ -425,8 +426,8 @@ def test_job_progress_log_events_are_not_duplicated():
 def test_crawl_job_console_hides_skipped_and_started_progress():
     from datetime import datetime
 
-    from src.api.events import JobEvent
-    from src.api.jobs import Job, JobStatus, build_progress_emitter
+    from src.api.background.models import Job, JobStatus
+    from src.api.events import JobEvent, build_progress_emitter
     from src.application.progress import ProgressEvent
 
     job = Job(

@@ -18,7 +18,8 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException
 
 from src.api.auth import is_remote_mode, require_secret_key_configured
-from src.api.jobs import JobConflictError, JobManager
+from src.api.background.manager import JobManager
+from src.api.background.registry import JobConflictError
 
 _logger = logging.getLogger(__name__)
 

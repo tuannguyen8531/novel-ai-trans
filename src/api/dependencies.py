@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Annotated
 from fastapi import Depends, Request
 
 from src.api.auth import Principal, authenticate, health_authenticate
-from src.api.jobs import JobManager
+from src.api.background.manager import JobManager
 
 if TYPE_CHECKING:
     from src.api.factory import AppState

@@ -158,7 +158,7 @@ async def post_generate_config(
     loop = asyncio.get_running_loop()
 
     def _run(job, emit, cancel_event):
-        from src.api.jobs import build_progress_emitter as _bpe
+        from src.api.events import build_progress_emitter as _bpe
 
         progress_cb = _bpe(job, emit)
         result: ConfigGenerationResult = application_generate_config(
@@ -205,7 +205,7 @@ async def post_validate_config(
     loop = asyncio.get_running_loop()
 
     def _run(job, emit, cancel_event):
-        from src.api.jobs import build_progress_emitter as _bpe
+        from src.api.events import build_progress_emitter as _bpe
 
         progress_cb = _bpe(job, emit)
         result: ConfigValidationResult = application_validate_config(

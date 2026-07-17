@@ -116,8 +116,7 @@ def job_to_snapshot(job: Any) -> dict[str, Any]:
 
 def snapshot_to_job(snapshot: dict[str, Any]) -> Any:
     """Reconstruct a :class:`Job` from a snapshot dict (without cancel_event)."""
-    # Local import to avoid a cycle: jobs.py is the canonical owner of Job.
-    from src.api.jobs import Job, JobError, JobStatus
+    from src.api.background.models import Job, JobError, JobStatus
 
     status = JobStatus(snapshot["status"])
     error_data = snapshot.get("error")
