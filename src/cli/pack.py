@@ -1,9 +1,4 @@
-"""Packager CLI: turn translated output into EPUB.
-
-Re-exports the reusable building blocks from :mod:`src.services.packaging`
-and keeps the argparse entry point :func:`main`. The application
-workflow in :mod:`src.application.pack` performs the actual work.
-"""
+"""Packager CLI: turn translated output into EPUB."""
 
 from __future__ import annotations
 
@@ -19,7 +14,7 @@ from src.application.pack import (
 )
 from src.application.progress import ProgressEvent
 from src.domain.language import SUPPORTED_TARGET_LANGUAGES
-from src.services.packaging import package_file_stem
+from src.services.packaging.builder import package_file_stem as _package_file_stem
 from src.utils.display import GREEN, RED, RESET, YELLOW
 
 # Re-exported for tests and external callers.
@@ -35,6 +30,12 @@ def _print_progress(event: ProgressEvent) -> None:
             print(f"  {event.message}")
     elif event.kind == "skipped":
         print(f"  {event.message}")
+
+
+def package_file_stem(novel_name: str, target_language: str | None = None) -> str:
+    """Keep the CLI helper's target-language default for existing callers."""
+    target = target_language or get_config().target_language
+    return _package_file_stem(novel_name, target)
 
 
 def main(argv: list[str] | None = None) -> None:

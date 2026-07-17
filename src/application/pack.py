@@ -11,7 +11,6 @@ API callers; artifacts always write into the novel root. The CLI keeps its
 
 from __future__ import annotations
 
-import tempfile
 import time
 from collections.abc import Callable
 from contextlib import suppress
@@ -28,32 +27,13 @@ from src.application.errors import (
 )
 from src.application.progress import ProgressEvent
 from src.domain.language import normalize_target_language
-from src.services.packaging import (  # type: ignore[attr-defined]
-    EPUBBuilder,
-    clean_text,
-    image_media_type,
-    load_metadata,
-    package_file_stem,
-    parse_chapter_file,
-    resolve_book_author,
-    resolve_book_title,
-    resolve_cover_image,
-    resolve_illustration,
-)
+from src.services.packaging.builder import EPUBBuilder, package_file_stem
+from src.services.packaging.chapters import parse_chapter_file
+from src.services.packaging.covers import cleanup_cover_image, resolve_cover_image
+from src.services.packaging.images import resolve_chapter_images
+from src.services.packaging.metadata import load_metadata, resolve_book_author, resolve_book_title
 
-# Re-export the building blocks so the existing CLI and tests can keep
-# importing them from ``src.cli.pack`` without changing all call sites.
 __all__ = [
-    "EPUBBuilder",
-    "clean_text",
-    "image_media_type",
-    "load_metadata",
-    "parse_chapter_file",
-    "resolve_book_author",
-    "resolve_book_title",
-    "resolve_cover_image",
-    "resolve_illustration",
-    "package_file_stem",
     "PackRequest",
     "PackResult",
     "ArtifactInfo",
@@ -140,14 +120,13 @@ def run_pack(
     chapter_files = _find_chapter_files(output_dir)
     sorted_chapters = sorted(chapter_files.items())
 
-    metadata = load_metadata(request.novel)
+    novel_root = _paths.novel_root_dir(config, request.novel)
+    metadata = load_metadata(novel_root / "metadata.json")
     book_title = request.title or resolve_book_title(metadata, target_normalized, request.novel)
     book_author = request.author if request.author != "AI Translator" else resolve_book_author(metadata, request.author)
 
-    novel_root = _paths.novel_root_dir(config, request.novel)
     cover_image = resolve_cover_image(metadata, novel_root)
     illustrations_dir = novel_root / "illustrations"
-    downloaded_cover = cover_image is not None and str(cover_image).startswith(tempfile.gettempdir())
 
     package_dir = request.output_dir or _paths.novel_artifact_dir(config, request.novel)
     package_dir.mkdir(parents=True, exist_ok=True)
@@ -180,12 +159,13 @@ def run_pack(
             ),
         )
         epub_path = package_dir / f"{package_stem}.epub"
+        illustrations = resolve_chapter_images(illustrations_dir, loaded_chapters)
         builder = EPUBBuilder(
             title=book_title,
             author=book_author,
             language=target_normalized,
             cover_image=cover_image,
-            illustrations_dir=illustrations_dir,
+            illustrations=illustrations,
         )
         for title, paragraphs in loaded_chapters:
             builder.add_chapter(title, paragraphs)
@@ -202,10 +182,7 @@ def run_pack(
     except OSError as error:
         raise PersistenceError(str(error)) from error
     finally:
-        # Always clean up a downloaded cover (a temp file we created). The
-        # ``downloaded_cover`` flag avoids touching user-provided cover paths.
-        if downloaded_cover and cover_image is not None:
-            cover_image.unlink(missing_ok=True)
+        cleanup_cover_image(cover_image)
 
     _emit(
         progress_callback,
