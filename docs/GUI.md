@@ -66,9 +66,11 @@ CLI commands, and the GUI sees the same state on next refresh.
 
 ## Build and start
 
-Build the production bundle once (writes `web/dist/`, ignored by Git):
+Build the production bundle once (writes `web/dist/`, ignored by Git).
+Node.js 20+ is required for this step:
 
 ```bash
+cd web && npm install && cd ..
 uv run build
 ```
 

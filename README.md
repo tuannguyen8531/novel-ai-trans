@@ -1,6 +1,7 @@
 # novel-ai-trans
 
 [![Python 3.14+](https://img.shields.io/badge/python-3.14%2B-blue.svg)](https://www.python.org/)
+[![Node.js 20+](https://img.shields.io/badge/node-20%2B-green.svg)](https://nodejs.org/)
 [![uv](https://img.shields.io/badge/package%20manager-uv-2b2b2b.svg)](https://docs.astral.sh/uv/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
@@ -47,6 +48,7 @@ Website / EPUB
 ## Requirements
 
 - Python 3.14+
+- Node.js 20+ (only for building the web frontend)
 - [uv](https://docs.astral.sh/uv/)
 - One supported LLM provider:
   - local [Ollama](https://ollama.com/) server, or
@@ -62,6 +64,7 @@ cd novel-ai-trans
 
 uv sync
 cp .env.example .env
+cd web && npm install && cd ..
 ```
 
 Edit `.env` for your provider:
