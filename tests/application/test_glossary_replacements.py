@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 from src.application.glossary.replacements import apply_pending_replacements
 from src.config import Config, active_config_scope
-from src.services.glossary import save_glossary, update_glossary_term
+from src.services.glossary.repository import save_glossary, update_glossary_term
 
 
 def test_apply_pending_replacements_uses_explicit_target_scope(tmp_path: Path) -> None:

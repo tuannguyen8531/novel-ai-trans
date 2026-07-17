@@ -17,7 +17,7 @@ from src.utils.progress import ProgressTracker
 def _patch_cli_paths():
     """Each test patches the application config default rather than
     the legacy module-level ``config`` global."""
-    with patch("src.services.glossary.config") as mock_glossary_config:
+    with patch("src.services.glossary.repository.config") as mock_glossary_config:
         mock_glossary_config.translated_dir = ""
         mock_glossary_config.target_language = "vi"
         yield
@@ -104,13 +104,13 @@ class TestGlossaryCli:
     def test_glossary_add_and_list(self, capsys):
         with (
             patch("sys.argv", ["translate", "glossary", "add", "my-novel", "李白", "Lý Bạch"]),
-            patch("src.services.glossary.GLOSSARY_DIR", self.base / "glossary"),
+            patch("src.services.glossary.repository.GLOSSARY_DIR", self.base / "glossary"),
         ):
             main()
 
         with (
             patch("sys.argv", ["translate", "glossary", "list", "my-novel"]),
-            patch("src.services.glossary.GLOSSARY_DIR", self.base / "glossary"),
+            patch("src.services.glossary.repository.GLOSSARY_DIR", self.base / "glossary"),
         ):
             main()
 
@@ -157,7 +157,7 @@ class TestGlossaryCli:
                     "supporting",
                 ],
             ),
-            patch("src.services.glossary.GLOSSARY_DIR", glossary_dir),
+            patch("src.services.glossary.repository.GLOSSARY_DIR", glossary_dir),
         ):
             main()
 
@@ -176,19 +176,19 @@ class TestGlossaryCli:
                     "1",
                 ],
             ),
-            patch("src.services.glossary.GLOSSARY_DIR", glossary_dir),
+            patch("src.services.glossary.repository.GLOSSARY_DIR", glossary_dir),
         ):
             main()
 
         with (
             patch("sys.argv", ["translate", "glossary", "validate", "my-novel"]),
-            patch("src.services.glossary.GLOSSARY_DIR", glossary_dir),
+            patch("src.services.glossary.repository.GLOSSARY_DIR", glossary_dir),
         ):
             main()
 
         with (
             patch("sys.argv", ["translate", "glossary", "audit", "my-novel"]),
-            patch("src.services.glossary.GLOSSARY_DIR", glossary_dir),
+            patch("src.services.glossary.repository.GLOSSARY_DIR", glossary_dir),
             _patch_config(translated_dir=str(self.base), target_language="vi"),
             pytest.raises(SystemExit),
         ):
@@ -215,17 +215,17 @@ class TestGlossaryCli:
         output_path = novel_root / "output" / "chapter_001.txt"
         output_path.write_text('Ma thuật cũ. "ma thuật" mới.', encoding="utf-8")
 
-        config_patcher = patch("src.services.glossary.config")
+        config_patcher = patch("src.services.glossary.repository.config")
         mock_config = config_patcher.start()
         mock_config.translated_dir = str(translated_root)
         mock_config.target_language = "vi"
 
         try:
             with (
-                patch("src.services.glossary.GLOSSARY_DIR", glossary_dir),
+                patch("src.services.glossary.repository.GLOSSARY_DIR", glossary_dir),
                 _patch_config(translated_dir=str(translated_root), target_language="vi"),
             ):
-                from src.services.glossary import (
+                from src.services.glossary.repository import (
                     PENDING_REPLACEMENTS_KEY,
                     load_glossary_data,
                     save_glossary,

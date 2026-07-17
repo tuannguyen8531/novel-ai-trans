@@ -7,7 +7,7 @@ import pytest
 
 from src.application.crawl.configs import list_configs, load_config, load_draft, save_config
 from src.application.errors import ApplicationValidationError, PersistenceError
-from src.services.drafts import DraftRepository
+from src.services.generation.drafts import DraftRepository
 
 
 def _config(name: str = "demo") -> dict[str, object]:

@@ -20,6 +20,13 @@ LEGACY_MODULES = {
     "src/api/jobs.py",
     "src/services/packaging.py",
     "src/services/importer.py",
+    "src/services/backups.py",
+    "src/services/checkpoints.py",
+    "src/services/drafts.py",
+    "src/services/glossary.py",
+    "src/services/memory.py",
+    "src/services/reports.py",
+    "src/services/translations.py",
 }
 RAW_PERSISTENCE_METHODS = {
     "mkdir",

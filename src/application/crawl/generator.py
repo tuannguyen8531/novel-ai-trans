@@ -20,10 +20,10 @@ from src.application.progress import ProgressEvent
 from src.domain.language import detect_language_heuristic
 from src.paths import CONFIG_DIR, RUNTIME_OUTPUT_ROOT
 from src.services import documents
-from src.services.drafts import DraftRepository
 from src.services.generation import prompts
 from src.services.generation.analysis import ConfigAnalyzer, clean_novel_html, normalize_novel_info
 from src.services.generation.cache import HtmlCache
+from src.services.generation.drafts import DraftRepository
 from src.services.generation.fetching import PageAcquirer, is_error_page, open_acquirer
 from src.services.generation.repository import ConfigRepository
 from src.services.generation.samples import load_known_config, load_sample, prepare_sample

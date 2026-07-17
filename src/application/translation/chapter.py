@@ -8,8 +8,8 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from src.models.state import TranslationState, initial_state
-from src.services.reports import ReportStore
-from src.services.translations import TranslationStorage
+from src.services.translation.reports import ReportStore
+from src.services.translation.storage import TranslationStorage
 from src.utils.text import normalize_paragraph_spacing
 
 

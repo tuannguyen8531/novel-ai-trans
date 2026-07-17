@@ -18,9 +18,9 @@ from src.domain.glossary import (
     uppercase_first_cased,
 )
 from src.domain.language import normalize_target_language
-from src.services import backups as backup_repository
 from src.services import chapters as chapter_service
-from src.services import glossary as glossary_service
+from src.services.glossary import backups as backup_repository
+from src.services.glossary import repository as glossary_service
 
 GLOSSARY_BACKUP_DIR = _paths.GLOSSARY_BACKUP_DIR
 _BACKUP_ID_PATTERN = re.compile(r"^\d{8}T\d{6}_\d{6}Z_[0-9a-f]{8}$")

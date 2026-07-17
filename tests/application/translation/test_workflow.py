@@ -11,9 +11,9 @@ from src.application.progress import ProgressEvent
 from src.application.translation.models import TranslationRequest
 from src.application.translation.workflow import TranslationWorkflow
 from src.config import Config
-from src.services.checkpoints import CheckpointStore
-from src.services.reports import ReportStore
-from src.services.translations import TranslationStorage
+from src.services.translation.checkpoints import CheckpointStore
+from src.services.translation.reports import ReportStore
+from src.services.translation.storage import TranslationStorage
 
 
 class SuccessGraph:

@@ -9,7 +9,7 @@ from typing import Any
 
 from src.application.crawl.generator import save_generated_metadata
 from src.application.errors import ApplicationValidationError, PersistenceError, ResourceNotFoundError
-from src.services.drafts import DraftRepository
+from src.services.generation.drafts import DraftRepository
 from src.services.generation.repository import ConfigRepository
 
 

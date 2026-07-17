@@ -1,6 +1,6 @@
 """Cross-chapter summary persistence backed by the novel glossary document."""
 
-from src.services.glossary import load_glossary_data, update_glossary_data
+from src.services.glossary.repository import load_glossary_data, update_glossary_data
 
 
 def _format_recent_summaries(summaries: dict, current_chapter: int, max_count: int = 3) -> str:

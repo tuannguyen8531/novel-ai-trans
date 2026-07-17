@@ -3,8 +3,8 @@
 import json
 
 from src.application.translation.chapter import translate_chapter
-from src.services.reports import ReportStore
-from src.services.translations import TranslationStorage
+from src.services.translation.reports import ReportStore
+from src.services.translation.storage import TranslationStorage
 
 
 class FakeGraph:

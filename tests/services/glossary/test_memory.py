@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from src.config import Config, active_config_scope
-from src.services.memory import (
+from src.services.glossary.memory import (
     load_chapter_summary,
     load_recent_chapter_summaries,
     save_chapter_summary,

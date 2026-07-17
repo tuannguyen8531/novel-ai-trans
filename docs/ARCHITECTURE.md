@@ -32,9 +32,12 @@ workflows.
 
 Raw persistence is implemented by focused repositories and services such as
 `services/documents.py`, `services/catalog.py`, `services/artifacts.py`,
-`services/rules.py`, `services/drafts.py`, and the feature packages under
-`services/`. Application modules resolve use-case inputs and coordinate those
-collaborators.
+`services/rules.py`, and the capability packages under `services/`.
+Translation storage, checkpoints, and reports live under
+`services/translation/`; glossary persistence, memory, and backups live under
+`services/glossary/`; generated config drafts live with the other config
+generation collaborators under `services/generation/`. Application modules
+resolve use-case inputs and coordinate those collaborators.
 
 ## Frontend dependency direction
 

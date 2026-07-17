@@ -1,7 +1,7 @@
 """Tests for translation checkpoint persistence."""
 
 from src import paths
-from src.services.checkpoints import CheckpointStore
+from src.services.translation.checkpoints import CheckpointStore
 
 
 def test_save_and_load_normalizes_chapter_lists(tmp_path) -> None:

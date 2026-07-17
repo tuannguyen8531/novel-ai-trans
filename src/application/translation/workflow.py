@@ -22,11 +22,11 @@ from src.application.translation.validation import apply_request_overrides, vali
 from src.config import Config
 from src.domain.chunking import estimate_token_count
 from src.graph.builder import build_graph
-from src.services.checkpoints import CheckpointStore
 from src.services.logger import log_error
 from src.services.metadata import load_source_language
-from src.services.reports import ReportStore
-from src.services.translations import TranslationStorage
+from src.services.translation.checkpoints import CheckpointStore
+from src.services.translation.reports import ReportStore
+from src.services.translation.storage import TranslationStorage
 
 
 class GraphFactory(Protocol):

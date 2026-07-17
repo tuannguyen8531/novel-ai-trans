@@ -2,7 +2,7 @@
 
 import json
 
-from src.services.reports import ReportStore
+from src.services.translation.reports import ReportStore
 
 
 def test_report_store_creates_parent_and_preserves_unicode(tmp_path) -> None:
