@@ -22,7 +22,7 @@ _logger = logging.getLogger(__name__)
 
 def application_error_to_http(error: ApplicationError) -> HTTPException:
     code = error.code
-    message = error.public_message or error.message or code
+    message = error.message if error.message != error.public_message else error.public_message
     details: dict[str, Any] = error.details or {}
     if isinstance(error, ApplicationValidationError):
         status_code = 422
