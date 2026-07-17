@@ -296,7 +296,15 @@ def _sanitize_entity_keys(characters: dict) -> dict:
     for old_key, info in entities.items():
         new_key = _strip_entity_key_annotation(old_key)
         if new_key != old_key:
-            _logger.warning("Cleaned entity key: %r -> %r", old_key, new_key)
+            _logger.warning(
+                "Cleaned entity key: %r -> %r",
+                old_key,
+                new_key,
+                extra={
+                    "presentation_event": "cli_message",
+                    "presentation_message": f"  ⚠ Cleaned entity key: '{old_key}' → '{new_key}'",
+                },
+            )
         key_map[old_key] = new_key
         # If two old keys map to the same new key, merge (keep last)
         if new_key in cleaned_entities:
@@ -541,7 +549,14 @@ def learner_node(state: TranslationState) -> dict:
         new_characters = learn_data.get("characters", {})
     except Exception as e:
         log_error("Failed to extract terms and characters", e, chapter=chapter_number)
-        _logger.warning("Failed to extract terms and characters: %s", e)
+        _logger.warning(
+            "Failed to extract terms and characters: %s",
+            e,
+            extra={
+                "presentation_event": "cli_message",
+                "presentation_message": f"\n  [Warning] Failed to extract terms and characters: {e}",
+            },
+        )
 
     # Sanitize entity keys: strip parenthetical annotations from keys/edges/rules
     new_characters = _sanitize_entity_keys(new_characters)
@@ -553,7 +568,14 @@ def learner_node(state: TranslationState) -> dict:
         if not _is_kinship_or_role(name):
             filtered_entities[name] = info
         else:
-            _logger.warning("Skipped kinship/role term as entity: %s", name)
+            _logger.warning(
+                "Skipped kinship/role term as entity: %s",
+                name,
+                extra={
+                    "presentation_event": "cli_message",
+                    "presentation_message": f"  ⚠ Skipped kinship/role term as entity: {name}",
+                },
+            )
     new_characters["entities"] = filtered_entities
 
     # Normalize and validate edge relationship types
@@ -565,7 +587,15 @@ def learner_node(state: TranslationState) -> dict:
             continue
         from_char, to_char, rel_type = edge[0], edge[1], edge[2]
         if _is_kinship_or_role(from_char) or _is_kinship_or_role(to_char):
-            _logger.warning("Skipped edge with kinship term: %s -> %s", from_char, to_char)
+            _logger.warning(
+                "Skipped edge with kinship term: %s -> %s",
+                from_char,
+                to_char,
+                extra={
+                    "presentation_event": "cli_message",
+                    "presentation_message": f"  ⚠ Skipped edge with kinship term: {from_char} -> {to_char}",
+                },
+            )
             continue
         normalized_rel = _normalize_relationship(rel_type)
         cleaned_edges.append([from_char, to_char, normalized_rel] + edge[3:])
@@ -593,6 +623,13 @@ def learner_node(state: TranslationState) -> dict:
             len(new_entities),
             len(new_edges),
             len(new_address_rules),
+            extra={
+                "presentation_event": "cli_message",
+                "presentation_message": (
+                    f"  📝 Updated {len(new_entities)} character(s), {len(new_edges)} relationship(s), "
+                    f"{len(new_address_rules)} address rule(s)"
+                ),
+            },
         )
 
     save_source_language(novel_name, state["source_language"])
@@ -629,7 +666,14 @@ def learner_node(state: TranslationState) -> dict:
             )
         except Exception as e:
             log_error("Failed to generate summary", e, chapter=chapter_number)
-            _logger.warning("Failed to generate summary: %s", e)
+            _logger.warning(
+                "Failed to generate summary: %s",
+                e,
+                extra={
+                    "presentation_event": "cli_message",
+                    "presentation_message": f"\n  [Warning] Failed to generate summary: {e}",
+                },
+            )
             summary_response = ""
 
     return {

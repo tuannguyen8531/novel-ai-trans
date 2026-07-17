@@ -46,6 +46,10 @@ def list_configs(root: Path) -> list[ConfigRecord]:
 
 def load_config(root: Path, name: str) -> dict[str, Any]:
     try:
+        ConfigRepository.validate_name(name)
+    except ValueError as error:
+        raise ApplicationValidationError(f"Invalid config name: {name!r}") from error
+    try:
         return ConfigRepository(root).load(name)
     except FileNotFoundError as error:
         raise ResourceNotFoundError(str(error)) from error
@@ -56,7 +60,10 @@ def load_config(root: Path, name: str) -> dict[str, Any]:
 def save_config(root: Path, drafts_root: Path, name: str, config: dict[str, Any], draft_id: str | None) -> None:
     drafts = DraftRepository(drafts_root)
     try:
-        ConfigRepository.validate_name(name)
+        try:
+            ConfigRepository.validate_name(name)
+        except ValueError as error:
+            raise ApplicationValidationError(f"Invalid config name: {name!r}") from error
         draft = drafts.load(draft_id) if draft_id else None
         if draft is not None and draft.get("name") != name:
             raise ApplicationValidationError("Draft name does not match the target config name.")
@@ -89,6 +96,10 @@ def list_drafts(root: Path) -> list[DraftRecord]:
 
 
 def load_draft(root: Path, draft_id: str) -> DraftRecord:
+    try:
+        DraftRepository.validate_id(draft_id)
+    except ValueError as error:
+        raise ApplicationValidationError(str(error)) from error
     try:
         return _draft_record(DraftRepository(root).load(draft_id))
     except FileNotFoundError as error:

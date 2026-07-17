@@ -38,7 +38,14 @@ def context_node(state: TranslationState) -> dict:
     if not language:
         language = load_source_language(novel_name)
         if language:
-            _logger.info("Loaded source language from metadata: %s", language)
+            _logger.info(
+                "Loaded source language from metadata: %s",
+                language,
+                extra={
+                    "presentation_event": "cli_message",
+                    "presentation_message": f"  🌐 Loaded source language from metadata: {language}",
+                },
+            )
 
     # 1. Load translation rules (common + language-specific)
     rules_parts = []
@@ -83,6 +90,13 @@ def context_node(state: TranslationState) -> dict:
             len(entities),
             len(edges),
             len(address_rules),
+            extra={
+                "presentation_event": "cli_message",
+                "presentation_message": (
+                    f"  👥 Loaded {len(entities)} active character(s) with "
+                    f"{len(edges)} relationship(s), {len(address_rules)} address rule(s)"
+                ),
+            },
         )
 
     return {

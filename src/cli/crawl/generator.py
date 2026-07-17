@@ -11,6 +11,7 @@ from src.application.crawl.generator import generate_config, save_generated_conf
 from src.application.errors import ApplicationError
 from src.application.progress import ProgressEvent
 from src.cli.crawl import common
+from src.cli.logging import llm_console
 from src.utils.logging import get_logger
 
 
@@ -83,16 +84,17 @@ def main(argv: list[str] | None = None) -> int:
 def run(args: argparse.Namespace) -> int:
     """Generate a novel crawl config using AI."""
     try:
-        result = generate_config(
-            url=args.url,
-            name=args.name,
-            provider=args.provider,
-            use_browser=args.browser,
-            headed=args.headed,
-            no_cache=args.no_cache,
-            ignore_sample=args.ignore_sample,
-            progress_callback=print_progress,
-        )
+        with llm_console():
+            result = generate_config(
+                url=args.url,
+                name=args.name,
+                provider=args.provider,
+                use_browser=args.browser,
+                headed=args.headed,
+                no_cache=args.no_cache,
+                ignore_sample=args.ignore_sample,
+                progress_callback=print_progress,
+            )
 
         print(f"\n{'═' * 60}")
         print("Generated config:")

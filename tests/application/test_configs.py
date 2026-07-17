@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from src.application.crawl.configs import list_configs, load_config, save_config
-from src.application.errors import ApplicationValidationError
+from src.application.crawl.configs import list_configs, load_config, load_draft, save_config
+from src.application.errors import ApplicationValidationError, PersistenceError
 from src.services.drafts import DraftRepository
 
 
@@ -46,3 +46,24 @@ def test_save_config_consumes_draft_and_persists_metadata(tmp_path: Path) -> Non
 def test_save_config_rejects_invalid_draft_id(tmp_path: Path) -> None:
     with pytest.raises(ApplicationValidationError):
         save_config(tmp_path / "translated", tmp_path / "drafts", "demo", _config(), "../../escape")
+
+
+def test_load_config_and_draft_keep_validation_and_persistence_errors(tmp_path: Path) -> None:
+    with pytest.raises(ApplicationValidationError, match="Invalid config name"):
+        load_config(tmp_path / "translated", "../escape")
+    with pytest.raises(ApplicationValidationError, match="Invalid draft id"):
+        load_draft(tmp_path / "drafts", "../escape")
+
+    config_path = tmp_path / "translated" / "demo" / "config.json"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text("not-json", encoding="utf-8")
+    with pytest.raises(PersistenceError) as config_error:
+        load_config(tmp_path / "translated", "demo")
+    assert config_error.value.code == "persistence_error"
+
+    draft_path = tmp_path / "drafts" / "broken.json"
+    draft_path.parent.mkdir(parents=True)
+    draft_path.write_text("not-json", encoding="utf-8")
+    with pytest.raises(PersistenceError) as draft_error:
+        load_draft(tmp_path / "drafts", "broken")
+    assert draft_error.value.code == "persistence_error"

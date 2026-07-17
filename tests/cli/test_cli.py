@@ -56,6 +56,21 @@ class TestDryRun:
         assert "1 would be translated" in output
 
 
+def test_missing_input_directory_uses_no_chapters_error(capsys, tmp_path: Path):
+    with (
+        _patch_config(translated_dir=str(tmp_path), target_language="vi"),
+        patch("src.cli.translate.notify_translation_failure") as notify_failure,
+        pytest.raises(SystemExit) as exit_info,
+    ):
+        main(["missing-novel"])
+
+    assert exit_info.value.code == 1
+    output = capsys.readouterr().out
+    assert f"No chapter files found in {tmp_path / 'missing-novel' / 'input'}" in output
+    assert "Input directory not found" not in output
+    notify_failure.assert_called_once()
+
+
 class TestCliProgress:
     def test_cli_progress_uses_run_total_not_input_total(self):
         tracker = ProgressTracker(10, "novel")

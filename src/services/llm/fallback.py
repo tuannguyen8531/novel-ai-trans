@@ -47,8 +47,24 @@ class FallbackProvider(BaseProvider):
             )
 
             if is_fallback_worthy:
-                _job_logger.info("%s failed: %s", self._primary.provider_name, error_msg[:100])
-                _job_logger.info("Falling back to %s...", self._fallback.provider_name)
+                _job_logger.info(
+                    "%s failed: %s",
+                    self._primary.provider_name,
+                    error_msg[:100],
+                    extra={
+                        "presentation_event": "llm_fallback_failed",
+                        "provider": self._primary.provider_name,
+                        "error_message": error_msg[:100],
+                    },
+                )
+                _job_logger.info(
+                    "Falling back to %s...",
+                    self._fallback.provider_name,
+                    extra={
+                        "presentation_event": "llm_fallback_started",
+                        "provider": self._fallback.provider_name,
+                    },
+                )
                 log_error(
                     context="LLM Fallback Triggered",
                     error=e,

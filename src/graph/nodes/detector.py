@@ -51,5 +51,12 @@ def detector_node(state: TranslationState) -> dict:
 
     save_source_language(state["novel_name"], detected)
 
-    _logger.info("Language: %s", detected)
+    _logger.info(
+        "Language: %s",
+        detected,
+        extra={
+            "presentation_event": "cli_message",
+            "presentation_message": f"  📝 Language: {detected}",
+        },
+    )
     return {"source_language": detected}

@@ -28,6 +28,13 @@ def test_catalog_repository_owns_directories_progress_and_glossary(tmp_path: Pat
     progress_path.write_text(json.dumps({"completed": [1], "failed": [2]}), encoding="utf-8")
     assert catalog.load_progress(progress_path) == {"completed": [1], "failed": [2]}
 
+    progress_path.write_text(json.dumps({"completed": ["3"], "failed": []}), encoding="utf-8")
+    assert catalog.load_progress(progress_path) == {"completed": [3], "failed": []}
+
+    progress_path.write_text(json.dumps({"completed": ["invalid"], "failed": []}), encoding="utf-8")
+    with pytest.raises(ValueError):
+        catalog.load_progress(progress_path)
+
     glossary_path = novel_root / "glossary.json"
     glossary_path.write_text(
         json.dumps({"terms": {"a": "b"}, "entities": {"c": {}}, "edges": [["c", "d", "friend"]]}),

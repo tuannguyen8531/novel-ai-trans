@@ -16,7 +16,7 @@ from src.application.translation.inspection import scan_input, source_language
 from src.application.translation.models import TranslationRequest
 from src.application.translation.workflow import run_translation
 from src.cli import glossary as glossary_cli
-from src.cli.logging import enable_verbose
+from src.cli.logging import enable_verbose, llm_console
 from src.cli.notifications import notify_translation_failure, notify_translation_result
 from src.utils.display import DIM, GREEN, RED, RESET, YELLOW, check_provider
 from src.utils.progress import ProgressTracker
@@ -220,11 +220,12 @@ def main(argv: list[str] | None = None) -> None:
 
     _progress_tracker = ProgressTracker(total, novel)
     try:
-        result = run_translation(
-            request,
-            progress_callback=_print_progress_callback,
-            cancel_event=_cancel_event,
-        )
+        with llm_console():
+            result = run_translation(
+                request,
+                progress_callback=_print_progress_callback,
+                cancel_event=_cancel_event,
+            )
     except KeyboardInterrupt:
         if _shutdown_requested:
             print(f"\n{YELLOW}⚠ Interrupted. Progress saved.{RESET}")

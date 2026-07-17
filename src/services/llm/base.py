@@ -86,10 +86,27 @@ class BaseProvider(ABC):
         for attempt in range(max_retries + 1):
             try:
                 message = f"Calling {self.provider_name} ({call_type})..."
-                _job_logger.info(message)
+                _job_logger.info(
+                    message,
+                    extra={
+                        "presentation_event": "llm_call_started",
+                        "provider": self.provider_name,
+                        "call_type": call_type,
+                    },
+                )
                 started = time.monotonic()
                 result = self._do_generate(system_prompt, user_prompt, call_type)
-                _job_logger.info("Done %s (%s) in %.1fs", self.provider_name, call_type, time.monotonic() - started)
+                _job_logger.info(
+                    "Done %s (%s) in %.1fs",
+                    self.provider_name,
+                    call_type,
+                    time.monotonic() - started,
+                    extra={
+                        "presentation_event": "llm_call_completed",
+                        "provider": self.provider_name,
+                        "call_type": call_type,
+                    },
+                )
                 return result
             except (RuntimeError, httpx.HTTPError) as e:
                 error_msg = self._format_generation_error(e)
@@ -111,6 +128,13 @@ class BaseProvider(ABC):
                         delay,
                         attempt + 1,
                         max_retries,
+                        extra={
+                            "presentation_event": "llm_retry",
+                            "provider": self.provider_name,
+                            "delay": delay,
+                            "attempt": attempt + 1,
+                            "max_retries": max_retries,
+                        },
                     )
                     time.sleep(delay)
                     continue
