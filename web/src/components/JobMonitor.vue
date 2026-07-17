@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
-import { useJobsStore } from '@/stores/jobs'
+import { useJobsStore } from '@/composables/jobs'
 import type { JobModel } from '@/api/types'
 
 const props = withDefaults(defineProps<{ job?: JobModel; jobId?: string; live?: boolean }>(), {

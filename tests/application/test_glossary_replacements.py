@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 from src.application.glossary.replacements import apply_pending_replacements
 from src.config import Config, active_config_scope
-from src.services.glossary import save_glossary, update_glossary_term
+from src.services.glossary.repository import save_glossary, update_glossary_term
 
 
 def test_apply_pending_replacements_uses_explicit_target_scope(tmp_path: Path) -> None:
@@ -24,7 +24,7 @@ def test_apply_pending_replacements_uses_explicit_target_scope(tmp_path: Path) -
     vietnamese_config = Config(translated_dir=str(tmp_path / "translated"), target_language="vi")
     with (
         active_config_scope(vietnamese_config),
-        patch("src.services.glossary.LOCK_DIR", tmp_path / "locks"),
+        patch("src.application.locks.LOCK_DIR", tmp_path / "locks"),
         patch("src.application.glossary.replacements.GLOSSARY_BACKUP_DIR", tmp_path / "backups"),
     ):
         result = apply_pending_replacements("demo", target_language="en", write=True)

@@ -1,87 +1,12 @@
 <script setup lang="ts">
-import { onMounted, ref, computed, watch } from 'vue'
-import { useRoute } from 'vue-router'
-import { api } from '@/api/client'
-import { useNovelsStore } from '@/stores/novels'
-import type { NovelSummary } from '@/api/types'
 import JobMonitor from '@/components/JobMonitor.vue'
+import { useTranslation } from '@/composables/translation'
 
-const novels = useNovelsStore()
-const route = useRoute()
-
-const novel = ref<string>('')
-const target = ref<string>('vi')
-const source = ref<string>('')
-const provider = ref<string>('')
-const start = ref<number>(0)
-const end = ref<number>(0)
-const limit = ref<number>(0)
-const force = ref<boolean>(false)
-const resume = ref<boolean>(false)
-const failedOnly = ref<boolean>(false)
-const review = ref<boolean>(false)
-const summary = ref<boolean>(false)
-const translateMetadata = ref<boolean>(true)
-const forceMetadata = ref<boolean>(false)
-const jobId = ref<string | null>(null)
-const error = ref<string | null>(null)
-
-function syncSourceLanguage(novelName: string) {
-  const language = novels.novels.find((item) => item.name === novelName)?.source_language ?? ''
-  const aliases: Record<string, string> = {
-    zh: 'chinese',
-    ja: 'japanese',
-    ko: 'korean'
-  }
-  source.value = aliases[language] ?? language
-}
-
-onMounted(async () => {
-  if (typeof route.query.novel === 'string') {
-    novel.value = route.query.novel
-  }
-  await novels.refresh()
-  syncSourceLanguage(novel.value)
-})
-
-watch(novel, syncSourceLanguage)
-
-const novelOptions = computed(() => novels.novels)
-
-function remainingChapters(item: NovelSummary): number {
-  const progress = item.targets.find((entry) => entry.target === target.value)
-  return Math.max(0, item.total_input_chapters - (progress?.completed ?? 0))
-}
-
-async function startTranslation() {
-  error.value = null
-  if (!novel.value) {
-    error.value = 'Choose a novel.'
-    return
-  }
-  const payload: Record<string, unknown> = {
-    novel: novel.value,
-    target_language: target.value,
-    start_chapter: start.value,
-    end_chapter: end.value,
-    limit: limit.value,
-    force: force.value,
-    resume: resume.value,
-    failed_only: failedOnly.value,
-    enable_review: review.value,
-    enable_summary: summary.value,
-    translate_metadata: translateMetadata.value,
-    force_metadata: forceMetadata.value
-  }
-  if (source.value) payload.source_language = source.value
-  if (provider.value) payload.provider = provider.value
-  try {
-    const result = await api.startTranslate(payload)
-    jobId.value = result.job_id
-  } catch (err) {
-    error.value = (err as Error).message
-  }
-}
+const {
+  novel, target, source, provider, start, end, limit, force, resume, failedOnly, review,
+  summary, translateMetadata, forceMetadata, jobId, error, novelOptions, remainingChapters,
+  startTranslation
+} = useTranslation()
 </script>
 
 <template>

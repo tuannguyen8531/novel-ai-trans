@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 
 from src.application.errors import ResourceConflictError, ResourceNotFoundError
-from src.services import glossary as glossary_service
+from src.services.glossary import repository as glossary_service
 
 
 def _empty_glossary() -> dict:

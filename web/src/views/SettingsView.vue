@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { useSettingsStore } from '@/stores/settings'
-import { api } from '@/api/client'
+import { useSettingsStore } from '@/composables/settings'
 import type { OllamaAccount, ProviderInfo } from '@/api/types'
 import ProviderModelField from '@/components/ProviderModelField.vue'
 
@@ -51,8 +50,7 @@ onMounted(async () => {
     providerForm.gemini_model = settings.settings.gemini_model
     providerForm.openrouter_model = settings.settings.openrouter_model
   }
-  const list = await api.listProviders()
-  providers.value = list.providers
+  providers.value = await settings.listProviders()
   await refreshOllamaAccount()
 })
 
@@ -145,7 +143,7 @@ function getOllamaAccountText(): string {
 async function refreshOllamaAccount() {
   ollamaAccountLoading.value = true
   try {
-    ollamaAccount.value = await api.getOllamaAccount()
+    ollamaAccount.value = await settings.ollamaAccount()
   } catch (err) {
     ollamaAccount.value = {
       signed_in: false,
@@ -161,7 +159,7 @@ async function runProviderCheck(provider: string) {
   clearProviderCheck(provider)
   checkingProviders.value = { ...checkingProviders.value, [provider]: true }
   try {
-    const res = await api.checkProvider(provider, {
+    const res = await settings.checkProvider(provider, {
       ollama_base_url: providerForm.ollama_base_url,
       gemini_api_key: geminiKeyInput.value.trim() || undefined,
       openrouter_api_key: openrouterKeyInput.value.trim() || undefined
@@ -209,7 +207,7 @@ async function saveProviderSettings() {
     if (providerPersistResult.value) {
       geminiKeyInput.value = ''
       openrouterKeyInput.value = ''
-      providers.value = (await api.listProviders()).providers
+      providers.value = await settings.listProviders()
       checkResults.value = {}
       providerRefreshKey.value += 1
     }

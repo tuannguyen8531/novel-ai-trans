@@ -10,7 +10,10 @@ from pathlib import Path
 
 from src.config import SiteConfig
 from src.models import ChapterLink, CrawlProgress, NovelMetadata
-from src.services.crawler import NovelCrawler
+from src.services.crawling.crawler import NovelCrawler
+from src.services.crawling.extraction import InvalidChapterContentError
+from src.services.crawling.fetching import PageAcquirer
+from src.services.crawling.storage import CrawlStorage
 from src.services.http import FetchError, FetchResponse
 
 
@@ -146,23 +149,21 @@ class SlowChapterClient:
         )
 
 
-class InvalidThenSuccessfulClient:
+class InvalidThenSuccessfulExtractor:
     def __init__(self, *, always_invalid: bool = False) -> None:
         self.always_invalid = always_invalid
         self.calls: list[str] = []
 
-    def fetch(self, url: str) -> FetchResponse:
-        self.calls.append(url)
+    def chapter(self, chapter_link: ChapterLink, html: str, source_url: str) -> tuple[str, str, str]:
+        del html
+        self.calls.append(source_url)
         if self.always_invalid or len(self.calls) == 1:
-            body = "<html><title>Please wait</title><body>Loading...</body></html>"
-        else:
-            body = "<h1>Chapter</h1><div class='content'>Recovered</div>"
-        return FetchResponse(url=url, body=body, content_type="text/html")
+            raise InvalidChapterContentError("No chapter content found with selector: .content")
+        return "Chapter", "Recovered", chapter_link.url
 
 
-class DelayedExistingCheckCrawler(NovelCrawler):
-    @staticmethod
-    def _is_existing_chapter(path: Path) -> bool:
+class DelayedExistingStorage(CrawlStorage):
+    def chapter_exists(self, path: Path) -> bool:
         if path.name == "chapter_001.txt":
             time.sleep(0.05)
         return False
@@ -215,15 +216,16 @@ class NovelCrawlerTest(unittest.TestCase):
             retry_attempts=3,
             retry_backoff_seconds=0,
         )
-        client = InvalidThenSuccessfulClient()
-        crawler = NovelCrawler(config, fetcher=client)
+        client = SuccessfulClient()
+        extractor = InvalidThenSuccessfulExtractor()
+        acquirer = PageAcquirer(config, client, extractor)
 
-        title, body, final_url = crawler._fetch_chapter(ChapterLink(title="Fallback", url="https://public.example/c1"))
+        title, body, final_url = acquirer.chapter(ChapterLink(title="Fallback", url="https://public.example/c1"))
 
         self.assertEqual(title, "Chapter")
         self.assertEqual(body, "Recovered")
         self.assertEqual(final_url, "https://public.example/c1")
-        self.assertEqual(client.calls, [final_url, final_url])
+        self.assertEqual(extractor.calls, [final_url, final_url])
 
     def test_fetch_chapter_stops_after_content_retry_limit(self) -> None:
         config = replace(
@@ -231,17 +233,18 @@ class NovelCrawlerTest(unittest.TestCase):
             retry_attempts=2,
             retry_backoff_seconds=0,
         )
-        client = InvalidThenSuccessfulClient(always_invalid=True)
-        crawler = NovelCrawler(config, fetcher=client)
+        client = SuccessfulClient()
+        extractor = InvalidThenSuccessfulExtractor(always_invalid=True)
+        acquirer = PageAcquirer(config, client, extractor)
         chapter = ChapterLink(title="Fallback", url="https://public.example/c1")
 
         with self.assertRaisesRegex(
             FetchError,
             "No chapter content found with selector: .content",
         ):
-            crawler._fetch_chapter(chapter)
+            acquirer.chapter(chapter)
 
-        self.assertEqual(client.calls, [chapter.url, chapter.url])
+        self.assertEqual(extractor.calls, [chapter.url, chapter.url])
 
     def test_discover_filters_notices_and_prefers_explicit_chapter_titles(self) -> None:
         pages = {
@@ -502,8 +505,7 @@ class NovelCrawlerTest(unittest.TestCase):
             crawler.discover_chapters()
 
     def test_crawl_writes_metadata_and_shared_chapter_text(self) -> None:
-        crawler = NovelCrawler(demo_config())
-        crawler.client = FakeClient(demo_pages())  # type: ignore[arg-type]
+        crawler = NovelCrawler(demo_config(), fetcher=FakeClient(demo_pages()))
 
         with tempfile.TemporaryDirectory() as output:
             output_path = Path(output)
@@ -536,8 +538,7 @@ class NovelCrawlerTest(unittest.TestCase):
         self.assertNotIn("Buy now.", chapter_one)
 
     def test_crawl_preserves_user_managed_metadata_fields(self) -> None:
-        crawler = NovelCrawler(demo_config())
-        crawler.client = FakeClient(demo_pages())  # type: ignore[arg-type]
+        crawler = NovelCrawler(demo_config(), fetcher=FakeClient(demo_pages()))
 
         with tempfile.TemporaryDirectory() as output:
             output_path = Path(output)
@@ -585,8 +586,7 @@ class NovelCrawlerTest(unittest.TestCase):
             author_selector=None,
             source_url="https://public.example/book",
         )
-        crawler = NovelCrawler(config)
-        crawler.client = FakeClient(demo_pages())  # type: ignore[arg-type]
+        crawler = NovelCrawler(config, fetcher=FakeClient(demo_pages()))
 
         with tempfile.TemporaryDirectory() as output:
             output_path = Path(output)
@@ -629,8 +629,7 @@ class NovelCrawlerTest(unittest.TestCase):
             <h1 class="title">那年花开1981最新章节</h1>
             <nav class="chapters"><a href="/c1">第1章 Start</a></nav>
         """
-        crawler = NovelCrawler(config)
-        crawler.client = FakeClient(pages)  # type: ignore[arg-type]
+        crawler = NovelCrawler(config, fetcher=FakeClient(pages))
 
         with tempfile.TemporaryDirectory() as output:
             output_path = Path(output)
@@ -642,8 +641,7 @@ class NovelCrawlerTest(unittest.TestCase):
 
     def test_crawl_skips_existing_chapter_files_by_default(self) -> None:
         fake_client = FakeClient(demo_pages())
-        crawler = NovelCrawler(demo_config())
-        crawler.client = fake_client  # type: ignore[arg-type]
+        crawler = NovelCrawler(demo_config(), fetcher=fake_client)
 
         with tempfile.TemporaryDirectory() as output:
             output_path = Path(output)
@@ -671,8 +669,7 @@ class NovelCrawlerTest(unittest.TestCase):
 
     def test_crawl_overwrites_existing_chapter_files_when_requested(self) -> None:
         fake_client = FakeClient(demo_pages())
-        crawler = NovelCrawler(demo_config())
-        crawler.client = fake_client  # type: ignore[arg-type]
+        crawler = NovelCrawler(demo_config(), fetcher=fake_client)
 
         with tempfile.TemporaryDirectory() as output:
             output_path = Path(output)
@@ -693,8 +690,7 @@ class NovelCrawlerTest(unittest.TestCase):
         self.assertIn("https://public.example/c1", fake_client.fetched_urls)
 
     def test_crawl_reports_progress_and_updates_manifest_incrementally(self) -> None:
-        crawler = NovelCrawler(demo_config())
-        crawler.client = FakeClient(demo_pages())  # type: ignore[arg-type]
+        crawler = NovelCrawler(demo_config(), fetcher=FakeClient(demo_pages()))
         progress_events: list[CrawlProgress] = []
         manifest_snapshots: list[dict[str, object]] = []
 
@@ -748,8 +744,7 @@ class NovelCrawlerTest(unittest.TestCase):
               <a href="/c3">Chapter 3</a>
             </nav>
         """
-        crawler = NovelCrawler(demo_config())
-        crawler.client = fake_client  # type: ignore[arg-type]
+        crawler = NovelCrawler(demo_config(), fetcher=fake_client)
 
         with tempfile.TemporaryDirectory() as output:
             output_path = Path(output)
@@ -794,9 +789,8 @@ class NovelCrawlerTest(unittest.TestCase):
             self.assertIn(("fetched", 1, 1, 1), progress_snapshots)
 
     def test_parallel_max_chapters_recovers_from_failures(self) -> None:
-        crawler = NovelCrawler(demo_config())
         client = FlakyClient()
-        crawler.client = client
+        crawler = NovelCrawler(demo_config(), fetcher=client)
         crawler.discover_chapters = lambda: (
             NovelMetadata(title="Flaky", author=None, source_url="url", site_name="flaky"),
             [
@@ -827,9 +821,8 @@ class NovelCrawlerTest(unittest.TestCase):
         )
 
     def test_fail_fast_halts_workers_immediately(self) -> None:
-        crawler = NovelCrawler(demo_config())
         client = BlockingFlakyClient()
-        crawler.client = client
+        crawler = NovelCrawler(demo_config(), fetcher=client)
         crawler.discover_chapters = lambda: (
             NovelMetadata(title="FailFast", author=None, source_url="url", site_name="failfast"),
             [
@@ -850,7 +843,6 @@ class NovelCrawlerTest(unittest.TestCase):
         self.assertEqual(client.calls, ["https://public.example/c1"])
 
     def test_crawl_stops_after_five_consecutive_chapter_failures(self) -> None:
-        crawler = NovelCrawler(demo_config())
         client = ConsecutiveFailureClient(
             fail_urls={
                 "https://public.example/c1",
@@ -860,7 +852,7 @@ class NovelCrawlerTest(unittest.TestCase):
                 "https://public.example/c5",
             }
         )
-        crawler.client = client
+        crawler = NovelCrawler(demo_config(), fetcher=client)
 
         with tempfile.TemporaryDirectory() as output:
             with self.assertRaisesRegex(
@@ -890,9 +882,8 @@ class NovelCrawlerTest(unittest.TestCase):
         self.assertEqual(manifest["completed_chapters"], 5)
 
     def test_cancel_event_stops_scheduling_and_writes_cancelled_manifest(self) -> None:
-        crawler = NovelCrawler(demo_config())
         client = SlowChapterClient()
-        crawler.client = client  # type: ignore[arg-type]
+        crawler = NovelCrawler(demo_config(), fetcher=client)
         cancel_event = threading.Event()
 
         def cancel_after_chapter_starts() -> None:
@@ -920,7 +911,11 @@ class NovelCrawlerTest(unittest.TestCase):
 
     def test_parallel_max_chapters_preserves_chapter_order(self) -> None:
         client = SuccessfulClient()
-        crawler = DelayedExistingCheckCrawler(demo_config(), fetcher=client)
+        crawler = NovelCrawler(
+            demo_config(),
+            fetcher=client,
+            storage_factory=DelayedExistingStorage,
+        )
         crawler.discover_chapters = lambda: (
             NovelMetadata(title="Ordered", author=None, source_url="url", site_name="ordered"),
             [

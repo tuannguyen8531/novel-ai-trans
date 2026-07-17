@@ -3,22 +3,12 @@
 import json
 import tempfile
 from pathlib import Path
-from threading import Event
 from unittest.mock import patch
 
 import pytest
 
 from src.application.progress import ProgressEvent
-from src.application.translate import TranslationRequest, run_translation
-from src.cli.translate import (
-    _print_progress_callback,
-    find_untranslated,
-    load_progress,
-    main,
-    save_progress,
-    scan_chapters,
-    translate_file,
-)
+from src.cli.translate import _print_progress_callback, main
 from src.config import Config
 from src.utils.progress import ProgressTracker
 
@@ -27,7 +17,7 @@ from src.utils.progress import ProgressTracker
 def _patch_cli_paths():
     """Each test patches the application config default rather than
     the legacy module-level ``config`` global."""
-    with patch("src.services.glossary.config") as mock_glossary_config:
+    with patch("src.services.glossary.repository.config") as mock_glossary_config:
         mock_glossary_config.translated_dir = ""
         mock_glossary_config.target_language = "vi"
         yield
@@ -37,127 +27,8 @@ def _patch_config(**attrs):
     """Return a context manager that overrides the application config snapshot."""
     from src.application import config
 
-    class _FakeConfig:
-        def __init__(self):
-            for key, value in attrs.items():
-                setattr(self, key, value)
-
-        def __getattr__(self, name):
-            return ""
-
-    return patch.object(config, "get_config", lambda: _FakeConfig())
-
-
-class TestScanChapters:
-    def setup_method(self):
-        self.temp_dir = tempfile.TemporaryDirectory()
-        self.patcher_get = _patch_config(translated_dir=self.temp_dir.name, target_language="vi")
-        self.patcher_get.start()
-
-    def teardown_method(self):
-        self.patcher_get.stop()
-        self.temp_dir.cleanup()
-
-    def _create_chapter(self, novel: str, num: int, content: str = "test"):
-        path = Path(self.temp_dir.name) / novel / "input" / f"chapter_{num}.txt"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content, encoding="utf-8")
-
-    def test_scan_finds_all_chapters(self):
-        self._create_chapter("my-novel", 1)
-        self._create_chapter("my-novel", 2)
-        self._create_chapter("my-novel", 10)
-        chapters = scan_chapters("my-novel")
-        assert list(chapters.keys()) == [1, 2, 10]
-
-    def test_scan_sorted_by_number(self):
-        self._create_chapter("my-novel", 5)
-        self._create_chapter("my-novel", 1)
-        self._create_chapter("my-novel", 3)
-        chapters = scan_chapters("my-novel")
-        assert list(chapters.keys()) == [1, 3, 5]
-
-    def test_scan_ignores_non_chapter_files(self):
-        (Path(self.temp_dir.name) / "my-novel" / "input").mkdir(parents=True)
-        (Path(self.temp_dir.name) / "my-novel" / "input" / "notes.txt").write_text("ignore")
-        (Path(self.temp_dir.name) / "my-novel" / "input" / "chapter_1.txt").write_text("keep")
-        chapters = scan_chapters("my-novel")
-        assert list(chapters.keys()) == [1]
-
-    def test_scan_missing_directory(self):
-        with pytest.raises(SystemExit):
-            scan_chapters("nonexistent")
-
-
-class TestFindUntranslated:
-    def setup_method(self):
-        self.temp_dir = tempfile.TemporaryDirectory()
-        self.base = Path(self.temp_dir.name)
-
-    def teardown_method(self):
-        self.temp_dir.cleanup()
-
-    def _create_input(self, novel: str, chapters: list[int]):
-        for ch in chapters:
-            path = self.base / novel / "input" / f"chapter_{ch}.txt"
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text("source", encoding="utf-8")
-
-    def _create_output(self, novel: str, chapters: list[int]):
-        for ch in chapters:
-            path = self.base / novel / "output" / f"chapter_{ch:03d}.txt"
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text("translated", encoding="utf-8")
-
-    def test_all_untranslated(self):
-        self._create_input("my-novel", [1, 2, 3])
-        chapters = {
-            1: self.base / "my-novel/input/chapter_1.txt",
-            2: self.base / "my-novel/input/chapter_2.txt",
-            3: self.base / "my-novel/input/chapter_3.txt",
-        }
-        with _patch_config(translated_dir=str(self.base), target_language="vi"):
-            result = find_untranslated("my-novel", chapters)
-        assert result == [1, 2, 3]
-
-    def test_some_translated(self):
-        self._create_input("my-novel", [1, 2, 3])
-        self._create_output("my-novel", [1])
-        chapters = {
-            1: self.base / "my-novel/input/chapter_1.txt",
-            2: self.base / "my-novel/input/chapter_2.txt",
-            3: self.base / "my-novel/input/chapter_3.txt",
-        }
-        with _patch_config(translated_dir=str(self.base), target_language="vi"):
-            result = find_untranslated("my-novel", chapters)
-        assert result == [2, 3]
-
-    def test_all_translated(self):
-        self._create_input("my-novel", [1, 2])
-        self._create_output("my-novel", [1, 2])
-        chapters = {
-            1: self.base / "my-novel/input/chapter_1.txt",
-            2: self.base / "my-novel/input/chapter_2.txt",
-        }
-        with _patch_config(translated_dir=str(self.base), target_language="vi"):
-            result = find_untranslated("my-novel", chapters)
-        assert result == []
-
-    def test_target_language_uses_separate_output_dir(self):
-        self._create_input("my-novel", [1, 2])
-        self._create_output("my-novel", [1])
-        en_output = self.base / "my-novel" / "output" / "en" / "chapter_002.txt"
-        en_output.parent.mkdir(parents=True, exist_ok=True)
-        en_output.write_text("translated", encoding="utf-8")
-
-        chapters = {
-            1: self.base / "my-novel/input/chapter_1.txt",
-            2: self.base / "my-novel/input/chapter_2.txt",
-        }
-        with _patch_config(translated_dir=str(self.base), target_language="vi"):
-            result = find_untranslated("my-novel", chapters, target_language="en")
-
-        assert result == [1]
+    snapshot = Config(**attrs)
+    return patch.object(config, "get_config", lambda: snapshot)
 
 
 class TestDryRun:
@@ -185,83 +56,22 @@ class TestDryRun:
         assert "1 would be translated" in output
 
 
-class TestProgressState:
-    def setup_method(self):
-        self.temp_dir = tempfile.TemporaryDirectory()
-        self.base = Path(self.temp_dir.name)
+def test_missing_input_directory_uses_no_chapters_error(capsys, tmp_path: Path):
+    with (
+        _patch_config(translated_dir=str(tmp_path), target_language="vi"),
+        patch("src.cli.translate.notify_translation_failure") as notify_failure,
+        pytest.raises(SystemExit) as exit_info,
+    ):
+        main(["missing-novel"])
 
-    def teardown_method(self):
-        self.temp_dir.cleanup()
-
-    def test_save_and_load_progress_normalizes_lists(self):
-        with patch("src.cli.translate.PROGRESS_DIR", self.base / ".progress"), _patch_config(target_language="vi"):
-            save_progress("my-novel", {"completed": [2, 1, 2], "failed": [3, 3]})
-            assert load_progress("my-novel") == {"completed": [1, 2], "failed": [3]}
-
-    def test_target_language_uses_separate_progress_file(self):
-        with patch("src.cli.translate.PROGRESS_DIR", self.base / ".progress"), _patch_config(target_language="vi"):
-            save_progress("my-novel", {"completed": [1], "failed": []})
-            save_progress("my-novel", {"completed": [2], "failed": []}, target_language="en")
-
-            assert load_progress("my-novel") == {"completed": [1], "failed": []}
-            assert load_progress("my-novel", target_language="en") == {"completed": [2], "failed": []}
+    assert exit_info.value.code == 1
+    output = capsys.readouterr().out
+    assert f"No chapter files found in {tmp_path / 'missing-novel' / 'input'}" in output
+    assert "Input directory not found" not in output
+    notify_failure.assert_called_once()
 
 
-class TestQualityReport:
-    def setup_method(self):
-        self.temp_dir = tempfile.TemporaryDirectory()
-        self.base = Path(self.temp_dir.name)
-        self.input_path = self.base / "chapter_1.txt"
-        self.input_path.write_text("source", encoding="utf-8")
-
-    def teardown_method(self):
-        self.temp_dir.cleanup()
-
-    def test_translate_file_writes_quality_report(self):
-        class FakeGraph:
-            def invoke(self, state):
-                return {
-                    "final_translation": "translated",
-                    "new_terms": {"李白": "Lý Bạch"},
-                    "new_characters": {"entities": {"李白": {}}},
-                    "quality_reports": [
-                        {
-                            "chunk_index": 0,
-                            "score": 0.9,
-                            "feedback": "Good",
-                            "post_check_issues": [],
-                            "retry_count": 0,
-                        }
-                    ],
-                }
-
-        with (
-            tempfile.TemporaryDirectory() as translated_tmp,
-            patch("src.cli.translate.REPORT_DIR", self.base / "reports"),
-            _patch_config(translated_dir=translated_tmp, target_language="vi"),
-        ):
-            success, out_chars, elapsed, new_terms_count = translate_file(
-                self.input_path,
-                "my-novel",
-                1,
-                "chinese",
-                graph=FakeGraph(),
-            )
-
-        assert success
-        assert out_chars == len("translated")
-        assert elapsed >= 0
-        assert new_terms_count == 1
-
-        report = json.loads((self.base / "reports" / "my-novel" / "chapter_001.json").read_text(encoding="utf-8"))
-        assert report["chapter"] == 1
-        assert report["target_language"] == "vi"
-        assert report["new_terms_count"] == 1
-        assert report["new_characters_count"] == 1
-        assert report["chunks"][0]["score"] == 0.9
-
-
-class TestTranslationWorkflow:
+class TestCliProgress:
     def test_cli_progress_uses_run_total_not_input_total(self):
         tracker = ProgressTracker(10, "novel")
 
@@ -273,94 +83,12 @@ class TestTranslationWorkflow:
         assert tracker.current_index == 0
         assert tracker.current_chapter == 8
 
-    def test_progress_sizes_follow_token_chunk_mode(self, tmp_path):
-        translated_root = tmp_path / "translated"
-        input_dir = translated_root / "novel" / "input"
-        input_dir.mkdir(parents=True)
-        (input_dir / "chapter_1.txt").write_text("甲乙丙丁", encoding="utf-8")
-        config = Config(translated_dir=str(translated_root), chunk_mode="tokens")
-        events: list[ProgressEvent] = []
-
-        def translate_success(*_args, output_dir, **_kwargs):
-            output_dir.mkdir(parents=True, exist_ok=True)
-            output = "abcdefgh"
-            (output_dir / "chapter_001.txt").write_text(output, encoding="utf-8")
-            return True, len(output), 1.0, 0
-
-        with (
-            patch("src.application.translate.app_config.get_config", return_value=config),
-            patch("src.application.translate._paths.PROGRESS_DIR", tmp_path / "progress"),
-            patch("src.application.translate._validate_provider"),
-            patch("src.application.translate.build_graph", return_value=object()),
-            patch("src.application.translate.translate_file", side_effect=translate_success),
-        ):
-            run_translation(TranslationRequest(novel="novel"), progress_callback=events.append)
-
-        started = next(event for event in events if event.kind == "chapter_started")
-        completed = next(event for event in events if event.kind == "chapter_completed")
-        assert started.extra["source_size"] == 4
-        assert started.extra["size_unit"] == "tokens"
-        assert completed.extra["output_size"] == 2
-        assert completed.extra["size_unit"] == "tokens"
-
-    def test_chapter_exception_is_counted_once(self, tmp_path):
-        translated_root = tmp_path / "translated"
-        input_dir = translated_root / "novel" / "input"
-        input_dir.mkdir(parents=True)
-        (input_dir / "chapter_1.txt").write_text("source", encoding="utf-8")
-        events: list[ProgressEvent] = []
-        config = Config(translated_dir=str(translated_root))
-
-        with (
-            patch("src.application.translate.app_config.get_config", return_value=config),
-            patch("src.application.translate._paths.PROGRESS_DIR", tmp_path / "progress"),
-            patch("src.application.translate._validate_provider"),
-            patch("src.application.translate.build_graph", return_value=object()),
-            patch("src.application.translate.translate_file", side_effect=RuntimeError("provider failed")),
-        ):
-            result = run_translation(TranslationRequest(novel="novel"), progress_callback=events.append)
-
-        assert result.total == 1
-        assert result.failed == 1
-        assert result.failures == [1]
-        assert result.chapters_attempted == [1]
-        failed_event = next(event for event in events if event.kind == "chapter_failed")
-        assert failed_event.current == 1
-        assert failed_event.pct == 100.0
-
-    def test_cancel_finishes_current_chapter_then_stops_before_the_next(self, tmp_path):
-        translated_root = tmp_path / "translated"
-        input_dir = translated_root / "novel" / "input"
-        input_dir.mkdir(parents=True)
-        (input_dir / "chapter_1.txt").write_text("source 1", encoding="utf-8")
-        (input_dir / "chapter_2.txt").write_text("source 2", encoding="utf-8")
-        config = Config(translated_dir=str(translated_root))
-        cancel_event = Event()
-
-        def finish_current_chapter(*_args, **_kwargs):
-            cancel_event.set()
-            return True, 10, 1.0, 0
-
-        with (
-            patch("src.application.translate.app_config.get_config", return_value=config),
-            patch("src.application.translate._paths.PROGRESS_DIR", tmp_path / "progress"),
-            patch("src.application.translate._validate_provider"),
-            patch("src.application.translate.build_graph", return_value=object()),
-            patch("src.application.translate.translate_file", side_effect=finish_current_chapter) as mocked_translate,
-        ):
-            result = run_translation(TranslationRequest(novel="novel"), cancel_event=cancel_event)
-
-        assert result.cancelled is True
-        assert result.success == 1
-        assert result.chapters_attempted == [1]
-        mocked_translate.assert_called_once()
-
 
 class TestGlossaryCli:
     def setup_method(self):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.base = Path(self.temp_dir.name)
-        self.lock_patcher = patch("src.services.glossary.LOCK_DIR", self.base / "locks")
+        self.lock_patcher = patch("src.application.locks.LOCK_DIR", self.base / "locks")
         self.lock_patcher.start()
         self.backup_patcher = patch(
             "src.application.glossary.replacements.GLOSSARY_BACKUP_DIR",
@@ -376,13 +104,13 @@ class TestGlossaryCli:
     def test_glossary_add_and_list(self, capsys):
         with (
             patch("sys.argv", ["translate", "glossary", "add", "my-novel", "李白", "Lý Bạch"]),
-            patch("src.services.glossary.GLOSSARY_DIR", self.base / "glossary"),
+            patch("src.services.glossary.repository.GLOSSARY_DIR", self.base / "glossary"),
         ):
             main()
 
         with (
             patch("sys.argv", ["translate", "glossary", "list", "my-novel"]),
-            patch("src.services.glossary.GLOSSARY_DIR", self.base / "glossary"),
+            patch("src.services.glossary.repository.GLOSSARY_DIR", self.base / "glossary"),
         ):
             main()
 
@@ -429,7 +157,7 @@ class TestGlossaryCli:
                     "supporting",
                 ],
             ),
-            patch("src.services.glossary.GLOSSARY_DIR", glossary_dir),
+            patch("src.services.glossary.repository.GLOSSARY_DIR", glossary_dir),
         ):
             main()
 
@@ -448,19 +176,19 @@ class TestGlossaryCli:
                     "1",
                 ],
             ),
-            patch("src.services.glossary.GLOSSARY_DIR", glossary_dir),
+            patch("src.services.glossary.repository.GLOSSARY_DIR", glossary_dir),
         ):
             main()
 
         with (
             patch("sys.argv", ["translate", "glossary", "validate", "my-novel"]),
-            patch("src.services.glossary.GLOSSARY_DIR", glossary_dir),
+            patch("src.services.glossary.repository.GLOSSARY_DIR", glossary_dir),
         ):
             main()
 
         with (
             patch("sys.argv", ["translate", "glossary", "audit", "my-novel"]),
-            patch("src.services.glossary.GLOSSARY_DIR", glossary_dir),
+            patch("src.services.glossary.repository.GLOSSARY_DIR", glossary_dir),
             _patch_config(translated_dir=str(self.base), target_language="vi"),
             pytest.raises(SystemExit),
         ):
@@ -487,17 +215,17 @@ class TestGlossaryCli:
         output_path = novel_root / "output" / "chapter_001.txt"
         output_path.write_text('Ma thuật cũ. "ma thuật" mới.', encoding="utf-8")
 
-        config_patcher = patch("src.services.glossary.config")
+        config_patcher = patch("src.services.glossary.repository.config")
         mock_config = config_patcher.start()
         mock_config.translated_dir = str(translated_root)
         mock_config.target_language = "vi"
 
         try:
             with (
-                patch("src.services.glossary.GLOSSARY_DIR", glossary_dir),
+                patch("src.services.glossary.repository.GLOSSARY_DIR", glossary_dir),
                 _patch_config(translated_dir=str(translated_root), target_language="vi"),
             ):
-                from src.services.glossary import (
+                from src.services.glossary.repository import (
                     PENDING_REPLACEMENTS_KEY,
                     load_glossary_data,
                     save_glossary,

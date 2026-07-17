@@ -7,7 +7,7 @@ import asyncio
 from fastapi import APIRouter
 
 from src.api.dependencies import AuthenticatedPrincipal, JobManagerDependency
-from src.api.jobs import build_progress_emitter
+from src.api.events import build_progress_emitter
 from src.api.schemas import JobStartResponse, PackRequestPayload
 from src.application import config as app_config
 from src.application.pack import PackRequest, run_pack

@@ -3,32 +3,21 @@
 from __future__ import annotations
 
 import hashlib
-import json
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from src.application.errors import ApplicationValidationError, PersistenceError
 from src.application.novel.identity import require_path
-from src.utils import files as file_utils
+from src.services import documents
 
 
 def load(novel_root: Path) -> dict[str, Any]:
-    metadata_path = novel_root / "metadata.json"
-    if not metadata_path.exists():
-        return {}
-    try:
-        return json.loads(metadata_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError, OSError:
-        return {}
+    return documents.load(novel_root)
 
 
 def write(novel_root: Path, metadata: dict[str, Any], *, trailing_newline: bool = True) -> None:
-    content = json.dumps(metadata, ensure_ascii=False, indent=2)
-    (novel_root / "metadata.json").write_text(
-        content + ("\n" if trailing_newline else ""),
-        encoding="utf-8",
-    )
+    documents.write(novel_root, metadata, trailing_newline=trailing_newline)
 
 
 def metadata(root: Path, name: str) -> dict[str, Any]:
@@ -94,7 +83,7 @@ def update_metadata(
         return next_data
 
     try:
-        return file_utils.merge_json_locked(novel_root / "metadata.json", updater)
+        return documents.update(novel_root, updater)
     except OSError as error:
         raise PersistenceError(f"Failed to update novel metadata: {error}") from error
 

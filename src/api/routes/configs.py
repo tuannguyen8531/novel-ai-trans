@@ -3,17 +3,12 @@
 from __future__ import annotations
 
 import asyncio
-import json
-import re
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Request
 
 from src.api.dependencies import AuthenticatedPrincipal, JobManagerDependency, get_state
-from src.api.errors import ApplicationValidationError as _ApiValidationError
-from src.api.errors import ResourceNotFoundError
 from src.api.schemas import (
     ConfigGenerateRequest,
     ConfigSaveRequest,
@@ -24,69 +19,21 @@ from src.api.schemas import (
     JobStartResponse,
 )
 from src.application import config as app_config
-from src.application.crawl.generator import (
-    ConfigGenerationResult,
-    save_generated_metadata,
-)
-from src.application.crawl.generator import (
-    generate_config as application_generate_config,
-)
-from src.application.crawl.validator import (
-    ConfigValidationResult,
-)
-from src.application.crawl.validator import (
-    validate_config as application_validate_config,
-)
-from src.config import SiteConfig
-from src.paths import novel_config_path_from_root
+from src.application.crawl import configs as config_workflow
+from src.application.crawl import generator as generator_workflow
+from src.application.crawl import validator as validator_workflow
+from src.application.novel import identity
 
 router = APIRouter(tags=["configs"])
 
-_SLUG_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 
-
-def _is_valid_slug(name: str) -> bool:
-    return bool(name) and bool(_SLUG_PATTERN.match(name)) and name not in {".", ".."}
-
-
-def _config_path(name: str) -> Path:
-    if not _is_valid_slug(name):
-        raise _ApiValidationError(f"Invalid config name: {name!r}")
-    root = Path(app_config.get_config().translated_dir)
-    return novel_config_path_from_root(root / name)
-
-
-def _list_configs() -> list[ConfigSummary]:
-    root = Path(app_config.get_config().translated_dir)
-    if not root.exists():
-        return []
-    out: list[ConfigSummary] = []
-    for entry in sorted(root.iterdir()):
-        path = novel_config_path_from_root(entry)
-        if entry.is_dir() and _is_valid_slug(entry.name) and path.is_file():
-            try:
-                data = json.loads(path.read_text(encoding="utf-8"))
-                if not isinstance(data, dict):
-                    continue
-                if data.get("name") != entry.name:
-                    continue
-                out.append(
-                    ConfigSummary(
-                        name=entry.name,
-                        version=int(data.get("version", 1)),
-                        source_url=str(data.get("source_url", "")),
-                        toc_url=str(data.get("toc_url", "")),
-                        updated_at=None,
-                    )
-                )
-            except OSError, json.JSONDecodeError:
-                continue
-    return out
+def _translated_root() -> Path:
+    return identity.resolve_root(app_config.get_config().translated_dir)
 
 
 @router.get("/configs", response_model=list[ConfigSummary])
 def get_configs(_: AuthenticatedPrincipal) -> list[ConfigSummary]:
-    return _list_configs()
+    return [ConfigSummary(**vars(record), updated_at=None) for record in config_workflow.list_configs(_translated_root())]
 
 
 @router.get("/configs/{name}")
@@ -94,13 +41,7 @@ def get_config_file(
     name: str,
     _: AuthenticatedPrincipal,
 ) -> dict[str, Any]:
-    path = _config_path(name)
-    if not path.exists():
-        raise ResourceNotFoundError(f"Config not found: {name}")
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
-        raise HTTPException(status_code=500, detail={"code": "invalid_config", "message": str(error)}) from error
+    return config_workflow.load_config(_translated_root(), name)
 
 
 @router.put("/configs/{name}")
@@ -110,40 +51,13 @@ def save_config(
     request: Request,
     _: AuthenticatedPrincipal,
 ) -> dict[str, Any]:
-    if not _is_valid_slug(name):
-        raise _ApiValidationError(f"Invalid config name: {name!r}")
-    if payload.draft_id and not _is_valid_slug(payload.draft_id):
-        raise _ApiValidationError(f"Invalid draft id: {payload.draft_id!r}")
-    draft = _load_draft(payload.draft_id) if payload.draft_id else None
-    if draft is not None and draft.name != name:
-        raise _ApiValidationError("Draft name does not match the target config name.")
-    try:
-        site_config = SiteConfig.from_dict(payload.config)
-    except (ValueError, KeyError) as error:
-        raise _ApiValidationError(f"Invalid config: {error}") from error
-    if site_config.name != name:
-        raise _ApiValidationError(f"Config name {site_config.name!r} does not match novel {name!r}.")
-
-    target = _config_path(name)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    tmp = target.with_suffix(target.suffix + ".tmp")
-    tmp.write_text(
-        json.dumps(payload.config, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
+    config_workflow.save_config(
+        _translated_root(),
+        get_state(request).drafts_dir,
+        name,
+        payload.config,
+        payload.draft_id,
     )
-    tmp.replace(target)
-
-    if draft is not None and draft.metadata:
-        save_generated_metadata(name, draft.metadata)
-
-    if payload.draft_id:
-        # ``payload.draft_id`` is validated by ``_draft_path`` before the
-        # file is removed; the regex check there is what CodeQL can't trace.
-        draft_path = (
-            get_state(request).drafts_dir / f"{payload.draft_id}.json"
-        )  # codeql[py/path-injection]: validated by _is_valid_slug inside _draft_path
-        if draft_path.exists():
-            draft_path.unlink()
     return {"name": name, "saved": True}
 
 
@@ -158,10 +72,10 @@ async def post_generate_config(
     loop = asyncio.get_running_loop()
 
     def _run(job, emit, cancel_event):
-        from src.api.jobs import build_progress_emitter as _bpe
+        from src.api.events import build_progress_emitter as _bpe
 
         progress_cb = _bpe(job, emit)
-        result: ConfigGenerationResult = application_generate_config(
+        result: generator_workflow.ConfigGenerationResult = generator_workflow.generate_config(
             url=payload.url,
             name=payload.name,
             provider=payload.provider,
@@ -205,10 +119,10 @@ async def post_validate_config(
     loop = asyncio.get_running_loop()
 
     def _run(job, emit, cancel_event):
-        from src.api.jobs import build_progress_emitter as _bpe
+        from src.api.events import build_progress_emitter as _bpe
 
         progress_cb = _bpe(job, emit)
-        result: ConfigValidationResult = application_validate_config(
+        result: validator_workflow.ConfigValidationResult = validator_workflow.validate_config(
             novel=name,
             use_browser=payload.browser,
             progress_callback=progress_cb,
@@ -231,82 +145,18 @@ async def post_validate_config(
     return JobStartResponse(job_id=job.id)
 
 
-# ---------------------------------------------------------------------------
-# Drafts
-# ---------------------------------------------------------------------------
-
-
-def _draft_path(draft_id: str) -> Path:
-    if not _is_valid_slug(draft_id):
-        raise _ApiValidationError(f"Invalid draft id: {draft_id!r}")
-    # The slug regex (``[A-Za-z0-9._-]``) excludes path separators, ``..`` and
-    # absolute paths, so interpolating it into a filename is safe. CodeQL's
-    # py/path-injection cannot trace the regex check, so we suppress the
-    # alert at this exact interpolation point.
-    path = get_state().drafts_dir / f"{draft_id}.json"  # codeql[py/path-injection]: validated by _is_valid_slug above
-    return path
-
-
-def _load_draft(draft_id: str) -> DraftDetail:
-    path = _draft_path(draft_id)
-    if not path.exists():
-        raise ResourceNotFoundError(f"Draft not found: {draft_id}")
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
-        raise HTTPException(status_code=500, detail={"code": "invalid_draft", "message": str(error)}) from error
-    return DraftDetail(
-        draft_id=data["draft_id"],
-        name=data.get("name", ""),
-        created_at=datetime.fromisoformat(data["created_at"]),
-        expires_at=datetime.fromisoformat(data["expires_at"]),
-        source_url=data.get("source_url"),
-        config=data.get("config", {}),
-        metadata=data.get("metadata", {}),
-    )
-
-
-def _cleanup_expired_drafts(now: datetime | None = None) -> None:
-    now = now or datetime.now(UTC)
-    drafts_dir = get_state().drafts_dir
-    if not drafts_dir.exists():
-        return
-    for entry in drafts_dir.iterdir():
-        if entry.suffix != ".json" or not entry.is_file():
-            continue
-        try:
-            data = json.loads(entry.read_text(encoding="utf-8"))
-        except OSError, json.JSONDecodeError:
-            continue
-        expires = datetime.fromisoformat(data.get("expires_at"))
-        if expires <= now:
-            entry.unlink(missing_ok=True)
-
-
 @router.get("/config-drafts", response_model=list[DraftSummary])
 def list_drafts(_: AuthenticatedPrincipal) -> list[DraftSummary]:
-    _cleanup_expired_drafts()
-    drafts_dir = get_state().drafts_dir
-    if not drafts_dir.exists():
-        return []
-    out: list[DraftSummary] = []
-    for entry in sorted(drafts_dir.iterdir()):
-        if entry.suffix != ".json" or not entry.is_file():
-            continue
-        try:
-            data = json.loads(entry.read_text(encoding="utf-8"))
-        except OSError, json.JSONDecodeError:
-            continue
-        out.append(
-            DraftSummary(
-                draft_id=data["draft_id"],
-                name=data.get("name", ""),
-                created_at=datetime.fromisoformat(data["created_at"]),
-                expires_at=datetime.fromisoformat(data["expires_at"]),
-                source_url=data.get("source_url"),
-            )
+    return [
+        DraftSummary(
+            draft_id=record.draft_id,
+            name=record.name,
+            created_at=record.created_at,
+            expires_at=record.expires_at,
+            source_url=record.source_url,
         )
-    return out
+        for record in config_workflow.list_drafts(get_state().drafts_dir)
+    ]
 
 
 @router.get("/config-drafts/{draft_id}", response_model=DraftDetail)
@@ -314,7 +164,7 @@ def get_draft(
     draft_id: str,
     _: AuthenticatedPrincipal,
 ) -> DraftDetail:
-    return _load_draft(draft_id)
+    return DraftDetail(**vars(config_workflow.load_draft(get_state().drafts_dir, draft_id)))
 
 
 @router.delete("/config-drafts/{draft_id}", status_code=204)
@@ -322,8 +172,5 @@ def delete_draft(
     draft_id: str,
     _: AuthenticatedPrincipal,
 ) -> None:
-    path = _draft_path(draft_id)
-    if not path.exists():
-        return None
-    path.unlink()
+    config_workflow.delete_draft(get_state().drafts_dir, draft_id)
     return None

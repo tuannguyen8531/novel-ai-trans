@@ -1,56 +1,8 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
-import { api } from '@/api/client'
 import JobMonitor from '@/components/JobMonitor.vue'
-import { useNovelsStore } from '@/stores/novels'
+import { useImporting } from '@/composables/importing'
 
-const novels = useNovelsStore()
-const file = ref<File | null>(null)
-const name = ref<string>('')
-const selectedNovel = ref<string>('')
-const keepExisting = ref<boolean>(false)
-const jobId = ref<string | null>(null)
-const error = ref<string | null>(null)
-
-onMounted(() => novels.refresh())
-
-watch(name, (value) => {
-  if (selectedNovel.value && value !== selectedNovel.value) {
-    selectedNovel.value = ''
-  }
-})
-
-function slugFromFilename(filename: string): string {
-  return filename.replace(/\.epub$/i, '').toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/-{2,}/g, '-').replace(/^[-._]+|[-._]+$/g, '')
-}
-
-function onFileChange(event: Event) {
-  const target = event.target as HTMLInputElement
-  file.value = target.files && target.files.length > 0 ? target.files[0] : null
-  if (file.value && !name.value) {
-    name.value = slugFromFilename(file.value.name)
-  }
-}
-
-function onExistingNovelChange() {
-  if (!selectedNovel.value) return
-  name.value = selectedNovel.value
-  keepExisting.value = true
-}
-
-async function upload() {
-  error.value = null
-  if (!file.value) {
-    error.value = 'Choose an EPUB file first.'
-    return
-  }
-  try {
-    const result = await api.uploadImport(file.value, name.value || undefined, keepExisting.value)
-    jobId.value = result.job_id
-  } catch (err) {
-    error.value = (err as Error).message
-  }
-}
+const { novels, file, name, selectedNovel, keepExisting, jobId, error, onFileChange, onExistingNovelChange, upload } = useImporting()
 </script>
 
 <template>

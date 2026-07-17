@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
-import { api } from '@/api/client'
+import { computed } from 'vue'
+import { useProviderModels } from '@/composables/models'
 
 const props = defineProps<{
   provider: 'ollama' | 'gemini' | 'openrouter'
@@ -12,27 +12,7 @@ const emit = defineEmits<{
   (e: 'update:modelValue', value: string): void
 }>()
 
-const models = ref<string[]>([])
-const loading = ref(false)
-const loadError = ref<string | null>(null)
-
-async function refresh() {
-  loading.value = true
-  loadError.value = null
-  try {
-    const result = await api.listProviderModels(props.provider)
-    models.value = result.models
-  } catch (err) {
-    loadError.value = (err as Error).message
-    models.value = []
-  } finally {
-    loading.value = false
-  }
-}
-
-onMounted(refresh)
-// Refresh when the provider switches (e.g. user changes the default).
-watch(() => props.provider, refresh)
+const { models, loading, loadError, refresh } = useProviderModels(() => props.provider)
 
 const knownModel = computed(() => models.value.includes(props.modelValue))
 

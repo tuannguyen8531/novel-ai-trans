@@ -8,8 +8,9 @@ import json
 from fastapi import APIRouter, HTTPException, Request
 from sse_starlette.sse import EventSourceResponse
 
+from src.api.background.models import Job, JobStatus
+from src.api.background.registry import JobNotFoundError
 from src.api.dependencies import AuthenticatedPrincipal, JobManagerDependency
-from src.api.jobs import Job, JobNotFoundError, JobStatus
 from src.api.schemas import JobErrorModel, JobListResponse, JobModel
 
 router = APIRouter(tags=["jobs"])

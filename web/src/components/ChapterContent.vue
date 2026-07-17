@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref, watch } from 'vue'
-import { api, getAuthToken } from '@/api/client'
+import { computed } from 'vue'
+import { useIllustrations } from '@/composables/illustrations'
 
 const props = defineProps<{
   content: string
@@ -33,56 +33,10 @@ const segments = computed<Segment[]>(() => {
 
 const hasIllustrations = computed(() => segments.value.some((s) => s.type === 'illustration'))
 
-// For remote mode: map filename → objectURL (to attach Bearer token via fetch)
-const objectUrls = ref<Map<string, string>>(new Map())
-const loadingImages = ref<Set<string>>(new Set())
-
-function illustrationSrc(filename: string): string {
-  const token = getAuthToken()
-  if (!token) {
-    // Local mode: direct URL, browser fetches without auth header
-    return api.illustrationUrl(props.novel, filename)
-  }
-  // Remote mode: use cached objectURL if available
-  return objectUrls.value.get(filename) ?? ''
-}
-
-async function loadIllustrationBlob(filename: string): Promise<void> {
-  if (objectUrls.value.has(filename) || loadingImages.value.has(filename)) return
-  loadingImages.value.add(filename)
-  try {
-    const url = api.illustrationUrl(props.novel, filename)
-    const token = getAuthToken()
-    const resp = await fetch(url, token ? { headers: { Authorization: `Bearer ${token}` } } : {})
-    if (!resp.ok) return
-    const blob = await resp.blob()
-    const objUrl = URL.createObjectURL(blob)
-    objectUrls.value.set(filename, objUrl)
-  } finally {
-    loadingImages.value.delete(filename)
-  }
-}
-
-watch(
-  segments,
-  (segs) => {
-    const token = getAuthToken()
-    if (!token) return // local mode: direct URL, no pre-fetch needed
-    for (const seg of segs) {
-      if (seg.type === 'illustration') {
-        void loadIllustrationBlob(seg.filename)
-      }
-    }
-  },
-  { immediate: true }
-)
-
-// Revoke objectURLs on unmount to free memory
-onUnmounted(() => {
-  for (const url of objectUrls.value.values()) {
-    URL.revokeObjectURL(url)
-  }
-})
+const illustrationFilenames = computed(() => segments.value
+  .filter((segment): segment is Extract<Segment, { type: 'illustration' }> => segment.type === 'illustration')
+  .map((segment) => segment.filename))
+const { authenticated, src: illustrationSrc } = useIllustrations(() => props.novel, illustrationFilenames)
 </script>
 
 <template>
@@ -95,7 +49,7 @@ onUnmounted(() => {
         <pre v-if="seg.type === 'text'" class="chapter-content chapter-content-segment">{{ seg.text }}</pre>
         <figure v-else class="chapter-illustration">
           <img
-            v-if="seg.type === 'illustration' && (illustrationSrc(seg.filename) || !getAuthToken())"
+            v-if="seg.type === 'illustration' && (illustrationSrc(seg.filename) || !authenticated())"
             :src="illustrationSrc(seg.filename)"
             :alt="`Illustration: ${seg.filename}`"
             class="chapter-illustration-img"

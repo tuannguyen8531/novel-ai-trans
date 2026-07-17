@@ -2,13 +2,17 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from threading import Event
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
+
+import pytest
 
 from src.application.crawl.crawler import CrawlRequest, run_crawl
 from src.application.crawl.generator import generate_config, save_generated_config
 from src.application.crawl.importer import ImportRequest, import_epub_workflow
-from src.services.importer import ChapterImportChange
+from src.application.errors import OperationCancelledError
+from src.services.importing.changes import ChapterImportChange
 
 
 def test_run_crawl_dry_run_returns_preview_without_crawling(tmp_path: Path) -> None:
@@ -94,33 +98,30 @@ def test_headed_crawl_forces_one_worker_for_shared_browser_page(tmp_path: Path) 
 
 
 def test_generate_config_without_drafts_dir_does_not_create_draft() -> None:
-    llm = object()
-    generator = Mock()
-    generator.generate.return_value = {
+    generated = {
         "name": "demo",
         "toc_url": "https://example.com/book/",
         "chapter_link_selector": "a.chapter",
     }
 
     with (
-        patch("src.application.crawl.generator.get_llm", return_value=llm),
-        patch("src.application.crawl.generator.ConfigGenerator") as generator_cls,
+        patch("src.application.crawl.generator.get_llm", return_value=object()),
+        patch("src.application.crawl.generator.open_acquirer") as open_acquirer,
+        patch("src.application.crawl.generator._generate_config_data", return_value=generated),
+        patch("src.application.crawl.generator.ConfigRepository") as repository_cls,
     ):
-        generator_cls.return_value = generator
         result = generate_config(url="https://example.com/book/", headed=True)
 
-    generator_cls.assert_called_once_with(llm, use_browser=True, headed=True)
-    generator.generate.assert_called_once()
-    assert generator.generate.call_args.kwargs["use_cache"] is True
-    generator_cls.validate.assert_called_once_with(generator.generate.return_value)
+    open_acquirer.assert_called_once()
+    assert open_acquirer.call_args.kwargs == {"use_browser": False, "headed": True}
+    repository_cls.return_value.validate.assert_called_once_with(generated)
     assert result.draft_id == ""
     assert result.expires_at is None
-    assert result.config == generator.generate.return_value
+    assert result.config == generated
 
 
 def test_generate_config_no_cache_disables_generator_cache() -> None:
-    generator = Mock()
-    generator.generate.return_value = {
+    generated = {
         "name": "demo",
         "toc_url": "https://example.com/book/toc",
         "chapter_link_selector": "a.chapter",
@@ -128,16 +129,18 @@ def test_generate_config_no_cache_disables_generator_cache() -> None:
 
     with (
         patch("src.application.crawl.generator.get_llm", return_value=object()),
-        patch("src.application.crawl.generator.ConfigGenerator", return_value=generator),
+        patch("src.application.crawl.generator.HtmlCache") as cache_cls,
+        patch("src.application.crawl.generator.open_acquirer"),
+        patch("src.application.crawl.generator._generate_config_data", return_value=generated),
+        patch("src.application.crawl.generator.ConfigRepository"),
     ):
         generate_config(url="https://example.com/book", no_cache=True)
 
-    assert generator.generate.call_args.kwargs["use_cache"] is False
+    assert cache_cls.call_args.kwargs["enabled"] is False
 
 
 def test_generate_config_separates_novel_metadata_from_crawler_config() -> None:
-    generator = Mock()
-    generator.generate.return_value = {
+    generated = {
         "name": "demo",
         "toc_url": "https://example.com/book/toc",
         "source_url": "https://example.com/book",
@@ -151,7 +154,9 @@ def test_generate_config_separates_novel_metadata_from_crawler_config() -> None:
 
     with (
         patch("src.application.crawl.generator.get_llm", return_value=object()),
-        patch("src.application.crawl.generator.ConfigGenerator", return_value=generator),
+        patch("src.application.crawl.generator.open_acquirer"),
+        patch("src.application.crawl.generator._generate_config_data", return_value=generated),
+        patch("src.application.crawl.generator.ConfigRepository"),
     ):
         result = generate_config(url="https://example.com/book")
 
@@ -228,3 +233,44 @@ def test_import_workflow_reports_chapter_changes_in_result_and_logs() -> None:
         "Import chapters: retained 1 · unchanged 1 · overwritten 1 · added 1 · removed 0",
         "Overwritten chapter 3: Chapter 3: Revised",
     ]
+
+
+def test_import_workflow_checks_cancellation_before_operation() -> None:
+    cancel_event = Event()
+    cancel_event.set()
+
+    with (
+        patch("src.application.crawl.importer.import_epub") as import_operation,
+        pytest.raises(OperationCancelledError),
+    ):
+        import_epub_workflow(ImportRequest(epub_path=Path("demo.epub")), cancel_event=cancel_event)
+
+    import_operation.assert_not_called()
+
+
+def test_import_workflow_observes_cancellation_only_after_complete_operation() -> None:
+    cancel_event = Event()
+    imported = SimpleNamespace(
+        metadata=SimpleNamespace(title="Demo"),
+        chapters=[],
+        illustrations=[],
+        output_dir="translated/demo",
+        retained_chapters=(),
+        unchanged_chapters=(),
+        overwritten_chapters=(),
+        added_chapters=(),
+        removed_chapters=(),
+        warnings=(),
+    )
+
+    def complete_operation(*args, **kwargs):
+        cancel_event.set()
+        return imported
+
+    with (
+        patch("src.application.crawl.importer.import_epub", side_effect=complete_operation) as import_operation,
+        pytest.raises(OperationCancelledError),
+    ):
+        import_epub_workflow(ImportRequest(epub_path=Path("demo.epub")), cancel_event=cancel_event)
+
+    import_operation.assert_called_once()

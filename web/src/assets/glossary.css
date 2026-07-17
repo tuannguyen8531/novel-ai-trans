@@ -1,0 +1,101 @@
+.gloss-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.gloss-section h3 {
+  margin: 0;
+}
+
+.gloss-section p.muted {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.gloss-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.gloss-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 0 1 auto;
+}
+
+.gloss-filter {
+  width: 14rem;
+}
+
+.gloss-add {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.5rem;
+  padding: 0.6rem;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.gloss-add button {
+  align-self: end;
+}
+
+.gloss-table-wrap {
+  max-height: 22rem;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.gloss-section table {
+  margin: 0;
+}
+
+.gloss-section thead th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-elev-2);
+  z-index: 1;
+}
+
+.gloss-section tbody tr:hover {
+  background: var(--bg-elev-2);
+}
+
+.gloss-original {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 18rem;
+}
+
+.gloss-section .actions {
+  text-align: right;
+  width: 1%;
+  white-space: nowrap;
+}
+
+.arrow {
+  text-align: center;
+  color: var(--fg-dim);
+  font-family: ui-monospace, SFMono-Regular, monospace;
+}
+
+.gloss-empty {
+  padding: 1rem;
+  text-align: center;
+}
+
+.inline-edit-input {
+  font-size: 0.85rem;
+  padding: 0.25rem 0.45rem;
+  background: var(--bg-elev-2);
+}

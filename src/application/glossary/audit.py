@@ -83,8 +83,8 @@ def audit_terms(
         if not output_path.exists():
             continue
         try:
-            source_text = source_path.read_text(encoding="utf-8")
-            translated_text = output_path.read_text(encoding="utf-8")
+            source_text = chapter_service.read(source_path.parent, chapter_number)
+            translated_text = chapter_service.read(output_dir, chapter_number)
         except OSError:
             continue
         issues.extend({"chapter": chapter_number, **issue} for issue in audit_term_usage(terms, source_text, translated_text))

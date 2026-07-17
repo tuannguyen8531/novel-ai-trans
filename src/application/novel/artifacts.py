@@ -9,10 +9,8 @@ from pathlib import Path
 from src import paths
 from src.application.errors import ResourceNotFoundError
 from src.application.novel.identity import require_path
+from src.services import artifacts as artifact_repository
 from src.services import chapters as chapter_service
-
-ARTIFACT_SUFFIXES = frozenset({".epub"})
-IMAGE_SUFFIXES = frozenset({".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif"})
 
 
 @dataclass(frozen=True)
@@ -26,35 +24,14 @@ class Artifact:
 
 
 def resolve_artifact_path(novel_root: Path, filename: str) -> Path:
-    if "/" in filename or "\\" in filename or filename.startswith("."):
-        raise ResourceNotFoundError("Invalid artifact name")
-    artifact_path = (paths.novel_artifact_dir_from_root(novel_root) / filename).resolve()
-    if not artifact_path.is_file():
-        artifact_path = (novel_root / filename).resolve()
     try:
-        artifact_path.relative_to(novel_root.resolve())
-    except ValueError as error:
-        raise ResourceNotFoundError("Artifact escapes novel root") from error
-    if not artifact_path.is_file() or artifact_path.suffix.lower() not in ARTIFACT_SUFFIXES:
-        raise ResourceNotFoundError(f"Artifact not found: {filename}")
-    return artifact_path
+        return artifact_repository.resolve(novel_root, filename)
+    except FileNotFoundError as error:
+        raise ResourceNotFoundError(str(error)) from error
 
 
 def list_artifact_paths(novel_root: Path) -> list[Path]:
-    if not novel_root.exists():
-        return []
-    seen: set[str] = set()
-    artifacts: list[Path] = []
-    artifact_dir = paths.novel_artifact_dir_from_root(novel_root)
-    if artifact_dir.is_dir():
-        for artifact_path in artifact_dir.iterdir():
-            if artifact_path.is_file() and artifact_path.suffix.lower() in ARTIFACT_SUFFIXES:
-                artifacts.append(artifact_path)
-                seen.add(artifact_path.name)
-    for artifact_path in novel_root.iterdir():
-        if artifact_path.is_file() and artifact_path.suffix.lower() in ARTIFACT_SUFFIXES and artifact_path.name not in seen:
-            artifacts.append(artifact_path)
-    return sorted(artifacts, key=lambda artifact_path: artifact_path.name)
+    return artifact_repository.list_paths(novel_root)
 
 
 def _artifact_target(artifact_path: Path) -> str:
@@ -86,22 +63,17 @@ def artifact(root: Path, name: str, filename: str) -> Path:
 
 
 def delete_artifact(root: Path, name: str, filename: str) -> None:
-    artifact(root, name, filename).unlink()
+    try:
+        artifact_repository.delete(require_path(root, name), filename)
+    except FileNotFoundError as error:
+        raise ResourceNotFoundError(str(error)) from error
 
 
 def illustration(root: Path, name: str, filename: str) -> Path:
-    novel_root = require_path(root, name)
-    if "/" in filename or "\\" in filename or filename.startswith("."):
-        raise ResourceNotFoundError("Invalid illustration filename")
-    illustration_dir = novel_root / "illustrations"
-    illustration_path = (illustration_dir / filename).resolve()
     try:
-        illustration_path.relative_to(illustration_dir.resolve())
-    except ValueError as error:
-        raise ResourceNotFoundError("Illustration escapes illustrations directory") from error
-    if not illustration_path.is_file() or illustration_path.suffix.lower() not in IMAGE_SUFFIXES:
-        raise ResourceNotFoundError(f"Illustration not found: {filename}")
-    return illustration_path
+        return artifact_repository.illustration(require_path(root, name), filename)
+    except FileNotFoundError as error:
+        raise ResourceNotFoundError(str(error)) from error
 
 
 __all__ = [
