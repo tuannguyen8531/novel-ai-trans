@@ -8,95 +8,31 @@ from pathlib import Path
 from unittest.mock import patch
 from xml.sax.saxutils import escape
 
-from src.services.importer import (
-    EpubSection,
-    TextExtractor,
-    detect_chapter_number,
-    import_epub,
-    select_processed_chapters,
-)
+from src.application.crawl.importer import ImportRequest
+from src.application.crawl.importer import import_epub as run_import
 from src.utils.files import write_text_atomic
 
 
+def import_epub(
+    epub_path: Path,
+    share_root: Path,
+    *,
+    name: str | None = None,
+    keep_existing: bool = False,
+    source_url: str | None = None,
+):
+    return run_import(
+        ImportRequest(
+            epub_path=epub_path,
+            name=name,
+            keep_existing=keep_existing,
+            source_url=source_url,
+        ),
+        share_root,
+    )
+
+
 class EpubImporterTest(unittest.TestCase):
-    def test_text_extractor_keeps_image_position_between_paragraphs(self) -> None:
-        extractor = TextExtractor()
-        extractor.feed('<p>Before image.</p><img src="image.jpg"/><p>After image.</p>')
-        extractor.close()
-
-        self.assertEqual(
-            extractor.get_text(),
-            "Before image.\n\n[[EPUB_IMAGE:1]]\n\nAfter image.",
-        )
-
-    def test_detects_supported_chapter_formats(self) -> None:
-        cases = {
-            "1화 - 회귀": 1,
-            "제12화 재회": 12,
-            "3장 시작": 3,
-            "Chương 4: Khởi đầu": 4,
-            "Chuong 5 - Gap lai": 5,
-            "Chapter 6: Return": 6,
-            "Ch. 7 - Return": 7,
-            "Episode 8 - Return": 8,
-            "第9章 帰還": 9,
-            "第10話 帰還": 10,
-            "12章 别让八班嚣张起来": 12,
-        }
-
-        for title, expected in cases.items():
-            with self.subTest(title=title):
-                self.assertEqual(detect_chapter_number(title), expected)
-
-    def test_ignores_unmarked_numbers(self) -> None:
-        cases = [
-            "notice 65",
-            "일러스트 모음 65 추가",
-            "2024 special notice",
-            "cover",
-        ]
-
-        for title in cases:
-            with self.subTest(title=title):
-                self.assertIsNone(detect_chapter_number(title))
-
-    def test_falls_back_to_reading_order_for_unnumbered_titles(self) -> None:
-        sections = [
-            section(1, "해방노예인데 주인이 집착한다", text="Author: a\nTags: b\nSynopsis\n..."),
-            section(2, "Notice: 르노아 일러스트 모음"),
-            section(3, "해방된 노예가 집착할 리 없잖아"),
-            section(4, "주인은 노예 해방에 목숨 거는 거 아니었냐고"),
-        ]
-
-        chapters = select_processed_chapters(sections)
-
-        self.assertEqual([chapter.number for chapter in chapters], [1, 2])
-        self.assertEqual(
-            [chapter.section.title for chapter in chapters],
-            [
-                "해방된 노예가 집착할 리 없잖아",
-                "주인은 노예 해방에 목숨 거는 거 아니었냐고",
-            ],
-        )
-
-    def test_notice_chapter_markers_do_not_disable_fallback(self) -> None:
-        sections = [
-            section(1, "cover"),
-            section(2, "Demo Book", text="Author: a\nTags: b\nSynopsis\n..."),
-            section(3, "Notice: 550화까지 왔습니다!!"),
-            section(4, "Notice: 259화 삽화 추가되었습니다!!!"),
-            section(5, "1.[첫 번째 이야기]"),
-            section(6, "2.[두 번째 이야기]"),
-        ]
-
-        chapters = select_processed_chapters(sections)
-
-        self.assertEqual([chapter.number for chapter in chapters], [1, 2])
-        self.assertEqual(
-            [chapter.section.title for chapter in chapters],
-            ["1.[첫 번째 이야기]", "2.[두 번째 이야기]"],
-        )
-
     def test_import_writes_shared_input_and_metadata_with_name_slug(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             root = Path(tempdir)
@@ -160,6 +96,22 @@ class EpubImporterTest(unittest.TestCase):
             metadata = json.loads((novel_dir / "metadata.json").read_text(encoding="utf-8"))
 
         self.assertEqual(metadata["source_url"], "epub://my-custom-file.epub")
+
+    def test_import_preserves_explicit_empty_source_url(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            epub_path = root / "demo.epub"
+            write_epub(
+                epub_path,
+                title="Demo",
+                author=None,
+                sections=[("chapter-1.xhtml", "Chapter 1", "Body.")],
+            )
+
+            import_epub(epub_path, root / "translated", source_url="")
+            metadata = json.loads((root / "translated" / "demo" / "metadata.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(metadata["source_url"], "")
 
     def test_import_reads_summary_from_epub_description(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
@@ -332,7 +284,7 @@ class EpubImporterTest(unittest.TestCase):
             )
             import_epub(initial_epub, root / "translated", name="demo")
 
-            with patch("src.services.importer.write_text_atomic", wraps=write_text_atomic) as write_text:
+            with patch("src.services.importing.storage.write_text_atomic", wraps=write_text_atomic) as write_text:
                 result = import_epub(
                     updated_epub,
                     root / "translated",
@@ -423,15 +375,6 @@ class EpubImporterTest(unittest.TestCase):
             self.assertEqual(result.removed_chapters, (99,))
             self.assertFalse(stale_path.exists())
             self.assertTrue((stale_path.parent / "chapter_001.txt").is_file())
-
-
-def section(index: int, title: str, text: str = "body") -> EpubSection:
-    return EpubSection(
-        index=index,
-        source_path=f"section-{index}.xhtml",
-        title=title,
-        text=text,
-    )
 
 
 def write_epub(

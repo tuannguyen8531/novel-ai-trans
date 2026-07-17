@@ -2,13 +2,17 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from threading import Event
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
+
+import pytest
 
 from src.application.crawl.crawler import CrawlRequest, run_crawl
 from src.application.crawl.generator import generate_config, save_generated_config
 from src.application.crawl.importer import ImportRequest, import_epub_workflow
-from src.services.importer import ChapterImportChange
+from src.application.errors import OperationCancelledError
+from src.services.importing.changes import ChapterImportChange
 
 
 def test_run_crawl_dry_run_returns_preview_without_crawling(tmp_path: Path) -> None:
@@ -229,3 +233,44 @@ def test_import_workflow_reports_chapter_changes_in_result_and_logs() -> None:
         "Import chapters: retained 1 · unchanged 1 · overwritten 1 · added 1 · removed 0",
         "Overwritten chapter 3: Chapter 3: Revised",
     ]
+
+
+def test_import_workflow_checks_cancellation_before_operation() -> None:
+    cancel_event = Event()
+    cancel_event.set()
+
+    with (
+        patch("src.application.crawl.importer.import_epub") as import_operation,
+        pytest.raises(OperationCancelledError),
+    ):
+        import_epub_workflow(ImportRequest(epub_path=Path("demo.epub")), cancel_event=cancel_event)
+
+    import_operation.assert_not_called()
+
+
+def test_import_workflow_observes_cancellation_only_after_complete_operation() -> None:
+    cancel_event = Event()
+    imported = SimpleNamespace(
+        metadata=SimpleNamespace(title="Demo"),
+        chapters=[],
+        illustrations=[],
+        output_dir="translated/demo",
+        retained_chapters=(),
+        unchanged_chapters=(),
+        overwritten_chapters=(),
+        added_chapters=(),
+        removed_chapters=(),
+        warnings=(),
+    )
+
+    def complete_operation(*args, **kwargs):
+        cancel_event.set()
+        return imported
+
+    with (
+        patch("src.application.crawl.importer.import_epub", side_effect=complete_operation) as import_operation,
+        pytest.raises(OperationCancelledError),
+    ):
+        import_epub_workflow(ImportRequest(epub_path=Path("demo.epub")), cancel_event=cancel_event)
+
+    import_operation.assert_called_once()

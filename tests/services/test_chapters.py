@@ -67,3 +67,27 @@ def test_read_title_does_not_treat_author_note_as_chapter_heading(tmp_path: Path
     )
 
     assert chapters.read_title(chapter, "fallback") == "Chương 13: Làm anh em, khắc ghi trong lòng!"
+
+
+def test_detect_chapter_number_supports_existing_import_formats() -> None:
+    cases = {
+        "1화 - 회귀": 1,
+        "제12화 재회": 12,
+        "3장 시작": 3,
+        "Chương 4: Khởi đầu": 4,
+        "Chuong 5 - Gap lai": 5,
+        "Chapter 6: Return": 6,
+        "Ch. 7 - Return": 7,
+        "Episode 8 - Return": 8,
+        "第9章 帰還": 9,
+        "第10話 帰還": 10,
+        "12章 别让八班嚣张起来": 12,
+    }
+
+    assert {title: chapters.detect_chapter_number(title) for title in cases} == cases
+
+
+def test_detect_chapter_number_ignores_unmarked_numbers() -> None:
+    titles = ["notice 65", "일러스트 모음 65 추가", "2024 special notice", "cover"]
+
+    assert all(chapters.detect_chapter_number(title) is None for title in titles)

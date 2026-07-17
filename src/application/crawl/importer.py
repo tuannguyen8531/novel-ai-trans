@@ -11,7 +11,18 @@ from src.application import config as app_config
 from src.application.crawl.common import check_cancel, emit
 from src.application.errors import ApplicationValidationError, PersistenceError
 from src.application.progress import ProgressEvent
-from src.services.importer import ChapterImportChange, EpubImportError, import_epub
+from src.models import ChapterResult, NovelMetadata
+from src.services.importing.changes import ChapterImportChange, ImportChanges
+from src.services.importing.extractor import normalize_whitespace
+from src.services.importing.reader import EpubImportError, read_epub_book, resolve_epub_path
+from src.services.importing.selection import extract_summary_from_sections, select_processed_chapters
+from src.services.importing.storage import (
+    EpubIllustration,
+    persist_chapters,
+    persist_metadata,
+    prepare_storage,
+)
+from src.utils.text import slugify
 
 
 @dataclass
@@ -39,6 +50,89 @@ class ImportResult:
     warnings: list[str] = field(default_factory=list)
 
 
+@dataclass(frozen=True)
+class EpubImportResult:
+    metadata: NovelMetadata
+    chapters: list[ChapterResult]
+    illustrations: list[EpubIllustration]
+    output_dir: str
+    chapter_output_dir: str
+    illustrations_dir: str
+    changes: ImportChanges
+    warnings: tuple[str, ...]
+
+    @property
+    def retained_chapters(self) -> tuple[int, ...]:
+        return self.changes.retained
+
+    @property
+    def unchanged_chapters(self) -> tuple[int, ...]:
+        return self.changes.unchanged
+
+    @property
+    def overwritten_chapters(self) -> tuple[ChapterImportChange, ...]:
+        return self.changes.overwritten
+
+    @property
+    def added_chapters(self) -> tuple[int, ...]:
+        return self.changes.added
+
+    @property
+    def removed_chapters(self) -> tuple[int, ...]:
+        return self.changes.removed
+
+
+def import_epub(request: ImportRequest, share_root: Path) -> EpubImportResult:
+    """Coordinate EPUB reading, classification, comparison, and persistence."""
+    epub_path = resolve_epub_path(request.epub_path)
+    book = read_epub_book(epub_path)
+
+    fallback_title = request.name or epub_path.stem
+    title = normalize_whitespace(book.metadata.title or fallback_title)
+    author = normalize_whitespace(book.metadata.author or "") or None
+    summary = book.metadata.description or extract_summary_from_sections(book.sections)
+    source_url = request.source_url
+    if source_url is None:
+        source_url = epub_path.resolve().as_uri()
+    fallback_slug = slugify(epub_path.stem, fallback="epub")
+    novel_slug = slugify(request.name or epub_path.stem, fallback=fallback_slug)
+    processed_chapters = select_processed_chapters(book.sections)
+    if not processed_chapters:
+        raise EpubImportError(f"no importable chapters found in {epub_path}")
+
+    paths, existing_chapters = prepare_storage(
+        share_root,
+        novel_slug,
+        keep_existing=request.keep_existing,
+    )
+    metadata = NovelMetadata(
+        title=title,
+        author=author,
+        source_url=source_url,
+        site_name=novel_slug,
+        summary=summary,
+    )
+    persist_metadata(paths, metadata, summary)
+    persisted = persist_chapters(
+        epub_path,
+        processed_chapters,
+        source_url,
+        paths,
+        existing_chapters,
+        keep_existing=request.keep_existing,
+    )
+    return EpubImportResult(
+        metadata=metadata,
+        chapters=persisted.chapters,
+        illustrations=persisted.illustrations,
+        output_dir=str(paths.novel_dir),
+        chapter_output_dir=str(paths.chapter_output_dir),
+        illustrations_dir=str(paths.illustrations_dir),
+        changes=persisted.changes,
+        warnings=persisted.warnings,
+    )
+
+
 def import_epub_workflow(
     request: ImportRequest,
     *,
@@ -53,11 +147,8 @@ def import_epub_workflow(
     emit(progress_callback, ProgressEvent(kind="phase", message=f"Importing {request.epub_path.name}"))
     try:
         result = import_epub(
-            request.epub_path,
+            request,
             share_root,
-            name=request.name,
-            keep_existing=request.keep_existing,
-            source_url=request.source_url,
         )
     except EpubImportError as error:
         raise ApplicationValidationError(str(error)) from error
