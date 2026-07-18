@@ -51,6 +51,7 @@ def create_app(
     history_root: Path | None = None,
     jobs_dir: Path | None = None,
     max_upload_bytes: int = 100 * 1024 * 1024,
+    max_cover_bytes: int = 10 * 1024 * 1024,
 ) -> FastAPI:
     """Construct the FastAPI application."""
     from src.api.routes import register_routes
@@ -78,6 +79,7 @@ def create_app(
         jobs_dir=jobs_dir,
         shutdown_event=asyncio.Event(),
         max_upload_bytes=max_upload_bytes,
+        max_cover_bytes=max_cover_bytes,
     )
     state.drafts_dir.mkdir(parents=True, exist_ok=True)
     state.config_drafts_dir.mkdir(parents=True, exist_ok=True)

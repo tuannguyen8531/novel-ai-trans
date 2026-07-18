@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, computed, ref } from 'vue'
+import { onMounted, onUnmounted, computed, ref } from 'vue'
 import { useNovelsStore } from '@/composables/novels'
 import { useSettingsStore } from '@/composables/settings'
 import type { NovelSummary, NovelTargetProgress } from '@/api/types'
@@ -24,6 +24,9 @@ const newTitle = ref('')
 const newAuthor = ref('')
 const newSourceLang = ref('ko')
 const newIllustrationUrl = ref('')
+const newCoverFile = ref<File | null>(null)
+const newCoverPreview = ref<string | null>(null)
+const createdSlug = ref<string | null>(null)
 const addError = ref<string | null>(null)
 const adding = ref(false)
 
@@ -34,7 +37,20 @@ function closeAddModal() {
   newAuthor.value = ''
   newSourceLang.value = 'ko'
   newIllustrationUrl.value = ''
+  setNewCoverFile(null)
+  createdSlug.value = null
   addError.value = null
+}
+
+function setNewCoverFile(file: File | null) {
+  if (newCoverPreview.value) URL.revokeObjectURL(newCoverPreview.value)
+  newCoverFile.value = file
+  newCoverPreview.value = file ? URL.createObjectURL(file) : null
+}
+
+function selectNewCover(event: Event) {
+  const input = event.target as HTMLInputElement
+  setNewCoverFile(input.files?.[0] ?? null)
 }
 
 async function submitAddNovel() {
@@ -42,13 +58,25 @@ async function submitAddNovel() {
   adding.value = true
   addError.value = null
   try {
-    await novels.create({
-      name: newSlug.value.trim(),
-      title: newTitle.value.trim() || undefined,
-      author: newAuthor.value.trim() || undefined,
-      source_language: newSourceLang.value.trim() || undefined,
-      illustration_url: newIllustrationUrl.value.trim() || undefined
-    })
+    const slug = createdSlug.value ?? newSlug.value.trim()
+    if (!createdSlug.value) {
+      await novels.create({
+        name: slug,
+        title: newTitle.value.trim() || undefined,
+        author: newAuthor.value.trim() || undefined,
+        source_language: newSourceLang.value.trim() || undefined,
+        illustration_url: newCoverFile.value ? undefined : (newIllustrationUrl.value.trim() || undefined)
+      })
+      createdSlug.value = slug
+    }
+    if (newCoverFile.value) {
+      try {
+        await novels.uploadCover(slug, newCoverFile.value)
+      } catch (err) {
+        addError.value = `Novel was created, but the cover could not be saved: ${(err as Error).message}`
+        return
+      }
+    }
     closeAddModal()
   } catch (err) {
     addError.value = (err as Error).message
@@ -60,6 +88,8 @@ async function submitAddNovel() {
 onMounted(() => {
   void Promise.all([novels.refresh(), settings.refresh()])
 })
+
+onUnmounted(() => setNewCoverFile(null))
 
 const totalNovels = computed(() => novels.novels.length)
 const defaultTarget = computed(() => settings.settings?.target_language ?? 'vi')
@@ -255,33 +285,49 @@ const deleteMessage = computed(() => {
           <div v-if="addError" class="error">{{ addError }}</div>
           <div>
             <label for="new-slug">Slug/Directory Name <span class="danger">*</span></label>
-            <input id="new-slug" v-model="newSlug" placeholder="e.g. my-awesome-novel (only letters, numbers, dashes, underscores)" />
+            <input id="new-slug" v-model="newSlug" :disabled="Boolean(createdSlug)" placeholder="e.g. my-awesome-novel (only letters, numbers, dashes, underscores)" />
           </div>
           <div>
             <label for="new-title">Title</label>
-            <input id="new-title" v-model="newTitle" placeholder="e.g. My Awesome Novel" />
+            <input id="new-title" v-model="newTitle" :disabled="Boolean(createdSlug)" placeholder="e.g. My Awesome Novel" />
           </div>
           <div>
             <label for="new-author">Author</label>
-            <input id="new-author" v-model="newAuthor" placeholder="e.g. Author Name" />
+            <input id="new-author" v-model="newAuthor" :disabled="Boolean(createdSlug)" placeholder="e.g. Author Name" />
           </div>
           <div>
             <label for="new-lang">Language</label>
-            <select id="new-lang" v-model="newSourceLang">
+            <select id="new-lang" v-model="newSourceLang" :disabled="Boolean(createdSlug)">
               <option value="ko">Korean</option>
               <option value="ja">Japanese</option>
               <option value="zh">Chinese</option>
             </select>
           </div>
           <div>
-            <label for="new-illustration">Illustration URL</label>
-            <input id="new-illustration" v-model="newIllustrationUrl" placeholder="e.g. https://example.com/cover.jpg" />
+            <label for="new-cover">Upload cover</label>
+            <input
+              id="new-cover"
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              @change="selectNewCover"
+            />
+            <p class="muted cover-help">JPEG, PNG, WebP, or GIF; up to 10 MiB. Saved as optimized cover.jpg.</p>
+            <img v-if="newCoverPreview" class="cover-preview" :src="newCoverPreview" alt="Cover preview" />
+          </div>
+          <div>
+            <label for="new-illustration">Remote cover URL</label>
+            <input
+              id="new-illustration"
+              v-model="newIllustrationUrl"
+              :disabled="Boolean(newCoverFile) || Boolean(createdSlug)"
+              placeholder="https://example.com/cover.jpg (alternative to upload)"
+            />
           </div>
         </div>
         <div class="modal-footer">
           <button class="secondary" type="button" :disabled="adding" @click="closeAddModal">Cancel</button>
           <button type="button" :disabled="adding || !newSlug.trim()" @click="submitAddNovel">
-            {{ adding ? 'Creating...' : 'Create Novel' }}
+            {{ adding ? 'Saving…' : (createdSlug ? 'Retry cover upload' : 'Create Novel') }}
           </button>
         </div>
       </div>
@@ -464,5 +510,20 @@ button.action-link:hover:not(:disabled) {
 
 .danger {
   color: var(--danger);
+}
+
+.cover-help {
+  margin: 0.35rem 0 0;
+  font-size: 0.85rem;
+}
+
+.cover-preview {
+  display: block;
+  width: min(10rem, 100%);
+  max-height: 14rem;
+  margin-top: 0.65rem;
+  object-fit: contain;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
 }
 </style>

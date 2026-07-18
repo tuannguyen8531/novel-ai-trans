@@ -19,6 +19,7 @@ class AppState:
     jobs_dir: Path
     shutdown_event: asyncio.Event
     max_upload_bytes: int = 100 * 1024 * 1024
+    max_cover_bytes: int = 10 * 1024 * 1024
 
 
 __all__ = ["AppState"]

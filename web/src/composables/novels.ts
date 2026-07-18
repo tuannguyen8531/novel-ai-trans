@@ -51,5 +51,10 @@ export const useNovelsStore = defineStore('novels', () => {
     return api.getTranslationProgress(name, target)
   }
 
-  return { novels, detail, error, loading, refresh, load, remove, create, progress }
+  async function uploadCover(name: string, file: File) {
+    await api.uploadNovelCover(name, file)
+    await refresh()
+  }
+
+  return { novels, detail, error, loading, refresh, load, remove, create, progress, uploadCover }
 })

@@ -20,6 +20,7 @@ const {
   loading,
   loadError,
   error,
+  saving,
   title,
   author,
   sourceUrl,
@@ -27,6 +28,8 @@ const {
   summary,
   sourceLanguage,
   force,
+  coverFile,
+  setCoverFile,
   targetTitle,
   targetSummary,
   display,
@@ -49,7 +52,13 @@ onUnmounted(() => {
 })
 
 function close() {
+  setCoverFile(null)
   emit('update:open', false)
+}
+
+function selectCover(event: Event) {
+  const input = event.target as HTMLInputElement
+  setCoverFile(input.files?.[0] ?? null)
 }
 
 async function saveAndClose() {
@@ -100,8 +109,23 @@ defineExpose({ load })
             <input v-model="sourceUrl" placeholder="https://..." />
           </div>
           <div>
-            <label>Cover image URL</label>
-            <input v-model="illustrationUrl" placeholder="https://... (optional)" />
+            <label for="metadata-cover-file">Upload cover</label>
+            <input
+              id="metadata-cover-file"
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              @change="selectCover"
+            />
+            <p class="muted cover-help">JPEG, PNG, WebP, or GIF; up to 10 MiB. Saved as optimized cover.jpg.</p>
+            <img v-if="display.illustrationSrc" class="cover-preview" :src="display.illustrationSrc" alt="Cover preview" />
+          </div>
+          <div>
+            <label>Remote cover URL</label>
+            <input
+              v-model="illustrationUrl"
+              :disabled="Boolean(coverFile)"
+              placeholder="https://... (alternative to upload)"
+            />
           </div>
           <div>
             <label>Summary</label>
@@ -134,7 +158,7 @@ defineExpose({ load })
               <span>Regenerate existing AI translations</span>
             </label>
             <div class="row gap-2">
-              <button class="secondary" type="button" @click="saveAndLocalize">
+              <button class="secondary" type="button" :disabled="saving" @click="saveAndLocalize">
                 Save and translate {{ targetLanguageLabel }}
               </button>
             </div>
@@ -143,9 +167,11 @@ defineExpose({ load })
         <p v-if="error" class="error operation-error">{{ error }}</p>
       </div>
       <footer class="modal-footer">
-        <button class="secondary" type="button" @click="close">Cancel</button>
-        <button class="secondary" type="button" @click="load">Revert</button>
-        <button type="button" @click="saveAndClose">Save metadata</button>
+        <button class="secondary" type="button" :disabled="saving" @click="close">Cancel</button>
+        <button class="secondary" type="button" :disabled="saving" @click="load">Revert</button>
+        <button type="button" :disabled="saving" @click="saveAndClose">
+          {{ saving ? 'Saving…' : 'Save metadata' }}
+        </button>
       </footer>
     </div>
   </div>
@@ -177,5 +203,20 @@ defineExpose({ load })
 
 .operation-error {
   margin-top: 0.5rem;
+}
+
+.cover-help {
+  margin: 0.35rem 0 0;
+  font-size: 0.85rem;
+}
+
+.cover-preview {
+  display: block;
+  width: min(10rem, 100%);
+  max-height: 14rem;
+  margin-top: 0.65rem;
+  object-fit: contain;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
 }
 </style>

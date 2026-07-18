@@ -169,6 +169,8 @@ export const api = {
     }),
   illustrationUrl: (name: string, filename: string): string =>
     `${BASE}/api/novels/${encodeURIComponent(name)}/illustrations/${encodeURIComponent(filename)}`,
+  coverUrl: (name: string): string =>
+    `${BASE}/api/novels/${encodeURIComponent(name)}/cover`,
   listArtifacts: (name: string) =>
     request<ArtifactInfo[]>(`/api/novels/${encodeURIComponent(name)}/artifacts`),
   downloadArtifact: async (name: string, filename: string): Promise<Blob> => {
@@ -210,6 +212,14 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(patch)
     }),
+  uploadNovelCover: (name: string, file: File) => {
+    const form = new FormData()
+    form.append('file', file, file.name)
+    return request<NovelMetadataResponse>(`/api/novels/${encodeURIComponent(name)}/cover`, {
+      method: 'PUT',
+      body: form
+    })
+  },
   localizeNovelMetadata: (
     name: string,
     payload: { target_language: 'vi' | 'en'; fields?: Array<'title' | 'summary'>; provider?: string; force?: boolean }

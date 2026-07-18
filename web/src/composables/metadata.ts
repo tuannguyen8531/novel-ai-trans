@@ -1,4 +1,4 @@
-import { computed, ref, toValue, type MaybeRefOrGetter } from 'vue'
+import { computed, onScopeDispose, ref, toValue, type MaybeRefOrGetter } from 'vue'
 import { api } from '@/api/client'
 import { useNovelsStore } from '@/composables/novels'
 
@@ -26,6 +26,7 @@ export function useMetadata(
   const loading = ref(false)
   const loadError = ref<string | null>(null)
   const error = ref<string | null>(null)
+  const saving = ref(false)
   const title = ref('')
   const author = ref('')
   const sourceUrl = ref('')
@@ -37,6 +38,16 @@ export function useMetadata(
   const summaryVi = ref('')
   const summaryEn = ref('')
   const force = ref(false)
+  const coverFile = ref<File | null>(null)
+  const coverPreviewUrl = ref<string | null>(null)
+
+  function setCoverFile(file: File | null) {
+    if (coverPreviewUrl.value) URL.revokeObjectURL(coverPreviewUrl.value)
+    coverFile.value = file
+    coverPreviewUrl.value = file ? URL.createObjectURL(file) : null
+  }
+
+  onScopeDispose(() => setCoverFile(null))
 
   const targetTitle = computed({
     get: () => toValue(targetLanguage) === 'vi' ? translatedVi.value : translatedEn.value,
@@ -59,6 +70,7 @@ export function useMetadata(
     author.value.trim() ||
     sourceUrl.value.trim() ||
     illustrationUrl.value.trim() ||
+    coverFile.value ||
     summary.value.trim() ||
     sourceLanguage.value.trim() ||
     translatedVi.value.trim() ||
@@ -68,10 +80,14 @@ export function useMetadata(
   ))
 
   const illustrationSrc = computed(() => {
+    if (coverPreviewUrl.value) return coverPreviewUrl.value
     const value = illustrationUrl.value.trim()
     if (!value) return null
     if (value.startsWith('http://') || value.startsWith('https://') || value.startsWith('data:')) {
       return value
+    }
+    if (/^(?:illustrations\/)?cover\.(?:gif|jpe?g|png|webp)$/i.test(value)) {
+      return api.coverUrl(toValue(novel))
     }
     return api.illustrationUrl(toValue(novel), value)
   })
@@ -90,6 +106,7 @@ export function useMetadata(
   }))
 
   async function load() {
+    setCoverFile(null)
     loading.value = true
     loadError.value = null
     try {
@@ -117,14 +134,15 @@ export function useMetadata(
 
   async function save(): Promise<boolean> {
     error.value = null
+    saving.value = true
     const patch: Record<string, unknown> = {
       title: title.value.trim(),
       author: author.value.trim(),
       source_url: sourceUrl.value.trim(),
-      illustration_url: illustrationUrl.value.trim(),
       summary: summary.value.trim(),
       source_language: sourceLanguage.value.trim() || null
     }
+    if (!coverFile.value) patch.illustration_url = illustrationUrl.value.trim()
     const currentLocalized = (
       metadata.value?.localized as Record<string, Record<string, string | null>> | undefined
     ) ?? {}
@@ -144,12 +162,16 @@ export function useMetadata(
 
     try {
       await api.patchNovelMetadata(toValue(novel), patch)
+      if (coverFile.value) await api.uploadNovelCover(toValue(novel), coverFile.value)
+      setCoverFile(null)
       await load()
       await novels.load(toValue(novel))
       return true
     } catch (err) {
       error.value = (err as Error).message
       return false
+    } finally {
+      saving.value = false
     }
   }
 
@@ -172,6 +194,7 @@ export function useMetadata(
     loading,
     loadError,
     error,
+    saving,
     title,
     author,
     sourceUrl,
@@ -179,6 +202,8 @@ export function useMetadata(
     summary,
     sourceLanguage,
     force,
+    coverFile,
+    setCoverFile,
     targetTitle,
     targetSummary,
     display,

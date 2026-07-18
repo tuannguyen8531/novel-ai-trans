@@ -6,10 +6,12 @@ import json
 import os
 import tempfile
 import time
+from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from PIL import Image
 from starlette.testclient import TestClient
 
 from src.api.factory import create_app
@@ -140,6 +142,67 @@ def test_patch_metadata_creates_file_if_missing(client):
     assert (novel_dir / "metadata.json").exists()
     on_disk = json.loads((novel_dir / "metadata.json").read_text(encoding="utf-8"))
     assert on_disk["title"] == "Brand New"
+
+
+def _cover_bytes() -> bytes:
+    output = BytesIO()
+    Image.new("RGBA", (200, 300), (0, 128, 255, 128)).save(output, format="PNG")
+    return output.getvalue()
+
+
+def test_upload_cover_normalizes_to_canonical_jpeg_and_updates_metadata(client):
+    test_client, novel_dir = client
+    (novel_dir / "cover.png").write_bytes(b"old")
+    illustrations = novel_dir / "illustrations"
+    illustrations.mkdir()
+    (illustrations / "cover.webp").write_bytes(b"old")
+
+    response = test_client.put(
+        "/api/novels/demo/cover",
+        files={"file": ("../../unexpected.png", _cover_bytes(), "image/png")},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["illustration_url"] == "cover.jpg"
+    cover = novel_dir / "cover.jpg"
+    with Image.open(cover) as image:
+        assert image.format == "JPEG"
+        assert image.mode == "RGB"
+        assert image.size == (200, 300)
+    assert not (novel_dir / "cover.png").exists()
+    assert not (illustrations / "cover.webp").exists()
+    assert json.loads((novel_dir / "metadata.json").read_text(encoding="utf-8"))["illustration_url"] == "cover.jpg"
+
+    served = test_client.get("/api/novels/demo/cover")
+    assert served.status_code == 200
+    assert served.headers["content-type"] == "image/jpeg"
+    assert served.content == cover.read_bytes()
+
+
+def test_upload_cover_rejects_invalid_image_without_changing_metadata(client):
+    test_client, novel_dir = client
+
+    response = test_client.put(
+        "/api/novels/demo/cover",
+        files={"file": ("cover.png", b"not an image", "image/png")},
+    )
+
+    assert response.status_code == 422
+    assert not (novel_dir / "cover.jpg").exists()
+    assert "illustration_url" not in json.loads((novel_dir / "metadata.json").read_text(encoding="utf-8"))
+
+
+def test_upload_cover_enforces_separate_size_limit(client):
+    test_client, novel_dir = client
+    test_client.app.state.app_state.max_cover_bytes = 4
+
+    response = test_client.put(
+        "/api/novels/demo/cover",
+        files={"file": ("cover.png", b"12345", "image/png")},
+    )
+
+    assert response.status_code == 422
+    assert not (novel_dir / "cover.jpg").exists()
 
 
 def test_patch_metadata_deep_merges_localized_values_and_marks_manual(client):

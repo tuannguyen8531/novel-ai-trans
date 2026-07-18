@@ -6,7 +6,7 @@ import asyncio
 from dataclasses import asdict
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
 
 from src.api.dependencies import AuthenticatedPrincipal, JobManagerDependency, get_state
@@ -25,9 +25,9 @@ from src.api.schemas import (
     NovelSummary,
 )
 from src.application import config as app_config
-from src.application.errors import PersistenceError
+from src.application.errors import ApplicationValidationError, PersistenceError
 from src.application.languages import normalize_source_language
-from src.application.novel import artifacts, catalog, chapters, identity, metadata, rules
+from src.application.novel import artifacts, catalog, chapters, covers, identity, metadata, rules
 from src.application.novel.localization import localize_metadata
 
 router = APIRouter(tags=["novels"])
@@ -170,6 +170,37 @@ def patch_novel_metadata(
         novel=name,
         data=metadata.update_metadata(root, name, updates, localized_origin="manual"),
     )
+
+
+@router.put("/novels/{name}/cover", response_model=NovelMetadataResponse)
+async def put_novel_cover(
+    name: str,
+    _: AuthenticatedPrincipal,
+    file: Annotated[UploadFile, File(...)],
+) -> NovelMetadataResponse:
+    limit = get_state().max_cover_bytes
+    chunks: list[bytes] = []
+    received = 0
+    try:
+        while chunk := await file.read(min(1024 * 1024, limit + 1)):
+            received += len(chunk)
+            if received > limit:
+                raise ApplicationValidationError(f"Cover image must not exceed {limit // (1024 * 1024)} MiB.")
+            chunks.append(chunk)
+    finally:
+        await file.close()
+
+    root = identity.resolve_root(app_config.get_config().translated_dir)
+    return NovelMetadataResponse(novel=name, data=covers.save(root, name, b"".join(chunks)))
+
+
+@router.get("/novels/{name}/cover")
+def get_novel_cover(
+    name: str,
+    _: AuthenticatedPrincipal,
+) -> FileResponse:
+    root = identity.resolve_root(app_config.get_config().translated_dir)
+    return FileResponse(covers.cover(root, name))
 
 
 @router.post(

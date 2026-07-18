@@ -31,3 +31,15 @@ def test_epub_builder_embeds_resolved_illustration_at_marker_position(tmp_path) 
     assert chapter.index("Before.") < chapter.index("images/001-001.jpg") < chapter.index("After.")
     assert 'href="images/001-001.jpg" media-type="image/jpeg"' in manifest
     assert embedded == b"image-data"
+
+
+def test_epub_builder_uses_cover_media_type_from_file_suffix(tmp_path) -> None:
+    cover = tmp_path / "cover.png"
+    cover.write_bytes(b"png-data")
+    output = tmp_path / "book.epub"
+
+    EPUBBuilder("Book", cover_image=cover).write(output)
+
+    with zipfile.ZipFile(output) as epub:
+        manifest = epub.read("OEBPS/content.opf").decode("utf-8")
+    assert 'href="cover.png" media-type="image/png"' in manifest

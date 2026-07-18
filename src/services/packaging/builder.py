@@ -9,7 +9,7 @@ from pathlib import Path
 
 from src.domain.illustrations import parse_illustration_marker
 from src.domain.language import normalize_target_language
-from src.services.packaging.images import ResolvedImage
+from src.services.packaging.images import ResolvedImage, image_media_type
 
 
 def package_file_stem(novel_name: str, target_language: str) -> str:
@@ -169,7 +169,9 @@ p {
         if self.cover_image and self.cover_image.exists():
             suffix = self.cover_image.suffix.lower()
             cover_filename = f"cover{suffix}"
-            manifest_items.append(f'    <item id="cover-image" href="{cover_filename}" media-type="image/jpeg"/>')
+            manifest_items.append(
+                f'    <item id="cover-image" href="{cover_filename}" media-type="{image_media_type(self.cover_image)}"/>'
+            )
             manifest_items.append('    <item id="cover" href="cover.xhtml" media-type="application/xhtml+xml"/>')
             spine_items.append('    <itemref idref="cover"/>')
             cover_meta = '\n    <meta name="cover" content="cover-image"/>'
