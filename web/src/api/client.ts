@@ -250,9 +250,9 @@ export const api = {
     }),
 
   listDrafts: () => request<DraftSummary[]>('/api/config-drafts'),
-  getDraft: (draft_id: string) => request<DraftDetail>(`/api/config-drafts/${draft_id}`),
+  getDraft: (draft_id: string) => request<DraftDetail>(`/api/config-drafts/${encodeURIComponent(draft_id)}`),
   deleteDraft: (draft_id: string) =>
-    request<void>(`/api/config-drafts/${draft_id}`, { method: 'DELETE' }),
+    request<void>(`/api/config-drafts/${encodeURIComponent(draft_id)}`, { method: 'DELETE' }),
 
   startTranslate: (payload: Record<string, unknown>) =>
     request<{ job_id: string }>('/api/translate', {

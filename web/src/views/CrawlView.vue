@@ -6,11 +6,13 @@ import { useCrawl } from '@/composables/crawl'
 const router = useRouter()
 const {
   activeTab, configs, configsError, loadingConfigs, selectedConfigText, selectedConfigError,
-  loadingSelectedConfig, selectedConfig, browser, headed, ignoreRobots, overwrite, workers,
+  loadingSelectedConfig, savingSelectedConfig, selectedConfigMessage, selectedConfig, browser,
+  headed, ignoreRobots, overwrite, workers,
   maxChapters, crawlError, crawlJobId, generateUrl, generateName, generateProvider,
   generateUseBrowser, generateHeaded, generateNoCache, generateIgnoreSample, generateError,
-  generateJobId, generatedDraft, draftConfigText, selectBrowserMode, selectGenerateBrowserMode,
-  startCrawl, startGenerate, saveGeneratedDraft, discardDraft
+  generateJobId, generatedDraft, draftConfigText, drafts, draftsError, loadingDrafts,
+  selectBrowserMode, selectGenerateBrowserMode, startCrawl, startGenerate, saveSelectedConfig,
+  loadSelectedConfig, loadDraft, saveGeneratedDraft, deleteDraft, discardDraft
 } = useCrawl()
 </script>
 
@@ -138,14 +140,25 @@ const {
       <div v-if="selectedConfig" class="card">
         <h3>Current config — <code>{{ selectedConfig }}</code></h3>
         <p v-if="loadingSelectedConfig" class="muted">Loading config...</p>
-        <p v-else-if="selectedConfigError" class="error">{{ selectedConfigError }}</p>
         <textarea
           v-else
-          :value="selectedConfigText"
+          v-model="selectedConfigText"
           class="draft-editor"
-          readonly
           spellcheck="false"
         ></textarea>
+        <p v-if="selectedConfigError" class="error" style="margin-top: 0.5rem;">{{ selectedConfigError }}</p>
+        <div v-if="!loadingSelectedConfig" class="row gap-2" style="margin-top: 0.75rem;">
+          <button type="button" :disabled="savingSelectedConfig" @click="saveSelectedConfig">
+            {{ savingSelectedConfig ? 'Validating…' : 'Validate & save' }}
+          </button>
+          <button class="secondary" type="button" :disabled="savingSelectedConfig" @click="loadSelectedConfig(selectedConfig)">
+            Reload
+          </button>
+        </div>
+        <p class="muted" style="margin-top: 0.5rem;">
+          JSON structure, required fields, and config name are validated by the server before the file is replaced.
+        </p>
+        <p v-if="selectedConfigMessage" class="muted" style="margin-top: 0.5rem;">{{ selectedConfigMessage }}</p>
       </div>
 
       <div v-if="crawlJobId" class="card">
@@ -238,6 +251,29 @@ const {
         <JobMonitor :job-id="generateJobId" />
       </div>
 
+      <div class="card">
+        <div class="row gap-2" style="justify-content: space-between; align-items: center;">
+          <div>
+            <h3>Pending drafts</h3>
+            <p class="muted">Drafts remain available until they expire or are discarded.</p>
+          </div>
+        </div>
+        <p v-if="loadingDrafts" class="muted">Loading drafts…</p>
+        <p v-else-if="draftsError" class="error">{{ draftsError }}</p>
+        <p v-else-if="!drafts.length" class="muted">No pending drafts.</p>
+        <div v-else class="flex-col gap-2 draft-list">
+          <div v-for="draft in drafts" :key="draft.draft_id" class="row gap-2 draft-row">
+            <div class="draft-summary">
+              <strong><code>{{ draft.name }}</code></strong>
+              <span class="muted">{{ draft.source_url || 'No source URL' }}</span>
+              <small class="muted">Expires {{ new Date(draft.expires_at).toLocaleString() }}</small>
+            </div>
+            <button class="secondary" type="button" @click="loadDraft(draft.draft_id)">Open</button>
+            <button class="danger" type="button" @click="deleteDraft(draft.draft_id)">Delete</button>
+          </div>
+        </div>
+      </div>
+
       <div v-if="generatedDraft" class="card">
         <h3>Review draft — <code>{{ generatedDraft.name }}</code></h3>
         <p class="muted">
@@ -249,9 +285,12 @@ const {
         </p>
         <textarea v-model="draftConfigText" class="draft-editor" spellcheck="false"></textarea>
         <div class="row gap-2" style="margin-top: 0.75rem;">
-          <button type="button" @click="saveGeneratedDraft">Save config</button>
+          <button type="button" @click="saveGeneratedDraft">Validate & save</button>
           <button class="danger" type="button" @click="discardDraft">Discard draft</button>
         </div>
+        <p class="muted" style="margin-top: 0.5rem;">
+          Invalid JSON or config schema errors leave both the existing config and this draft unchanged.
+        </p>
       </div>
     </div>
   </section>
@@ -302,5 +341,23 @@ const {
   font-size: 0.85rem;
   line-height: 1.4;
   background: var(--bg-elev-2);
+}
+
+.draft-list {
+  margin-top: 0.75rem;
+}
+
+.draft-row {
+  align-items: center;
+  padding: 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+}
+
+.draft-summary {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
 }
 </style>

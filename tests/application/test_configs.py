@@ -48,6 +48,32 @@ def test_save_config_rejects_invalid_draft_id(tmp_path: Path) -> None:
         save_config(tmp_path / "translated", tmp_path / "drafts", "demo", _config(), "../../escape")
 
 
+def test_save_config_validates_before_replacing_file_or_consuming_draft(tmp_path: Path) -> None:
+    translated_root = tmp_path / "translated"
+    drafts_root = tmp_path / "drafts"
+    save_config(translated_root, drafts_root, "demo", _config(), None)
+    config_path = translated_root / "demo" / "config.json"
+    original = config_path.read_text(encoding="utf-8")
+    now = datetime.now(UTC)
+    DraftRepository(drafts_root).save(
+        {
+            "draft_id": "invalid-demo",
+            "name": "demo",
+            "created_at": now.isoformat(),
+            "expires_at": (now + timedelta(days=1)).isoformat(),
+            "config": _config(),
+        }
+    )
+    invalid = _config()
+    invalid.pop("chapter_content_selector")
+
+    with pytest.raises(ApplicationValidationError, match="Missing required config fields"):
+        save_config(translated_root, drafts_root, "demo", invalid, "invalid-demo")
+
+    assert config_path.read_text(encoding="utf-8") == original
+    assert (drafts_root / "invalid-demo.json").is_file()
+
+
 def test_load_config_and_draft_keep_validation_and_persistence_errors(tmp_path: Path) -> None:
     with pytest.raises(ApplicationValidationError, match="Invalid config name"):
         load_config(tmp_path / "translated", "../escape")

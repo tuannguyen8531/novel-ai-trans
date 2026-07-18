@@ -1,6 +1,6 @@
 import { onMounted, ref, watch } from 'vue'
 import { api } from '@/api/client'
-import type { ConfigSummary, DraftDetail } from '@/api/types'
+import type { ConfigSummary, DraftDetail, DraftSummary } from '@/api/types'
 import { useJobsStore } from '@/composables/jobs'
 
 export function useCrawl() {
@@ -12,6 +12,8 @@ export function useCrawl() {
   const selectedConfigText = ref('')
   const selectedConfigError = ref<string | null>(null)
   const loadingSelectedConfig = ref(false)
+  const savingSelectedConfig = ref(false)
+  const selectedConfigMessage = ref<string | null>(null)
   let selectedConfigRequest = 0
 
   const selectedConfig = ref('')
@@ -35,6 +37,9 @@ export function useCrawl() {
   const generateJobId = ref<string | null>(null)
   const generatedDraft = ref<DraftDetail | null>(null)
   const draftConfigText = ref('')
+  const drafts = ref<DraftSummary[]>([])
+  const draftsError = ref<string | null>(null)
+  const loadingDrafts = ref(false)
 
   function selectBrowserMode(mode: 'headless' | 'headed') {
     browser.value = mode === 'headless'
@@ -63,6 +68,7 @@ export function useCrawl() {
     const request = ++selectedConfigRequest
     selectedConfigText.value = ''
     selectedConfigError.value = null
+    selectedConfigMessage.value = null
     if (!name) return
     loadingSelectedConfig.value = true
     try {
@@ -72,6 +78,37 @@ export function useCrawl() {
       if (request === selectedConfigRequest) selectedConfigError.value = (err as Error).message
     } finally {
       if (request === selectedConfigRequest) loadingSelectedConfig.value = false
+    }
+  }
+
+  function parseConfigDocument(text: string): Record<string, unknown> {
+    const parsed: unknown = JSON.parse(text)
+    if (parsed === null || Array.isArray(parsed) || typeof parsed !== 'object') {
+      throw new Error('Config must be a JSON object.')
+    }
+    return parsed as Record<string, unknown>
+  }
+
+  async function saveSelectedConfig() {
+    if (!selectedConfig.value) return
+    selectedConfigError.value = null
+    selectedConfigMessage.value = null
+    let parsed: Record<string, unknown>
+    try {
+      parsed = parseConfigDocument(selectedConfigText.value)
+    } catch (err) {
+      selectedConfigError.value = `Invalid JSON: ${(err as Error).message}`
+      return
+    }
+    savingSelectedConfig.value = true
+    try {
+      await api.saveConfig(selectedConfig.value, parsed)
+      selectedConfigMessage.value = 'Config validated and saved.'
+      await loadConfigs()
+    } catch (err) {
+      selectedConfigError.value = (err as Error).message
+    } finally {
+      savingSelectedConfig.value = false
     }
   }
 
@@ -121,6 +158,7 @@ export function useCrawl() {
   }
 
   async function loadDraft(draftId: string) {
+    generateError.value = null
     try {
       const detail = await api.getDraft(draftId)
       generatedDraft.value = detail
@@ -130,11 +168,23 @@ export function useCrawl() {
     }
   }
 
+  async function loadDrafts() {
+    loadingDrafts.value = true
+    draftsError.value = null
+    try {
+      drafts.value = await api.listDrafts()
+    } catch (err) {
+      draftsError.value = (err as Error).message
+    } finally {
+      loadingDrafts.value = false
+    }
+  }
+
   async function saveGeneratedDraft() {
     if (!generatedDraft.value) return
     let parsed: Record<string, unknown>
     try {
-      parsed = JSON.parse(draftConfigText.value)
+      parsed = parseConfigDocument(draftConfigText.value)
     } catch (err) {
       generateError.value = `Invalid JSON: ${(err as Error).message}`
       return
@@ -144,26 +194,38 @@ export function useCrawl() {
       generateError.value = null
       generatedDraft.value = null
       draftConfigText.value = ''
-      await loadConfigs()
+      await Promise.all([loadConfigs(), loadDrafts()])
     } catch (err) {
       generateError.value = (err as Error).message
     }
   }
 
-  function discardDraft() {
-    if (generatedDraft.value) void api.deleteDraft(generatedDraft.value.draft_id).catch(() => undefined)
-    generatedDraft.value = null
-    draftConfigText.value = ''
+  async function deleteDraft(draftId: string) {
+    draftsError.value = null
+    try {
+      await api.deleteDraft(draftId)
+      if (generatedDraft.value?.draft_id === draftId) {
+        generatedDraft.value = null
+        draftConfigText.value = ''
+      }
+      await loadDrafts()
+    } catch (err) {
+      draftsError.value = (err as Error).message
+    }
   }
 
-  onMounted(loadConfigs)
+  async function discardDraft() {
+    if (generatedDraft.value) await deleteDraft(generatedDraft.value.draft_id)
+  }
+
+  onMounted(() => void Promise.all([loadConfigs(), loadDrafts()]))
   watch(selectedConfig, (name) => void loadSelectedConfig(name))
   watch(
     () => generateJobId.value ? jobs.findJob(generateJobId.value) : null,
     (job) => {
       const draftId = job?.result?.draft_id
       if (job?.status === 'completed' && typeof draftId === 'string' && generatedDraft.value?.draft_id !== draftId) {
-        void loadDraft(draftId)
+        void loadDraft(draftId).then(loadDrafts)
       }
     },
     { deep: true }
@@ -171,10 +233,12 @@ export function useCrawl() {
 
   return {
     activeTab, configs, configsError, loadingConfigs, selectedConfigText, selectedConfigError,
-    loadingSelectedConfig, selectedConfig, browser, headed, ignoreRobots, overwrite, workers,
+    loadingSelectedConfig, savingSelectedConfig, selectedConfigMessage, selectedConfig, browser, headed,
+    ignoreRobots, overwrite, workers,
     maxChapters, crawlError, crawlJobId, generateUrl, generateName, generateProvider,
     generateUseBrowser, generateHeaded, generateNoCache, generateIgnoreSample, generateError,
-    generateJobId, generatedDraft, draftConfigText, selectBrowserMode, selectGenerateBrowserMode,
-    startCrawl, startGenerate, saveGeneratedDraft, discardDraft
+    generateJobId, generatedDraft, draftConfigText, drafts, draftsError, loadingDrafts,
+    selectBrowserMode, selectGenerateBrowserMode, startCrawl, startGenerate, saveSelectedConfig,
+    loadSelectedConfig, loadDraft, saveGeneratedDraft, deleteDraft, discardDraft
   }
 }
