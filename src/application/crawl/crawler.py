@@ -155,7 +155,7 @@ def run_crawl(
     try:
         if request.dry_run:
             metadata, discovered = crawler.discover_chapters()
-            metadata_path = share_root / request.novel / "metadata.json"
+            metadata_path = config_path.parent / "metadata.json"
             if metadata_path.is_file():
                 metadata = merge_metadata(metadata_path, metadata, site_config)
             if max_chapters is not None:

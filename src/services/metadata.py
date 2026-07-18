@@ -44,7 +44,8 @@ def metadata_path(novel_name: str) -> Path:
     """Return the metadata file used for a novel."""
     if config.translated_dir:
         return _paths.novel_root_dir(config, novel_name) / "metadata.json"
-    return METADATA_FALLBACK_DIR / f"{novel_name}.metadata.json"
+    _paths.validate_novel_name(novel_name)
+    return _paths.resolve_within(METADATA_FALLBACK_DIR, f"{novel_name}.metadata.json")
 
 
 def _legacy_glossary_path(novel_name: str) -> Path:

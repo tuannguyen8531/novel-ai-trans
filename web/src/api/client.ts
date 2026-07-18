@@ -18,6 +18,7 @@ import type {
   ProviderCheckSettings,
   ProviderSettings,
   Settings,
+  SettingsPatch,
   TelegramSettings
 } from './types'
 
@@ -86,7 +87,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 export const api = {
   health: () => request<HealthResponse>('/api/health'),
   getSettings: () => request<Settings>('/api/settings'),
-  patchSettings: (patch: Partial<Settings>) =>
+  patchSettings: (patch: SettingsPatch) =>
     request<Settings>('/api/settings', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },

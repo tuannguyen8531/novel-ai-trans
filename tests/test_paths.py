@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+import pytest
+
 from src import paths
 
 
@@ -46,3 +48,15 @@ def test_novel_glossary_path_uses_target_and_fallback_root(tmp_path: Path) -> No
 
     config.translated_dir = ""
     assert paths.novel_glossary_path(config, "demo", fallback_root=tmp_path) == tmp_path / "demo.json"
+
+
+@pytest.mark.parametrize("novel_name", ["../secret", "..\\secret", "/absolute", "C:\\absolute", ".hidden"])
+def test_novel_paths_reject_unsafe_names(tmp_path: Path, novel_name: str) -> None:
+    class Config:
+        translated_dir = str(tmp_path / "translated")
+        target_language = "vi"
+
+    with pytest.raises(ValueError, match="Invalid novel name"):
+        paths.novel_root_dir(Config(), novel_name)
+    with pytest.raises(ValueError, match="Invalid novel name"):
+        paths.translation_progress_path_for_target(novel_name, "vi", progress_root=tmp_path)

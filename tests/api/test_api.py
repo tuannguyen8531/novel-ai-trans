@@ -82,6 +82,15 @@ def test_settings_round_trip(client):
     assert client.get("/api/settings").json()["target_language"] == new_value
 
 
+def test_settings_rejects_translated_dir_patch(client):
+    original = client.get("/api/settings").json()["translated_dir"]
+
+    response = client.patch("/api/settings", json={"translated_dir": "C:/outside"})
+
+    assert response.status_code == 422
+    assert client.get("/api/settings").json()["translated_dir"] == original
+
+
 def test_settings_omits_secrets(client):
     response = client.get("/api/settings")
     body = response.json()
@@ -489,6 +498,15 @@ def test_config_save_rejects_traversal_draft_id(client):
     assert response.status_code == 422
     translated_root = Path(_config.get_config().translated_dir)
     assert not (translated_root / "demo" / "config.json").exists()
+
+
+def test_crawl_rejects_client_selected_filesystem_root(client):
+    response = client.post(
+        "/api/crawl",
+        json={"novel": "demo", "translated_output": "C:/outside"},
+    )
+
+    assert response.status_code == 422
 
 
 def test_config_save_persists_draft_metadata_separately(client):

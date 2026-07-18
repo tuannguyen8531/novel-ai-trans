@@ -27,6 +27,20 @@ export interface Settings {
   openrouter_model: string
 }
 
+export type SettingsPatch = Partial<Pick<Settings,
+  | 'target_language'
+  | 'max_chapters'
+  | 'chunk_mode'
+  | 'chunk_size'
+  | 'chunk_overlap'
+  | 'review_threshold'
+  | 'max_retries'
+  | 'enable_review'
+  | 'enable_summary'
+  | 'translation_temperature'
+  | 'translation_max_tokens'
+>>
+
 export interface TelegramSettings {
   telegram_enabled: boolean
   telegram_api_base: string

@@ -7,6 +7,7 @@ import type {
   ProviderInfo,
   ProviderSettings,
   Settings,
+  SettingsPatch,
   TelegramSettings
 } from '@/api/types'
 
@@ -27,7 +28,7 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
-  async function patch(patch: Partial<Settings>) {
+  async function patch(patch: SettingsPatch) {
     loading.value = true
     error.value = null
     try {

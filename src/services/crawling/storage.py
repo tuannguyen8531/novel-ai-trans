@@ -9,6 +9,7 @@ from pathlib import Path
 
 from src.config import SiteConfig
 from src.models import ChapterLink, ChapterResult, CrawlError, NovelMetadata
+from src.paths import resolve_novel_root
 from src.services.chapters import chapter_path as resolve_chapter_path
 from src.services.metadata import metadata_to_dict
 from src.utils.files import write_text_atomic
@@ -54,7 +55,8 @@ class CrawlStorage:
         self.config = config
         self.output_root = output_root
         self.manifest_path = output_root / f"{novel_slug}.json"
-        self.chapter_output_dir = share_root / novel_slug / "input" if share_root else output_root / novel_slug / "chapters"
+        novel_root = resolve_novel_root(share_root, novel_slug) if share_root else resolve_novel_root(output_root, novel_slug)
+        self.chapter_output_dir = novel_root / ("input" if share_root else "chapters")
         self.metadata_path = self.chapter_output_dir.parent / "metadata.json"
 
     def prepare(self) -> None:

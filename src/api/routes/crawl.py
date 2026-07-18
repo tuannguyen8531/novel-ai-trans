@@ -35,7 +35,6 @@ async def post_crawl(
         progress_cb = build_progress_emitter(job, emit)
         request = CrawlRequest(
             novel=payload.novel,
-            translated_output=Path(payload.translated_output) if payload.translated_output else None,
             max_chapters=payload.max_chapters,
             fail_fast=payload.fail_fast or False,
             ignore_robots=payload.ignore_robots or False,

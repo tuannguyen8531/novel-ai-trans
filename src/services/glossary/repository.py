@@ -77,7 +77,7 @@ def current_target_language() -> str:
 def translated_novel_root(novel_name: str) -> Path:
     if config.translated_dir:
         return _paths.novel_root_dir(config, novel_name)
-    return Path("translated") / novel_name
+    return _paths.resolve_novel_root(Path("translated"), novel_name)
 
 
 def _glossary_path(novel_name: str) -> Path:

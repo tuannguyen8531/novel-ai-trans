@@ -18,7 +18,7 @@ from src.application.crawl.common import check_cancel, emit
 from src.application.errors import PersistenceError
 from src.application.progress import ProgressEvent
 from src.domain.language import detect_language_heuristic
-from src.paths import CONFIG_DIR, RUNTIME_OUTPUT_ROOT
+from src.paths import CONFIG_DIR, RUNTIME_OUTPUT_ROOT, resolve_novel_root
 from src.services import documents
 from src.services.generation import prompts
 from src.services.generation.analysis import ConfigAnalyzer, clean_novel_html, normalize_novel_info
@@ -141,7 +141,7 @@ def save_generated_metadata(
 ) -> Path:
     """Merge generated novel information into its canonical metadata file."""
     root = translated_root or Path(app_config.get_config().translated_dir)
-    path = root / name / "metadata.json"
+    path = resolve_novel_root(root, name) / "metadata.json"
 
     def _merge(existing: dict) -> dict:
         localized = existing.get("localized")

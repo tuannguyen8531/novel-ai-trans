@@ -175,7 +175,7 @@ def run_pack(
     except OSError as error:
         raise PersistenceError(str(error)) from error
     finally:
-        cleanup_cover_image(cover_image)
+        cleanup_cover_image(cover_image, novel_root=novel_root)
 
     _emit(
         progress_callback,

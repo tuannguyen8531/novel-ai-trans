@@ -8,6 +8,24 @@ from typing import Any
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
+_LOCAL_COVER_SUFFIXES = frozenset({".gif", ".jpeg", ".jpg", ".png", ".webp"})
+
+
+def _local_cover_candidates(novel_root: Path, local_path: Path) -> tuple[Path, ...]:
+    """Return allowed locations for a canonical local cover filename."""
+    if (
+        local_path.is_absolute()
+        or local_path.stem.casefold() != "cover"
+        or local_path.suffix.casefold() not in _LOCAL_COVER_SUFFIXES
+    ):
+        return ()
+    parts = local_path.parts
+    if len(parts) == 1:
+        return novel_root / local_path, novel_root / "illustrations" / local_path
+    if len(parts) == 2 and parts[0].casefold() == "illustrations":
+        return (novel_root / local_path,)
+    return ()
+
 
 def resolve_cover_image(metadata: dict[str, Any], novel_root: Path | None = None) -> Path | None:
     """Resolve a local cover or download a remote cover to a temporary file."""
@@ -16,17 +34,15 @@ def resolve_cover_image(metadata: dict[str, Any], novel_root: Path | None = None
         return None
 
     if not illustration_url.startswith(("http://", "https://")):
+        if novel_root is None:
+            return None
         local_path = Path(illustration_url)
-        if local_path.is_absolute() and local_path.exists():
-            return local_path
-        if novel_root is not None:
-            path_in_root = novel_root / local_path
-            if path_in_root.exists():
-                return path_in_root
-            path_in_illustrations = novel_root / "illustrations" / local_path
-            if path_in_illustrations.exists():
-                return path_in_illustrations
-        return local_path if local_path.exists() else None
+        resolved_root = novel_root.resolve()
+        for candidate in _local_cover_candidates(resolved_root, local_path):
+            resolved_candidate = candidate.resolve()
+            if resolved_candidate.is_relative_to(resolved_root) and resolved_candidate.is_file():
+                return resolved_candidate
+        return None
 
     try:
         request = Request(illustration_url, headers={"User-Agent": "Mozilla/5.0"})
@@ -46,10 +62,16 @@ def resolve_cover_image(metadata: dict[str, Any], novel_root: Path | None = None
         return None
 
 
-def cleanup_cover_image(cover_image: Path | None) -> None:
-    """Remove a temporary cover using the workflow's existing path rule."""
-    if cover_image is not None and str(cover_image).startswith(tempfile.gettempdir()):
-        cover_image.unlink(missing_ok=True)
+def cleanup_cover_image(cover_image: Path | None, *, novel_root: Path | None = None) -> None:
+    """Remove only cover files created by the remote-cover downloader."""
+    if cover_image is None:
+        return
+    resolved_cover = cover_image.resolve()
+    if novel_root is not None and resolved_cover.is_relative_to(novel_root.resolve()):
+        return
+    temporary_root = Path(tempfile.gettempdir()).resolve()
+    if resolved_cover.parent == temporary_root and resolved_cover.name.startswith("novel_cover_"):
+        resolved_cover.unlink(missing_ok=True)
 
 
 __all__ = ["cleanup_cover_image", "resolve_cover_image"]

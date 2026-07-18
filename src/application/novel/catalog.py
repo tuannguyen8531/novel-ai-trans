@@ -88,7 +88,7 @@ def _progress_paths(novel_root: Path, name: str, target: str, progress_root: Pat
         name,
         target,
         progress_root=progress_root,
-    )  # codeql[py/path-injection]: name validated by resolve_path
+    )
     shared_path = novel_root / (f"progress.{target}.json" if target != "vi" else "progress.json")
     return runtime_path, shared_path
 

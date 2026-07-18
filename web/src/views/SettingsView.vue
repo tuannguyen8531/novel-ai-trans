@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useSettingsStore } from '@/composables/settings'
-import type { OllamaAccount, ProviderInfo } from '@/api/types'
+import type { OllamaAccount, ProviderInfo, SettingsPatch } from '@/api/types'
 import ProviderModelField from '@/components/ProviderModelField.vue'
 
 const settings = useSettingsStore()
@@ -75,7 +75,7 @@ function providerConfigured(provider: string): boolean {
   return providers.value.find((item) => item.name === provider)?.configured ?? false
 }
 
-async function patchSetting(key: string, value: unknown) {
+async function patchSetting(key: keyof SettingsPatch, value: SettingsPatch[keyof SettingsPatch]) {
   await settings.patch({ [key]: value })
 }
 
@@ -258,7 +258,8 @@ async function saveTelegramSettings() {
         </div>
         <div>
           <label>Translated folder</label>
-          <input :value="settings.settings.translated_dir" @change="patchSetting('translated_dir', ($event.target as HTMLInputElement).value)" />
+          <input :value="settings.settings.translated_dir" readonly aria-readonly="true" />
+          <p class="muted">Configured by <code>TRANSLATED_DIR</code> when the server starts.</p>
         </div>
         <div>
           <label>Chunk mode</label>

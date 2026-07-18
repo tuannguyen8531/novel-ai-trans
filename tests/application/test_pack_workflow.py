@@ -1,6 +1,8 @@
 """Tests for the EPUB packaging workflow."""
 
 import json
+import tempfile
+from pathlib import Path
 from threading import Event
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -34,8 +36,9 @@ def test_run_pack_preserves_core_epub_entries_and_cleans_downloaded_cover(tmp_pa
     output_dir = translated_root / "demo" / "output"
     output_dir.mkdir(parents=True)
     (output_dir / "chapter_001.txt").write_text("Chapter 1\n\nBody text.", encoding="utf-8")
-    downloaded_cover = tmp_path / "novel_cover_downloaded.jpg"
-    downloaded_cover.write_bytes(b"cover-image")
+    with tempfile.NamedTemporaryFile(prefix="novel_cover_downloaded_", suffix=".jpg", delete=False) as temporary:
+        temporary.write(b"cover-image")
+        downloaded_cover = Path(temporary.name)
     config = SimpleNamespace(translated_dir=str(translated_root), target_language="vi")
 
     with (
@@ -128,8 +131,9 @@ def test_run_pack_preserves_cancel_boundary_and_cover_cleanup(tmp_path) -> None:
     output_dir = translated_root / "demo" / "output"
     output_dir.mkdir(parents=True)
     (output_dir / "chapter_001.txt").write_text("Chapter 1\n\nBody.", encoding="utf-8")
-    temporary_cover = tmp_path / "novel_cover_cancelled.jpg"
-    temporary_cover.write_bytes(b"cover")
+    with tempfile.NamedTemporaryFile(prefix="novel_cover_cancelled_", suffix=".jpg", delete=False) as temporary:
+        temporary.write(b"cover")
+        temporary_cover = Path(temporary.name)
     config = SimpleNamespace(translated_dir=str(translated_root), target_language="vi")
     cancel_event = Event()
     cancel_event.set()

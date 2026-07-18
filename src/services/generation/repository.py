@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from src.config import SiteConfig
+from src.paths import resolve_novel_root
 
 _SLUG = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
 
@@ -45,7 +46,7 @@ class ConfigRepository:
 
     def load(self, name: str) -> dict[str, Any]:
         self.validate_name(name)
-        path = self._translated_root / name / "config.json"
+        path = resolve_novel_root(self._translated_root, name) / "config.json"
         if not path.exists():
             raise FileNotFoundError(f"Config not found: {name}")
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -56,7 +57,7 @@ class ConfigRepository:
     def save(self, config: dict[str, Any]) -> Path:
         name = str(config.get("name", "generated"))
         self.validate_name(name)
-        path = self._translated_root / name / "config.json"
+        path = resolve_novel_root(self._translated_root, name) / "config.json"
         path.parent.mkdir(parents=True, exist_ok=True)
         temporary = path.with_suffix(path.suffix + ".tmp")
         temporary.write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

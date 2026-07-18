@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from src.models import ChapterResult, NovelMetadata
+from src.paths import resolve_novel_root
 from src.services import chapters as chapter_service
 from src.services.importing.changes import ChapterImportChange, ImportChanges, calculate_changes, classify_chapter
 from src.services.importing.extractor import EPUB_IMAGE_PLACEHOLDER
@@ -41,7 +42,7 @@ class PersistedImport:
 
 
 def prepare_storage(share_root: Path, novel_slug: str, *, keep_existing: bool) -> tuple[StoragePaths, dict[int, Path]]:
-    novel_dir = share_root / novel_slug
+    novel_dir = resolve_novel_root(share_root, novel_slug)
     chapter_output_dir = novel_dir / "input"
     illustrations_dir = novel_dir / "illustrations"
     chapter_output_dir.mkdir(parents=True, exist_ok=True)

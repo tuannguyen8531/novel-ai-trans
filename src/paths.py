@@ -7,12 +7,14 @@ root so they stay valid regardless of the caller's current working directory.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
 from src.domain.language import normalize_target_language
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
+_NOVEL_NAME_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
 
 RUNTIME_DIR = _PROJECT_ROOT / "runtime"
 INPUT_DIR = _PROJECT_ROOT / "translated" / "input"
@@ -28,8 +30,38 @@ LOCK_DIR = RUNTIME_DIR / "locks"
 GLOSSARY_BACKUP_DIR = RUNTIME_DIR / "glossary-backups"
 
 
+def is_valid_novel_name(novel_name: str) -> bool:
+    """Return whether *novel_name* is safe as one filesystem component."""
+    return isinstance(novel_name, str) and novel_name not in {".", ".."} and bool(_NOVEL_NAME_PATTERN.fullmatch(novel_name))
+
+
+def validate_novel_name(novel_name: str) -> str:
+    """Validate and return a filesystem-safe novel name."""
+    if not is_valid_novel_name(novel_name):
+        raise ValueError(f"Invalid novel name: {novel_name!r}")
+    return novel_name
+
+
+def resolve_within(root: Path, *parts: str) -> Path:
+    """Resolve a path and require it to remain below *root*.
+
+    Resolving both sides also prevents an existing symlink inside the root
+    from redirecting filesystem operations outside the configured boundary.
+    """
+    resolved_root = root.resolve()
+    candidate = resolved_root.joinpath(*parts).resolve()
+    if not candidate.is_relative_to(resolved_root):
+        raise ValueError(f"Path escapes configured root: {candidate}")
+    return candidate
+
+
+def resolve_novel_root(root: Path, novel_name: str) -> Path:
+    """Return a validated novel directory contained by *root*."""
+    return resolve_within(root, validate_novel_name(novel_name))
+
+
 def novel_root_dir(config: Any, novel_name: str) -> Path:
-    return Path(config.translated_dir) / novel_name
+    return resolve_novel_root(Path(config.translated_dir), novel_name)
 
 
 def novel_input_dir_from_root(novel_root: Path) -> Path:
@@ -63,7 +95,9 @@ def novel_glossary_path(
         return novel_root / ("glossary.json" if target == "vi" else f"glossary.{target}.json")
 
     root = fallback_root or GLOSSARY_DIR
-    return root / (f"{novel_name}.json" if target == "vi" else f"{novel_name}.{target}.json")
+    validate_novel_name(novel_name)
+    filename = f"{novel_name}.json" if target == "vi" else f"{novel_name}.{target}.json"
+    return resolve_within(root, filename)
 
 
 def novel_input_dir(config: Any, novel_name: str) -> Path:
@@ -91,9 +125,10 @@ def translation_progress_path_for_target(
 ) -> Path:
     target = normalize_target_language(target_language)
     root = progress_root or PROGRESS_DIR
+    validate_novel_name(novel_name)
     if target == "vi":
-        return root / f"{novel_name}.json"
-    return root / target / f"{novel_name}.json"
+        return resolve_within(root, f"{novel_name}.json")
+    return resolve_within(root, target, f"{novel_name}.json")
 
 
 def translation_progress_path(
@@ -117,9 +152,10 @@ def translation_report_path(
 ) -> Path:
     target = normalize_target_language(target_language or config.target_language)
     root = report_root or REPORT_DIR
+    validate_novel_name(novel_name)
     if target == "vi":
-        return root / novel_name / f"chapter_{chapter_number:03d}.json"
-    return root / target / novel_name / f"chapter_{chapter_number:03d}.json"
+        return resolve_within(root, novel_name, f"chapter_{chapter_number:03d}.json")
+    return resolve_within(root, target, novel_name, f"chapter_{chapter_number:03d}.json")
 
 
 __all__ = [
@@ -135,6 +171,10 @@ __all__ = [
     "CONFIG_DRAFTS_DIR",
     "LOCK_DIR",
     "GLOSSARY_BACKUP_DIR",
+    "is_valid_novel_name",
+    "validate_novel_name",
+    "resolve_within",
+    "resolve_novel_root",
     "novel_root_dir",
     "novel_input_dir_from_root",
     "novel_output_dir_from_root",
