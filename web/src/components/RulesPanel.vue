@@ -27,13 +27,7 @@ watch(() => props.active, (active) => {
       <DetailPanelHeader
         title="Novel Translation Rules"
         description="These instructions will be appended to the translation rules for this novel only. You can use Markdown."
-      >
-        <template #actions>
-          <button type="button" :disabled="saving || loading" @click="save">
-            {{ saving ? 'Saving...' : 'Save Rules' }}
-          </button>
-        </template>
-      </DetailPanelHeader>
+      />
       <textarea
         v-model="rules"
         class="rules-textarea"
@@ -42,6 +36,14 @@ watch(() => props.active, (active) => {
 - Giữ nguyên tên chiêu thức bằng Hán-Việt."
         :disabled="loading"
       ></textarea>
+      <div class="row gap-2 rules-actions">
+        <button type="button" :disabled="saving || loading" @click="save">
+          {{ saving ? 'Saving...' : 'Save Rules' }}
+        </button>
+        <button class="secondary" type="button" :disabled="saving || loading" @click="load">
+          {{ loading ? 'Reloading...' : 'Reload' }}
+        </button>
+      </div>
       <div v-if="error" class="error">{{ error }}</div>
       <div v-if="successMessage" class="success-message">{{ successMessage }}</div>
     </div>
@@ -68,6 +70,10 @@ watch(() => props.active, (active) => {
   background-color: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 4px;
+}
+
+.rules-actions {
+  margin-top: 0.75rem;
 }
 
 .success-message {

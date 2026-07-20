@@ -235,6 +235,32 @@ function metaDisplayValue(current: string, fallback: string | null | undefined):
 .novel-summary-content {
   min-height: 0;
   overflow: auto;
+  padding-right: 0.25rem;
   white-space: pre-wrap;
+  overflow-wrap: break-word;
+  text-align: justify;
+  text-justify: inter-word;
+  scrollbar-color: var(--border) transparent;
+  scrollbar-width: thin;
+}
+
+.novel-summary-content::-webkit-scrollbar {
+  width: 0.5rem;
+  height: 0.5rem;
+}
+
+.novel-summary-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.novel-summary-content::-webkit-scrollbar-thumb {
+  background: var(--border);
+  background-clip: padding-box;
+  border: 0.125rem solid transparent;
+  border-radius: 999px;
+}
+
+.novel-summary-content::-webkit-scrollbar-thumb:hover {
+  background-color: var(--fg-dim);
 }
 </style>

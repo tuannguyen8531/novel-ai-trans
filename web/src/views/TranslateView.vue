@@ -4,7 +4,7 @@ import { useTranslation } from '@/composables/translation'
 
 const {
   novel, target, source, provider, start, end, limit, force, resume, failedOnly, review,
-  summary, translateMetadata, forceMetadata, jobId, error, novelOptions, remainingChapters,
+  summary, translateMetadata, jobId, error, novelOptions, remainingChapters,
   startTranslation
 } = useTranslation()
 </script>
@@ -68,7 +68,7 @@ const {
         </div>
         <div>
           <label>Options</label>
-          <div class="check-row">
+          <div class="check-row translate-options">
             <label class="check">
               <input v-model="force" type="checkbox" />
               <span>Force re-translate</span>
@@ -91,11 +91,7 @@ const {
             </label>
             <label class="check">
               <input v-model="translateMetadata" type="checkbox" />
-              <span>Translate title and novel summary</span>
-            </label>
-            <label v-if="translateMetadata" class="check">
-              <input v-model="forceMetadata" type="checkbox" />
-              <span>Regenerate AI metadata</span>
+              <span>Translate title and summary</span>
             </label>
           </div>
         </div>
@@ -111,3 +107,26 @@ const {
     </div>
   </section>
 </template>
+
+<style scoped>
+.translate-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.translate-options .check {
+  min-width: 0;
+}
+
+@media (max-width: 760px) {
+  .translate-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .translate-options {
+    grid-template-columns: 1fr;
+  }
+}
+</style>

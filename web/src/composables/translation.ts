@@ -19,8 +19,7 @@ export function useTranslation() {
   const failedOnly = ref(false)
   const review = ref(false)
   const summary = ref(false)
-  const translateMetadata = ref(true)
-  const forceMetadata = ref(false)
+  const translateMetadata = ref(false)
   const jobId = ref<string | null>(null)
   const error = ref<string | null>(null)
   const novelOptions = computed(() => novels.novels)
@@ -53,7 +52,7 @@ export function useTranslation() {
       enable_review: review.value,
       enable_summary: summary.value,
       translate_metadata: translateMetadata.value,
-      force_metadata: forceMetadata.value
+      force_metadata: translateMetadata.value
     }
     if (source.value) payload.source_language = source.value
     if (provider.value) payload.provider = provider.value
@@ -73,7 +72,7 @@ export function useTranslation() {
 
   return {
     novel, target, source, provider, start, end, limit, force, resume, failedOnly, review,
-    summary, translateMetadata, forceMetadata, jobId, error, novelOptions, remainingChapters,
+    summary, translateMetadata, jobId, error, novelOptions, remainingChapters,
     startTranslation
   }
 }
