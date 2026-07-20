@@ -15,6 +15,7 @@ import time
 from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from threading import Event
 
@@ -25,8 +26,10 @@ from src.application.errors import (
     PersistenceError,
     ResourceNotFoundError,
 )
+from src.application.locks import novel_lock
 from src.application.progress import ProgressEvent
 from src.domain.language import normalize_target_language
+from src.services import artifacts as artifact_repository
 from src.services import chapters as chapter_service
 from src.services.packaging.builder import EPUBBuilder, package_file_stem
 from src.services.packaging.chapters import parse_chapter_file
@@ -104,7 +107,17 @@ def run_pack(
     progress_callback: Callable[[ProgressEvent], None] | None = None,
     cancel_event: Event | None = None,
 ) -> PackResult:
-    """Build an EPUB artifact for *request.novel*."""
+    """Build an EPUB artifact while holding the shared novel-operation lock."""
+    with novel_lock(request.novel):
+        return _run_pack(request, progress_callback=progress_callback, cancel_event=cancel_event)
+
+
+def _run_pack(
+    request: PackRequest,
+    *,
+    progress_callback: Callable[[ProgressEvent], None] | None = None,
+    cancel_event: Event | None = None,
+) -> PackResult:
     config = get_config()
     started_at = time.time()
     target_language = request.target_language or config.target_language
@@ -163,11 +176,22 @@ def run_pack(
         for title, paragraphs in loaded_chapters:
             builder.add_chapter(title, paragraphs)
         builder.write(epub_path)
+        artifact_size = epub_path.stat().st_size
+        if request.output_dir is None:
+            artifact_repository.record_metadata(
+                novel_root,
+                epub_path.name,
+                artifact_format="epub",
+                size=artifact_size,
+                target_language=target_normalized,
+                created_at=datetime.now(UTC),
+                chapter_count=len(sorted_chapters),
+            )
         artifacts.append(
             ArtifactInfo(
                 format="epub",
                 path=str(epub_path),
-                size=epub_path.stat().st_size,
+                size=artifact_size,
             )
         )
     except OperationCancelledError:

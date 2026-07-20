@@ -284,6 +284,7 @@ class ArtifactInfoResponse(BaseModel):
     target_language: str
     created_at: datetime
     chapter_count: int
+    metadata_status: Literal["recorded", "inferred"]
 
 
 # ---------------------------------------------------------------------------

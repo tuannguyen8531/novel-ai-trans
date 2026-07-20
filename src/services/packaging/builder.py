@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import html
+import os
+import stat
+import tempfile
 import uuid
 import zipfile
+from contextlib import suppress
 from pathlib import Path
 
 from src.domain.illustrations import parse_illustration_marker
@@ -54,6 +58,26 @@ class EPUBBuilder:
 
     def write(self, output_path: Path) -> None:
         output_path.parent.mkdir(parents=True, exist_ok=True)
+        fd, temporary_name = tempfile.mkstemp(
+            prefix=f".{output_path.name}.",
+            suffix=".tmp",
+            dir=output_path.parent,
+        )
+        temporary_path = Path(temporary_name)
+        os.close(fd)
+        try:
+            mode = stat.S_IMODE(output_path.stat().st_mode) if output_path.exists() else 0o644
+            temporary_path.chmod(mode)
+            self._write_archive(temporary_path)
+            with temporary_path.open("rb") as artifact:
+                os.fsync(artifact.fileno())
+            os.replace(temporary_path, output_path)
+        except Exception:
+            with suppress(OSError):
+                temporary_path.unlink()
+            raise
+
+    def _write_archive(self, output_path: Path) -> None:
         with zipfile.ZipFile(output_path, "w", zipfile.ZIP_DEFLATED) as archive:
             archive.writestr("mimetype", "application/epub+zip", compress_type=zipfile.ZIP_STORED)
 

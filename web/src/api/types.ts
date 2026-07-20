@@ -167,6 +167,7 @@ export interface ArtifactInfo {
   target_language: string
   created_at: string
   chapter_count: number
+  metadata_status: 'recorded' | 'inferred'
 }
 
 export interface GlossaryResponse {

@@ -1,4 +1,7 @@
 import zipfile
+from unittest.mock import patch
+
+import pytest
 
 from src.services.packaging.builder import EPUBBuilder, package_file_stem
 from src.services.packaging.images import resolve_chapter_images
@@ -43,3 +46,17 @@ def test_epub_builder_uses_cover_media_type_from_file_suffix(tmp_path) -> None:
     with zipfile.ZipFile(output) as epub:
         manifest = epub.read("OEBPS/content.opf").decode("utf-8")
     assert 'href="cover.png" media-type="image/png"' in manifest
+
+
+def test_epub_builder_preserves_existing_artifact_when_write_fails(tmp_path) -> None:
+    output = tmp_path / "book.epub"
+    output.write_bytes(b"existing artifact")
+
+    with (
+        patch("src.services.packaging.builder.zipfile.ZipFile.writestr", side_effect=OSError("write failed")),
+        pytest.raises(OSError, match="write failed"),
+    ):
+        EPUBBuilder("Book").write(output)
+
+    assert output.read_bytes() == b"existing artifact"
+    assert list(tmp_path.glob(".book.epub.*.tmp")) == []

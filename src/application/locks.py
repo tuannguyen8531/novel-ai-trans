@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -16,19 +15,19 @@ _ACTIVE_LOCKS: set[str] = set()
 
 
 def novel_runtime_key(novel: str) -> str:
-    return hashlib.sha256(novel.encode("utf-8")).hexdigest()
+    return paths.novel_runtime_key(novel)
 
 
 @contextmanager
 def novel_lock(novel: str, *, lock_dir: Path | None = None) -> Iterator[None]:
-    """Prevent overlapping translation and glossary operations for one novel."""
-    message = f"Novel {novel!r} is currently locked by another translation or glossary apply operation."
+    """Prevent overlapping operations for one novel."""
+    message = f"Novel {novel!r} is currently locked by another operation."
     if novel in _ACTIVE_LOCKS:
         raise ResourceConflictError(message)
 
     _ACTIVE_LOCKS.add(novel)
     try:
-        path = (lock_dir or LOCK_DIR) / f"{novel_runtime_key(novel)}.lock"
+        path = paths.novel_lock_path(novel, lock_dir=lock_dir or LOCK_DIR)
         try:
             with files.exclusive_file_lock(path, blocking=False):
                 yield

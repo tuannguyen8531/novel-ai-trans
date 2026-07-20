@@ -22,6 +22,9 @@ def test_novel_directories_from_root() -> None:
     assert paths.novel_output_dir_from_root(novel_root, "vi") == novel_root / "output"
     assert paths.novel_output_dir_from_root(novel_root, "en") == novel_root / "output" / "en"
     assert paths.novel_artifact_dir_from_root(novel_root) == novel_root / "artifacts"
+    assert paths.novel_artifact_manifest_path_from_root(novel_root) == novel_root / "artifacts" / "manifest.json"
+    novel_lock = paths.novel_lock_path("demo", lock_dir=Path("runtime/locks"))
+    assert novel_lock == Path("runtime/locks") / f"{paths.novel_runtime_key('demo')}.lock"
     assert paths.novel_config_path_from_root(novel_root) == novel_root / "config.json"
 
 

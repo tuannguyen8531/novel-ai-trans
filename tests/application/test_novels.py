@@ -173,6 +173,22 @@ def test_artifact_paths_prefer_artifacts_directory_and_ignore_unsupported_format
         artifacts.resolve_artifact_path(novel_root, "demo.en.mobi")
 
 
+def test_legacy_artifact_metadata_is_marked_as_inferred(tmp_path: Path) -> None:
+    root = tmp_path / "translated"
+    novel_root = root / "demo"
+    artifact_dir = novel_root / "artifacts"
+    artifact_dir.mkdir(parents=True)
+    (artifact_dir / "demo.vi.epub").write_bytes(b"legacy")
+    _write_chapter(novel_root / "output", 1)
+
+    listed = artifacts.list_artifacts(root, "demo")
+
+    assert len(listed) == 1
+    assert listed[0].size == 6
+    assert listed[0].chapter_count == 1
+    assert listed[0].metadata_status == "inferred"
+
+
 @pytest.mark.parametrize("filename", ["../demo.epub", "subdir/demo.epub", ".hidden.epub"])
 def test_resolve_artifact_rejects_unsafe_filename(tmp_path: Path, filename: str) -> None:
     with pytest.raises(ResourceNotFoundError, match="Invalid artifact name"):

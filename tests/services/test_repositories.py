@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -68,5 +69,57 @@ def test_artifact_repository_lists_resolves_and_deletes_files(tmp_path: Path) ->
     with pytest.raises(FileNotFoundError):
         artifacts.resolve(tmp_path, "../escape.epub")
 
+    created_at = datetime.now(UTC)
+    artifacts.record_metadata(
+        tmp_path,
+        epub.name,
+        artifact_format="epub",
+        size=epub.stat().st_size,
+        target_language="vi",
+        created_at=created_at,
+        chapter_count=12,
+    )
+    metadata = artifacts.read_metadata(tmp_path, epub.name)
+    assert metadata == artifacts.ArtifactMetadata(
+        format="epub",
+        size=4,
+        target_language="vi",
+        created_at=created_at,
+        chapter_count=12,
+    )
+
     artifacts.delete(tmp_path, epub.name)
     assert not epub.exists()
+    assert artifacts.read_metadata(tmp_path, epub.name) is None
+    manifest = json.loads((artifact_dir / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest == {"artifacts": {}}
+
+
+def test_artifact_manifest_replaces_one_language_without_losing_others(tmp_path: Path) -> None:
+    created_at = datetime.now(UTC)
+    for filename, target, chapters in (("demo.vi.epub", "vi", 10), ("demo.en.epub", "en", 8)):
+        artifacts.record_metadata(
+            tmp_path,
+            filename,
+            artifact_format="epub",
+            size=100,
+            target_language=target,
+            created_at=created_at,
+            chapter_count=chapters,
+        )
+
+    artifacts.record_metadata(
+        tmp_path,
+        "demo.vi.epub",
+        artifact_format="epub",
+        size=120,
+        target_language="vi",
+        created_at=created_at,
+        chapter_count=12,
+    )
+
+    manifest_path = tmp_path / "artifacts" / "manifest.json"
+    entries = json.loads(manifest_path.read_text(encoding="utf-8"))["artifacts"]
+    assert set(entries) == {"demo.vi.epub", "demo.en.epub"}
+    assert entries["demo.vi.epub"]["chapter_count"] == 12
+    assert entries["demo.en.epub"]["chapter_count"] == 8

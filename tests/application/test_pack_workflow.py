@@ -10,8 +10,16 @@ from zipfile import ZipFile
 
 import pytest
 
-from src.application.errors import OperationCancelledError
+from src import paths
+from src.application.errors import OperationCancelledError, ResourceConflictError
+from src.application.locks import novel_lock
+from src.application.novel import artifacts as novel_artifacts
 from src.application.pack import PackRequest, run_pack
+
+
+@pytest.fixture(autouse=True)
+def _artifact_locks_in_temporary_directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("src.application.locks.LOCK_DIR", tmp_path / "runtime" / "locks")
 
 
 def test_run_pack_builds_single_epub_artifact(tmp_path) -> None:
@@ -29,6 +37,39 @@ def test_run_pack_builds_single_epub_artifact(tmp_path) -> None:
     ]
     with ZipFile(result.artifacts[0].path) as epub:
         assert epub.testzip() is None
+
+    manifest_path = translated_root / "demo" / "artifacts" / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert not manifest_path.with_name(".manifest.lock").exists()
+    assert list((tmp_path / "runtime" / "locks").glob("*.lock")) == [
+        paths.novel_lock_path("demo", lock_dir=tmp_path / "runtime" / "locks")
+    ]
+    recorded = manifest["artifacts"]["demo.vi.epub"]
+    assert recorded["format"] == "epub"
+    assert recorded["target_language"] == "vi"
+    assert recorded["chapter_count"] == 1
+    assert recorded["size"] == result.artifacts[0].size
+
+    (output_dir / "chapter_002.txt").write_text("Chapter 2\n\nNew body.", encoding="utf-8")
+    listed = novel_artifacts.list_artifacts(translated_root, "demo")
+    assert [(artifact.chapter_count, artifact.metadata_status) for artifact in listed] == [(1, "recorded")]
+
+    with patch("src.application.pack.get_config", return_value=config):
+        run_pack(PackRequest(novel="demo"))
+
+    updated = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert list(updated["artifacts"]) == ["demo.vi.epub"]
+    assert updated["artifacts"]["demo.vi.epub"]["chapter_count"] == 2
+
+
+def test_run_pack_uses_the_shared_novel_lock(tmp_path) -> None:
+    lock_dir = tmp_path / "runtime" / "locks"
+
+    with (
+        novel_lock("demo", lock_dir=lock_dir),
+        pytest.raises(ResourceConflictError, match="currently locked"),
+    ):
+        run_pack(PackRequest(novel="demo"))
 
 
 def test_run_pack_preserves_core_epub_entries_and_cleans_downloaded_cover(tmp_path) -> None:

@@ -7,6 +7,7 @@ root so they stay valid regardless of the caller's current working directory.
 
 from __future__ import annotations
 
+import hashlib
 import re
 from pathlib import Path
 from typing import Any
@@ -78,6 +79,18 @@ def novel_artifact_dir_from_root(novel_root: Path) -> Path:
     return novel_root / "artifacts"
 
 
+def novel_artifact_manifest_path_from_root(novel_root: Path) -> Path:
+    return novel_artifact_dir_from_root(novel_root) / "manifest.json"
+
+
+def novel_runtime_key(novel_name: str) -> str:
+    return hashlib.sha256(novel_name.encode("utf-8")).hexdigest()
+
+
+def novel_lock_path(novel_name: str, *, lock_dir: Path | None = None) -> Path:
+    return (lock_dir or LOCK_DIR) / f"{novel_runtime_key(novel_name)}.lock"
+
+
 def novel_config_path_from_root(novel_root: Path) -> Path:
     return novel_root / "config.json"
 
@@ -111,6 +124,10 @@ def novel_output_dir(config: Any, novel_name: str, target_language: str | None =
 
 def novel_artifact_dir(config: Any, novel_name: str) -> Path:
     return novel_artifact_dir_from_root(novel_root_dir(config, novel_name))
+
+
+def novel_artifact_manifest_path(config: Any, novel_name: str) -> Path:
+    return novel_artifact_manifest_path_from_root(novel_root_dir(config, novel_name))
 
 
 def novel_config_path(config: Any, novel_name: str) -> Path:
@@ -179,11 +196,15 @@ __all__ = [
     "novel_input_dir_from_root",
     "novel_output_dir_from_root",
     "novel_artifact_dir_from_root",
+    "novel_artifact_manifest_path_from_root",
+    "novel_runtime_key",
+    "novel_lock_path",
     "novel_config_path_from_root",
     "novel_glossary_path",
     "novel_input_dir",
     "novel_output_dir",
     "novel_artifact_dir",
+    "novel_artifact_manifest_path",
     "novel_config_path",
     "translation_progress_path_for_target",
     "translation_progress_path",

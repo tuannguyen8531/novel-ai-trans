@@ -108,6 +108,9 @@ function formatDate(dateString: string): string {
           <div class="artifact-meta">
             <span class="artifact-badge">{{ artifact.format.toUpperCase() }}</span>
             <span class="artifact-badge">{{ artifact.target_language.toUpperCase() }}</span>
+            <span v-if="artifact.metadata_status === 'inferred'" class="artifact-badge artifact-badge-warning">
+              Metadata inferred
+            </span>
             <span class="muted">{{ artifact.chapter_count }} chapters</span>
             <span class="muted">—</span>
             <span class="muted">{{ formatFileSize(artifact.size) }}</span>
@@ -218,6 +221,10 @@ function formatDate(dateString: string): string {
   background: var(--bg-elev);
   border: 1px solid var(--border);
   border-radius: 4px;
+}
+
+.artifact-badge-warning {
+  color: var(--warning, #b7791f);
 }
 
 .artifact-actions {
