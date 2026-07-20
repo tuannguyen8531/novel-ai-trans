@@ -7,8 +7,7 @@ const PAGE_TITLES: Record<string, string> = {
   novels: 'Novels',
   'novel-detail': 'Novel',
   'chapter-reader': 'Chapter',
-  crawl: 'Crawl',
-  import: 'Import',
+  sources: 'Sources',
   translate: 'Translate',
   jobs: 'Jobs',
   settings: 'Settings'
@@ -41,8 +40,7 @@ export const router = createRouter({
         chapter: Number(route.params.chapter)
       })
     },
-    { path: '/crawl', name: 'crawl', component: () => import('@/views/CrawlView.vue') },
-    { path: '/import', name: 'import', component: () => import('@/views/ImportView.vue') },
+    { path: '/sources', name: 'sources', component: () => import('@/views/SourcesView.vue') },
     { path: '/translate', name: 'translate', component: () => import('@/views/TranslateView.vue') },
     { path: '/jobs', name: 'jobs', component: () => import('@/views/JobListView.vue') },
     { path: '/settings', name: 'settings', component: () => import('@/views/SettingsView.vue') },

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onUnmounted, ref, toRef, watch } from 'vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import DetailPanelHeader from '@/components/DetailPanelHeader.vue'
 import { useArtifacts } from '@/composables/artifacts'
 import type { TargetLanguage } from '@/composables/metadata'
 
@@ -98,7 +99,7 @@ function formatDate(dateString: string): string {
     role="tabpanel"
     aria-labelledby="artifacts-tab"
   >
-    <h3>Artifacts</h3>
+    <DetailPanelHeader title="Artifacts" />
     <p v-if="error" class="error">{{ error }}</p>
     <p v-if="!visible.length" class="muted">No {{ targetLanguage.toUpperCase() }} artifacts yet.</p>
     <div v-else class="artifact-list">
@@ -172,6 +173,11 @@ function formatDate(dateString: string): string {
 <style scoped>
 .detail-tab-panel {
   padding: 1rem;
+}
+
+.detail-tab-panel > .error,
+.detail-tab-panel > .muted {
+  margin: 0;
 }
 
 .artifact-list {

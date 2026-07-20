@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { toRef, watch } from 'vue'
+import DetailPanelHeader from '@/components/DetailPanelHeader.vue'
 import { useRules } from '@/composables/rules'
 
 const props = defineProps<{
@@ -23,17 +24,16 @@ watch(() => props.active, (active) => {
     aria-labelledby="rules-tab"
   >
     <div class="rules-editor">
-      <div class="rules-editor-header">
-        <div class="rules-editor-copy">
-          <h3>Novel Translation Rules</h3>
-          <p class="muted">
-            These instructions will be appended to the translation rules for this novel only. You can use Markdown.
-          </p>
-        </div>
-        <button type="button" :disabled="saving || loading" @click="save">
-          {{ saving ? 'Saving...' : 'Save Rules' }}
-        </button>
-      </div>
+      <DetailPanelHeader
+        title="Novel Translation Rules"
+        description="These instructions will be appended to the translation rules for this novel only. You can use Markdown."
+      >
+        <template #actions>
+          <button type="button" :disabled="saving || loading" @click="save">
+            {{ saving ? 'Saving...' : 'Save Rules' }}
+          </button>
+        </template>
+      </DetailPanelHeader>
       <textarea
         v-model="rules"
         class="rules-textarea"
@@ -56,34 +56,6 @@ watch(() => props.active, (active) => {
 .rules-editor {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
-}
-
-.rules-editor-header {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 0.5rem 0.75rem;
-}
-
-.rules-editor-copy {
-  min-width: 0;
-  flex: 1 1 24rem;
-}
-
-.rules-editor-copy h3,
-.rules-editor-copy p {
-  margin: 0;
-}
-
-.rules-editor-copy h3 {
-  margin-bottom: 0.35rem;
-}
-
-.rules-editor-header button {
-  flex: 0 0 auto;
-  margin-bottom: 0.1rem;
 }
 
 .rules-textarea {
@@ -99,17 +71,12 @@ watch(() => props.active, (active) => {
 }
 
 .success-message {
+  margin-top: 0.6rem;
   color: var(--color-success, #4caf50);
   font-weight: bold;
 }
 
-@media (max-width: 640px) {
-  .rules-editor-header {
-    align-items: flex-start;
-  }
-
-  .rules-editor-header button {
-    margin-bottom: 0;
-  }
+.rules-editor > .error {
+  margin-top: 0.6rem;
 }
 </style>

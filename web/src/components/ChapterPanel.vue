@@ -2,6 +2,7 @@
 import { onMounted, ref, toRef } from 'vue'
 import { useChapters } from '@/composables/chapters'
 import ChapterDialog from '@/components/ChapterDialog.vue'
+import DetailPanelHeader from '@/components/DetailPanelHeader.vue'
 
 const props = defineProps<{
   novel: string
@@ -50,20 +51,19 @@ async function addChapter(chapter: number, content: string) {
     role="tabpanel"
     aria-labelledby="chapters-tab"
   >
-    <div class="row gap-2 panel-header">
-      <h3>Chapter List</h3>
-      <div class="row gap-2 panel-actions">
+    <DetailPanelHeader title="Chapter List">
+      <template #actions>
         <button
           type="button"
-          class="secondary sort-toggle"
+          class="secondary sort-toggle panel-action-button"
           :title="ascending ? 'Ascending' : 'Descending'"
           @click="ascending = !ascending"
         >
           {{ ascending ? '\u2191 Asc' : '\u2193 Desc' }}
         </button>
-        <button type="button" class="secondary" @click="openAddDialog">Add chapter</button>
-      </div>
-    </div>
+        <button type="button" class="secondary panel-action-button" @click="openAddDialog">Add chapter</button>
+      </template>
+    </DetailPanelHeader>
     <p v-if="!numbers.length" class="muted empty-message">No chapters yet.</p>
     <div v-else ref="containerRef" class="input-chapter-container">
       <div class="input-chapter-list">
@@ -101,22 +101,12 @@ async function addChapter(chapter: number, content: string) {
   padding: 1rem;
 }
 
-.panel-header {
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-}
-
-.panel-header h3 {
+.empty-message {
   margin: 0;
 }
 
-.panel-actions {
-  align-items: center;
-}
-
-.empty-message {
-  margin-top: 0.5rem;
+.panel-action-button {
+  padding: 0.25rem 0.65rem;
 }
 
 .input-chapter-list {
@@ -127,7 +117,6 @@ async function addChapter(chapter: number, content: string) {
 }
 
 .input-chapter-container {
-  margin-top: 0.75rem;
   padding: 0.75rem;
   background: var(--bg-elev-2);
   border: 1px solid var(--border);

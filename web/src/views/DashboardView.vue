@@ -51,8 +51,9 @@ const activeJobs = computed(() => jobs.activeJobs)
       </div>
       <div class="row gap-2" style="margin-top: 1rem;">
         <RouterLink to="/translate"><button>Translate</button></RouterLink>
-        <RouterLink to="/import"><button class="secondary">Import EPUB</button></RouterLink>
-        <RouterLink to="/crawl"><button class="secondary">Crawl new novel</button></RouterLink>
+        <RouterLink to="/sources">
+          <button class="secondary">Add source</button>
+        </RouterLink>
       </div>
     </div>
     <div class="card">
@@ -62,7 +63,7 @@ const activeJobs = computed(() => jobs.activeJobs)
           <JobMonitor :job="job" :live="false" />
         </div>
       </div>
-      <p v-else class="muted">No active job. Start one from the Translate, Import, or Crawl pages.</p>
+      <p v-else class="muted">No active job. Start one from the Translate or Sources page.</p>
     </div>
   </section>
 </template>

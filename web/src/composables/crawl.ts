@@ -41,12 +41,12 @@ export function useCrawl() {
   const draftsError = ref<string | null>(null)
   const loadingDrafts = ref(false)
 
-  function selectBrowserMode(mode: 'headless' | 'headed') {
+  function selectBrowserMode(mode: 'none' | 'headless' | 'headed') {
     browser.value = mode === 'headless'
     headed.value = mode === 'headed'
   }
 
-  function selectGenerateBrowserMode(mode: 'headless' | 'headed') {
+  function selectGenerateBrowserMode(mode: 'none' | 'headless' | 'headed') {
     generateUseBrowser.value = mode === 'headless'
     generateHeaded.value = mode === 'headed'
   }
@@ -182,6 +182,7 @@ export function useCrawl() {
 
   async function saveGeneratedDraft() {
     if (!generatedDraft.value) return
+    const savedName = generatedDraft.value.name
     let parsed: Record<string, unknown>
     try {
       parsed = parseConfigDocument(draftConfigText.value)
@@ -195,6 +196,10 @@ export function useCrawl() {
       generatedDraft.value = null
       draftConfigText.value = ''
       await Promise.all([loadConfigs(), loadDrafts()])
+      selectedConfig.value = savedName
+      await loadSelectedConfig(savedName)
+      selectedConfigMessage.value = 'Generated config saved and ready to crawl.'
+      activeTab.value = 'crawl'
     } catch (err) {
       generateError.value = (err as Error).message
     }

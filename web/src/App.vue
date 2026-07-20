@@ -41,8 +41,7 @@ function applyApiKey() {
         <RouterLink to="/">Dashboard</RouterLink>
         <RouterLink to="/novels">Novels</RouterLink>
         <RouterLink to="/translate">Translate</RouterLink>
-        <RouterLink to="/import">Import</RouterLink>
-        <RouterLink to="/crawl">Crawl</RouterLink>
+        <RouterLink to="/sources">Sources</RouterLink>
         <RouterLink to="/jobs">Jobs</RouterLink>
         <RouterLink to="/settings">Settings</RouterLink>
       </nav>

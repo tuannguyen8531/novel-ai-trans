@@ -7,6 +7,7 @@ import { useSettingsStore } from '@/composables/settings'
 import type { MetadataDisplay, TargetLanguage } from '@/composables/metadata'
 import ArtifactPanel from '@/components/ArtifactPanel.vue'
 import ChapterPanel from '@/components/ChapterPanel.vue'
+import DetailPanelHeader from '@/components/DetailPanelHeader.vue'
 import GlossaryEditor from '@/components/GlossaryEditor.vue'
 import JobMonitor from '@/components/JobMonitor.vue'
 import MetadataPanel from '@/components/MetadataPanel.vue'
@@ -162,6 +163,7 @@ function startPackJob(id: string) {
           role="tabpanel"
           aria-labelledby="glossary-tab"
         >
+          <DetailPanelHeader title="Glossary" />
           <GlossaryEditor :novel="novelName" />
         </div>
 

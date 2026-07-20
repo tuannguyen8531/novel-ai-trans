@@ -14,48 +14,46 @@ const {
   selectBrowserMode, selectGenerateBrowserMode, startCrawl, startGenerate, saveSelectedConfig,
   loadSelectedConfig, loadDraft, saveGeneratedDraft, deleteDraft, discardDraft
 } = useCrawl()
+
+function isWorkflowActive(workflow: 'crawl' | 'generate') {
+  return activeTab.value === workflow
+}
 </script>
 
 <template>
   <section class="flex-col gap-3">
-    <nav class="crawl-tabs" aria-label="Crawl tools" role="tablist">
-      <button
-        id="crawl-tab"
-        type="button"
-        class="crawl-tab"
-        role="tab"
-        :aria-selected="activeTab === 'crawl'"
-        aria-controls="crawl-panel"
-        @click="activeTab = 'crawl'"
-      >
-        Crawl Novel Chapters
-      </button>
-      <button
-        id="generate-config-tab"
-        type="button"
-        class="crawl-tab"
-        role="tab"
-        :aria-selected="activeTab === 'generate'"
-        aria-controls="generate-config-panel"
-        @click="activeTab = 'generate'"
-      >
-        Generate Config
-      </button>
-    </nav>
-
     <div
       v-if="activeTab === 'crawl'"
       id="crawl-panel"
-      class="crawl-tab-panel flex-col gap-3"
-      role="tabpanel"
-      aria-labelledby="crawl-tab"
+      class="crawl-source-panel flex-col gap-3"
     >
       <div class="card">
-      <h2>Crawl Novel Chapters</h2>
-      <p class="muted">
-        Pick a novel config. The job fetches chapters, writes them into
-        the novel input directory, and streams progress live.
-      </p>
+        <div class="workflow-header">
+          <div class="workflow-copy">
+            <h2>Crawl Novel Chapters</h2>
+            <p class="muted">
+              Select a novel and start downloading its chapters.
+            </p>
+          </div>
+          <div class="workflow-switch" role="group" aria-label="Website workflow">
+            <button
+              type="button"
+              :class="{ active: isWorkflowActive('crawl') }"
+              :aria-pressed="isWorkflowActive('crawl')"
+              @click="activeTab = 'crawl'"
+            >
+              Crawl
+            </button>
+            <button
+              type="button"
+              :class="{ active: isWorkflowActive('generate') }"
+              :aria-pressed="isWorkflowActive('generate')"
+              @click="activeTab = 'generate'"
+            >
+              Generate
+            </button>
+          </div>
+        </div>
 
       <div class="grid">
         <div>
@@ -74,6 +72,15 @@ const {
         <div>
           <label>Browser mode</label>
           <div class="check-row">
+            <label class="check">
+              <input
+                type="radio"
+                name="browser-mode"
+                :checked="!browser && !headed"
+                @change="selectBrowserMode('none')"
+              />
+              <span>Do not use a browser</span>
+            </label>
             <label class="check">
               <input
                 type="radio"
@@ -170,18 +177,35 @@ const {
     <div
       v-else
       id="generate-config-panel"
-      class="crawl-tab-panel flex-col gap-3"
-      role="tabpanel"
-      aria-labelledby="generate-config-tab"
+      class="crawl-source-panel flex-col gap-3"
     >
       <div class="card">
-        <h2>Generate config</h2>
-      <p class="muted">
-        Provide the novel's main information URL. The AI extracts its metadata and table of
-        contents, then proposes a site config. The result is saved as a draft; review and edit it,
-        then save the crawl settings to <code>translated/&lt;name&gt;/config.json</code> and the novel
-        information to <code>translated/&lt;name&gt;/metadata.json</code>.
-      </p>
+        <div class="workflow-header">
+          <div class="workflow-copy">
+            <h2>Create Crawl Config</h2>
+            <p class="muted">
+              Enter the novel page URL, review the generated setup, then save it to start crawling.
+            </p>
+          </div>
+          <div class="workflow-switch" role="group" aria-label="Website workflow">
+            <button
+              type="button"
+              :class="{ active: isWorkflowActive('crawl') }"
+              :aria-pressed="isWorkflowActive('crawl')"
+              @click="activeTab = 'crawl'"
+            >
+              Crawl
+            </button>
+            <button
+              type="button"
+              :class="{ active: isWorkflowActive('generate') }"
+              :aria-pressed="isWorkflowActive('generate')"
+              @click="activeTab = 'generate'"
+            >
+              Generate
+            </button>
+          </div>
+        </div>
 
       <div class="grid">
         <div>
@@ -204,6 +228,15 @@ const {
         <div>
           <label>Browser mode</label>
           <div class="check-row">
+            <label class="check">
+              <input
+                type="radio"
+                name="generate-browser-mode"
+                :checked="!generateUseBrowser && !generateHeaded"
+                @change="selectGenerateBrowserMode('none')"
+              />
+              <span>Do not use a browser</span>
+            </label>
             <label class="check">
               <input
                 type="radio"
@@ -297,41 +330,60 @@ const {
 </template>
 
 <style scoped>
-.crawl-tabs {
+.workflow-header {
   display: flex;
-  gap: 0;
-  border-bottom: 1px solid var(--border);
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
 }
 
-.crawl-tab {
-  position: relative;
-  padding: 0.65rem 1rem;
+.workflow-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.workflow-header h2 {
+  margin: 0 0 0.35rem;
+}
+
+.workflow-header p {
+  margin: 0;
+}
+
+.workflow-switch {
+  display: grid;
+  grid-template-columns: repeat(2, 5rem);
+  flex: 0 0 auto;
+  padding: 0.2rem;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.workflow-switch button {
+  min-width: 0;
+  padding: 0.4rem 0.65rem;
   background: transparent;
   color: var(--fg-dim);
-  border: 0;
-  border-radius: 0;
 }
 
-.crawl-tab:hover:not(:disabled) {
+.workflow-switch button:hover:not(:disabled) {
   background: var(--bg-elev);
   color: var(--fg);
 }
 
-.crawl-tab[aria-selected='true'] {
-  color: var(--accent);
-}
-
-.crawl-tab[aria-selected='true']::after {
-  position: absolute;
-  right: 0;
-  bottom: -1px;
-  left: 0;
-  height: 2px;
+.workflow-switch button.active {
   background: var(--accent);
-  content: '';
+  color: #fff;
 }
 
-.crawl-tab-panel {
+.workflow-switch button.active:hover:not(:disabled) {
+  background: var(--accent-strong);
+}
+
+.crawl-source-panel {
   min-width: 0;
 }
 

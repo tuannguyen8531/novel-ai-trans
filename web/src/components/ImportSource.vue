@@ -6,10 +6,12 @@ const { novels, file, name, selectedNovel, keepExisting, jobId, error, onFileCha
 </script>
 
 <template>
-  <section class="flex-col gap-3">
+  <section class="import-source flex-col gap-3">
     <div class="card">
-      <h2>Import EPUB</h2>
-      <p class="muted">Upload an EPUB to import chapters and illustrations into a novel's input directory.</p>
+      <div class="source-heading">
+        <h2>Import EPUB</h2>
+        <p class="muted">Upload an EPUB to import chapters and illustrations into a novel's input directory.</p>
+      </div>
       <div class="grid">
         <div>
           <label>EPUB file</label>
@@ -51,3 +53,17 @@ const { novels, file, name, selectedNovel, keepExisting, jobId, error, onFileCha
     </div>
   </section>
 </template>
+
+<style scoped>
+.source-heading {
+  margin-bottom: 1rem;
+}
+
+.source-heading h2 {
+  margin: 0 0 0.35rem;
+}
+
+.source-heading p {
+  margin: 0;
+}
+</style>
