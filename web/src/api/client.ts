@@ -329,7 +329,7 @@ export const api = {
   updateCharacter: (
     name: string,
     original: string,
-    payload: { translated_name?: string; role?: string }
+    payload: { translated_name?: string; role?: string; pronoun?: string }
   ) =>
     request<GlossaryResponse>(
       `/api/novels/${encodeURIComponent(name)}/glossary/characters/${encodeURIComponent(original)}`,

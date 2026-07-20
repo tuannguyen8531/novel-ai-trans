@@ -165,6 +165,22 @@ class TestGlossary:
             "new": "Lý Thái Bạch",
         }
 
+    def test_save_character_updates_preserves_and_clears_pronoun(self):
+        save_characters_batch(
+            "test-novel",
+            {"李白": {"translated_name": "Lý Bạch", "role": "minor", "pronoun": "ông"}},
+            [],
+        )
+
+        assert save_character("test-novel", "李白", pronoun="anh ấy")
+        assert load_glossary_data("test-novel")["entities"]["李白"]["pronoun"] == "anh ấy"
+
+        assert save_character("test-novel", "李白", role="supporting")
+        assert load_glossary_data("test-novel")["entities"]["李白"]["pronoun"] == "anh ấy"
+
+        assert save_character("test-novel", "李白", pronoun="")
+        assert load_glossary_data("test-novel")["entities"]["李白"]["pronoun"] == ""
+
     def test_reverting_character_name_removes_pending_replacement(self):
         save_characters_batch(
             "test-novel",

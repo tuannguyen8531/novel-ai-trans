@@ -28,7 +28,7 @@ runtime glossary directory.
 Character schema:
 - entities: dict of original_name -> {translated_name, role, pronoun, aliases?}
   role: protagonist | antagonist | supporting | minor
-  pronoun: target-language pronoun/reference style assigned on first appearance (immutable)
+  pronoun: target-language pronoun/reference style preserved during learning; manual edits may override it
   aliases: source-language short/full-name variants resolved to the canonical entity
 - edges: list of [from_orig, to_orig, relationship_type, since_chapter]
   Each relationship stored ONCE (no bidirectional duplication).
@@ -261,10 +261,11 @@ def save_character(
     translated_name: str = "",
     role: str = "",
     name_vi: str = "",
+    pronoun: str | None = None,
     *,
     is_user_edit: bool = False,
 ) -> bool:
-    """Update a character's translated name and/or role. Returns True if found."""
+    """Update editable character fields. Returns True if found."""
     path = _glossary_path(novel_name)
     found = False
     name_value = translated_name or name_vi
@@ -281,6 +282,8 @@ def save_character(
             info["translated_name"] = name_value
         if role:
             info["role"] = role
+        if pronoun is not None:
+            info["pronoun"] = pronoun
         entities[original_name] = info
         found = True
         updated = {**data, "entities": entities}

@@ -139,6 +139,7 @@ def update_character(
         original,
         translated_name=payload.translated_name or "",
         role=payload.role or "",
+        pronoun=payload.pronoun if "pronoun" in payload.model_fields_set else None,
     )
     return GlossaryResponse(novel=name, data=data)
 

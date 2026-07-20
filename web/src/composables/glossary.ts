@@ -140,13 +140,15 @@ export function useGlossary(
   async function saveCharacter(
     original: string,
     translatedName: string,
-    role: string
+    role: string,
+    pronoun?: string
   ): Promise<boolean> {
     error.value = null
     try {
       data.value = await api.updateCharacter(toValue(novel), original, {
         translated_name: translatedName || undefined,
-        role: role || undefined
+        role: role || undefined,
+        pronoun
       })
       return true
     } catch (err) {

@@ -77,12 +77,14 @@ def save_character(
     *,
     translated_name: str,
     role: str,
+    pronoun: str | None = None,
 ) -> dict:
     glossary_service.save_character(
         novel_name,
         original,
         translated_name=translated_name,
         role=role,
+        pronoun=pronoun,
         is_user_edit=True,
     )
     return load_glossary(novel_name)

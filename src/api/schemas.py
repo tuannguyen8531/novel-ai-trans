@@ -412,6 +412,7 @@ class GlossaryCharacterUpdate(BaseModel):
 
     translated_name: str | None = None
     role: str | None = None
+    pronoun: str | None = None
 
 
 class GlossaryRelationshipAdd(BaseModel):

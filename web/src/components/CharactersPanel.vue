@@ -4,14 +4,14 @@ import type { GlossaryCharacter } from '@/composables/glossary'
 
 const props = defineProps<{
   characters: Record<string, GlossaryCharacter>
-  saveCharacter: (original: string, translatedName: string, role: string) => Promise<boolean>
+  saveCharacter: (original: string, translatedName: string, role: string, pronoun?: string) => Promise<boolean>
   removeCharacter: (original: string) => Promise<boolean>
 }>()
 
 const filter = ref('')
-const newCharacter = ref({ original: '', translatedName: '', role: '' })
+const newCharacter = ref({ original: '', translatedName: '', role: '', pronoun: '' })
 const showAdd = ref(false)
-const editing = ref<{ original: string; translatedName: string; role: string } | null>(null)
+const editing = ref<{ original: string; translatedName: string; role: string; pronoun: string } | null>(null)
 
 const filteredCharacters = computed<[string, GlossaryCharacter][]>(() => {
   const query = filter.value.trim().toLowerCase()
@@ -32,9 +32,10 @@ async function add() {
   if (!await props.saveCharacter(
     newCharacter.value.original,
     newCharacter.value.translatedName,
-    newCharacter.value.role
+    newCharacter.value.role,
+    newCharacter.value.pronoun || undefined
   )) return
-  newCharacter.value = { original: '', translatedName: '', role: '' }
+  newCharacter.value = { original: '', translatedName: '', role: '', pronoun: '' }
   showAdd.value = false
 }
 
@@ -42,7 +43,8 @@ function startEdit(original: string, info: GlossaryCharacter) {
   editing.value = {
     original,
     translatedName: info.translated_name ?? '',
-    role: info.role ?? ''
+    role: info.role ?? '',
+    pronoun: info.pronoun ?? ''
   }
 }
 
@@ -51,7 +53,8 @@ async function saveEdit() {
   if (!await props.saveCharacter(
     editing.value.original,
     editing.value.translatedName,
-    editing.value.role
+    editing.value.role,
+    editing.value.pronoun
   )) return
   editing.value = null
 }
@@ -82,6 +85,7 @@ async function saveEdit() {
         <option value="supporting">supporting</option>
         <option value="minor">minor</option>
       </select>
+      <input v-model="newCharacter.pronoun" placeholder="Pronoun / reference style" />
       <button type="button" :disabled="!newCharacter.original" @click="add">Save</button>
     </div>
 
@@ -110,7 +114,13 @@ async function saveEdit() {
                   <option value="minor">minor</option>
                 </select>
               </td>
-              <td>{{ info.pronoun ?? '—' }}</td>
+              <td>
+                <input
+                  v-model="editing.pronoun"
+                  class="inline-edit-input"
+                  placeholder="Pronoun / reference style"
+                />
+              </td>
               <td class="actions">
                 <div class="row gap-1">
                   <button type="button" @click="saveEdit">Save</button>
@@ -122,7 +132,7 @@ async function saveEdit() {
               <td class="gloss-original">{{ original }}</td>
               <td>{{ info.translated_name ?? '—' }}</td>
               <td>{{ info.role ?? '—' }}</td>
-              <td>{{ info.pronoun ?? '—' }}</td>
+              <td>{{ info.pronoun || '—' }}</td>
               <td class="actions">
                 <div class="row gap-1 row-actions">
                   <button class="secondary" type="button" @click="startEdit(original, info)">Edit</button>

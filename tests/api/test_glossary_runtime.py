@@ -3,10 +3,12 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from src.api.auth import Principal
-from src.api.routes.glossary import get_glossary
+from src.api.routes.glossary import get_glossary, update_character
+from src.api.schemas import GlossaryCharacterUpdate
 from src.application.glossary.audit import audit_glossary
 from src.application.glossary.storage import load_glossary
 from src.config import Config, active_config_scope
+from src.services.glossary.repository import save_characters_batch
 
 EMPTY_GLOSSARY = {"terms": {}, "entities": {}, "edges": []}
 
@@ -33,6 +35,25 @@ def test_get_glossary_preserves_empty_response_contract(tmp_path):
 
     assert response.novel == "demo"
     assert response.data == EMPTY_GLOSSARY
+
+
+def test_update_character_pronoun_supports_preserve_update_and_clear(tmp_path):
+    (tmp_path / "demo").mkdir()
+    principal = Principal(authenticated=True, source="local")
+
+    with active_config_scope(Config(translated_dir=str(tmp_path))):
+        save_characters_batch(
+            "demo",
+            {"李白": {"translated_name": "Lý Bạch", "role": "minor", "pronoun": "ông"}},
+            [],
+        )
+        preserved = update_character("demo", "李白", GlossaryCharacterUpdate(role="supporting"), principal)
+        updated = update_character("demo", "李白", GlossaryCharacterUpdate(pronoun="anh ấy"), principal)
+        cleared = update_character("demo", "李白", GlossaryCharacterUpdate(pronoun=""), principal)
+
+    assert preserved.data["entities"]["李白"]["pronoun"] == "ông"
+    assert updated.data["entities"]["李白"]["pronoun"] == "anh ấy"
+    assert cleared.data["entities"]["李白"]["pronoun"] == ""
 
 
 def test_vietnamese_audit_reads_legacy_output_directory(tmp_path):
