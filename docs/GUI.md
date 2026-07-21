@@ -159,92 +159,120 @@ limits; the FastAPI process itself does not terminate TLS.
 | Route | View | Purpose |
 | --- | --- | --- |
 | `/` | Dashboard | Library overview, totals, and the active job monitor |
-| `/novels` | Novels | Per-novel translation progress by target |
-| `/novels/:name` | Novel detail | Metadata localization, chapter reader, glossary editor, pack, artifacts |
-| `/crawl` | Crawl | Pick or generate a config, then start a crawl |
-| `/import` | Import | Upload an EPUB and start an import job |
-| `/translate` | Translate | Metadata localization, chapter range, force / failed-only / limit, optional review |
+| `/novels` | Novels | Novel library, translation progress, creation, and deletion |
+| `/novels/:name` | Novel detail | Chapters, glossary, artifacts, rules, metadata, translation, and packing |
+| `/novels/:name/chapters/:chapter` | Chapter reader | Read or edit a source or translated chapter |
+| `/sources` | Sources | Crawl a website or import an EPUB |
+| `/translate` | Translate | Chapter range, language, provider, review, summary, and metadata options |
 | `/jobs` | Jobs | Current and recent jobs with their status, results, and logs |
-| `/settings` | Settings | Read runtime defaults, edit and persist non-secret fields, run provider checks |
+| `/settings` | Settings | Runtime defaults, Telegram behavior, providers, and connection checks |
+
+The sidebar contains Dashboard, Novels, Translate, Sources, Jobs, and Settings.
+`/crawl` and `/import` are not GUI routes; both source workflows live under
+`/sources`.
 
 ### Dashboard
 
 Shows the count of novels, total input chapters, total translated chapters,
-and a live monitor for the active job (if any). Quick links jump to Translate,
-Import, or Crawl.
+and a live monitor for active jobs. Quick actions open Translate or Sources.
 
 ### Novels
 
-Lists every novel under `TRANSLATED_DIR`. Each row shows its total input
-chapters and translation progress for the configured default target language.
-Use **Open** to view its details or **Delete** to permanently remove the novel
-directory after confirmation. Deletion is rejected while a job is active.
+Lists every novel under `TRANSLATED_DIR`. Each row shows its short name, title,
+translated/total chapter count for the configured target language, and either
+normal or failed status. Clicking the name or title opens Novel detail. Clicking
+a failed badge lists the failed chapters.
+
+**Add Novel** creates an empty novel from a required short name plus optional
+title, author, source language, uploaded cover, or remote cover URL. **Delete**
+permanently removes the novel after confirmation. Deletion is rejected while a
+job for that novel is active.
 
 ### Novel detail
 
-The workhorse page. Tabs cover:
+The header shows the cover, localized title and summary when available, author,
+chapter totals, and translated count. Its actions open Translate with the novel
+selected, open the Pack dialog, or edit Metadata.
 
-- **Chapters**: per-chapter source and per-target output status, with a
-  reader for any single chapter.
+Tabs cover:
+
+- **Chapters**: paginated source chapter numbers, ascending/descending order,
+  and an Add chapter action. The reader can switch between source and target
+  text, open the table of contents, edit the current text, and delete a source
+  chapter.
 - **Glossary**: terms, characters, and relationships. Edits are saved through
-  the same atomic helpers the CLI uses; bulk term PUT is a merge, not a
-  replace. Validation and audit are available through the API and CLI, but are
-  not exposed as buttons in the current GUI.
-- **Artifacts**: list and download generated EPUB files for the
-  novel.
+  their respective inline editors. When glossary changes affect existing
+  translations, Preview & Apply shows proposed replacements, conflicts, and a
+  restore action for an applied change.
+- **Artifacts**: lists generated EPUBs for the configured target language with
+  format, language, chapter count, size, and creation time. Artifacts can be
+  downloaded or deleted.
+- **Rules**: Markdown-capable translation instructions for this novel. Save
+  writes the editor contents; Reload restores the currently saved rules.
 
-Pack options are displayed above the tabs rather than as a fourth tab. They can
-start an EPUB pack job; title, author, and target language can be overridden per
-job. The **Translate** action opens the Translate page with the current novel
-selected.
+The Pack dialog uses the configured target language and accepts optional title
+and author overrides for that job.
 
-The **Metadata** action edits the source title, author, source URL, cover URL,
-source novel summary, source language, and localized title/summary values for
-Vietnamese and English. Use **Save metadata** for manual values. Use **Save and
-translate Vietnamese** or **Save and translate English** to save the form and
-start an asynchronous localization job. **Regenerate existing AI translations**
-refreshes AI-generated values even when their source has not changed, but never
-overwrites a value marked as manual. Clear a manual localized field before
-starting localization if AI should replace it.
+The **Metadata** dialog edits the source title, author, source URL, uploaded or
+remote cover, source summary, source language, and localized title/summary for
+the configured target language. **Save metadata** writes manual values. **Save
+and translate _language_** saves first and then starts an asynchronous metadata
+localization job. **Regenerate existing AI translations** refreshes AI values
+whose source has not changed, but never overwrites a value marked as manual.
+Clear a manual localized field before localizing if AI should replace it.
 
 The configured target language controls the localized title and summary shown
 on the novel list and detail header. The chapter reader similarly selects the
 localized title for its current `vi` or `en` view, falling back to the source
 title when needed.
 
-### Crawl
+### Sources
 
-The Crawl page keeps both config workflows in one place:
+Sources is one page with **From Website** and **From EPUB** tabs. The selected
+tab is local UI state, so the URL remains `/sources` and opening the page starts
+on From Website.
 
-1. Pick an existing `translated/<name>/config.json` by novel name.
-2. Generate a new one with `POST /api/configs/generate` from the novel's main
-   information URL. The job returns a draft id; the draft is loaded into the
-   editor for review, and `PUT /api/configs/{name}` writes it to that novel
-   directory and consumes the draft.
-3. Start a crawl by novel slug. Explicit config paths are not accepted.
+#### From Website
 
-The current Crawl page does not expose config validation. Use
-`uv run validate <name>` or `POST /api/configs/{name}/validate` when selectors
-need to be checked against live HTML. The site config field is named
-`chapter_link_selector`, alongside `chapter_content_selector` and
-`remove_selectors`.
+A compact **Crawl / Generate** switch changes the website workflow without
+changing routes.
 
-A successful config save (or a `DELETE /api/config-drafts/{draft_id}`) ends
-the draft; unconsumed drafts survive a server restart and expire after
-seven days, with cleanup at startup and on each draft listing.
+**Crawl** selects a crawl setup by short name, optionally edits and reloads its
+JSON, chooses direct/background/visible browser mode, and controls robots.txt,
+overwrite behavior, simultaneous downloads, and maximum chapters. Starting the
+operation creates a crawl job that can be monitored in place or on Jobs.
 
-### Import
+**Generate** accepts the novel information URL, optional config name and
+provider, browser mode, fresh-fetch option, and from-scratch option. Generation
+produces a reviewable draft. Drafts can be reopened or deleted and show their
+expiry time in `YYYY/MM/DD HH:mm:ss` format. Saving a draft refreshes the setup
+list, selects the saved setup, and returns the switch to Crawl.
 
-Streams an EPUB to a temp file (default cap 100 MB), then runs the import
-in the background worker. Chapter and illustration counts are reported
-when the job finishes. The importer also captures the original novel summary
-from OPF `dc:description` or clearly labelled synopsis front matter when
-available. Re-import fills only a missing/blank summary and preserves an
-existing value. The temp file is deleted even on failure.
+The GUI does not expose the separate live-selector validation operation. Use
+`uv run validate <name>` or `POST /api/configs/{name}/validate` when it is
+needed.
+
+#### From EPUB
+
+The EPUB picker and **Keep chapters already in the novel** option share the
+first row. An existing novel can be selected by short name, or an optional new
+short name can be supplied; when blank, it is derived from the EPUB filename.
+The existing-novel selector uses the same `short-name — chapter count` display
+style as the other novel selectors.
+
+The upload streams to a temporary file (default cap 100 MB) and then runs as a
+background import job. It imports chapters and illustrations and captures an
+available source summary from OPF `dc:description` or clearly labelled synopsis
+front matter. Re-import fills only a missing source summary and preserves an
+existing one. The temporary file is deleted on success or failure.
 
 ### Translate
 
-Includes the CLI chapter flags plus GUI/API-only metadata controls:
+The novel selector uses short names and shows the remaining chapter count.
+Source and target language share one 50/50 row, source first. The six options
+form a 3-by-2 grid on wide screens and collapse responsively.
+
+The form includes the CLI chapter flags plus a GUI/API metadata option:
 
 | Field | CLI flag | Notes |
 | --- | --- | --- |
@@ -259,14 +287,15 @@ Includes the CLI chapter flags plus GUI/API-only metadata controls:
 | Limit | `--limit` | Cap the number of chapters this run |
 | Review | `--review` | Optional second pass; off by default |
 | Summary | `--summary` | Optional per-chapter summary; off by default |
-| Translate title and novel summary | GUI/API only | On by default; runs before chapter translation |
-| Regenerate AI metadata | GUI/API only | Rebuild AI metadata without overwriting manual values |
+| Translate title and summary | GUI/API only | Off by default; when enabled, force-localizes AI metadata before chapters |
 
-The metadata options are intentionally separate from `--summary`: the latter
+The metadata option is separate from `--summary`: the latter
 generates short per-chapter memory, while metadata localization translates the
 novel's existing source synopsis. If the source title or source summary is
-blank, only that field is skipped. Metadata localization uses only glossary
-terms and known characters that occur in the fields being translated.
+blank, that field is skipped. Enabling it regenerates existing AI-localized
+title/summary values but preserves manual values. Metadata localization uses
+only glossary terms and known characters that occur in the fields being
+translated.
 
 Live progress is streamed over SSE. Reloading the page does not interrupt
 the job — the GUI fetches the authoritative job state, then resumes the
@@ -276,30 +305,28 @@ is always observable from `GET /api/jobs/{id}`.
 
 ### Jobs
 
-Lists the current job (if any) and the most recent 50 finished jobs from
-on-disk history (`runtime/jobs/`). Open any job to see its kind, novel,
-timestamps, progress, result, error, and a bounded log tail from the current
-server process. Logs are deliberately omitted when jobs are restored from disk
-after a restart. The endpoint is the source of truth for terminal state; the
-SSE stream is the live view.
+Lists active jobs and the most recent 50 finished jobs from on-disk history
+(`runtime/jobs/`). Rows show the short job id, kind, novel, status, progress,
+and creation time in `YYYY/MM/DD HH:mm:ss` format. Inactive jobs can be deleted
+individually or together. Open a job to see progress, result, error, and a
+bounded log tail from the current server process. Logs are omitted when jobs
+are restored from disk after a restart. The endpoint is the source of truth for
+terminal state; the SSE stream is the live view.
 
 ### Settings
 
 Three panels:
 
-- **General**: target language, chunk mode (`Characters` or estimated `Tokens`),
-  chunk size, chunk overlap, review
-  threshold, max retries, review / summary toggles. Changes are sent with
-  `PATCH /api/settings`; the persist button calls `POST /api/settings/persist`
-  and writes the in-memory values back to `.env` (non-secret fields only).
+- **Runtime settings**: target language, chunk mode (`Characters` or estimated
+  `Tokens`), chunk size, review threshold, and translation temperature. Field
+  changes update the runtime snapshot; **Save** persists supported non-secret
+  values.
 - **Telegram**: enabled flag, API base, parse mode, silent flag, and timeout.
-  Bot token and chat id are only read from `.env` and are represented in the
-  GUI by a configured/not-configured status.
+  Credentials are represented only by configured/not-configured status.
 - **Providers**: primary and fallback provider, Ollama base URL and model,
-  Gemini model and key, OpenRouter model and key. Provider check calls
-  `POST /api/providers/check`, which uses a thread pool and is not gated
-  by the single-job rule — checks can run while a translate job is in
-  flight.
+  Gemini model and key, OpenRouter model and key, Ollama cloud-account status,
+  model refresh, and per-provider connection checks. Blank key inputs preserve
+  current keys.
 
 ## Jobs, progress, and cancellation
 
@@ -393,8 +420,12 @@ written in this call and a `skipped` list.
 
 Metadata localization runs before chapter translation. Omitting
 `translate_metadata` enables it; explicitly send `false` to retain the old
-chapter-only API behavior. A localization failure fails the translation job
-before chapter processing begins.
+chapter-only API behavior. The current GUI always sends this field: the
+**Translate title and summary** option is off by default, and enabling it sends
+both `translate_metadata` and `force_metadata` as `true`. This regenerates
+existing AI-localized title and summary values while preserving manual values.
+A localization failure fails the translation job before chapter processing
+begins.
 
 Manual localized values can be written with
 `PATCH /api/novels/{name}/metadata`:
@@ -414,17 +445,16 @@ legacy top-level `translated` field is rejected; migrate legacy values to
 
 ## Settings in the browser
 
-General runtime settings use a two-step workflow:
+Editing a general runtime field calls `PATCH /api/settings` and updates the
+in-process config snapshot. Future jobs use the new value; a running job, if
+any, is unaffected. Clicking **Save** calls `POST /api/settings/persist` and
+writes that snapshot back to `.env`. Only general non-secret fields are written
+by this endpoint.
 
-1. **Edit**: `PATCH /api/settings` updates the in-process config snapshot.
-   Future jobs in this server use the new values; the running job, if any,
-   is unaffected.
-2. **Persist**: `POST /api/settings/persist` writes the current snapshot
-   back to `.env`. Only general non-secret fields are written by this endpoint.
-   `POST /api/settings/providers/persist` writes provider settings and any
-   non-empty key entered in the GUI; a blank key preserves its existing value.
-   `POST /api/settings/telegram/persist` writes non-secret Telegram behavior
-   settings but does not accept the bot token or chat id.
+`POST /api/settings/providers/persist` writes provider settings and any
+non-empty key entered in the GUI; a blank key preserves its existing value.
+`POST /api/settings/telegram/persist` writes non-secret Telegram behavior
+settings but does not accept the bot token or chat id.
 
 The Provider and Telegram forms apply their runtime changes and persist them in
 one save request rather than using the general `PATCH`-then-persist sequence.
@@ -458,7 +488,7 @@ Removing provider keys, changing Telegram credentials, or changing
 | `Another long-running job is already active` (409) | Open the Jobs page to inspect or cancel the active job, or wait for it to finish |
 | Vite dev server cannot reach the API | Confirm `uv run serve` is running on `127.0.0.1:8000`; Vite's dev proxy assumes that target |
 | `web/dist not present; API will run without the SPA bundle` | Run `uv run build`, then restart `uv run serve` |
-| Settings change does not survive a restart | Click **Persist** on the Settings page after editing; the edit updates the running process, persist writes to `.env` |
+| Settings change does not survive a restart | Click **Save** on the Settings page after editing; the edit updates the running process, while Save writes it to `.env` |
 | Reload during translation loses live progress | The progress bar is restored from `GET /api/jobs/{id}` and the SSE stream is reopened; terminal status is always available even if the stream never reconnects |
 | Cancel button does nothing immediately | The job enters `cancelling` immediately; the running translation chapter finishes before it becomes `cancelled` |
 | Generated draft disappeared | Drafts expire after seven days and are also removed when consumed by a successful `PUT /api/configs/{name}` or by a manual `DELETE /api/config-drafts/{draft_id}` |
