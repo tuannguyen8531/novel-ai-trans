@@ -2,6 +2,7 @@
 import { useRouter } from 'vue-router'
 import JobMonitor from '@/components/JobMonitor.vue'
 import { useCrawl } from '@/composables/crawl'
+import { formatDateTime } from '@/datetime'
 
 const router = useRouter()
 const {
@@ -57,10 +58,10 @@ function isWorkflowActive(workflow: 'crawl' | 'generate') {
 
       <div class="grid">
         <div>
-          <label>Config</label>
+          <label>Crawl setup</label>
           <select v-model="selectedConfig" :disabled="!configs.length">
             <option v-if="!configs.length" disabled value="">
-              {{ loadingConfigs ? 'Loading…' : 'No novel configs found' }}
+              {{ loadingConfigs ? 'Loading…' : 'No crawl setups found' }}
             </option>
             <option v-for="cfg in configs" :key="cfg.name" :value="cfg.name">
               {{ cfg.name }} — {{ cfg.source_url }}
@@ -88,7 +89,7 @@ function isWorkflowActive(workflow: 'crawl' | 'generate') {
                 :checked="browser && !headed"
                 @change="selectBrowserMode('headless')"
               />
-              <span>Headless browser (for JS challenges)</span>
+              <span>Background browser</span>
             </label>
             <label class="check">
               <input
@@ -97,7 +98,7 @@ function isWorkflowActive(workflow: 'crawl' | 'generate') {
                 :checked="headed"
                 @change="selectBrowserMode('headed')"
               />
-              <span>Headed browser (visible window)</span>
+              <span>Visible browser</span>
             </label>
           </div>
         </div>
@@ -117,14 +118,14 @@ function isWorkflowActive(workflow: 'crawl' | 'generate') {
         </div>
 
         <div>
-          <label>Concurrency &amp; limit</label>
-          <div class="row gap-2" style="align-items: center;">
-            <label class="row gap-1" style="flex: 0 0 auto;">
-              <span class="muted">Workers</span>
+          <label>Download limits</label>
+          <div class="row gap-2 download-limits">
+            <label class="row gap-1 download-limit-field">
+              <span class="muted">At once</span>
               <input v-model.number="workers" type="number" min="1" max="8" style="max-width: 5rem;" />
             </label>
-            <label class="row gap-1" style="flex: 0 0 auto;">
-              <span class="muted">Max chapters (0 = unlimited)</span>
+            <label class="row gap-1 download-limit-field">
+              <span class="muted">Max chapters</span>
               <input
                 v-model.number="maxChapters"
                 type="number"
@@ -145,8 +146,8 @@ function isWorkflowActive(workflow: 'crawl' | 'generate') {
       </div>
 
       <div v-if="selectedConfig" class="card">
-        <h3>Current config — <code>{{ selectedConfig }}</code></h3>
-        <p v-if="loadingSelectedConfig" class="muted">Loading config...</p>
+        <h3>Current setup — {{ selectedConfig }}</h3>
+        <p v-if="loadingSelectedConfig" class="muted">Loading setup...</p>
         <textarea
           v-else
           v-model="selectedConfigText"
@@ -156,15 +157,12 @@ function isWorkflowActive(workflow: 'crawl' | 'generate') {
         <p v-if="selectedConfigError" class="error" style="margin-top: 0.5rem;">{{ selectedConfigError }}</p>
         <div v-if="!loadingSelectedConfig" class="row gap-2" style="margin-top: 0.75rem;">
           <button type="button" :disabled="savingSelectedConfig" @click="saveSelectedConfig">
-            {{ savingSelectedConfig ? 'Validating…' : 'Validate & save' }}
+            {{ savingSelectedConfig ? 'Saving…' : 'Save changes' }}
           </button>
           <button class="secondary" type="button" :disabled="savingSelectedConfig" @click="loadSelectedConfig(selectedConfig)">
             Reload
           </button>
         </div>
-        <p class="muted" style="margin-top: 0.5rem;">
-          JSON structure, required fields, and config name are validated by the server before the file is replaced.
-        </p>
         <p v-if="selectedConfigMessage" class="muted" style="margin-top: 0.5rem;">{{ selectedConfigMessage }}</p>
       </div>
 
@@ -244,7 +242,7 @@ function isWorkflowActive(workflow: 'crawl' | 'generate') {
                 :checked="generateUseBrowser && !generateHeaded"
                 @change="selectGenerateBrowserMode('headless')"
               />
-              <span>Headless browser (for JS challenges)</span>
+              <span>Background browser</span>
             </label>
             <label class="check">
               <input
@@ -253,7 +251,7 @@ function isWorkflowActive(workflow: 'crawl' | 'generate') {
                 :checked="generateHeaded"
                 @change="selectGenerateBrowserMode('headed')"
               />
-              <span>Headed browser (visible window)</span>
+              <span>Visible browser</span>
             </label>
           </div>
         </div>
@@ -262,11 +260,11 @@ function isWorkflowActive(workflow: 'crawl' | 'generate') {
           <div class="check-row">
             <label class="check">
               <input v-model="generateNoCache" type="checkbox" />
-              <span>Bypass the HTML cache</span>
+              <span>Fetch fresh website data</span>
             </label>
             <label class="check">
               <input v-model="generateIgnoreSample" type="checkbox" />
-              <span>Ignore samples and known-domain configs</span>
+              <span>Build a new setup from scratch</span>
             </label>
           </div>
         </div>
@@ -288,7 +286,6 @@ function isWorkflowActive(workflow: 'crawl' | 'generate') {
         <div class="row gap-2" style="justify-content: space-between; align-items: center;">
           <div>
             <h3>Pending drafts</h3>
-            <p class="muted">Drafts remain available until they expire or are discarded.</p>
           </div>
         </div>
         <p v-if="loadingDrafts" class="muted">Loading drafts…</p>
@@ -299,7 +296,7 @@ function isWorkflowActive(workflow: 'crawl' | 'generate') {
             <div class="draft-summary">
               <strong><code>{{ draft.name }}</code></strong>
               <span class="muted">{{ draft.source_url || 'No source URL' }}</span>
-              <small class="muted">Expires {{ new Date(draft.expires_at).toLocaleString() }}</small>
+              <small class="muted">Expires {{ formatDateTime(draft.expires_at) }}</small>
             </div>
             <button class="secondary" type="button" @click="loadDraft(draft.draft_id)">Open</button>
             <button class="danger" type="button" @click="deleteDraft(draft.draft_id)">Delete</button>
@@ -308,22 +305,16 @@ function isWorkflowActive(workflow: 'crawl' | 'generate') {
       </div>
 
       <div v-if="generatedDraft" class="card">
-        <h3>Review draft — <code>{{ generatedDraft.name }}</code></h3>
+        <h3>Review draft — {{ generatedDraft.name }}</h3>
         <p class="muted">
-          Edit the JSON below, then save it to
-          <code>translated/{{ generatedDraft.name }}/config.json</code>.
-          Extracted novel information will be merged into
-          <code>translated/{{ generatedDraft.name }}/metadata.json</code>.
-          Expires {{ new Date(generatedDraft.expires_at).toLocaleString() }}.
+          Review the generated setup, make any changes, then save it.
+          Expires {{ formatDateTime(generatedDraft.expires_at) }}.
         </p>
         <textarea v-model="draftConfigText" class="draft-editor" spellcheck="false"></textarea>
         <div class="row gap-2" style="margin-top: 0.75rem;">
-          <button type="button" @click="saveGeneratedDraft">Validate & save</button>
+          <button type="button" @click="saveGeneratedDraft">Save setup</button>
           <button class="danger" type="button" @click="discardDraft">Discard draft</button>
         </div>
-        <p class="muted" style="margin-top: 0.5rem;">
-          Invalid JSON or config schema errors leave both the existing config and this draft unchanged.
-        </p>
       </div>
     </div>
   </section>
@@ -385,6 +376,19 @@ function isWorkflowActive(workflow: 'crawl' | 'generate') {
 
 .crawl-source-panel {
   min-width: 0;
+}
+
+.download-limits {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.download-limit-field {
+  flex: 0 0 auto;
+}
+
+.download-limit-field > span {
+  white-space: nowrap;
 }
 
 .draft-editor {

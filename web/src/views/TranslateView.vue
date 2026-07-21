@@ -13,7 +13,7 @@ const {
   <section class="flex-col gap-3">
     <div class="card">
       <h2>Translate</h2>
-      <p class="muted">Choose a novel, the target language, and translation options. Progress streams live while the job runs.</p>
+      <p class="muted">Choose a novel, language, and translation options.</p>
       <div class="grid">
         <div>
           <label>Novel</label>
@@ -24,21 +24,23 @@ const {
             </option>
           </select>
         </div>
-        <div>
-          <label>Target language</label>
-          <select v-model="target">
-            <option value="vi">Vietnamese (vi)</option>
-            <option value="en">English (en)</option>
-          </select>
-        </div>
-        <div>
-          <label>Source language</label>
-          <select v-model="source">
-            <option value="">Auto detect</option>
-            <option value="chinese">Chinese</option>
-            <option value="japanese">Japanese</option>
-            <option value="korean">Korean</option>
-          </select>
+        <div class="language-row">
+          <div>
+            <label>Source language</label>
+            <select v-model="source">
+              <option value="">Auto detect</option>
+              <option value="chinese">Chinese</option>
+              <option value="japanese">Japanese</option>
+              <option value="korean">Korean</option>
+            </select>
+          </div>
+          <div>
+            <label>Target language</label>
+            <select v-model="target">
+              <option value="vi">Vietnamese (vi)</option>
+              <option value="en">English (en)</option>
+            </select>
+          </div>
         </div>
         <div>
           <label>Provider override (optional)</label>
@@ -109,6 +111,12 @@ const {
 </template>
 
 <style scoped>
+.language-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
 .translate-options {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -125,6 +133,7 @@ const {
 }
 
 @media (max-width: 520px) {
+  .language-row,
   .translate-options {
     grid-template-columns: 1fr;
   }

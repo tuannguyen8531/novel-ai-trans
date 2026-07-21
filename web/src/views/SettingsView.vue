@@ -245,8 +245,7 @@ async function saveTelegramSettings() {
     <div v-if="settings.settings" class="card">
       <h2>Runtime settings</h2>
       <p class="muted">
-        These defaults are used by future jobs. Secrets are not displayed and cannot be
-        changed through this interface.
+        These defaults apply to new jobs.
       </p>
       <div class="grid">
         <div>
@@ -255,11 +254,6 @@ async function saveTelegramSettings() {
             <option value="vi">Vietnamese</option>
             <option value="en">English</option>
           </select>
-        </div>
-        <div>
-          <label>Translated folder</label>
-          <input :value="settings.settings.translated_dir" readonly aria-readonly="true" />
-          <p class="muted">Configured by <code>TRANSLATED_DIR</code> when the server starts.</p>
         </div>
         <div>
           <label>Chunk mode</label>
@@ -292,7 +286,7 @@ async function saveTelegramSettings() {
             {{ persisting ? 'Saving…' : 'Save' }}
           </button>
           <span v-if="persistResult" class="muted">
-            Saved {{ persistResult.changed_keys.length }} config(s).
+            Settings saved.
           </span>
         </div>
       </div>
@@ -301,8 +295,7 @@ async function saveTelegramSettings() {
     <div class="card">
       <h2>Telegram notifications</h2>
       <p class="muted">
-        Bot token and chat ID are read from <code>.env</code> and are never displayed here.
-        Credentials are
+        Notification credentials are configured outside this app and are
         <span class="badge" :class="settings.settings?.telegram_configured ? 'ok' : 'danger'">
           {{ settings.settings?.telegram_configured ? 'configured' : 'not configured' }}
         </span>.
@@ -338,7 +331,7 @@ async function saveTelegramSettings() {
             {{ telegramPersisting ? 'Saving…' : 'Save Telegram' }}
           </button>
           <span v-if="telegramPersistResult" class="muted">
-            Saved {{ telegramPersistResult.changed_keys.length }} Telegram setting(s).
+            Telegram settings saved.
           </span>
         </div>
       </div>
@@ -347,8 +340,7 @@ async function saveTelegramSettings() {
     <div class="card">
       <h2>Providers</h2>
       <p class="muted">
-        API keys are never displayed. Leave a key blank to keep its current value.
-        Check uses the values currently shown and verifies connectivity and credentials, not the selected model.
+        Leave a key blank to keep its current value. Use Check to test the connection.
       </p>
       <div class="grid">
         <div>
@@ -468,7 +460,7 @@ async function saveTelegramSettings() {
             {{ providerPersisting ? 'Saving…' : 'Save Providers' }}
           </button>
           <span v-if="providerPersistResult" class="muted">
-            Saved {{ providerPersistResult.changed_keys.length }} provider setting(s).
+            Provider settings saved.
           </span>
         </div>
       </div>

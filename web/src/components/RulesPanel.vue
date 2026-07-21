@@ -26,7 +26,7 @@ watch(() => props.active, (active) => {
     <div class="rules-editor">
       <DetailPanelHeader
         title="Novel Translation Rules"
-        description="These instructions will be appended to the translation rules for this novel only. You can use Markdown."
+        description="These instructions apply only to this novel. Markdown is supported."
       />
       <textarea
         v-model="rules"

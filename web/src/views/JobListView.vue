@@ -3,6 +3,7 @@ import { onMounted, onUnmounted, computed, ref } from 'vue'
 import { useJobsStore } from '@/composables/jobs'
 import JobMonitor from '@/components/JobMonitor.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import { formatDateTime } from '@/datetime'
 
 const jobs = useJobsStore()
 const selectedId = ref<string | null>(null)
@@ -177,7 +178,7 @@ async function handleClearAll() {
               </template>
               <span v-else class="muted">—</span>
             </td>
-            <td class="muted">{{ new Date(row.created_at).toLocaleString() }}</td>
+            <td class="muted">{{ formatDateTime(row.created_at) }}</td>
             <td>
               <div class="row gap-2" style="align-items: center;">
                 <button class="secondary" type="button" @click="select(row.id)">Open</button>

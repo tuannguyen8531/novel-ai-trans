@@ -284,7 +284,7 @@ const deleteMessage = computed(() => {
         <div class="modal-body flex-col gap-3">
           <div v-if="addError" class="error">{{ addError }}</div>
           <div>
-            <label for="new-slug">Slug/Directory Name <span class="danger">*</span></label>
+            <label for="new-slug">Short name <span class="danger">*</span></label>
             <input id="new-slug" v-model="newSlug" :disabled="Boolean(createdSlug)" placeholder="e.g. my-awesome-novel (only letters, numbers, dashes, underscores)" />
           </div>
           <div>
@@ -311,7 +311,7 @@ const deleteMessage = computed(() => {
               accept="image/jpeg,image/png,image/webp,image/gif"
               @change="selectNewCover"
             />
-            <p class="muted cover-help">JPEG, PNG, WebP, or GIF; up to 10 MiB. Saved as optimized cover.jpg.</p>
+            <p class="muted cover-help">JPEG, PNG, WebP, or GIF; up to 10 MiB.</p>
             <img v-if="newCoverPreview" class="cover-preview" :src="newCoverPreview" alt="Cover preview" />
           </div>
           <div>

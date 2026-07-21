@@ -10,7 +10,7 @@ const { novels, file, name, selectedNovel, keepExisting, jobId, error, onFileCha
     <div class="card">
       <div class="source-heading">
         <h2>Import EPUB</h2>
-        <p class="muted">Upload an EPUB to import chapters and illustrations into a novel's input directory.</p>
+        <p class="muted">Upload an EPUB to add its chapters and illustrations to a novel.</p>
       </div>
       <div class="grid import-grid">
         <div>
@@ -22,7 +22,7 @@ const { novels, file, name, selectedNovel, keepExisting, jobId, error, onFileCha
           <div class="check-row">
             <label class="check">
               <input v-model="keepExisting" type="checkbox" />
-              <span>Keep existing chapters in the target input directory</span>
+              <span>Keep chapters already in the novel</span>
             </label>
           </div>
         </div>
@@ -31,15 +31,15 @@ const { novels, file, name, selectedNovel, keepExisting, jobId, error, onFileCha
           <select v-model="selectedNovel" :disabled="novels.loading" @change="onExistingNovelChange">
             <option value="">— choose an existing novel —</option>
             <option v-for="novel in novels.novels" :key="novel.name" :value="novel.name">
-              {{ novel.title ? `${novel.title} (${novel.name})` : novel.name }} · {{ novel.total_input_chapters }} chapters
+              {{ novel.name }} — {{ novel.total_input_chapters }} chapters
             </option>
           </select>
           <p v-if="novels.error" class="error">{{ novels.error }}</p>
-          <p v-else class="muted">Selecting a novel fills its slug and enables Keep existing.</p>
+          <p v-else class="muted">Select a novel to import into it.</p>
         </div>
         <div class="import-full-row">
-          <label>Output slug (optional)</label>
-          <input v-model="name" placeholder="defaults to the EPUB filename" />
+          <label>Short name (optional)</label>
+          <input v-model="name" placeholder="Uses the EPUB filename when blank" />
         </div>
       </div>
       <div class="row gap-2" style="margin-top: 1rem;">

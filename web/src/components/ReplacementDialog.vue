@@ -122,16 +122,13 @@ onUnmounted(() => {
               Novel: <strong>{{ previewData.novel }}</strong> |
               Target language: <strong>{{ previewData.target }}</strong>
             </p>
-            <p>Files to change: <strong>{{ previewData.changed_files }} file(s)</strong></p>
+            <p>Chapters to update: <strong>{{ previewData.changed_files }}</strong></p>
             <p v-if="previewData.conflicted" class="error">
               ⚠️ Conflict detected. You cannot overwrite the translation while conflicts exist.
             </p>
             <p v-else-if="previewData.write" class="notice">
-              Updated {{ previewData.changed_files }} file(s).
+              Updated {{ previewData.changed_files }} chapter(s).
               <template v-if="unresolvedCount">{{ unresolvedCount }} issue(s) remain pending.</template>
-            </p>
-            <p v-if="previewData.backup_id" class="muted">
-              Backup: <code>{{ previewData.backup_id }}</code>
             </p>
           </div>
 
@@ -164,7 +161,7 @@ onUnmounted(() => {
             </table>
           </div>
           <p v-else class="muted">
-            No matching translated chapter occurrences were found in existing output.
+            No matching text was found in the translated chapters.
           </p>
         </div>
       </div>
@@ -175,7 +172,7 @@ onUnmounted(() => {
           class="secondary"
           :disabled="busy"
           @click="rollback"
-        >{{ rollbackLoading ? 'Restoring...' : 'Rollback' }}</button>
+        >{{ rollbackLoading ? 'Restoring...' : 'Restore previous version' }}</button>
         <button type="button" class="secondary" :disabled="busy" @click="close">
           {{ previewData?.write ? 'Close' : 'Cancel' }}
         </button>

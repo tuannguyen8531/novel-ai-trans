@@ -92,7 +92,7 @@ defineExpose({ load })
         <p v-if="loading" class="muted">Loading metadata…</p>
         <p v-else-if="loadError" class="error">Failed to load metadata: {{ loadError }}</p>
         <p v-else-if="!metadata" class="muted">
-          No metadata.json yet. Fill in the fields below and save to create one.
+          No metadata yet. Fill in the fields below and save when ready.
         </p>
 
         <div v-if="!loading" class="metadata-fields">
@@ -116,7 +116,7 @@ defineExpose({ load })
               accept="image/jpeg,image/png,image/webp,image/gif"
               @change="selectCover"
             />
-            <p class="muted cover-help">JPEG, PNG, WebP, or GIF; up to 10 MiB. Saved as optimized cover.jpg.</p>
+            <p class="muted cover-help">JPEG, PNG, WebP, or GIF; up to 10 MiB.</p>
             <img v-if="display.illustrationSrc" class="cover-preview" :src="display.illustrationSrc" alt="Cover preview" />
           </div>
           <div>

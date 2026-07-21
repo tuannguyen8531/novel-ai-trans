@@ -119,7 +119,7 @@ const showToc = ref(false)
     <ConfirmDialog
       :show="showDeleteDialog"
       title="Delete Chapter"
-      :message="`Delete Chapter ${chapter}?\n\nThis permanently deletes the source chapter file. Translated chapters will not be deleted but may become orphaned. This cannot be undone.`"
+      :message="`Delete Chapter ${chapter}?\n\nThis permanently deletes the source chapter. Existing translations are kept. This cannot be undone.`"
       confirm-label="Delete"
       :danger="true"
       :loading="deleteLoading"

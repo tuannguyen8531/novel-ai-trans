@@ -4,6 +4,7 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import DetailPanelHeader from '@/components/DetailPanelHeader.vue'
 import { useArtifacts } from '@/composables/artifacts'
 import type { TargetLanguage } from '@/composables/metadata'
+import { formatDateTime } from '@/datetime'
 
 const props = defineProps<{
   novel: string
@@ -79,16 +80,6 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-function formatDate(dateString: string): string {
-  const date = new Date(dateString)
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const hour = String(date.getHours()).padStart(2, '0')
-  const minute = String(date.getMinutes()).padStart(2, '0')
-  const second = String(date.getSeconds()).padStart(2, '0')
-  return `${year}/${month}/${day} ${hour}:${minute}:${second}`
-}
 </script>
 
 <template>
@@ -116,7 +107,7 @@ function formatDate(dateString: string): string {
             <span class="muted">—</span>
             <span class="muted">{{ formatFileSize(artifact.size) }}</span>
             <span class="muted">—</span>
-            <span class="muted">{{ formatDate(artifact.created_at) }}</span>
+            <span class="muted">{{ formatDateTime(artifact.created_at) }}</span>
           </div>
         </div>
         <div class="artifact-actions">
