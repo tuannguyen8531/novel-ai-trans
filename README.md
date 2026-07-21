@@ -5,58 +5,45 @@
 [![uv](https://img.shields.io/badge/package%20manager-uv-2b2b2b.svg)](https://docs.astral.sh/uv/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-An end-to-end toolkit for turning web novels or EPUB files into translated EPUB
-books with LLMs. Crawl, translate, package — one pipeline.
-
-`novel-ai-trans` combines a configurable crawler, an LLM translation pipeline
-with glossary memory and quality checks, and EPUB packaging in one
-repository.
+Turn web novels or EPUB files into translated EPUB books with LLMs. Crawl or
+import a novel, translate its chapters with consistent terminology, and package
+the result through a CLI or web interface.
 
 ```text
 Website / EPUB
-    -> translated/<novel>/input/
-    -> translate with Ollama, Gemini, or OpenRouter
-    -> translated/<novel>/output/
-    -> <novel>.<target>.epub
+    -> source chapters
+    -> Ollama, Gemini, or OpenRouter
+    -> translated chapters
+    -> EPUB
 ```
 
-## Features
+## Highlights
 
-- **Crawl public novel sites** with per-novel JSON selector configs, or generate
-  and validate configs with an LLM-assisted workflow.
-- **Import EPUB files** into the same chapter pipeline used by the crawler,
-  including an original summary from EPUB metadata or labelled front matter
-  when available.
-- **Translate** Chinese, Korean, and Japanese source chapters into Vietnamese
-  or English.
-- **Localize novel metadata** — translate the title and original novel summary
-  into Vietnamese or English while preserving manual edits.
-- **Multiple providers** — Ollama (local), Gemini, or OpenRouter, with optional
-  fallback provider support.
-- **Per-novel glossary memory** for terms, character names, pronouns, and
-  relationships — kept consistent across the whole book.
-- **Preserve EPUB illustrations** through source markers and restore them during
-  packaging.
-- **EPUB output** from translated chapter text, with cover image support.
-- **Resume anytime** — chapter-level progress tracking, retry failed chapters,
-  retranslate ranges.
-- **Token-free quality checks** on every translated chunk, with automatic retry
-  for empty, truncated, untranslated, or illustration-damaging output.
-- **Optional review and summary steps** when quality is worth the extra tokens.
-- **Telegram notifications** when a crawl or translation run finishes.
+- Crawl public novel sites with reusable selector configurations.
+- Generate and validate crawl configurations with LLM assistance.
+- Import EPUB files while preserving metadata and illustrations.
+- Translate Chinese, Korean, and Japanese novels into Vietnamese or English.
+- Keep names, terms, pronouns, and relationships consistent with per-novel
+  glossary memory.
+- Detect incomplete, untranslated, or illustration-damaging output and retry
+  automatically.
+- Resume interrupted runs, retry failed chapters, or retranslate a range.
+- Localize novel titles and summaries and package translated chapters as EPUB.
+- Use Ollama locally or Gemini and OpenRouter in the cloud, with optional
+  provider fallback.
+- Run the complete workflow from either the CLI or the web GUI.
 
 ## Requirements
 
 - Python 3.14+
-- Node.js 20+ (only for building the web frontend)
 - [uv](https://docs.astral.sh/uv/)
-- One supported LLM provider:
-  - local [Ollama](https://ollama.com/) server, or
-  - [Gemini](https://aistudio.google.com/apikey) API key, or
-  - [OpenRouter](https://openrouter.ai/keys) API key
-- Playwright Chromium if you crawl JavaScript-heavy sites
+- One supported LLM provider: [Ollama](https://ollama.com/),
+  [Gemini](https://aistudio.google.com/apikey), or
+  [OpenRouter](https://openrouter.ai/keys)
+- Node.js 20+ when building the web GUI
+- Playwright Chromium when crawling JavaScript-heavy sites
 
-## Quick Start
+## Quick start
 
 ```bash
 git clone https://github.com/tuannguyen8531/novel-ai-trans.git
@@ -64,10 +51,9 @@ cd novel-ai-trans
 
 uv sync
 cp .env.example .env
-cd web && npm install && cd ..
 ```
 
-Edit `.env` for your provider:
+Configure a provider in `.env`. For example, with a local Ollama server:
 
 ```env
 LLM_PROVIDER=ollama
@@ -75,13 +61,24 @@ OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_MODEL=qwen3:8b
 ```
 
-For browser-based crawling:
+See the [provider guide](docs/PROVIDERS.md) for Gemini, OpenRouter, fallback,
+and model settings.
+
+### Use the web GUI
 
 ```bash
-uv run playwright install chromium
+cd web && npm install && cd ..
+uv run build
+uv run serve
 ```
 
-### Option 1: import an EPUB
+Open <http://127.0.0.1:8000>. The GUI supports importing, crawling,
+translation, metadata localization, glossary management, packaging, and job
+monitoring.
+
+### Use the CLI
+
+Import and translate an EPUB:
 
 ```bash
 uv run import ./book.epub --name my-novel
@@ -89,7 +86,7 @@ uv run translate my-novel --target vi
 uv run pack my-novel --target vi
 ```
 
-### Option 2: crawl from a configured site
+Or generate a configuration and crawl a website:
 
 ```bash
 uv run generate https://example.com/novel --name my-novel
@@ -99,194 +96,69 @@ uv run translate my-novel --target vi
 uv run pack my-novel --target vi
 ```
 
-Generated files are written under:
+Install Chromium before using browser-based crawling:
+
+```bash
+uv run playwright install chromium
+```
+
+Runtime novel data and generated books are kept together:
 
 ```text
 translated/<novel>/
-├── config.json             crawl settings for this novel
-├── input/                  source chapter_*.txt files
-├── output/                 Vietnamese translated chapters
-├── output/en/              English translated chapters
-├── illustrations/          imported or crawled images
+├── config.json
 ├── metadata.json
+├── input/                  source chapters
+├── output/                 Vietnamese chapters
+├── output/en/              English chapters
+├── illustrations/
 └── artifacts/
     ├── <novel>.vi.epub
     └── <novel>.en.epub
 ```
 
-See [docs/GUIDE.md](docs/GUIDE.md) for the full walkthrough.
-Contributor-facing dependency direction and module ownership are documented in
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-
-## Novel metadata localization
-
-The web GUI can translate a novel's source `title` and `summary` independently
-from its chapters:
-
-1. Open a novel, select **Metadata**, then use **Save and translate
-   Vietnamese** or **Save and translate English**; or
-2. Open **Translate** and leave **Translate title and novel summary** enabled to
-   run metadata localization before chapter translation.
-
-Metadata localization uses only glossary terms and character context that
-appear in the title/summary being sent. AI-generated values are skipped while
-their source hash is current and regenerated when the source changes. Manual
-values are never overwritten by the regenerate option; clear a manual field
-before using **Save and translate...** when it should be replaced by AI.
-
-The chapter `translate` CLI does not currently start metadata localization.
-Use the GUI or the metadata localization API documented in
-[docs/GUI.md](docs/GUI.md#metadata-localization-api).
-
-### Metadata schema compatibility
-
-Localized title and summary values use the nested `localized` schema:
-
-```json
-{
-  "title": "Original title",
-  "summary": "Original synopsis",
-  "localized": {
-    "vi": {"title": "Tên truyện", "summary": "Tóm tắt"},
-    "en": {"title": "English title", "summary": "English synopsis"}
-  },
-  "localization_meta": {
-    "vi": {
-      "title": {"origin": "ai", "source_hash": "...", "updated_at": "..."}
-    }
-  }
-}
-```
-
-The legacy `translated: {"vi": "...", "en": "..."}` title field is no
-longer read by the GUI, API, or packager, and the API rejects it. Existing
-metadata must be migrated to `localized.<language>.title`. Values entered in
-the Metadata editor are recorded with `origin: "manual"`.
-
-## Providers
-
-| Provider    | Type   | Get started                                         |
-| ----------- | ------ | --------------------------------------------------- |
-| **Ollama**  | Local  | [ollama.com](https://ollama.com/)                   |
-| **Gemini**  | Cloud  | [Google AI Studio](https://aistudio.google.com/apikey) |
-| **OpenRouter** | Cloud (200+ models) | [openrouter.ai/keys](https://openrouter.ai/keys) |
-
-Any provider can be paired with a different `FALLBACK_PROVIDER` for automatic
-failover when the primary errors out.
-
-See [docs/PROVIDERS.md](docs/PROVIDERS.md) for detailed setup instructions.
-
 ## Commands
 
-The project exposes short console commands through `pyproject.toml`:
+| Command | Purpose |
+| --- | --- |
+| `uv run generate <url>` | Generate novel metadata and a crawl configuration |
+| `uv run validate <novel>` | Validate selectors against the source website |
+| `uv run crawl <novel>` | Download source chapters |
+| `uv run import <book.epub>` | Import an EPUB into the chapter pipeline |
+| `uv run translate <novel>` | Translate chapters |
+| `uv run glossary <command> <novel>` | Manage the per-novel glossary |
+| `uv run pack <novel>` | Build a translated EPUB |
+| `uv run serve` | Start the API and built web GUI |
 
-```bash
-uv run crawl <novel>                 # use translated/<novel>/config.json
-uv run generate <novel-url>          # AI-generate metadata and a crawl config
-uv run validate <novel>              # test the novel config against live HTML
-uv run import <book.epub>            # import an EPUB into the pipeline
-uv run translate <novel>             # batch translate chapters
-uv run glossary <command> <novel>    # manage per-novel glossary
-uv run pack <novel>                  # build EPUB
-uv run test                          # ruff + pyright + pytest
-uv run build                         # build the web UI
-uv run serve                         # start the API + built GUI server
-```
-
-`main.py` also provides a single dispatcher for local use:
-
-```bash
-uv run python main.py <command> --help
-```
-
-See [docs/GUIDE.md](docs/GUIDE.md) for every flag and example.
-
-## Configuration
-
-Settings are loaded from `.env`. Copy `.env.example` to `.env` and edit.
-
-| Key | Default | Purpose |
-| --- | --- | --- |
-| `TRANSLATED_DIR` | `translated` | Per-novel config, input, output, metadata, and package root |
-| `LOG_RETENTION_DAYS` | `30` | Number of most recent daily folders to keep under `logs/` |
-| `MAX_CHAPTERS` | `0` | Crawler chapter cap, `0` means unlimited |
-| `LLM_PROVIDER` | `ollama` | Primary provider: `ollama`, `gemini`, or `openrouter` |
-| `FALLBACK_PROVIDER` | empty | Optional fallback provider |
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama endpoint |
-| `OLLAMA_MODEL` | `qwen3:8b` | Ollama model |
-| `GEMINI_API_KEY` | empty | Gemini credential |
-| `GEMINI_MODEL` | `gemini-2.5-flash` | Gemini model |
-| `OPENROUTER_API_KEY` | empty | OpenRouter credential |
-| `OPENROUTER_MODEL` | `qwen/qwen3-8b` | OpenRouter model |
-| `TARGET_LANGUAGE` | `vi` | Default target: `vi` or `en` |
-| `CHUNK_MODE` | `chars` | Chunk unit: `chars` or provider-neutral estimated `tokens` |
-| `CHUNK_SIZE` | `1500` | Translation chunk size in the selected unit |
-| `CHUNK_OVERLAP` | `100` | Context overlap in the selected unit |
-| `REVIEW_THRESHOLD` | `0.7` | Minimum review score before retry |
-| `MAX_RETRIES` | `2` | Quality and provider retry count |
-| `ENABLE_REVIEW` | `false` | Enable review by default |
-| `ENABLE_SUMMARY` | `false` | Enable summary by default |
-| `TELEGRAM_ENABLED` | `false` | Enable Telegram notifications for crawl and translation |
-| `TELEGRAM_BOT_TOKEN` | empty | Telegram bot token for notifications |
-| `TELEGRAM_CHAT_ID` | empty | Telegram chat id to notify |
-
-## Project Layout
-
-```text
-novel-ai-trans/
-├── configs/              reusable crawler config samples
-├── rules/                source-language rules per target language
-├── src/
-│   ├── cli/              command entry points
-│   ├── domain/           chunking, glossary, language, quality logic
-│   ├── graph/            LangGraph translation workflow
-│   ├── prompts/          prompt templates
-│   ├── services/         crawler, importer, metadata, LLM providers
-│   └── utils/            display, logging, text, JSON, HTML helpers
-├── tests/                pytest suite
-├── translated/           local per-novel config, books, and chapters
-└── runtime/              progress, reports, crawler state, logs
-```
-
-`translated/` and `runtime/` are local runtime data. They are intentionally
-separate from source code.
+Run a workflow command such as `uv run translate --help`, or see the
+[complete workflow guide](docs/GUIDE.md) for flags and examples.
 
 ## Documentation
 
-| Guide | Description |
+| Guide | Contents |
 | --- | --- |
-| [docs/GUIDE.md](docs/GUIDE.md) | Full walkthrough: crawl, generate, import, translate, glossary, pack |
-| [docs/GUI.md](docs/GUI.md) | Web GUI and API: build, serve, local vs remote mode, pages, jobs |
-| [docs/PROVIDERS.md](docs/PROVIDERS.md) | Detailed provider setup (Ollama, Gemini, OpenRouter, fallback) |
+| [Workflow guide](docs/GUIDE.md) | Crawl, generate, import, translate, glossary, and packaging |
+| [Web GUI](docs/GUI.md) | Build, serve, configure, and operate the browser interface and API |
+| [Providers](docs/PROVIDERS.md) | Ollama, Gemini, OpenRouter, fallback, and generation settings |
+| [Architecture](docs/ARCHITECTURE.md) | Module ownership and backend/frontend dependency direction |
+
+Configuration starts from [.env.example](.env.example). Runtime progress,
+jobs, reports, locks, and crawler state are stored under `runtime/`, separately
+from the source code and per-novel data.
 
 ## Development
 
-Run the full validation pipeline:
-
-```bash
-uv run test
-```
-
-Apply automatically fixable Ruff lint changes and format the code before
-running the remaining validation steps:
+Apply safe formatting and lint fixes, then run the full validation pipeline:
 
 ```bash
 uv run test --fix
+uv run test
 ```
 
-Run individual checks:
+After changing the frontend, also run:
 
 ```bash
-uv run ruff check .
-uv run ruff format --check .
-uv run pyright
-uv run pytest tests/
-```
-
-Forward extra pytest arguments through the unified test command:
-
-```bash
-uv run test -- tests/services/test_crawler.py -v
+uv run build
 ```
 
 ## License

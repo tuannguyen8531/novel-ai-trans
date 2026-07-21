@@ -5,7 +5,7 @@ description = "End-to-end pipeline for crawling, translating, and packaging publ
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.14"
-authors = [{name = "SeventhS"}]
+authors = [{name = "Tuan Nguyen"}]
 keywords = [
     "crawler", "translation", "novel", "lightnovel", "webnovel",
     "llm", "ollama", "gemini", "openrouter",
@@ -46,9 +46,9 @@ import    = "src.cli.crawl.importer:main"
 translate = "src.cli.translate:main"
 pack      = "src.cli.pack:main"
 glossary  = "src.cli.glossary:main"
-serve     = "src.api.__main__:main"
 test      = "src.cli.test:main"
 build     = "src.cli.build:main"
+serve     = "src.api.__main__:main"
 
 [build-system]
 requires = ["hatchling"]
