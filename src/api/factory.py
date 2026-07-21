@@ -60,6 +60,11 @@ def create_app(
     _ = base / "runtime"
     jobs_dir = jobs_dir or base / "runtime" / "jobs"
     from src.api.services.jobs import JobStore
+    from src.services.insertion import recover_prepared_backups
+
+    recovered_inserts = recover_prepared_backups(jobs_dir.parent / "insert-backups")
+    if recovered_inserts:
+        _logger.warning("Recovered %d interrupted insert operation(s)", len(recovered_inserts))
 
     job_store = JobStore(jobs_dir)
     # Drop expired job files so the on-disk history mirrors the in-memory

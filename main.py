@@ -7,6 +7,7 @@ Gemini, OpenRouter), and packages the result as EPUB.
 Each subcommand lives in its own module under `src/cli/`:
 
   - src.cli.crawl        → crawl-related command adapters
+  - src.cli.insertion    → insert an empty source chapter
   - src.cli.translate    → translate, translate glossary <subcmd>
   - src.cli.pack         → pack
   - src.cli.test         → test (ruff + pyright + pytest)
@@ -26,6 +27,7 @@ COMMANDS = (
     "generate",
     "validate",
     "import",
+    "insert",
     "translate",
     "pack",
     "glossary",
@@ -62,6 +64,11 @@ def main() -> int:
             return validator.main(sys.argv[2:])
         if subcommand == "import":
             return importer.main(sys.argv[2:])
+
+    if subcommand == "insert":
+        from src.cli import insertion as insertion_module
+
+        return insertion_module.main(sys.argv[2:])
 
     if subcommand == "translate":
         from src.cli import translate as translate_module

@@ -29,6 +29,7 @@ GLOSSARY_DIR = _PROJECT_ROOT / "runtime" / "glossary"
 CONFIG_DRAFTS_DIR = _PROJECT_ROOT / "runtime" / "config-drafts"
 LOCK_DIR = RUNTIME_DIR / "locks"
 GLOSSARY_BACKUP_DIR = RUNTIME_DIR / "glossary-backups"
+INSERT_BACKUP_DIR = RUNTIME_DIR / "insert-backups"
 
 
 def is_valid_novel_name(novel_name: str) -> bool:
@@ -188,6 +189,7 @@ __all__ = [
     "CONFIG_DRAFTS_DIR",
     "LOCK_DIR",
     "GLOSSARY_BACKUP_DIR",
+    "INSERT_BACKUP_DIR",
     "is_valid_novel_name",
     "validate_novel_name",
     "resolve_within",

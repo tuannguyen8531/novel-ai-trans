@@ -10,11 +10,13 @@ from fastapi import APIRouter, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
 
 from src.api.dependencies import AuthenticatedPrincipal, JobManagerDependency, get_state
+from src.api.events import build_progress_emitter
 from src.api.schemas import (
     ArtifactInfoResponse,
     ChapterContentPayload,
     ChapterContentResponse,
     CreateNovelPayload,
+    InsertChapterPayload,
     JobStartResponse,
     MetadataLocalizationPayload,
     NovelChapterStatus,
@@ -28,6 +30,7 @@ from src.application import config as app_config
 from src.application.errors import ApplicationValidationError, PersistenceError
 from src.application.languages import normalize_source_language
 from src.application.novel import artifacts, catalog, chapters, covers, identity, metadata, rules
+from src.application.novel.insertion import InsertRequest, insert_chapter
 from src.application.novel.localization import localize_metadata
 
 router = APIRouter(tags=["novels"])
@@ -93,6 +96,51 @@ def novel_chapters(
 ) -> list[NovelChapterStatus]:
     root = identity.resolve_root(app_config.get_config().translated_dir)
     return [NovelChapterStatus(**asdict(chapter)) for chapter in chapters.list_chapters(root, name)]
+
+
+@router.post(
+    "/novels/{name}/chapters/insert",
+    response_model=JobStartResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def insert_novel_chapter(
+    name: str,
+    payload: InsertChapterPayload,
+    _: AuthenticatedPrincipal,
+    jobs: JobManagerDependency,
+) -> JobStartResponse:
+    config = app_config.get_config()
+    root = identity.resolve_root(config.translated_dir)
+    identity.require_path(root, name)
+    snapshot = config.clone()
+    loop = asyncio.get_running_loop()
+    runtime_root = get_state().jobs_dir.parent
+
+    def _run(job, emit, cancel_event):
+        result = insert_chapter(
+            InsertRequest(
+                novel=name,
+                number=payload.number,
+                content=payload.content,
+                operation_id=job.id,
+            ),
+            progress_callback=build_progress_emitter(job, emit),
+            cancel_event=cancel_event,
+            progress_root=runtime_root / "progress",
+            report_root=runtime_root / "reports",
+            backup_root=runtime_root / "insert-backups",
+            lock_dir=runtime_root / "locks",
+        )
+        return asdict(result)
+
+    job = jobs.submit(
+        kind="insert",
+        novel=name,
+        snapshot=snapshot,
+        loop=loop,
+        run=_run,
+    )
+    return JobStartResponse(job_id=job.id)
 
 
 @router.get("/novels/{name}/chapters/{number}", response_model=ChapterContentResponse)

@@ -191,6 +191,13 @@ class ChapterContentPayload(BaseModel):
     content: str
 
 
+class InsertChapterPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    number: int = Field(..., ge=1)
+    content: str = ""
+
+
 class NovelMetadataResponse(BaseModel):
     novel: str
     data: dict[str, Any]

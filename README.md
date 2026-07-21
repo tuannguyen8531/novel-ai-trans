@@ -125,6 +125,7 @@ translated/<novel>/
 | `uv run validate <novel>` | Validate selectors against the source website |
 | `uv run crawl <novel>` | Download source chapters |
 | `uv run import <book.epub>` | Import an EPUB into the chapter pipeline |
+| `uv run insert <novel> <chapter>` | Insert an empty source chapter before an existing chapter |
 | `uv run translate <novel>` | Translate chapters |
 | `uv run glossary <command> <novel>` | Manage the per-novel glossary |
 | `uv run pack <novel>` | Build a translated EPUB |

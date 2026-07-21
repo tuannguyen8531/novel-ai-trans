@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { onMounted, ref, toRef } from 'vue'
+import { computed, onMounted, ref, toRef, watch } from 'vue'
+import { useJobsStore } from '@/composables/jobs'
 import { useChapters } from '@/composables/chapters'
 import ChapterDialog from '@/components/ChapterDialog.vue'
 import DetailPanelHeader from '@/components/DetailPanelHeader.vue'
@@ -11,7 +12,10 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   openChapter: [chapter: number]
+  jobStarted: [jobId: string]
 }>()
+
+const jobs = useJobsStore()
 
 const {
   addSaving,
@@ -28,8 +32,22 @@ const {
   add
 } = useChapters(toRef(props, 'novel'))
 const showAddDialog = ref(false)
+const insertJobId = ref<string | null>(null)
+const pendingChapter = ref<number | null>(null)
+const insertJobStatus = computed(() => (
+  insertJobId.value ? jobs.findJob(insertJobId.value)?.status ?? null : null
+))
 
 onMounted(load)
+
+watch(insertJobStatus, async (status, previous) => {
+  if (status !== 'completed' || previous === 'completed') return
+  const chapter = pendingChapter.value
+  await load()
+  insertJobId.value = null
+  pendingChapter.value = null
+  if (chapter !== null) emit('openChapter', chapter)
+})
 
 function openAddDialog() {
   addError.value = null
@@ -37,9 +55,12 @@ function openAddDialog() {
 }
 
 async function addChapter(chapter: number, content: string) {
-  if (!await add(chapter, content)) return
+  const jobId = await add(chapter, content)
+  if (!jobId) return
   showAddDialog.value = false
-  emit('openChapter', chapter)
+  insertJobId.value = jobId
+  pendingChapter.value = chapter
+  emit('jobStarted', jobId)
 }
 </script>
 
@@ -61,7 +82,7 @@ async function addChapter(chapter: number, content: string) {
         >
           {{ ascending ? '\u2191 Asc' : '\u2193 Desc' }}
         </button>
-        <button type="button" class="secondary panel-action-button" @click="openAddDialog">Add chapter</button>
+        <button type="button" class="secondary panel-action-button" @click="openAddDialog">Insert chapter</button>
       </template>
     </DetailPanelHeader>
     <p v-if="!numbers.length" class="muted empty-message">No chapters yet.</p>

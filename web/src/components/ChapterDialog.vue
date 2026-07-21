@@ -80,7 +80,7 @@ onUnmounted(() => {
       @keydown="handleKeydown"
     >
       <header class="modal-header">
-        <h3 id="add-chapter-title">Add Chapter</h3>
+        <h3 id="add-chapter-title">Insert Chapter</h3>
         <button
           type="button"
           class="modal-close"
@@ -94,6 +94,7 @@ onUnmounted(() => {
         <div>
           <label>Chapter number</label>
           <input v-model.number="chapterNumber" type="number" min="1" />
+          <p class="muted insert-hint">This chapter and every later chapter will move forward.</p>
         </div>
         <div class="content-field">
           <label>Content (optional)</label>
@@ -106,7 +107,7 @@ onUnmounted(() => {
           type="button"
           :disabled="saving || chapterNumber === null || chapterNumber < 1"
           @click="chapterNumber !== null && emit('confirm', chapterNumber, content)"
-        >{{ saving ? 'Adding...' : 'Add' }}</button>
+        >{{ saving ? 'Starting...' : 'Insert' }}</button>
       </footer>
     </div>
   </div>
@@ -116,6 +117,11 @@ onUnmounted(() => {
 <style scoped>
 .content-field {
   margin-top: 0.75rem;
+}
+
+.insert-hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.85rem;
 }
 
 .chapter-edit-area {

@@ -163,6 +163,12 @@ export const api = {
       body: JSON.stringify({ content })
     })
   },
+  insertChapter: (name: string, number: number, content: string) =>
+    request<{ job_id: string }>(`/api/novels/${encodeURIComponent(name)}/chapters/insert`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ number, content })
+    }),
   deleteChapter: (name: string, chapter: number) =>
     request<void>(`/api/novels/${encodeURIComponent(name)}/chapters/${chapter}`, {
       method: 'DELETE'

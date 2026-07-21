@@ -64,19 +64,14 @@ export function useChapters(novel: MaybeRefOrGetter<string>) {
     }
   }
 
-  async function add(number: number, content: string): Promise<boolean> {
+  async function add(number: number, content: string): Promise<string | null> {
     addError.value = null
     addSaving.value = true
     try {
-      await api.putChapterContent(toValue(novel), number, content)
-      await load()
-      const index = numbers.value.indexOf(number)
-      const newPage = Math.ceil(index / perPage.value + 1)
-      if (newPage > 0) page.value = newPage
-      return true
+      return (await api.insertChapter(toValue(novel), number, content)).job_id
     } catch (err) {
       addError.value = (err as Error).message
-      return false
+      return null
     } finally {
       addSaving.value = false
     }

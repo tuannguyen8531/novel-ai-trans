@@ -14,6 +14,7 @@ For provider setup, see [PROVIDERS.md](PROVIDERS.md).
   - [Generate a novel config](#generate-a-novel-config)
   - [Validate a config](#validate-a-config)
   - [Import an EPUB](#import-an-epub)
+  - [Insert a missing chapter](#insert-a-missing-chapter)
 - [2. Translate](#2-translate)
   - [Localize title and novel summary](#localize-title-and-novel-summary)
 - [3. Glossary](#3-glossary)
@@ -192,6 +193,25 @@ retained chapters, unchanged chapters skipped without rewriting, chapters
 overwritten because their content changed, newly added chapters, and chapters
 removed when `--keep-existing` is not enabled. Changed overwritten chapters are
 listed by number and title.
+
+### Insert a missing chapter
+
+Insert an empty source chapter before an existing chapter number:
+
+```bash
+uv run insert my-novel 301
+```
+
+The command moves that chapter and every later source chapter, translation,
+report, progress entry, and chapter-indexed glossary record forward by one. It
+then creates an empty `chapter_301.txt` and stores a recovery backup under
+`runtime/insert-backups/`. Fill the new source chapter in the GUI or edit the
+file, then translate that chapter explicitly. If a translation already exists,
+use `--force`:
+
+```bash
+uv run translate my-novel --start 301 --to 301 --force
+```
 
 #### Novel config schema
 

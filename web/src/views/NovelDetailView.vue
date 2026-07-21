@@ -89,6 +89,11 @@ function startPackJob(id: string) {
   jobId.value = id
   void router.replace({ query: { job: id } })
 }
+
+function startInsertJob(id: string) {
+  jobId.value = id
+  void router.replace({ query: { job: id } })
+}
 </script>
 
 <template>
@@ -154,6 +159,7 @@ function startPackJob(id: string) {
           :novel="novelName"
           :active="tab === 'chapters'"
           @open-chapter="openChapter"
+          @job-started="startInsertJob"
         />
 
         <div

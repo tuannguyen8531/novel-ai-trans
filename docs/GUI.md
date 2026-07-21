@@ -197,9 +197,10 @@ selected, open the Pack dialog, or edit Metadata.
 Tabs cover:
 
 - **Chapters**: paginated source chapter numbers, ascending/descending order,
-  and an Add chapter action. The reader can switch between source and target
-  text, open the table of contents, edit the current text, and delete a source
-  chapter.
+  and an Insert chapter action. Inserting moves that chapter and every later
+  source, translation, report, and progress record forward before saving the
+  new source text. The reader can switch between source and target text, open
+  the table of contents, edit the current text, and delete a source chapter.
 - **Glossary**: terms, characters, and relationships. Edits are saved through
   their respective inline editors. When glossary changes affect existing
   translations, Preview & Apply shows proposed replacements, conflicts, and a

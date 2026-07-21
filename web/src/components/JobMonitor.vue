@@ -115,7 +115,7 @@ async function cancel() {
       <p v-if="progress?.message" class="muted" style="margin-top: 0.3rem;">{{ progress.message }}</p>
       <div class="row gap-2" style="margin-top: 0.5rem;">
         <button
-          v-if="['running', 'queued', 'cancelling'].includes(localJob.status)"
+          v-if="localJob.kind !== 'insert' && ['running', 'queued', 'cancelling'].includes(localJob.status)"
           class="secondary"
           type="button"
           @click="cancel"

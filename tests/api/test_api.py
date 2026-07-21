@@ -117,6 +117,35 @@ def test_novel_detail_rejects_invalid_slug(client):
     assert response.status_code == 404
 
 
+def test_insert_chapter_starts_insert_job_and_shifts_existing_source(client):
+    assert client.post("/api/novels", json={"name": "demo"}).status_code == 201
+    novel_root = Path(_config.get_config().translated_dir) / "demo"
+    input_dir = novel_root / "input"
+    input_dir.mkdir(parents=True, exist_ok=True)
+    (input_dir / "chapter_001.txt").write_text("old one", encoding="utf-8")
+    (input_dir / "chapter_002.txt").write_text("old two", encoding="utf-8")
+
+    response = client.post(
+        "/api/novels/demo/chapters/insert",
+        json={"number": 1, "content": "new one"},
+    )
+
+    assert response.status_code == 202
+    job_id = response.json()["job_id"]
+    deadline = time.time() + 5
+    job = client.get(f"/api/jobs/{job_id}").json()
+    while job["status"] in {"queued", "running"} and time.time() < deadline:
+        time.sleep(0.02)
+        job = client.get(f"/api/jobs/{job_id}").json()
+
+    assert job["kind"] == "insert"
+    assert job["status"] == "completed"
+    assert job["result"]["chapter"] == 1
+    assert (input_dir / "chapter_001.txt").read_text(encoding="utf-8") == "new one"
+    assert (input_dir / "chapter_002.txt").read_text(encoding="utf-8") == "old one"
+    assert (input_dir / "chapter_003.txt").read_text(encoding="utf-8") == "old two"
+
+
 def test_provider_check_rejects_unknown(client):
     response = client.post("/api/providers/check", json={"provider": "bogus"})
     assert response.status_code == 502
