@@ -619,7 +619,7 @@ def learner_node(state: TranslationState) -> dict:
     if new_entities or new_edges or new_address_rules:
         save_characters_batch(novel_name, new_entities, new_edges, address_rules=new_address_rules, chapter=chapter_number)
         _logger.info(
-            "Updated %s character(s), %s relationship(s), %s address rule(s)",
+            "Updated %s character(s), %s relationship(s); observed %s address rule candidate(s)",
             len(new_entities),
             len(new_edges),
             len(new_address_rules),
@@ -627,7 +627,7 @@ def learner_node(state: TranslationState) -> dict:
                 "presentation_event": "cli_message",
                 "presentation_message": (
                     f"  📝 Updated {len(new_entities)} character(s), {len(new_edges)} relationship(s), "
-                    f"{len(new_address_rules)} address rule(s)"
+                    f"observed {len(new_address_rules)} address rule candidate(s)"
                 ),
             },
         )

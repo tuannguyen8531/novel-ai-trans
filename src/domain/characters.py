@@ -4,6 +4,11 @@ import re
 
 CJK_RE = re.compile(r"[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]")
 
+ADDRESS_RULE_CANDIDATES_KEY = "_address_rule_candidates"
+ADDRESS_RULE_CONFIRMATION_COUNT = 2
+ADDRESS_RULE_CONFIRMATION_WINDOW = 5
+ADDRESS_RULE_SCOPES = frozenset({"stable", "temporary"})
+
 SYMMETRIC_RELATIONSHIPS = {
     "spouse",
     "romantic interest",
@@ -250,7 +255,7 @@ def normalize_address_rule(rule: dict, entities: dict, chapter: int = 0) -> dict
     self_ref = self_ref.strip() if isinstance(self_ref, str) else ""
     other_ref = other_ref.strip() if isinstance(other_ref, str) else ""
     notes = notes.strip() if isinstance(notes, str) else ""
-    if not self_ref and not other_ref and not notes:
+    if not self_ref and not other_ref:
         return None
 
     since = _coerce_chapter(rule.get("since"), fallback=max(0, chapter))
@@ -271,6 +276,12 @@ def normalize_address_rule(rule: dict, entities: dict, chapter: int = 0) -> dict
     if notes:
         normalized["notes"] = notes
 
+    scope = rule.get("scope")
+    if scope is not None:
+        if not isinstance(scope, str) or scope.strip().casefold() not in ADDRESS_RULE_SCOPES:
+            return None
+        normalized["scope"] = scope.strip().casefold()
+
     return normalized
 
 
@@ -282,6 +293,49 @@ _TRANSIENT_ADDRESS_PREFIXES = (
     "con nhỏ ",
     "con bé ",
     "đồ chết tiệt",
+)
+
+_NON_DIRECT_SELF_REFERENCES = {
+    "dạ",
+    "không",
+    "no",
+    "vâng",
+    "yes",
+}
+
+_THIRD_PERSON_REFERENCES = {
+    "anh ấy",
+    "anh ta",
+    "bà ấy",
+    "cô ấy",
+    "cô ta",
+    "hắn",
+    "he",
+    "her",
+    "him",
+    "họ",
+    "nó",
+    "she",
+    "them",
+    "they",
+    "ông ấy",
+    "y",
+}
+
+_TRANSIENT_ADDRESS_NOTES = (
+    "biệt danh tạm thời",
+    "đóng vai",
+    "khi say",
+    "lúc say",
+    "người thứ ba",
+    "nói về",
+    "roleplay",
+    "say rượu",
+    "speaking about",
+    "tạm thời",
+    "third party",
+    "temporary nickname",
+    "while drunk",
 )
 
 _COMMON_ADDRESS_REFERENCES = {
@@ -330,7 +384,17 @@ def _is_transient_address_rule(rule: dict, entities: dict) -> bool:
             if isinstance(alias, str) and alias.strip():
                 entity_names.append((alias.strip().casefold(), original))
 
+    self_ref = str(rule.get("self", "")).strip().casefold()
     other = str(rule.get("other", "")).strip().casefold()
+    notes = str(rule.get("notes", "")).strip().casefold()
+    if rule.get("scope") == "temporary":
+        return True
+    if self_ref in _NON_DIRECT_SELF_REFERENCES:
+        return True
+    if self_ref in _THIRD_PERSON_REFERENCES or other in _THIRD_PERSON_REFERENCES:
+        return True
+    if any(marker in notes for marker in _TRANSIENT_ADDRESS_NOTES):
+        return True
     if other and other not in _COMMON_ADDRESS_REFERENCES:
         has_address_prefix = any(other.startswith(f"{reference} ") for reference in _COMMON_ADDRESS_REFERENCES)
         matched_entities = {
@@ -347,9 +411,15 @@ def normalize_address_rules(rules: list, entities: dict, chapter: int = 0) -> li
         return []
 
     candidates: list[tuple[int, dict]] = []
+    transient_intervals: dict[tuple[str, str], list[tuple[int, int]]] = {}
     for order, rule in enumerate(rules):
         item = normalize_address_rule(rule, entities, chapter=chapter)
-        if not item or _is_transient_address_rule(item, entities):
+        if not item:
+            continue
+        if _is_transient_address_rule(item, entities):
+            since = item.get("since", 0)
+            until = item.get("until", since)
+            transient_intervals.setdefault((item["speaker"], item["listener"]), []).append((since, until))
             continue
         candidates.append((order, item))
 
@@ -365,11 +435,25 @@ def normalize_address_rules(rules: list, entities: dict, chapter: int = 0) -> li
         previous = timeline[-1]
         same_form = previous.get("self", "") == item.get("self", "") and previous.get("other", "") == item.get("other", "")
         continuous = previous.get("until") is None or previous["until"] >= item["since"] - 1
-        if same_form and continuous:
+        transient_bridge = False
+        if same_form and not continuous:
+            gap_start = previous["until"] + 1
+            gap_end = item["since"] - 1
+            covered_until = gap_start - 1
+            for start, end in sorted(transient_intervals.get(pair, [])):
+                if end < gap_start or start > covered_until + 1:
+                    continue
+                covered_until = max(covered_until, end)
+                if covered_until >= gap_end:
+                    transient_bridge = True
+                    break
+        if same_form and (continuous or transient_bridge):
             if item.get("notes"):
                 previous["notes"] = item["notes"]
             if "until" in item:
                 previous["until"] = item["until"]
+            else:
+                previous.pop("until", None)
             continue
 
         if item["since"] == previous["since"]:
@@ -385,6 +469,139 @@ def normalize_address_rules(rules: list, entities: dict, chapter: int = 0) -> li
     return [rule for timeline in timelines.values() for rule in timeline]
 
 
+def normalize_address_rule_candidates(candidates: list, entities: dict) -> list[dict]:
+    """Normalize unconfirmed rules, keeping only the latest candidate per pair."""
+    if not isinstance(candidates, list):
+        return []
+
+    normalized_by_pair: dict[tuple[str, str], dict] = {}
+    for candidate in candidates:
+        if not isinstance(candidate, dict):
+            continue
+        first_seen = _coerce_chapter(candidate.get("first_seen"))
+        last_seen = _coerce_chapter(candidate.get("last_seen"), fallback=first_seen)
+        if first_seen <= 0 or last_seen < first_seen:
+            continue
+        rule = normalize_address_rule(
+            {
+                **candidate,
+                "since": first_seen,
+            },
+            entities,
+            chapter=first_seen,
+        )
+        if not rule or _is_transient_address_rule(rule, entities):
+            continue
+        item = {
+            "speaker": rule["speaker"],
+            "listener": rule["listener"],
+            "self": rule.get("self", ""),
+            "other": rule.get("other", ""),
+            "first_seen": first_seen,
+            "last_seen": last_seen,
+            "observations": max(1, _coerce_chapter(candidate.get("observations"), fallback=1)),
+        }
+        if rule.get("notes"):
+            item["notes"] = rule["notes"]
+        if rule.get("scope"):
+            item["scope"] = rule["scope"]
+        normalized_by_pair[(rule["speaker"], rule["listener"])] = item
+    return list(normalized_by_pair.values())
+
+
+def merge_address_rule_candidates(
+    address_rules: list,
+    candidates: list,
+    incoming_rules: list,
+    entities: dict,
+    chapter: int,
+) -> tuple[list[dict], list[dict]]:
+    """Confirm learned address rules across distinct nearby chapters."""
+    stable_rules = normalize_address_rules(address_rules, entities)
+    pending = normalize_address_rule_candidates(candidates, entities)
+    observed_chapter = max(0, chapter)
+    if observed_chapter > 0:
+        pending = [item for item in pending if observed_chapter - item["last_seen"] <= ADDRESS_RULE_CONFIRMATION_WINDOW]
+
+    pending_by_pair = {(item["speaker"], item["listener"]): item for item in pending}
+    incoming_by_pair: dict[tuple[str, str], dict] = {}
+    for raw_rule in incoming_rules if isinstance(incoming_rules, list) else []:
+        item = normalize_address_rule(raw_rule, entities, chapter=observed_chapter)
+        if not item or _is_transient_address_rule(item, entities):
+            continue
+        pair = (item["speaker"], item["listener"])
+        incoming_by_pair[pair] = item
+
+    for pair, item in incoming_by_pair.items():
+        seen_chapter = observed_chapter or item.get("since", 0)
+        if seen_chapter <= 0:
+            continue
+
+        active = select_active_address_rules(
+            stable_rules,
+            {pair[0]: entities[pair[0]], pair[1]: entities[pair[1]]},
+            seen_chapter,
+        )
+        active_rule = next((rule for rule in active if (rule["speaker"], rule["listener"]) == pair), None)
+        form = (item.get("self", ""), item.get("other", ""))
+        if active_rule and form == (active_rule.get("self", ""), active_rule.get("other", "")):
+            pending_by_pair.pop(pair, None)
+            continue
+
+        existing_candidate = pending_by_pair.get(pair)
+        same_candidate = existing_candidate is not None and form == (
+            existing_candidate.get("self", ""),
+            existing_candidate.get("other", ""),
+        )
+        if existing_candidate is not None and seen_chapter <= existing_candidate["last_seen"]:
+            continue
+        within_window = (
+            existing_candidate is not None and seen_chapter - existing_candidate["last_seen"] <= ADDRESS_RULE_CONFIRMATION_WINDOW
+        )
+        candidate: dict
+        if existing_candidate is not None and same_candidate and within_window:
+            candidate = existing_candidate
+            if seen_chapter > candidate["last_seen"]:
+                candidate["last_seen"] = seen_chapter
+                candidate["observations"] += 1
+                if item.get("notes"):
+                    candidate["notes"] = item["notes"]
+                if item.get("scope"):
+                    candidate["scope"] = item["scope"]
+        else:
+            candidate = {
+                "speaker": pair[0],
+                "listener": pair[1],
+                "self": form[0],
+                "other": form[1],
+                "first_seen": seen_chapter,
+                "last_seen": seen_chapter,
+                "observations": 1,
+            }
+            if item.get("notes"):
+                candidate["notes"] = item["notes"]
+            if item.get("scope"):
+                candidate["scope"] = item["scope"]
+            pending_by_pair[pair] = candidate
+
+        if candidate["observations"] >= ADDRESS_RULE_CONFIRMATION_COUNT:
+            promoted = {
+                "speaker": pair[0],
+                "listener": pair[1],
+                "self": candidate.get("self", ""),
+                "other": candidate.get("other", ""),
+                "since": candidate["first_seen"],
+            }
+            if candidate.get("notes"):
+                promoted["notes"] = candidate["notes"]
+            if candidate.get("scope"):
+                promoted["scope"] = candidate["scope"]
+            stable_rules = normalize_address_rules([*stable_rules, promoted], entities)
+            pending_by_pair.pop(pair, None)
+
+    return stable_rules, list(pending_by_pair.values())
+
+
 def normalize_character_data(data: dict) -> dict:
     """Normalize the character-related sections of persisted glossary data."""
     entities = normalize_character_entities(data.get("entities", {}))
@@ -394,6 +611,11 @@ def normalize_character_data(data: dict) -> dict:
         "edges": normalize_character_edges(data.get("edges", []), entities),
         "address_rules": normalize_address_rules(data.get("address_rules", []), entities),
     }
+    candidates = normalize_address_rule_candidates(data.get(ADDRESS_RULE_CANDIDATES_KEY, []), entities)
+    if candidates:
+        normalized[ADDRESS_RULE_CANDIDATES_KEY] = candidates
+    else:
+        normalized.pop(ADDRESS_RULE_CANDIDATES_KEY, None)
     normalized.pop("pronoun_examples", None)
     return normalized
 
@@ -520,18 +742,25 @@ def merge_character_context(
 
     existing_entities = normalize_character_entities(existing_entities)
     existing_edges = normalize_character_edges(data.get("edges", []) + tagged_edges, existing_entities)
-    existing_address_rules = normalize_address_rules(
-        data.get("address_rules", []) + (address_rules or []),
+    existing_address_rules, address_rule_candidates = merge_address_rule_candidates(
+        data.get("address_rules", []),
+        data.get(ADDRESS_RULE_CANDIDATES_KEY, []),
+        address_rules or [],
         existing_entities,
-        chapter=chapter,
+        chapter,
     )
 
-    return {
+    result = {
         **data,
         "entities": existing_entities,
         "edges": existing_edges,
         "address_rules": existing_address_rules,
     }
+    if address_rule_candidates:
+        result[ADDRESS_RULE_CANDIDATES_KEY] = address_rule_candidates
+    else:
+        result.pop(ADDRESS_RULE_CANDIDATES_KEY, None)
+    return result
 
 
 def upsert_relationship(

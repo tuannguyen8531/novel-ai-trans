@@ -270,6 +270,7 @@ class TestGlossary:
         assert data["address_rules"] == []
 
     def test_save_and_load_active_address_rules(self):
+        rule = {"speaker": "Lý Bạch", "listener": "Đỗ Phủ", "self": "ta", "other": "huynh", "since": 2}
         save_characters_batch(
             "test-novel",
             {
@@ -277,12 +278,10 @@ class TestGlossary:
                 "杜甫": {"translated_name": "Đỗ Phủ", "role": "supporting", "pronoun": "ông"},
             },
             [["李白", "杜甫", "friend"]],
-            address_rules=[
-                {"speaker": "Lý Bạch", "listener": "Đỗ Phủ", "self": "ta", "other": "huynh", "since": 2},
-                {"speaker": "Đỗ Phủ", "listener": "Lý Bạch", "self": "tôi", "other": "ngài", "since": 5},
-            ],
+            address_rules=[rule],
             chapter=2,
         )
+        save_characters_batch("test-novel", {}, [], address_rules=[rule], chapter=3)
 
         entities, edges, address_rules = get_active_context("test-novel", "李白 gặp 杜甫.", chapter_number=3)
 
@@ -291,6 +290,10 @@ class TestGlossary:
         assert address_rules == [{"speaker": "李白", "listener": "杜甫", "self": "ta", "other": "huynh", "since": 2}]
 
     def test_active_context_does_not_load_address_rules_for_absent_neighbors(self):
+        rules = [
+            {"speaker": "陆远秋", "listener": "白清夏", "self": "tôi", "other": "cậu", "since": 1},
+            {"speaker": "陆远秋", "listener": "梁先生", "self": "cháu", "other": "ông", "since": 1},
+        ]
         save_characters_batch(
             "test-novel",
             {
@@ -302,12 +305,10 @@ class TestGlossary:
                 ["陆远秋", "白清夏", "friend"],
                 ["陆远秋", "梁先生", "teacher"],
             ],
-            address_rules=[
-                {"speaker": "陆远秋", "listener": "白清夏", "self": "tôi", "other": "cậu", "since": 1},
-                {"speaker": "陆远秋", "listener": "梁先生", "self": "cháu", "other": "ông", "since": 1},
-            ],
+            address_rules=rules,
             chapter=1,
         )
+        save_characters_batch("test-novel", {}, [], address_rules=rules, chapter=2)
 
         entities, edges, address_rules = get_active_context(
             "test-novel",

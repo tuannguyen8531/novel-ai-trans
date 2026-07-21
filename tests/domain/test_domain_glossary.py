@@ -1,6 +1,7 @@
 import pytest
 
 from src.domain.characters import (
+    ADDRESS_RULE_CANDIDATES_KEY,
     format_address_rules,
     format_relationships_shorthand,
     merge_character_context,
@@ -147,6 +148,98 @@ def test_validate_glossary_data_reports_bad_shapes():
     assert "address rule 0.since must be an integer" in issues
     assert "chapter summary key 'one' must be a numeric string" in issues
     assert "chapter summary 'one' must be a string" in issues
+
+
+def test_validate_glossary_data_accepts_address_rule_candidate_schema():
+    data = {
+        "entities": {
+            "李明": {"translated_name": "Lý Minh"},
+            "张伟": {"translated_name": "Trương Vĩ"},
+        },
+        ADDRESS_RULE_CANDIDATES_KEY: [
+            {
+                "speaker": "李明",
+                "listener": "张伟",
+                "self": "tôi",
+                "other": "cậu",
+                "scope": "stable",
+                "first_seen": 10,
+                "last_seen": 10,
+                "observations": 1,
+            }
+        ],
+    }
+
+    assert validate_glossary_data(data) == []
+
+
+def test_validate_glossary_data_reports_invalid_address_rule_candidates():
+    issues = validate_glossary_data(
+        {
+            "entities": {"李明": {"translated_name": "Lý Minh"}},
+            ADDRESS_RULE_CANDIDATES_KEY: [
+                {
+                    "speaker": "missing",
+                    "listener": 3,
+                    "self": 1,
+                    "scope": "temporary",
+                    "first_seen": "10",
+                    "last_seen": -1,
+                    "observations": 0,
+                },
+                {
+                    "speaker": "李明",
+                    "listener": "李明",
+                    "other": "cậu",
+                    "first_seen": 10,
+                    "last_seen": 9,
+                    "observations": "two",
+                },
+            ],
+        }
+    )
+
+    assert "address rule candidate 0 has an invalid listener" in issues
+    assert "address rule candidate 0 references unknown speaker 'missing'" in issues
+    assert "address rule candidate 0.self must be a string" in issues
+    assert "address rule candidate 0.scope must be stable" in issues
+    assert "address rule candidate 0.first_seen must be a positive integer" in issues
+    assert "address rule candidate 0.last_seen must be a positive integer" in issues
+    assert "address rule candidate 0.observations must be a positive integer" in issues
+    assert "address rule candidate 1 speaker and listener must differ" in issues
+    assert "address rule candidate 1.last_seen must not precede first_seen" in issues
+    assert "address rule candidate 1.observations must be a positive integer" in issues
+
+
+def test_validate_glossary_data_reports_candidate_collection_shape():
+    issues = validate_glossary_data({ADDRESS_RULE_CANDIDATES_KEY: {}})
+
+    assert issues == [f"{ADDRESS_RULE_CANDIDATES_KEY} must be a list"]
+
+
+def test_validate_glossary_data_rejects_notes_only_address_memory():
+    data = {
+        "entities": {
+            "李明": {"translated_name": "Lý Minh"},
+            "张伟": {"translated_name": "Trương Vĩ"},
+        },
+        "address_rules": [{"speaker": "李明", "listener": "张伟", "notes": "context"}],
+        ADDRESS_RULE_CANDIDATES_KEY: [
+            {
+                "speaker": "李明",
+                "listener": "张伟",
+                "notes": "context",
+                "first_seen": 10,
+                "last_seen": 10,
+                "observations": 1,
+            }
+        ],
+    }
+
+    issues = validate_glossary_data(data)
+
+    assert "address rule 0 must define self or other" in issues
+    assert "address rule candidate 0 must define self or other" in issues
 
 
 def test_validate_glossary_data_reports_bad_character_aliases():
@@ -362,6 +455,152 @@ def test_normalize_address_rules_drops_names_and_one_off_insults():
     assert normalize_address_rules(rules, entities) == [
         {"speaker": "李明", "listener": "张伟", "self": "tôi", "other": "cậu", "since": 4},
     ]
+
+
+def test_normalize_address_rules_drops_non_direct_and_temporary_references():
+    entities = {
+        "李明": {"translated_name": "Lý Minh"},
+        "张伟": {"translated_name": "Trương Vĩ"},
+    }
+    rules = [
+        {"speaker": "李明", "listener": "张伟", "self": "vâng", "other": "anh", "since": 1},
+        {"speaker": "李明", "listener": "张伟", "self": "tôi", "other": "cô ấy", "since": 2},
+        {
+            "speaker": "李明",
+            "listener": "张伟",
+            "self": "em",
+            "other": "thầy",
+            "since": 3,
+            "notes": "playful teacher-student roleplay",
+        },
+        {"speaker": "李明", "listener": "张伟", "self": "tôi", "other": "cậu", "since": 4},
+    ]
+
+    assert normalize_address_rules(rules, entities) == [rules[-1]]
+
+
+def test_notes_only_address_rule_is_rejected_before_candidate_persistence():
+    entities = {
+        "李明": {"translated_name": "Lý Minh"},
+        "张伟": {"translated_name": "Trương Vĩ"},
+    }
+    rule = [{"speaker": "李明", "listener": "张伟", "notes": "stable relationship"}]
+
+    result = merge_character_context({}, entities, [], rule, chapter=10)
+
+    assert normalize_address_rules(rule, entities, chapter=10) == []
+    assert result["address_rules"] == []
+    assert ADDRESS_RULE_CANDIDATES_KEY not in result
+
+
+def test_normalize_address_rules_bridges_transient_rule_between_stable_forms():
+    entities = {
+        "李明": {"translated_name": "Lý Minh"},
+        "张伟": {"translated_name": "Trương Vĩ"},
+    }
+    rules = [
+        {"speaker": "李明", "listener": "张伟", "self": "tôi", "other": "cậu", "since": 1, "until": 2},
+        {
+            "speaker": "李明",
+            "listener": "张伟",
+            "self": "em",
+            "other": "thầy",
+            "since": 3,
+            "until": 3,
+            "notes": "temporary roleplay",
+        },
+        {"speaker": "李明", "listener": "张伟", "self": "tôi", "other": "cậu", "since": 4},
+    ]
+
+    assert normalize_address_rules(rules, entities) == [
+        {"speaker": "李明", "listener": "张伟", "self": "tôi", "other": "cậu", "since": 1}
+    ]
+
+
+def test_normalize_address_rules_preserves_closed_gap_between_same_forms():
+    entities = {
+        "李明": {"translated_name": "Lý Minh"},
+        "张伟": {"translated_name": "Trương Vĩ"},
+    }
+    rules = [
+        {"speaker": "李明", "listener": "张伟", "self": "tôi", "other": "cậu", "since": 1, "until": 2},
+        {"speaker": "李明", "listener": "张伟", "self": "tôi", "other": "cậu", "since": 10},
+    ]
+
+    assert normalize_address_rules(rules, entities) == rules
+
+
+def test_temporary_scope_and_vietnamese_notes_never_become_candidates():
+    entities = {
+        "李明": {"translated_name": "Lý Minh"},
+        "张伟": {"translated_name": "Trương Vĩ"},
+    }
+    temporary_rules = [
+        {
+            "speaker": "李明",
+            "listener": "张伟",
+            "self": "em",
+            "other": "thầy",
+            "scope": "stable",
+            "notes": "đóng vai thầy trò tạm thời",
+        },
+        {
+            "speaker": "张伟",
+            "listener": "李明",
+            "self": "thầy",
+            "other": "em",
+            "scope": "temporary",
+        },
+    ]
+
+    first = merge_character_context({}, entities, [], temporary_rules, chapter=1)
+    second = merge_character_context(first, {}, [], temporary_rules, chapter=2)
+
+    assert first["address_rules"] == []
+    assert ADDRESS_RULE_CANDIDATES_KEY not in first
+    assert second["address_rules"] == []
+    assert ADDRESS_RULE_CANDIDATES_KEY not in second
+
+
+def test_merge_character_context_confirms_address_rule_in_two_distinct_chapters():
+    entities = {
+        "李明": {"translated_name": "Lý Minh"},
+        "张伟": {"translated_name": "Trương Vĩ"},
+    }
+    observed = [{"speaker": "李明", "listener": "张伟", "self": "tôi", "other": "cậu"}]
+
+    first = merge_character_context({}, entities, [], observed, chapter=10)
+    conflicting_retry = [{"speaker": "李明", "listener": "张伟", "self": "tao", "other": "mày"}]
+    repeated_same_chapter = merge_character_context(first, {}, [], conflicting_retry, chapter=10)
+    confirmed = merge_character_context(repeated_same_chapter, {}, [], observed, chapter=11)
+
+    assert first["address_rules"] == []
+    assert first[ADDRESS_RULE_CANDIDATES_KEY][0]["observations"] == 1
+    assert repeated_same_chapter[ADDRESS_RULE_CANDIDATES_KEY][0]["observations"] == 1
+    assert repeated_same_chapter[ADDRESS_RULE_CANDIDATES_KEY][0]["self"] == "tôi"
+    assert confirmed["address_rules"] == [{"speaker": "李明", "listener": "张伟", "self": "tôi", "other": "cậu", "since": 10}]
+    assert ADDRESS_RULE_CANDIDATES_KEY not in confirmed
+
+
+def test_merge_character_context_does_not_relearn_active_address_rule():
+    data = {
+        "entities": {
+            "李明": {"translated_name": "Lý Minh"},
+            "张伟": {"translated_name": "Trương Vĩ"},
+        },
+        "address_rules": [{"speaker": "李明", "listener": "张伟", "self": "tôi", "other": "cậu", "since": 1}],
+    }
+
+    result = merge_character_context(
+        data,
+        {},
+        [],
+        [{"speaker": "李明", "listener": "张伟", "self": "tôi", "other": "cậu"}],
+        chapter=20,
+    )
+
+    assert result["address_rules"] == data["address_rules"]
+    assert ADDRESS_RULE_CANDIDATES_KEY not in result
 
 
 def test_normalize_address_rules_keeps_common_references_that_prefix_entity_names():

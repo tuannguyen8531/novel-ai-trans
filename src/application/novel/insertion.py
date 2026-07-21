@@ -20,6 +20,7 @@ from src.application.errors import (
 from src.application.locks import novel_lock
 from src.application.novel.identity import require_path
 from src.application.progress import ProgressEvent
+from src.domain.characters import ADDRESS_RULE_CANDIDATES_KEY
 from src.domain.language import SUPPORTED_TARGET_LANGUAGES
 from src.services import chapters as chapter_service
 from src.services import insertion as insertion_storage
@@ -104,6 +105,16 @@ def _shift_glossary(data: dict[str, Any], number: int) -> dict[str, Any]:
                 value = rule.get(key)
                 if isinstance(value, int) and value >= number:
                     rule[key] = value + 1
+
+    candidates = updated.get(ADDRESS_RULE_CANDIDATES_KEY)
+    if isinstance(candidates, list):
+        for candidate in candidates:
+            if not isinstance(candidate, dict):
+                continue
+            for key in ("first_seen", "last_seen"):
+                value = candidate.get(key)
+                if isinstance(value, int) and value >= number:
+                    candidate[key] = value + 1
 
     summaries = updated.get("chapter_summaries")
     if isinstance(summaries, dict):

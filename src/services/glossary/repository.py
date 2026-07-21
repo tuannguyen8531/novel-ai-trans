@@ -45,6 +45,7 @@ from src import paths as _paths
 from src.config import config
 from src.domain import glossary as glossary_domain
 from src.domain.characters import (
+    ADDRESS_RULE_CANDIDATES_KEY,
     get_character_translated_name,
     merge_character_context,
     normalize_character_info,
@@ -201,7 +202,7 @@ def remove_character(novel_name: str, original_name: str) -> bool:
         entities = dict(data.get("entities", {}))
         removed = original_name in entities
         entities.pop(original_name, None)
-        # Also clean up any edges or address rules referencing this character!
+        # Also clean up any edges or address rules referencing this character.
         edges = [
             edge for edge in data.get("edges", []) if len(edge) >= 2 and edge[0] != original_name and edge[1] != original_name
         ]
@@ -210,7 +211,17 @@ def remove_character(novel_name: str, original_name: str) -> bool:
             for rule in data.get("address_rules", [])
             if rule.get("speaker") != original_name and rule.get("listener") != original_name
         ]
-        return {**data, "entities": entities, "edges": edges, "address_rules": address_rules}
+        address_rule_candidates = [
+            rule
+            for rule in data.get(ADDRESS_RULE_CANDIDATES_KEY, [])
+            if rule.get("speaker") != original_name and rule.get("listener") != original_name
+        ]
+        updated = {**data, "entities": entities, "edges": edges, "address_rules": address_rules}
+        if address_rule_candidates:
+            updated[ADDRESS_RULE_CANDIDATES_KEY] = address_rule_candidates
+        else:
+            updated.pop(ADDRESS_RULE_CANDIDATES_KEY, None)
+        return updated
 
     _merge_json_locked(path, updater)
     return removed

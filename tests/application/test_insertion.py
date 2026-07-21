@@ -61,6 +61,7 @@ def test_insert_shifts_chapter_indexed_files_and_state(tmp_path: Path) -> None:
             "entities": {},
             "edges": [["A", "B", "friend", 2]],
             "address_rules": [{"speaker": "A", "listener": "B", "since": 2, "until": 3}],
+            "_address_rule_candidates": [{"speaker": "A", "listener": "B", "first_seen": 2, "last_seen": 3, "observations": 1}],
             "chapter_summaries": {"1": "one", "2": "two", "3": "three"},
         },
     )
@@ -89,6 +90,8 @@ def test_insert_shifts_chapter_indexed_files_and_state(tmp_path: Path) -> None:
     assert glossary["edges"][0][3] == 3
     assert glossary["address_rules"][0]["since"] == 3
     assert glossary["address_rules"][0]["until"] == 4
+    assert glossary["_address_rule_candidates"][0]["first_seen"] == 3
+    assert glossary["_address_rule_candidates"][0]["last_seen"] == 4
     assert glossary["chapter_summaries"] == {"1": "one", "3": "two", "4": "three"}
     assert result.shifted_sources == 2
     assert result.shifted_translations == 3

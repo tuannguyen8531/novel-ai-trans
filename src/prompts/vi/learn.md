@@ -78,6 +78,7 @@ RULES FOR ADDRESS RULES (VIETNAMESE XƯNG HÔ):
 - Include a rule only when the source or translation clearly supports it; if unsure, leave it out
 - Record only the stable default pair used across scenes; do not repeat an unchanged existing rule
 - Do NOT store proper names, temporary nicknames, insults, jokes, or emotional outbursts as address rules
+- Set "scope" to "stable". If the usage is temporary (roleplay, drunken speech, a joke, or a one-scene nickname), omit it instead
 - If a stable relationship change creates a new default pair, emit the new rule from this chapter
 - Do NOT add generic third-person pronoun examples here
 - Use "since": {{chapter_number}} when the pattern starts or is first confirmed in this chapter
@@ -105,6 +106,7 @@ Respond with JSON ONLY (no other text):
                 "self": "Vietnamese self-reference",
                 "other": "Vietnamese address/reference for listener",
                 "since": {{chapter_number}},
+                "scope": "stable",
                 "notes": "optional short reason or context"
             }
         ]

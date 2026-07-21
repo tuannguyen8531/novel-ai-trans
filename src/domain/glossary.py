@@ -2,7 +2,11 @@
 
 import re
 
-from src.domain.characters import find_name_in_text, normalize_character_data
+from src.domain.characters import (
+    ADDRESS_RULE_CANDIDATES_KEY,
+    find_name_in_text,
+    normalize_character_data,
+)
 
 PENDING_REPLACEMENTS_KEY = "_pending_replacements"
 
@@ -154,6 +158,12 @@ def validate_glossary_data(data: dict) -> list[str]:
             for key in ("self", "other", "notes"):
                 if key in rule and not isinstance(rule[key], str):
                     issues.append(f"address rule {index}.{key} must be a string")
+            has_self = isinstance(rule.get("self"), str) and bool(rule["self"].strip())
+            has_other = isinstance(rule.get("other"), str) and bool(rule["other"].strip())
+            if not has_self and not has_other:
+                issues.append(f"address rule {index} must define self or other")
+            if "scope" in rule and rule["scope"] != "stable":
+                issues.append(f"address rule {index}.scope must be stable")
             for key in ("since", "until"):
                 if key in rule and not isinstance(rule[key], int):
                     issues.append(f"address rule {index}.{key} must be an integer")
@@ -162,6 +172,62 @@ def validate_glossary_data(data: dict) -> list[str]:
                     issues.append(f"address rule {index} references unknown speaker {speaker!r}")
                 if isinstance(listener, str) and listener not in entity_names:
                     issues.append(f"address rule {index} references unknown listener {listener!r}")
+
+    address_rule_candidates = data.get(ADDRESS_RULE_CANDIDATES_KEY, [])
+    if address_rule_candidates is not None and not isinstance(address_rule_candidates, list):
+        issues.append(f"{ADDRESS_RULE_CANDIDATES_KEY} must be a list")
+    elif isinstance(address_rule_candidates, list):
+        entity_names = set(entities) if isinstance(entities, dict) else set()
+        seen_pairs: set[tuple[str, str]] = set()
+        for index, candidate in enumerate(address_rule_candidates):
+            label = f"address rule candidate {index}"
+            if not isinstance(candidate, dict):
+                issues.append(f"{label} must be an object")
+                continue
+
+            speaker = candidate.get("speaker")
+            listener = candidate.get("listener")
+            speaker_value = speaker if isinstance(speaker, str) else ""
+            listener_value = listener if isinstance(listener, str) else ""
+            valid_speaker = bool(speaker_value.strip())
+            valid_listener = bool(listener_value.strip())
+            if not valid_speaker:
+                issues.append(f"{label} has an invalid speaker")
+            if not valid_listener:
+                issues.append(f"{label} has an invalid listener")
+            if valid_speaker and speaker_value not in entity_names:
+                issues.append(f"{label} references unknown speaker {speaker_value!r}")
+            if valid_listener and listener_value not in entity_names:
+                issues.append(f"{label} references unknown listener {listener_value!r}")
+            if valid_speaker and valid_listener:
+                pair = (speaker_value, listener_value)
+                if speaker_value == listener_value:
+                    issues.append(f"{label} speaker and listener must differ")
+                if pair in seen_pairs:
+                    issues.append(f"{label} duplicates an existing pair")
+                seen_pairs.add(pair)
+
+            for key in ("self", "other", "notes"):
+                if key in candidate and not isinstance(candidate[key], str):
+                    issues.append(f"{label}.{key} must be a string")
+            has_self = isinstance(candidate.get("self"), str) and bool(candidate["self"].strip())
+            has_other = isinstance(candidate.get("other"), str) and bool(candidate["other"].strip())
+            if not has_self and not has_other:
+                issues.append(f"{label} must define self or other")
+            if "scope" in candidate and candidate["scope"] != "stable":
+                issues.append(f"{label}.scope must be stable")
+
+            first_seen = candidate.get("first_seen")
+            last_seen = candidate.get("last_seen")
+            observations = candidate.get("observations")
+            if isinstance(first_seen, bool) or not isinstance(first_seen, int) or first_seen <= 0:
+                issues.append(f"{label}.first_seen must be a positive integer")
+            if isinstance(last_seen, bool) or not isinstance(last_seen, int) or last_seen <= 0:
+                issues.append(f"{label}.last_seen must be a positive integer")
+            elif isinstance(first_seen, int) and not isinstance(first_seen, bool) and last_seen < first_seen:
+                issues.append(f"{label}.last_seen must not precede first_seen")
+            if isinstance(observations, bool) or not isinstance(observations, int) or observations < 1:
+                issues.append(f"{label}.observations must be a positive integer")
 
     summaries = data.get("chapter_summaries", {})
     if summaries is not None and not isinstance(summaries, dict):
