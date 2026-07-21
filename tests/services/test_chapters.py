@@ -91,3 +91,12 @@ def test_detect_chapter_number_ignores_unmarked_numbers() -> None:
     titles = ["notice 65", "일러스트 모음 65 추가", "2024 special notice", "cover"]
 
     assert all(chapters.detect_chapter_number(title) is None for title in titles)
+
+
+def test_numbered_chapter_with_notice_marker_is_not_filtered() -> None:
+    titles = ["作品更新通知", "Notice: 550화까지 왔습니다!!", "第301章 是通知还是邀请", "第302章 是体香"]
+
+    assert chapters.is_obvious_non_chapter_title(titles[0])
+    assert chapters.is_obvious_non_chapter_title(titles[1])
+    assert not chapters.is_obvious_non_chapter_title(titles[2])
+    assert chapters.select_likely_chapters(titles, title_getter=lambda title: title) == titles[2:]

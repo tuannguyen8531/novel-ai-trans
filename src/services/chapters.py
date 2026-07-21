@@ -158,6 +158,10 @@ def detect_chapter_number(title: str) -> int | None:
 def is_obvious_non_chapter_title(title: str) -> bool:
     """Return whether a title is clearly an announcement rather than story content."""
     normalized_title = " ".join(title.split()).casefold()
+    if any(normalized_title.startswith(marker) for marker in NOTICE_MARKERS):
+        return True
+    if detect_chapter_number(title) is not None:
+        return False
     return any(marker in normalized_title for marker in NOTICE_MARKERS)
 
 
