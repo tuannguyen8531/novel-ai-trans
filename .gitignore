@@ -58,3 +58,6 @@ runtime/config-drafts/
 # Coverage artifacts
 .coverage
 htmlcov/
+
+# Outside scripts
+scripts/

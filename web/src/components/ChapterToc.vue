@@ -19,6 +19,7 @@ const emit = defineEmits<{
 
 const language = ref<ReaderLanguage>('source')
 const modal = ref<HTMLElement | null>(null)
+const tocList = ref<HTMLElement | null>(null)
 let previousFocus: HTMLElement | null = null
 
 const filteredChapters = computed(() => {
@@ -53,17 +54,35 @@ function select(chapter: number) {
   emit('select', chapter)
 }
 
-watch(() => props.open, (isOpen) => {
+function scrollToCurrentChapter() {
+  const list = tocList.value
+  const currentItem = list?.querySelector<HTMLElement>('.toc-item.active')
+  if (!list || !currentItem) return
+
+  const listRect = list.getBoundingClientRect()
+  const itemRect = currentItem.getBoundingClientRect()
+  list.scrollTop += itemRect.top - listRect.top - (list.clientHeight - itemRect.height) / 2
+}
+
+watch(() => props.open, async (isOpen) => {
   if (isOpen) {
     language.value = props.viewMode
     previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
     document.body.style.overflow = 'hidden'
-    void nextTick(() => modal.value?.focus())
+    await nextTick()
+    modal.value?.focus()
+    scrollToCurrentChapter()
   } else {
     document.body.style.overflow = ''
     previousFocus?.focus()
     previousFocus = null
   }
+})
+
+watch([language, filteredChapters], async () => {
+  if (!props.open) return
+  await nextTick()
+  scrollToCurrentChapter()
 })
 
 onUnmounted(() => {
@@ -94,7 +113,7 @@ onUnmounted(() => {
             <option :value="targetLanguage">{{ targetLanguageLabel }}</option>
           </select>
         </div>
-        <div class="toc-list">
+        <div ref="tocList" class="toc-list">
           <div v-if="filteredChapters.length === 0" class="muted empty-toc">
             No chapters available for this language.
           </div>
