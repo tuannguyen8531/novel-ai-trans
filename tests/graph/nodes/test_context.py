@@ -15,7 +15,7 @@ def test_context_loads_target_specific_rules():
 
     with (
         patch("src.graph.nodes.context.load_glossary", return_value={}),
-        patch("src.graph.nodes.context.get_active_context", return_value=({}, [], [])),
+        patch("src.graph.nodes.context.get_active_context_with_candidates", return_value=({}, [], [], [])),
     ):
         result = context_node(state)
 
@@ -35,7 +35,7 @@ def test_context_loads_vietnamese_rules_from_vi_folder():
 
     with (
         patch("src.graph.nodes.context.load_glossary", return_value={}),
-        patch("src.graph.nodes.context.get_active_context", return_value=({}, [], [])),
+        patch("src.graph.nodes.context.get_active_context_with_candidates", return_value=({}, [], [], [])),
     ):
         result = context_node(state)
 
@@ -60,8 +60,45 @@ def test_context_filters_glossary_terms_to_source_text():
                 "归墟": "Quy Khư",
             },
         ),
-        patch("src.graph.nodes.context.get_active_context", return_value=({}, [], [])),
+        patch("src.graph.nodes.context.get_active_context_with_candidates", return_value=({}, [], [], [])),
     ):
         result = context_node(state)
 
     assert result["glossary"] == {"玄天宗": "Huyền Thiên Tông"}
+
+
+def test_context_exposes_pending_address_hypotheses_separately():
+    state = initial_state(
+        source_text="李明和张伟说话。",
+        source_language="chinese",
+        target_language="vi",
+        novel_name="novel",
+        chapter_number=11,
+    )
+    entities = {"李明": {"translated_name": "Lý Minh"}, "张伟": {"translated_name": "Trương Vĩ"}}
+    rules = [{"speaker": "李明", "listener": "张伟", "self": "tôi", "other": "cô", "since": 1}]
+    candidates = [
+        {
+            "speaker": "李明",
+            "listener": "张伟",
+            "self": "anh",
+            "other": "em",
+            "first_seen": 10,
+            "last_seen": 10,
+            "observations": 1,
+            "scope": "stable",
+            "reason": "relationship_change",
+        }
+    ]
+
+    with (
+        patch("src.graph.nodes.context.load_glossary", return_value={}),
+        patch(
+            "src.graph.nodes.context.get_active_context_with_candidates",
+            return_value=(entities, [], rules, candidates),
+        ),
+    ):
+        result = context_node(state)
+
+    assert result["characters"]["address_rules"] == rules
+    assert result["characters"]["address_rule_candidates"] == candidates

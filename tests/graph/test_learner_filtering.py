@@ -1,6 +1,7 @@
 """Tests for learner node kinship/role filtering and relationship normalization."""
 
 from src.graph.nodes.learner import (
+    _build_existing_chars_str,
     _is_english,
     _is_kinship_or_role,
     _normalize_relationship,
@@ -119,3 +120,28 @@ def test_sample_across_text_covers_beginning_middle_and_end():
     assert "MIDDLE" in sample
     assert sample.endswith("ENDING")
     assert len(sample) <= 300
+
+
+def test_existing_character_context_labels_pending_address_hypotheses():
+    entities = {
+        "李明": {"translated_name": "Lý Minh"},
+        "张伟": {"translated_name": "Trương Vĩ"},
+    }
+    rules = [{"speaker": "李明", "listener": "张伟", "self": "tôi", "other": "cô"}]
+    candidates = [
+        {
+            "speaker": "李明",
+            "listener": "张伟",
+            "self": "anh",
+            "other": "em",
+            "observations": 1,
+            "reason": "relationship_change",
+        }
+    ]
+
+    result = _build_existing_chars_str(entities, [], rules, candidates)
+
+    assert 'Lý Minh->Trương Vĩ: self="tôi", other="cô"' in result
+    assert "Pending address hypotheses (re-evaluate from source only):" in result
+    assert 'Lý Minh->Trương Vĩ: self="anh", other="em", observations=1' in result
+    assert 'reason="relationship_change"' in result

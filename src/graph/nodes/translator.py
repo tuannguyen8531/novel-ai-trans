@@ -10,6 +10,7 @@ Builds a system prompt from template with:
 """
 
 from src.domain.characters import (
+    format_address_rule_candidates,
     format_address_rules,
     format_relationships_shorthand,
 )
@@ -51,10 +52,13 @@ def translator_node(state: TranslationState) -> dict:
     entities = char_data.get("entities", {})
     edges = char_data.get("edges", [])
     address_rules = char_data.get("address_rules", [])
+    address_rule_candidates = char_data.get("address_rule_candidates", [])
     relationships_text = format_relationships_shorthand(entities, edges)
     characters = f"\n{relationships_text}" if relationships_text else ""
     address_rules_text = format_address_rules(entities, address_rules, target_language=target_language)
     address_rules_prompt = f"\n{address_rules_text}" if address_rules_text else ""
+    candidate_text = format_address_rule_candidates(entities, address_rule_candidates, address_rules)
+    address_rule_candidates_prompt = f"\n{candidate_text}" if candidate_text else ""
 
     previous_summary = state.get("previous_summary", "")
     if previous_summary:
@@ -75,6 +79,7 @@ def translator_node(state: TranslationState) -> dict:
         glossary=glossary,
         characters=characters,
         address_rules=address_rules_prompt,
+        address_rule_candidates=address_rule_candidates_prompt,
         previous_summary=previous_summary,
         review_feedback=review_feedback,
     )

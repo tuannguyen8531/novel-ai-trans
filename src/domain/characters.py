@@ -5,9 +5,22 @@ import re
 CJK_RE = re.compile(r"[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]")
 
 ADDRESS_RULE_CANDIDATES_KEY = "_address_rule_candidates"
-ADDRESS_RULE_CONFIRMATION_COUNT = 2
-ADDRESS_RULE_CONFIRMATION_WINDOW = 5
-ADDRESS_RULE_SCOPES = frozenset({"stable", "temporary"})
+ADDRESS_RULE_INITIAL_CONFIRMATION_COUNT = 2
+ADDRESS_RULE_CHANGE_CONFIRMATION_COUNT = 3
+ADDRESS_RULE_CONFIRMATION_WINDOW = 20
+ADDRESS_RULE_HINT_ENCOUNTER_LIMIT = 2
+ADDRESS_RULE_SCOPES = frozenset({"stable", "temporary", "uncertain"})
+ADDRESS_RULE_STABLE_REASONS = frozenset({"default", "relationship_change"})
+ADDRESS_RULE_TRANSIENT_REASONS = frozenset(
+    {
+        "drunken_speech",
+        "emotional_outburst",
+        "joke",
+        "nickname",
+        "roleplay",
+    }
+)
+ADDRESS_RULE_REASONS = ADDRESS_RULE_STABLE_REASONS | ADDRESS_RULE_TRANSIENT_REASONS
 
 SYMMETRIC_RELATIONSHIPS = {
     "spouse",
@@ -282,6 +295,12 @@ def normalize_address_rule(rule: dict, entities: dict, chapter: int = 0) -> dict
             return None
         normalized["scope"] = scope.strip().casefold()
 
+    reason = rule.get("reason")
+    if reason is not None:
+        if not isinstance(reason, str) or reason.strip().casefold() not in ADDRESS_RULE_REASONS:
+            return None
+        normalized["reason"] = reason.strip().casefold()
+
     return normalized
 
 
@@ -324,18 +343,32 @@ _THIRD_PERSON_REFERENCES = {
 
 _TRANSIENT_ADDRESS_NOTES = (
     "biệt danh tạm thời",
+    "châm biếm",
+    "chọc ghẹo",
     "đóng vai",
+    "giả vờ",
     "khi say",
     "lúc say",
+    "mỉa mai",
     "người thứ ba",
+    "nói đùa",
     "nói về",
+    "playful",
+    "pretend",
     "roleplay",
+    "sarcastic",
     "say rượu",
     "speaking about",
     "tạm thời",
+    "teasing",
     "third party",
     "temporary nickname",
     "while drunk",
+    "joke",
+    "joking",
+    "mocking",
+    "trêu",
+    "đùa",
 )
 
 _COMMON_ADDRESS_REFERENCES = {
@@ -370,8 +403,17 @@ _COMMON_ADDRESS_REFERENCES = {
 }
 
 
+def _has_transient_address_note(rule: dict) -> bool:
+    notes = str(rule.get("notes", "")).strip().casefold()
+    return any(marker in notes for marker in _TRANSIENT_ADDRESS_NOTES)
+
+
+def _is_explicit_temporary_address_observation(rule: dict) -> bool:
+    return rule.get("scope") == "temporary" or rule.get("reason") in ADDRESS_RULE_TRANSIENT_REASONS
+
+
 def _is_transient_address_rule(rule: dict, entities: dict) -> bool:
-    """Reject names and obvious one-off insults from persistent address memory."""
+    """Reject explicit temporary observations and structurally transient forms."""
     entity_names: list[tuple[str, str]] = []
     for original, info in entities.items():
         if not isinstance(info, dict):
@@ -386,14 +428,14 @@ def _is_transient_address_rule(rule: dict, entities: dict) -> bool:
 
     self_ref = str(rule.get("self", "")).strip().casefold()
     other = str(rule.get("other", "")).strip().casefold()
-    notes = str(rule.get("notes", "")).strip().casefold()
-    if rule.get("scope") == "temporary":
+    if _is_explicit_temporary_address_observation(rule):
         return True
     if self_ref in _NON_DIRECT_SELF_REFERENCES:
         return True
     if self_ref in _THIRD_PERSON_REFERENCES or other in _THIRD_PERSON_REFERENCES:
         return True
-    if any(marker in notes for marker in _TRANSIENT_ADDRESS_NOTES):
+    strongly_stable = rule.get("scope") == "stable" and rule.get("reason") in ADDRESS_RULE_STABLE_REASONS
+    if _has_transient_address_note(rule) and not strongly_stable:
         return True
     if other and other not in _COMMON_ADDRESS_REFERENCES:
         has_address_prefix = any(other.startswith(f"{reference} ") for reference in _COMMON_ADDRESS_REFERENCES)
@@ -415,6 +457,8 @@ def normalize_address_rules(rules: list, entities: dict, chapter: int = 0) -> li
     for order, rule in enumerate(rules):
         item = normalize_address_rule(rule, entities, chapter=chapter)
         if not item:
+            continue
+        if item.get("scope") == "uncertain":
             continue
         if _is_transient_address_rule(item, entities):
             since = item.get("since", 0)
@@ -490,7 +534,7 @@ def normalize_address_rule_candidates(candidates: list, entities: dict) -> list[
             entities,
             chapter=first_seen,
         )
-        if not rule or _is_transient_address_rule(rule, entities):
+        if not rule or rule.get("scope") not in (None, "stable") or _is_transient_address_rule(rule, entities):
             continue
         item = {
             "speaker": rule["speaker"],
@@ -501,10 +545,19 @@ def normalize_address_rule_candidates(candidates: list, entities: dict) -> list[
             "last_seen": last_seen,
             "observations": max(1, _coerce_chapter(candidate.get("observations"), fallback=1)),
         }
+        raw_hinted_chapters = candidate.get("hinted_chapters", [])
+        hinted_values = raw_hinted_chapters if isinstance(raw_hinted_chapters, list) else []
+        hinted_chapters = sorted(
+            {hinted_chapter for value in hinted_values if (hinted_chapter := _coerce_chapter(value)) >= first_seen}
+        )
+        if hinted_chapters:
+            item["hinted_chapters"] = hinted_chapters[:ADDRESS_RULE_HINT_ENCOUNTER_LIMIT]
         if rule.get("notes"):
             item["notes"] = rule["notes"]
         if rule.get("scope"):
             item["scope"] = rule["scope"]
+        if rule.get("reason"):
+            item["reason"] = rule["reason"]
         normalized_by_pair[(rule["speaker"], rule["listener"])] = item
     return list(normalized_by_pair.values())
 
@@ -525,11 +578,35 @@ def merge_address_rule_candidates(
 
     pending_by_pair = {(item["speaker"], item["listener"]): item for item in pending}
     incoming_by_pair: dict[tuple[str, str], dict] = {}
+    blocked_forms: set[tuple[tuple[str, str], tuple[str, str]]] = set()
     for raw_rule in incoming_rules if isinstance(incoming_rules, list) else []:
         item = normalize_address_rule(raw_rule, entities, chapter=observed_chapter)
-        if not item or _is_transient_address_rule(item, entities):
+        if not item:
             continue
         pair = (item["speaker"], item["listener"])
+        form = (item.get("self", ""), item.get("other", ""))
+        scope = item.get("scope", "uncertain")
+        if _is_explicit_temporary_address_observation(item):
+            # Explicit temporary evidence may cancel pending evidence, but confirmed stable phases stay sticky.
+            blocked_forms.add((pair, form))
+            existing_candidate = pending_by_pair.get(pair)
+            if existing_candidate is not None and form == (
+                existing_candidate.get("self", ""),
+                existing_candidate.get("other", ""),
+            ):
+                pending_by_pair.pop(pair, None)
+            existing_incoming = incoming_by_pair.get(pair)
+            if existing_incoming is not None and form == (
+                existing_incoming.get("self", ""),
+                existing_incoming.get("other", ""),
+            ):
+                incoming_by_pair.pop(pair, None)
+            continue
+        # Free-form notes and structural heuristics are weak evidence: ignore the observation without mutating memory.
+        if _has_transient_address_note(item) or _is_transient_address_rule(item, entities):
+            continue
+        if scope != "stable" or (pair, form) in blocked_forms:
+            continue
         incoming_by_pair[pair] = item
 
     for pair, item in incoming_by_pair.items():
@@ -568,6 +645,8 @@ def merge_address_rule_candidates(
                     candidate["notes"] = item["notes"]
                 if item.get("scope"):
                     candidate["scope"] = item["scope"]
+                if item.get("reason") and (item["reason"] == "relationship_change" or not candidate.get("reason")):
+                    candidate["reason"] = item["reason"]
         else:
             candidate = {
                 "speaker": pair[0],
@@ -577,14 +656,18 @@ def merge_address_rule_candidates(
                 "first_seen": seen_chapter,
                 "last_seen": seen_chapter,
                 "observations": 1,
+                "scope": "stable",
             }
             if item.get("notes"):
                 candidate["notes"] = item["notes"]
             if item.get("scope"):
                 candidate["scope"] = item["scope"]
+            if item.get("reason"):
+                candidate["reason"] = item["reason"]
             pending_by_pair[pair] = candidate
 
-        if candidate["observations"] >= ADDRESS_RULE_CONFIRMATION_COUNT:
+        confirmation_count = required_address_rule_observations(candidate, active_rule)
+        if candidate["observations"] >= confirmation_count:
             promoted = {
                 "speaker": pair[0],
                 "listener": pair[1],
@@ -596,10 +679,19 @@ def merge_address_rule_candidates(
                 promoted["notes"] = candidate["notes"]
             if candidate.get("scope"):
                 promoted["scope"] = candidate["scope"]
+            if candidate.get("reason"):
+                promoted["reason"] = candidate["reason"]
             stable_rules = normalize_address_rules([*stable_rules, promoted], entities)
             pending_by_pair.pop(pair, None)
 
     return stable_rules, list(pending_by_pair.values())
+
+
+def required_address_rule_observations(candidate: dict, active_rule: dict | None) -> int:
+    """Return the stable-observation threshold for one pending hypothesis."""
+    if active_rule is None or candidate.get("reason") == "relationship_change":
+        return ADDRESS_RULE_INITIAL_CONFIRMATION_COUNT
+    return ADDRESS_RULE_CHANGE_CONFIRMATION_COUNT
 
 
 def normalize_character_data(data: dict) -> dict:
@@ -704,6 +796,37 @@ def select_active_address_rules(address_rules: list, active_entities: dict, curr
         if not existing or rule.get("since", 0) >= existing.get("since", 0):
             selected_by_pair[pair] = rule
     return list(selected_by_pair.values())
+
+
+def select_active_address_rule_candidates(
+    candidates: list,
+    active_entities: dict,
+    current_chapter: int = 0,
+) -> list[dict]:
+    """Select pending stable hypotheses for active pairs with remaining hint encounters."""
+    if not candidates or not active_entities:
+        return []
+
+    active_names = set(active_entities)
+    selected: list[dict] = []
+    for candidate in candidates:
+        if candidate.get("speaker") not in active_names or candidate.get("listener") not in active_names:
+            continue
+        first_seen = candidate.get("first_seen", 0)
+        last_seen = candidate.get("last_seen", first_seen)
+        if current_chapter > 0:
+            if not isinstance(first_seen, int) or first_seen > current_chapter:
+                continue
+            if isinstance(last_seen, int) and last_seen > current_chapter:
+                continue
+            if isinstance(last_seen, int) and current_chapter - last_seen > ADDRESS_RULE_CONFIRMATION_WINDOW:
+                continue
+        hinted_chapters = candidate.get("hinted_chapters", [])
+        hinted = hinted_chapters if isinstance(hinted_chapters, list) else []
+        if current_chapter not in hinted and len(hinted) >= ADDRESS_RULE_HINT_ENCOUNTER_LIMIT:
+            continue
+        selected.append(candidate)
+    return selected
 
 
 def merge_character_context(
@@ -860,4 +983,36 @@ def format_address_rules(entities: dict, address_rules: list, target_language: s
 
         lines.append(f"{speaker} -> {listener}: " + ", ".join(parts))
     lines.append("=== END ADDRESS RULES ===")
+    return "\n".join(lines)
+
+
+def format_address_rule_candidates(entities: dict, candidates: list, address_rules: list) -> str:
+    """Format pending address hypotheses separately from confirmed defaults."""
+    if not entities or not candidates:
+        return ""
+
+    active_by_pair = {(rule.get("speaker"), rule.get("listener")): rule for rule in address_rules}
+    lines = [
+        "=== UNCONFIRMED ADDRESS HYPOTHESES ===",
+        "These are provisional continuity hints, not confirmed rules.",
+    ]
+    for candidate in candidates:
+        speaker = candidate.get("speaker", "")
+        listener = candidate.get("listener", "")
+        parts = []
+        if candidate.get("self"):
+            parts.append(f'self="{candidate["self"]}"')
+        if candidate.get("other"):
+            parts.append(f'other="{candidate["other"]}"')
+
+        pair = (speaker, listener)
+        required = required_address_rule_observations(candidate, active_by_pair.get(pair))
+        metadata = [f"observations={candidate.get('observations', 1)}/{required}"]
+        if candidate.get("reason"):
+            metadata.append(f'reason="{candidate["reason"]}"')
+        if candidate.get("first_seen"):
+            metadata.append(f"first_seen={candidate['first_seen']}")
+        lines.append(f"{speaker} -> {listener}: {', '.join(parts)} [{', '.join(metadata)}]")
+
+    lines.append("=== END UNCONFIRMED ADDRESS HYPOTHESES ===")
     return "\n".join(lines)

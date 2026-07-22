@@ -2,6 +2,7 @@ import pytest
 
 from src.domain.characters import (
     ADDRESS_RULE_CANDIDATES_KEY,
+    format_address_rule_candidates,
     format_address_rules,
     format_relationships_shorthand,
     merge_character_context,
@@ -163,9 +164,11 @@ def test_validate_glossary_data_accepts_address_rule_candidate_schema():
                 "self": "tôi",
                 "other": "cậu",
                 "scope": "stable",
+                "reason": "default",
                 "first_seen": 10,
                 "last_seen": 10,
                 "observations": 1,
+                "hinted_chapters": [11, 12],
             }
         ],
     }
@@ -183,9 +186,11 @@ def test_validate_glossary_data_reports_invalid_address_rule_candidates():
                     "listener": 3,
                     "self": 1,
                     "scope": "temporary",
+                    "reason": "joke",
                     "first_seen": "10",
                     "last_seen": -1,
                     "observations": 0,
+                    "hinted_chapters": [9, 9, 10, "bad"],
                 },
                 {
                     "speaker": "李明",
@@ -194,6 +199,7 @@ def test_validate_glossary_data_reports_invalid_address_rule_candidates():
                     "first_seen": 10,
                     "last_seen": 9,
                     "observations": "two",
+                    "hinted_chapters": [9],
                 },
             ],
         }
@@ -203,12 +209,17 @@ def test_validate_glossary_data_reports_invalid_address_rule_candidates():
     assert "address rule candidate 0 references unknown speaker 'missing'" in issues
     assert "address rule candidate 0.self must be a string" in issues
     assert "address rule candidate 0.scope must be stable" in issues
+    assert "address rule candidate 0.reason is invalid" in issues
     assert "address rule candidate 0.first_seen must be a positive integer" in issues
     assert "address rule candidate 0.last_seen must be a positive integer" in issues
     assert "address rule candidate 0.observations must be a positive integer" in issues
+    assert "address rule candidate 0.hinted_chapters must contain positive integers" in issues
+    assert "address rule candidate 0.hinted_chapters must not contain duplicates" in issues
+    assert "address rule candidate 0.hinted_chapters exceeds the hint encounter limit" in issues
     assert "address rule candidate 1 speaker and listener must differ" in issues
     assert "address rule candidate 1.last_seen must not precede first_seen" in issues
     assert "address rule candidate 1.observations must be a positive integer" in issues
+    assert "address rule candidate 1.hinted_chapters must not precede first_seen" in issues
 
 
 def test_validate_glossary_data_reports_candidate_collection_shape():
@@ -471,12 +482,40 @@ def test_normalize_address_rules_drops_non_direct_and_temporary_references():
             "self": "em",
             "other": "thầy",
             "since": 3,
-            "notes": "playful teacher-student roleplay",
+            "scope": "stable",
+            "reason": "roleplay",
         },
-        {"speaker": "李明", "listener": "张伟", "self": "tôi", "other": "cậu", "since": 4},
+        {
+            "speaker": "李明",
+            "listener": "张伟",
+            "self": "vợ",
+            "other": "chồng",
+            "since": 4,
+            "notes": "nói đùa về việc kết hôn",
+        },
+        {"speaker": "李明", "listener": "张伟", "self": "tôi", "other": "cậu", "since": 5},
     ]
 
     assert normalize_address_rules(rules, entities) == [rules[-1]]
+
+
+def test_normalize_address_rules_keeps_structured_stable_rule_despite_ambiguous_notes():
+    entities = {
+        "李明": {"translated_name": "Lý Minh"},
+        "张伟": {"translated_name": "Trương Vĩ"},
+    }
+    rule = {
+        "speaker": "李明",
+        "listener": "张伟",
+        "self": "anh",
+        "other": "em",
+        "since": 10,
+        "scope": "stable",
+        "reason": "default",
+        "notes": "ban đầu nói đùa nhưng nay đã nghiêm túc",
+    }
+
+    assert normalize_address_rules([rule], entities) == [rule]
 
 
 def test_notes_only_address_rule_is_rejected_before_candidate_persistence():
@@ -567,10 +606,28 @@ def test_merge_character_context_confirms_address_rule_in_two_distinct_chapters(
         "李明": {"translated_name": "Lý Minh"},
         "张伟": {"translated_name": "Trương Vĩ"},
     }
-    observed = [{"speaker": "李明", "listener": "张伟", "self": "tôi", "other": "cậu"}]
+    observed = [
+        {
+            "speaker": "李明",
+            "listener": "张伟",
+            "self": "tôi",
+            "other": "cậu",
+            "scope": "stable",
+            "reason": "default",
+        }
+    ]
 
     first = merge_character_context({}, entities, [], observed, chapter=10)
-    conflicting_retry = [{"speaker": "李明", "listener": "张伟", "self": "tao", "other": "mày"}]
+    conflicting_retry = [
+        {
+            "speaker": "李明",
+            "listener": "张伟",
+            "self": "tao",
+            "other": "mày",
+            "scope": "stable",
+            "reason": "default",
+        }
+    ]
     repeated_same_chapter = merge_character_context(first, {}, [], conflicting_retry, chapter=10)
     confirmed = merge_character_context(repeated_same_chapter, {}, [], observed, chapter=11)
 
@@ -578,7 +635,311 @@ def test_merge_character_context_confirms_address_rule_in_two_distinct_chapters(
     assert first[ADDRESS_RULE_CANDIDATES_KEY][0]["observations"] == 1
     assert repeated_same_chapter[ADDRESS_RULE_CANDIDATES_KEY][0]["observations"] == 1
     assert repeated_same_chapter[ADDRESS_RULE_CANDIDATES_KEY][0]["self"] == "tôi"
-    assert confirmed["address_rules"] == [{"speaker": "李明", "listener": "张伟", "self": "tôi", "other": "cậu", "since": 10}]
+    assert confirmed["address_rules"] == [
+        {
+            "speaker": "李明",
+            "listener": "张伟",
+            "self": "tôi",
+            "other": "cậu",
+            "since": 10,
+            "scope": "stable",
+            "reason": "default",
+        }
+    ]
+    assert ADDRESS_RULE_CANDIDATES_KEY not in confirmed
+
+
+def test_merge_character_context_ignores_observation_without_scope():
+    entities = {
+        "李明": {"translated_name": "Lý Minh"},
+        "张伟": {"translated_name": "Trương Vĩ"},
+    }
+    observation = [{"speaker": "李明", "listener": "张伟", "self": "tôi", "other": "cậu"}]
+
+    result = merge_character_context({}, entities, [], observation, chapter=10)
+
+    assert result["address_rules"] == []
+    assert ADDRESS_RULE_CANDIDATES_KEY not in result
+
+
+def test_temporary_observation_cancels_matching_stable_candidate():
+    entities = {
+        "李明": {"translated_name": "Lý Minh"},
+        "张伟": {"translated_name": "Trương Vĩ"},
+    }
+    stable_misclassification = [
+        {
+            "speaker": "李明",
+            "listener": "张伟",
+            "self": "em",
+            "other": "thầy",
+            "scope": "stable",
+            "reason": "default",
+        }
+    ]
+    corrected = [
+        {
+            "speaker": "李明",
+            "listener": "张伟",
+            "self": "em",
+            "other": "thầy",
+            "scope": "temporary",
+            "reason": "roleplay",
+        }
+    ]
+
+    first = merge_character_context({}, entities, [], stable_misclassification, chapter=10)
+    corrected_result = merge_character_context(first, {}, [], corrected, chapter=11)
+
+    assert first[ADDRESS_RULE_CANDIDATES_KEY][0]["observations"] == 1
+    assert corrected_result["address_rules"] == []
+    assert ADDRESS_RULE_CANDIDATES_KEY not in corrected_result
+
+
+def test_reconfirmed_active_rule_rejects_pending_phase_change():
+    entities = {
+        "李明": {"translated_name": "Lý Minh"},
+        "张伟": {"translated_name": "Trương Vĩ"},
+    }
+    confirmed = {
+        "speaker": "李明",
+        "listener": "张伟",
+        "self": "tôi",
+        "other": "cô",
+        "since": 1,
+        "scope": "stable",
+        "reason": "default",
+    }
+    proposed_change = [
+        {
+            "speaker": "李明",
+            "listener": "张伟",
+            "self": "anh",
+            "other": "em",
+            "scope": "stable",
+            "reason": "relationship_change",
+        }
+    ]
+
+    pending = merge_character_context(
+        {"entities": entities, "address_rules": [confirmed]},
+        {},
+        [],
+        proposed_change,
+        chapter=10,
+    )
+    rejected = merge_character_context(
+        pending,
+        {},
+        [],
+        [{**confirmed, "since": 11}],
+        chapter=11,
+    )
+
+    assert pending[ADDRESS_RULE_CANDIDATES_KEY][0]["self"] == "anh"
+    assert rejected["address_rules"] == [confirmed]
+    assert ADDRESS_RULE_CANDIDATES_KEY not in rejected
+
+
+def test_suspicious_notes_do_not_cancel_a_stable_candidate():
+    entities = {
+        "李明": {"translated_name": "Lý Minh"},
+        "张伟": {"translated_name": "Trương Vĩ"},
+    }
+    stable = [
+        {
+            "speaker": "李明",
+            "listener": "张伟",
+            "self": "anh",
+            "other": "em",
+            "scope": "stable",
+            "reason": "default",
+        }
+    ]
+    ambiguous_notes = [
+        {
+            **stable[0],
+            "notes": "ban đầu nói đùa nhưng nay đã nghiêm túc",
+        }
+    ]
+
+    first = merge_character_context({}, entities, [], stable, chapter=10)
+    ambiguous = merge_character_context(first, {}, [], ambiguous_notes, chapter=11)
+    confirmed = merge_character_context(ambiguous, {}, [], stable, chapter=12)
+
+    assert ambiguous[ADDRESS_RULE_CANDIDATES_KEY][0]["observations"] == 1
+    assert confirmed["address_rules"] == [
+        {
+            "speaker": "李明",
+            "listener": "张伟",
+            "self": "anh",
+            "other": "em",
+            "since": 10,
+            "scope": "stable",
+            "reason": "default",
+        }
+    ]
+    assert ADDRESS_RULE_CANDIDATES_KEY not in confirmed
+
+
+def test_stable_candidate_survives_sparse_character_appearances():
+    entities = {
+        "李明": {"translated_name": "Lý Minh"},
+        "张伟": {"translated_name": "Trương Vĩ"},
+    }
+    stable = [
+        {
+            "speaker": "李明",
+            "listener": "张伟",
+            "self": "anh",
+            "other": "em",
+            "scope": "stable",
+            "reason": "default",
+        }
+    ]
+
+    first = merge_character_context({}, entities, [], stable, chapter=10)
+    confirmed = merge_character_context(first, {}, [], stable, chapter=30)
+
+    assert confirmed["address_rules"][0]["since"] == 10
+    assert ADDRESS_RULE_CANDIDATES_KEY not in confirmed
+
+
+def test_temporary_observation_does_not_retract_confirmed_stable_phase():
+    entities = {
+        "李明": {"translated_name": "Lý Minh"},
+        "张伟": {"translated_name": "Trương Vĩ"},
+    }
+    original_rule = {"speaker": "李明", "listener": "张伟", "self": "tôi", "other": "cậu", "since": 1}
+    data = {"entities": entities, "address_rules": [original_rule]}
+    misclassified = [
+        {
+            "speaker": "李明",
+            "listener": "张伟",
+            "self": "anh",
+            "other": "em",
+            "scope": "stable",
+            "reason": "relationship_change",
+        }
+    ]
+    corrected = [
+        {
+            "speaker": "李明",
+            "listener": "张伟",
+            "self": "anh",
+            "other": "em",
+            "scope": "temporary",
+            "reason": "joke",
+        }
+    ]
+
+    first = merge_character_context(data, {}, [], misclassified, chapter=10)
+    promoted = merge_character_context(first, {}, [], misclassified, chapter=11)
+    after_temporary = merge_character_context(promoted, {}, [], corrected, chapter=12)
+
+    assert promoted["address_rules"][0]["until"] == 9
+    assert len(promoted["address_rules"]) == 2
+    assert after_temporary["address_rules"] == promoted["address_rules"]
+    assert ADDRESS_RULE_CANDIDATES_KEY not in after_temporary
+
+
+def test_temporary_observations_across_chapters_never_become_stable():
+    entities = {
+        "李明": {"translated_name": "Lý Minh"},
+        "张伟": {"translated_name": "Trương Vĩ"},
+    }
+    joke = [
+        {
+            "speaker": "李明",
+            "listener": "张伟",
+            "self": "vợ",
+            "other": "chồng",
+            "scope": "temporary",
+            "reason": "joke",
+        }
+    ]
+
+    result: dict = {}
+    for chapter in (10, 11, 12):
+        result = merge_character_context(result, entities, [], joke, chapter=chapter)
+
+    assert result["address_rules"] == []
+    assert ADDRESS_RULE_CANDIDATES_KEY not in result
+
+
+def test_phase_change_requires_three_default_observations():
+    entities = {
+        "李明": {"translated_name": "Lý Minh"},
+        "张伟": {"translated_name": "Trương Vĩ"},
+    }
+    data = {
+        "entities": entities,
+        "address_rules": [{"speaker": "李明", "listener": "张伟", "self": "tôi", "other": "cậu", "since": 1}],
+    }
+    changed = [
+        {
+            "speaker": "李明",
+            "listener": "张伟",
+            "self": "anh",
+            "other": "em",
+            "scope": "stable",
+            "reason": "default",
+        }
+    ]
+
+    first = merge_character_context(data, {}, [], changed, chapter=10)
+    second = merge_character_context(first, {}, [], changed, chapter=11)
+    third = merge_character_context(second, {}, [], changed, chapter=12)
+
+    assert second["address_rules"] == data["address_rules"]
+    assert second[ADDRESS_RULE_CANDIDATES_KEY][0]["observations"] == 2
+    assert third["address_rules"] == [
+        {"speaker": "李明", "listener": "张伟", "self": "tôi", "other": "cậu", "since": 1, "until": 9},
+        {
+            "speaker": "李明",
+            "listener": "张伟",
+            "self": "anh",
+            "other": "em",
+            "since": 10,
+            "scope": "stable",
+            "reason": "default",
+        },
+    ]
+    assert ADDRESS_RULE_CANDIDATES_KEY not in third
+
+
+def test_explicit_relationship_change_requires_two_observations():
+    entities = {
+        "李明": {"translated_name": "Lý Minh"},
+        "张伟": {"translated_name": "Trương Vĩ"},
+    }
+    data = {
+        "entities": entities,
+        "address_rules": [{"speaker": "李明", "listener": "张伟", "self": "tôi", "other": "cậu", "since": 1}],
+    }
+    changed = [
+        {
+            "speaker": "李明",
+            "listener": "张伟",
+            "self": "anh",
+            "other": "em",
+            "scope": "stable",
+            "reason": "relationship_change",
+        }
+    ]
+
+    first = merge_character_context(data, {}, [], changed, chapter=10)
+    confirmed = merge_character_context(first, {}, [], changed, chapter=11)
+
+    assert confirmed["address_rules"][-1] == {
+        "speaker": "李明",
+        "listener": "张伟",
+        "self": "anh",
+        "other": "em",
+        "since": 10,
+        "scope": "stable",
+        "reason": "relationship_change",
+    }
     assert ADDRESS_RULE_CANDIDATES_KEY not in confirmed
 
 
@@ -819,6 +1180,35 @@ def test_format_address_rules():
     assert "formal in public" not in result
     assert "notes=" not in result
     assert "since chapter" not in result
+
+
+def test_format_address_rule_candidates_keeps_hypotheses_separate():
+    entities = {
+        "李明": {"translated_name": "Lý Minh"},
+        "张伟": {"translated_name": "Trương Vĩ"},
+    }
+    rules = [{"speaker": "李明", "listener": "张伟", "self": "tôi", "other": "cô", "since": 1}]
+    candidates = [
+        {
+            "speaker": "李明",
+            "listener": "张伟",
+            "self": "anh",
+            "other": "em",
+            "first_seen": 10,
+            "last_seen": 10,
+            "observations": 1,
+            "scope": "stable",
+            "reason": "relationship_change",
+        }
+    ]
+
+    result = format_address_rule_candidates(entities, candidates, rules)
+
+    assert "=== UNCONFIRMED ADDRESS HYPOTHESES ===" in result
+    assert "provisional continuity hints, not confirmed rules" in result
+    assert '李明 -> 张伟: self="anh", other="em"' in result
+    assert 'observations=1/2, reason="relationship_change", first_seen=10' in result
+    assert "tôi" not in result
 
 
 def test_validate_glossary_data_pronoun_examples():
