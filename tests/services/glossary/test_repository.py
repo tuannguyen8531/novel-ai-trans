@@ -18,6 +18,7 @@ from src.domain.glossary import PENDING_REPLACEMENTS_KEY
 from src.services.glossary.repository import (
     clean_glossary,
     get_active_context,
+    get_active_context_with_candidates,
     load_glossary,
     load_glossary_data,
     remove_character,
@@ -270,7 +271,15 @@ class TestGlossary:
         assert data["address_rules"] == []
 
     def test_save_and_load_active_address_rules(self):
-        rule = {"speaker": "Lý Bạch", "listener": "Đỗ Phủ", "self": "ta", "other": "huynh", "since": 2}
+        rule = {
+            "speaker": "Lý Bạch",
+            "listener": "Đỗ Phủ",
+            "self": "ta",
+            "other": "huynh",
+            "since": 2,
+            "scope": "stable",
+            "reason": "default",
+        }
         save_characters_batch(
             "test-novel",
             {
@@ -287,12 +296,38 @@ class TestGlossary:
 
         assert set(entities) == {"李白", "杜甫"}
         assert edges == [["李白", "杜甫", "friend", 2]]
-        assert address_rules == [{"speaker": "李白", "listener": "杜甫", "self": "ta", "other": "huynh", "since": 2}]
+        assert address_rules == [
+            {
+                "speaker": "李白",
+                "listener": "杜甫",
+                "self": "ta",
+                "other": "huynh",
+                "since": 2,
+                "scope": "stable",
+                "reason": "default",
+            }
+        ]
 
     def test_active_context_does_not_load_address_rules_for_absent_neighbors(self):
         rules = [
-            {"speaker": "陆远秋", "listener": "白清夏", "self": "tôi", "other": "cậu", "since": 1},
-            {"speaker": "陆远秋", "listener": "梁先生", "self": "cháu", "other": "ông", "since": 1},
+            {
+                "speaker": "陆远秋",
+                "listener": "白清夏",
+                "self": "tôi",
+                "other": "cậu",
+                "since": 1,
+                "scope": "stable",
+                "reason": "default",
+            },
+            {
+                "speaker": "陆远秋",
+                "listener": "梁先生",
+                "self": "cháu",
+                "other": "ông",
+                "since": 1,
+                "scope": "stable",
+                "reason": "default",
+            },
         ]
         save_characters_batch(
             "test-novel",
@@ -318,7 +353,45 @@ class TestGlossary:
 
         assert set(entities) == {"陆远秋", "白清夏"}
         assert edges == [["陆远秋", "白清夏", "friend", 1]]
-        assert address_rules == [{"speaker": "陆远秋", "listener": "白清夏", "self": "tôi", "other": "cậu", "since": 1}]
+        assert address_rules == [rules[0]]
+
+    def test_translation_context_bounds_candidate_hints_by_active_encounters(self):
+        entities = {
+            "李明": {"translated_name": "Lý Minh", "role": "supporting"},
+            "张伟": {"translated_name": "Trương Vĩ", "role": "supporting"},
+        }
+        confirmed = {
+            "speaker": "李明",
+            "listener": "张伟",
+            "self": "tôi",
+            "other": "cô",
+            "scope": "stable",
+            "reason": "default",
+        }
+        candidate = {
+            "speaker": "李明",
+            "listener": "张伟",
+            "self": "anh",
+            "other": "em",
+            "scope": "stable",
+            "reason": "relationship_change",
+        }
+        save_characters_batch("test-novel", entities, [], address_rules=[confirmed], chapter=1)
+        save_characters_batch("test-novel", {}, [], address_rules=[confirmed], chapter=2)
+        save_characters_batch("test-novel", {}, [], address_rules=[candidate], chapter=10)
+
+        _, _, rules, first_hints = get_active_context_with_candidates("test-novel", "李明和张伟说话。", chapter_number=11)
+        _, _, _, retried_hints = get_active_context_with_candidates("test-novel", "李明和张伟说话。", chapter_number=11)
+        _, _, _, second_hints = get_active_context_with_candidates("test-novel", "李明和张伟说话。", chapter_number=12)
+        _, _, _, exhausted_hints = get_active_context_with_candidates("test-novel", "李明和张伟说话。", chapter_number=13)
+
+        assert rules[0]["self"] == "tôi"
+        assert first_hints[0]["self"] == "anh"
+        assert retried_hints[0]["hinted_chapters"] == [11]
+        assert second_hints[0]["hinted_chapters"] == [11, 12]
+        assert exhausted_hints == []
+        stored = load_glossary_data("test-novel")["_address_rule_candidates"][0]
+        assert stored["hinted_chapters"] == [11, 12]
 
     def test_validate_glossary(self):
         save_glossary("test-novel", {"李白": "Lý Bạch"})

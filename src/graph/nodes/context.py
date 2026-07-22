@@ -16,7 +16,7 @@ from src.domain.glossary import select_active_glossary_terms
 from src.models.state import TranslationState
 from src.services.glossary.memory import load_recent_chapter_summaries
 from src.services.glossary.repository import (
-    get_active_context,
+    get_active_context_with_candidates,
     load_glossary,
 )
 from src.services.metadata import load_source_language
@@ -83,18 +83,24 @@ def context_node(state: TranslationState) -> dict:
             previous_summary = recent_summaries
 
     # 4. Load character context — only characters directly active in this chapter.
-    entities, edges, address_rules = get_active_context(novel_name, source_text, chapter_number)
+    entities, edges, address_rules, address_rule_candidates = get_active_context_with_candidates(
+        novel_name,
+        source_text,
+        chapter_number,
+    )
     if entities:
         _logger.info(
-            "Loaded %s active character(s) with %s relationship(s), %s address rule(s)",
+            "Loaded %s active character(s) with %s relationship(s), %s address rule(s), %s pending hint(s)",
             len(entities),
             len(edges),
             len(address_rules),
+            len(address_rule_candidates),
             extra={
                 "presentation_event": "cli_message",
                 "presentation_message": (
                     f"  👥 Loaded {len(entities)} active character(s) with "
-                    f"{len(edges)} relationship(s), {len(address_rules)} address rule(s)"
+                    f"{len(edges)} relationship(s), {len(address_rules)} address rule(s), "
+                    f"{len(address_rule_candidates)} pending hint(s)"
                 ),
             },
         )
@@ -104,5 +110,10 @@ def context_node(state: TranslationState) -> dict:
         "translation_rules": rules,
         "glossary": glossary,
         "previous_summary": previous_summary,
-        "characters": {"entities": entities, "edges": edges, "address_rules": address_rules},
+        "characters": {
+            "entities": entities,
+            "edges": edges,
+            "address_rules": address_rules,
+            "address_rule_candidates": address_rule_candidates,
+        },
     }

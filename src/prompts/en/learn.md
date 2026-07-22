@@ -65,17 +65,27 @@ RULES FOR EDGES (RELATIONSHIPS):
 - If a character's role is unclear, use "minor"
 
 RULES FOR ADDRESS RULES (ENGLISH DIRECT ADDRESS / REFERENCE STYLE):
-- Extract ONLY stable, explicit direct-address patterns between two named characters
+- Extract explicit direct-address observations between two named characters and classify their persistence
+- Determine persistence primarily from source events, dialogue context, tone, and relationship development
+- The translated address forms may have been influenced by existing address rules; do not treat them as proof that the existing rule is still stable
+- A pending address hypothesis may also have influenced the translation; neither the hypothesis nor the resulting translated forms count as confirmation
+- Re-evaluate every relevant pending hypothesis from the source: emit the same form as "stable" only when independently supported, as "temporary" when it is a local joke/roleplay/etc., or as "uncertain" when the source is inconclusive
+- If the source explicitly contradicts a pending hypothesis and continues the confirmed form, re-emit that confirmed form as "stable" even though it is otherwise unchanged; this rejects the hypothesis
+- Treat an existing address rule as a prior default, not as evidence against an explicit source-supported relationship change
+- Emit a stable change only when the source supports it independently of the translation's chosen address forms
 - Use original names for "speaker" and "listener"; never use translated or romanized names as keys
 - "self" is how the speaker refers to themselves in dialogue, when relevant (e.g. "I", "this servant")
 - "other" is how the speaker addresses/refers to the listener (e.g. "Your Highness", "Master", "my lady", first name)
-- Include a rule only when the source or translation clearly supports it; if unsure, leave it out
-- Record only the stable default pair used across scenes; do not repeat an unchanged existing rule
-- Do NOT store proper names, temporary nicknames, insults, jokes, or emotional outbursts as address rules
-- Set "scope" to "stable". If the usage is temporary (roleplay, drunken speech, a joke, or a one-scene nickname), omit it instead
-- If a stable relationship change creates a new default pair, emit the new rule from this chapter
+- Include an observation only when the source clearly supports the interaction; the translation may help with target wording but not with persistence
+- Use "scope": "stable" only for the default pair used consistently across scenes
+- Use "scope": "temporary" for roleplay, drunken speech, jokes, teasing, sarcasm, one-scene nicknames, insults, or emotional outbursts
+- Use "scope": "uncertain" when the direct form is clear but whether it is the stable default is unclear
+- Always emit a temporary observation so an earlier false stable candidate can be cancelled; it will not be stored as a lasting rule
+- Use "reason": "default" for an ordinary stable pattern and "relationship_change" only for an explicit lasting relationship change
+- For temporary observations, use the closest reason: "joke", "roleplay", "drunken_speech", "nickname", or "emotional_outburst"
+- Do not repeat an unchanged existing stable rule unless it explicitly rejects a pending hypothesis
 - Do NOT add generic he/she/they examples here
-- Use "since": {{chapter_number}} when the pattern starts or is first confirmed in this chapter
+- Use "since": {{chapter_number}} for every observation
 
 Respond with JSON ONLY (no other text):
 {
@@ -100,7 +110,8 @@ Respond with JSON ONLY (no other text):
                 "self": "English self-reference, if needed",
                 "other": "English address/reference for listener",
                 "since": {{chapter_number}},
-                "scope": "stable",
+                "scope": "stable | temporary | uncertain",
+                "reason": "default | relationship_change | joke | roleplay | drunken_speech | nickname | emotional_outburst",
                 "notes": "optional short reason or context"
             }
         ]

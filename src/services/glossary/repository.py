@@ -34,7 +34,7 @@ Character schema:
   Each relationship stored ONCE (no bidirectional duplication).
   Relationship types: mother, father, sibling, friend, enemy, master,
   disciple, rival, classmate, teacher, romantic interest, etc.
-- address_rules: list of {speaker, listener, self, other, since, until?, notes?}
+- address_rules: list of {speaker, listener, self, other, since, until?, scope?, reason?, notes?}
   Non-overlapping per-pair direct address/reference timelines in the target language.
 """
 
@@ -46,9 +46,11 @@ from src.config import config
 from src.domain import glossary as glossary_domain
 from src.domain.characters import (
     ADDRESS_RULE_CANDIDATES_KEY,
+    ADDRESS_RULE_HINT_ENCOUNTER_LIMIT,
     get_character_translated_name,
     merge_character_context,
     normalize_character_info,
+    select_active_address_rule_candidates,
     select_active_address_rules,
     select_active_character_context,
     upsert_relationship,
@@ -380,8 +382,69 @@ def clean_glossary(novel_name: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
+def _load_active_context(novel_name: str, source_text: str, chapter_number: int) -> tuple[dict, list, list, list]:
+    data = normalize_glossary_data(_read_json_locked(_glossary_path(novel_name)))
+    all_entities: dict = data.get("entities", {})
+    all_edges: list = data.get("edges", [])
+    all_address_rules: list = data.get("address_rules", [])
+    all_candidates: list = data.get(ADDRESS_RULE_CANDIDATES_KEY, [])
+
+    if not all_entities:
+        return {}, [], [], []
+
+    entities, edges = select_active_character_context(all_entities, all_edges, source_text)
+    address_rules = select_active_address_rules(all_address_rules, entities, chapter_number)
+    candidates = select_active_address_rule_candidates(all_candidates, entities, chapter_number)
+    return entities, edges, address_rules, candidates
+
+
+def _mark_address_rule_candidates_hinted(novel_name: str, candidates: list, chapter_number: int) -> None:
+    if chapter_number <= 0 or not candidates:
+        return
+
+    unmarked = [candidate for candidate in candidates if chapter_number not in candidate.get("hinted_chapters", [])]
+    if not unmarked:
+        return
+
+    selected = {
+        (
+            candidate.get("speaker"),
+            candidate.get("listener"),
+            candidate.get("self", ""),
+            candidate.get("other", ""),
+            candidate.get("first_seen"),
+        )
+        for candidate in unmarked
+    }
+
+    def updater(data: dict) -> dict:
+        normalized = normalize_glossary_data(data)
+        pending = normalized.get(ADDRESS_RULE_CANDIDATES_KEY, [])
+        for candidate in pending:
+            signature = (
+                candidate.get("speaker"),
+                candidate.get("listener"),
+                candidate.get("self", ""),
+                candidate.get("other", ""),
+                candidate.get("first_seen"),
+            )
+            if signature not in selected:
+                continue
+            hinted = candidate.setdefault("hinted_chapters", [])
+            if chapter_number not in hinted and len(hinted) < ADDRESS_RULE_HINT_ENCOUNTER_LIMIT:
+                hinted.append(chapter_number)
+        return normalized
+
+    _merge_json_locked(_glossary_path(novel_name), updater)
+
+    for candidate in unmarked:
+        hinted = candidate.setdefault("hinted_chapters", [])
+        if chapter_number not in hinted and len(hinted) < ADDRESS_RULE_HINT_ENCOUNTER_LIMIT:
+            hinted.append(chapter_number)
+
+
 def get_active_context(novel_name: str, source_text: str, chapter_number: int = 0) -> tuple[dict, list, list]:
-    """Load only characters and relationships relevant to the current source text.
+    """Load confirmed character context relevant to the current source text.
 
     Algorithm:
         1. Scan source_text for known character names (active set) using boundary-aware matching.
@@ -392,19 +455,21 @@ def get_active_context(novel_name: str, source_text: str, chapter_number: int = 
         (entities, edges, address_rules) — filtered to active context only.
         entities: {orig_name: {"translated_name": str, "role": str}}
         edges:    [[from, to, rel_type, since_chapter], ...]
-        address_rules: [{speaker, listener, self, other, since, until?, notes?}, ...]
+        address_rules: [{speaker, listener, self, other, since, until?, scope?, reason?, notes?}, ...]
     """
-    data = normalize_glossary_data(_read_json_locked(_glossary_path(novel_name)))
-    all_entities: dict = data.get("entities", {})
-    all_edges: list = data.get("edges", [])
-    all_address_rules: list = data.get("address_rules", [])
-
-    if not all_entities:
-        return {}, [], []
-
-    entities, edges = select_active_character_context(all_entities, all_edges, source_text)
-    address_rules = select_active_address_rules(all_address_rules, entities, chapter_number)
+    entities, edges, address_rules, _ = _load_active_context(novel_name, source_text, chapter_number)
     return entities, edges, address_rules
+
+
+def get_active_context_with_candidates(
+    novel_name: str,
+    source_text: str,
+    chapter_number: int = 0,
+) -> tuple[dict, list, list, list]:
+    """Load confirmed context plus bounded provisional address hints for translation."""
+    entities, edges, address_rules, candidates = _load_active_context(novel_name, source_text, chapter_number)
+    _mark_address_rule_candidates_hinted(novel_name, candidates, chapter_number)
+    return entities, edges, address_rules, candidates
 
 
 def save_characters_batch(
@@ -420,7 +485,8 @@ def save_characters_batch(
         entities: {orig_name: {"translated_name": str, "role": str}}
         edges:    [[from, to, rel_type]] or [[from, to, rel_type, since_chapter]]
                   Each relationship should be stored ONCE (no bidirectional duplicates).
-        address_rules: Direct address/reference rules for character pairs.
+        address_rules: Learned address/reference observations for character pairs.
+                       Only confirmed stable observations are persisted as rules.
         chapter:  Current chapter number (used as since_chapter fallback).
     """
     if not entities and not edges and not address_rules:

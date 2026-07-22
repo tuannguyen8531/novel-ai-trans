@@ -4,6 +4,8 @@ import re
 
 from src.domain.characters import (
     ADDRESS_RULE_CANDIDATES_KEY,
+    ADDRESS_RULE_HINT_ENCOUNTER_LIMIT,
+    ADDRESS_RULE_STABLE_REASONS,
     find_name_in_text,
     normalize_character_data,
 )
@@ -164,6 +166,8 @@ def validate_glossary_data(data: dict) -> list[str]:
                 issues.append(f"address rule {index} must define self or other")
             if "scope" in rule and rule["scope"] != "stable":
                 issues.append(f"address rule {index}.scope must be stable")
+            if "reason" in rule and (not isinstance(rule["reason"], str) or rule["reason"] not in ADDRESS_RULE_STABLE_REASONS):
+                issues.append(f"address rule {index}.reason is invalid")
             for key in ("since", "until"):
                 if key in rule and not isinstance(rule[key], int):
                     issues.append(f"address rule {index}.{key} must be an integer")
@@ -216,6 +220,10 @@ def validate_glossary_data(data: dict) -> list[str]:
                 issues.append(f"{label} must define self or other")
             if "scope" in candidate and candidate["scope"] != "stable":
                 issues.append(f"{label}.scope must be stable")
+            if "reason" in candidate and (
+                not isinstance(candidate["reason"], str) or candidate["reason"] not in ADDRESS_RULE_STABLE_REASONS
+            ):
+                issues.append(f"{label}.reason is invalid")
 
             first_seen = candidate.get("first_seen")
             last_seen = candidate.get("last_seen")
@@ -228,6 +236,25 @@ def validate_glossary_data(data: dict) -> list[str]:
                 issues.append(f"{label}.last_seen must not precede first_seen")
             if isinstance(observations, bool) or not isinstance(observations, int) or observations < 1:
                 issues.append(f"{label}.observations must be a positive integer")
+            hinted_chapters = candidate.get("hinted_chapters", [])
+            if not isinstance(hinted_chapters, list):
+                issues.append(f"{label}.hinted_chapters must be a list")
+            else:
+                valid_hints = [
+                    value for value in hinted_chapters if isinstance(value, int) and not isinstance(value, bool) and value > 0
+                ]
+                if len(valid_hints) != len(hinted_chapters):
+                    issues.append(f"{label}.hinted_chapters must contain positive integers")
+                if len(set(valid_hints)) != len(valid_hints):
+                    issues.append(f"{label}.hinted_chapters must not contain duplicates")
+                if len(valid_hints) > ADDRESS_RULE_HINT_ENCOUNTER_LIMIT:
+                    issues.append(f"{label}.hinted_chapters exceeds the hint encounter limit")
+                if (
+                    isinstance(first_seen, int)
+                    and not isinstance(first_seen, bool)
+                    and any(value < first_seen for value in valid_hints)
+                ):
+                    issues.append(f"{label}.hinted_chapters must not precede first_seen")
 
     summaries = data.get("chapter_summaries", {})
     if summaries is not None and not isinstance(summaries, dict):

@@ -62,3 +62,41 @@ class TestRenderPrompt:
         result = render_prompt("translate", target_language="en", lang_name="Chinese", target_name="English")
         assert "Chinese to English" in result
         assert "English translation" in result
+
+    @pytest.mark.parametrize(("target_language", "target_name"), [("vi", "Vietnamese"), ("en", "English")])
+    def test_translate_uses_address_rules_as_source_overridable_defaults(self, target_language, target_name):
+        result = render_prompt(
+            "translate",
+            target_language=target_language,
+            lang_name="Chinese",
+            target_name=target_name,
+        )
+
+        assert "Address rules are persistent defaults, not absolute constraints" in result
+        assert "use the newly supported address style immediately" in result
+        assert "preserve it only in the supported lines or scene" in result
+        assert "Never generalize a temporary form" in result
+        assert "An unconfirmed hypothesis is a provisional continuity hint" in result
+        assert 'For a "relationship_change" hypothesis, prefer the candidate' in result
+        assert 'For a "default" hypothesis, use the candidate only' in result
+        assert "address rules exactly when provided" not in result
+
+    @pytest.mark.parametrize("target_language", ["vi", "en"])
+    def test_learner_requires_source_grounding_for_address_changes(self, target_language):
+        result = render_prompt(
+            "learn",
+            target_language=target_language,
+            translation_rules="(none)",
+            existing_terms_str="(none)",
+            existing_chars_str="(none)",
+            chapter_number="12",
+        )
+
+        assert "Determine persistence primarily from source events" in result
+        assert "do not treat them as proof that the existing rule is still stable" in result
+        assert "Treat an existing address rule as a prior default" in result
+        assert "only when the source supports it independently" in result
+        assert "translation may help with target wording but not with persistence" in result
+        assert "neither the hypothesis nor the resulting translated" in result
+        assert "Re-evaluate every relevant pending hypothesis from the source" in result
+        assert "this rejects the hypothesis" in result

@@ -13,7 +13,6 @@ import re
 from src.config import config
 from src.domain.characters import (
     get_character_translated_name,
-    normalize_address_rules,
     normalize_character_edges,
 )
 from src.domain.language import target_language_name
@@ -457,7 +456,12 @@ def _normalize_relationship(rel_type: str) -> str:
     return rel_type
 
 
-def _build_existing_chars_str(entities: dict, edges: list, address_rules: list | None = None) -> str:
+def _build_existing_chars_str(
+    entities: dict,
+    edges: list,
+    address_rules: list | None = None,
+    address_rule_candidates: list | None = None,
+) -> str:
     """Build existing characters context string for the learner prompt."""
     if not entities:
         return "(none)"
@@ -497,6 +501,26 @@ def _build_existing_chars_str(entities: dict, edges: list, address_rules: list |
             rule_parts.append(f"  {speaker}->{listener}: " + ", ".join(refs))
         parts.extend(["Address rules:", *rule_parts])
 
+    if address_rule_candidates:
+        candidate_parts = []
+        for candidate in address_rule_candidates:
+            speaker = get_character_translated_name(entities.get(candidate.get("speaker", ""), {})) or candidate.get(
+                "speaker", ""
+            )
+            listener = get_character_translated_name(entities.get(candidate.get("listener", ""), {})) or candidate.get(
+                "listener", ""
+            )
+            refs = []
+            if candidate.get("self"):
+                refs.append(f'self="{candidate["self"]}"')
+            if candidate.get("other"):
+                refs.append(f'other="{candidate["other"]}"')
+            refs.append(f"observations={candidate.get('observations', 1)}")
+            if candidate.get("reason"):
+                refs.append(f'reason="{candidate["reason"]}"')
+            candidate_parts.append(f"  {speaker}->{listener}: " + ", ".join(refs))
+        parts.extend(["Pending address hypotheses (re-evaluate from source only):", *candidate_parts])
+
     return "\n".join(parts)
 
 
@@ -519,7 +543,13 @@ def learner_node(state: TranslationState) -> dict:
     existing_entities = existing_characters.get("entities", {})
     existing_edges = existing_characters.get("edges", [])
     existing_address_rules = existing_characters.get("address_rules", [])
-    existing_chars_str = _build_existing_chars_str(existing_entities, existing_edges, existing_address_rules)
+    existing_address_rule_candidates = existing_characters.get("address_rule_candidates", [])
+    existing_chars_str = _build_existing_chars_str(
+        existing_entities,
+        existing_edges,
+        existing_address_rules,
+        existing_address_rule_candidates,
+    )
     translation_rules = state.get("translation_rules", "").strip() or "(none)"
 
     learn_system_prompt = render_prompt(
@@ -609,25 +639,30 @@ def learner_node(state: TranslationState) -> dict:
         save_glossary(novel_name, new_terms)
 
     new_entities = new_characters.get("entities", {})
-    new_address_rules = new_characters.get("address_rules", [])
+    raw_address_rule_observations = new_characters.get("address_rules", [])
+    address_rule_observations = raw_address_rule_observations if isinstance(raw_address_rule_observations, list) else []
     new_edges = new_characters.get("edges", [])
 
-    edge_entities = {**existing_entities, **new_entities}
-    new_address_rules = normalize_address_rules(new_address_rules, edge_entities, chapter=chapter_number)
-    new_characters["address_rules"] = new_address_rules
+    new_characters["address_rules"] = address_rule_observations
 
-    if new_entities or new_edges or new_address_rules:
-        save_characters_batch(novel_name, new_entities, new_edges, address_rules=new_address_rules, chapter=chapter_number)
+    if new_entities or new_edges or address_rule_observations:
+        save_characters_batch(
+            novel_name,
+            new_entities,
+            new_edges,
+            address_rules=address_rule_observations,
+            chapter=chapter_number,
+        )
         _logger.info(
-            "Updated %s character(s), %s relationship(s); observed %s address rule candidate(s)",
+            "Updated %s character(s), %s relationship(s); observed %s address rule observation(s)",
             len(new_entities),
             len(new_edges),
-            len(new_address_rules),
+            len(address_rule_observations),
             extra={
                 "presentation_event": "cli_message",
                 "presentation_message": (
                     f"  📝 Updated {len(new_entities)} character(s), {len(new_edges)} relationship(s), "
-                    f"observed {len(new_address_rules)} address rule candidate(s)"
+                    f"observed {len(address_rule_observations)} address rule observation(s)"
                 ),
             },
         )
