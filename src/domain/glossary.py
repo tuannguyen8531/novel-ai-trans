@@ -3,8 +3,9 @@
 import re
 
 from src.domain.characters import (
+    ADDRESS_RULE_CANDIDATE_EVALUATION_LIMIT,
+    ADDRESS_RULE_CANDIDATE_VERDICTS,
     ADDRESS_RULE_CANDIDATES_KEY,
-    ADDRESS_RULE_HINT_ENCOUNTER_LIMIT,
     ADDRESS_RULE_STABLE_REASONS,
     find_name_in_text,
     normalize_character_data,
@@ -236,25 +237,30 @@ def validate_glossary_data(data: dict) -> list[str]:
                 issues.append(f"{label}.last_seen must not precede first_seen")
             if isinstance(observations, bool) or not isinstance(observations, int) or observations < 1:
                 issues.append(f"{label}.observations must be a positive integer")
-            hinted_chapters = candidate.get("hinted_chapters", [])
-            if not isinstance(hinted_chapters, list):
-                issues.append(f"{label}.hinted_chapters must be a list")
+            evaluations = candidate.get("evaluations", [])
+            if not isinstance(evaluations, list):
+                issues.append(f"{label}.evaluations must be a list")
             else:
-                valid_hints = [
-                    value for value in hinted_chapters if isinstance(value, int) and not isinstance(value, bool) and value > 0
-                ]
-                if len(valid_hints) != len(hinted_chapters):
-                    issues.append(f"{label}.hinted_chapters must contain positive integers")
-                if len(set(valid_hints)) != len(valid_hints):
-                    issues.append(f"{label}.hinted_chapters must not contain duplicates")
-                if len(valid_hints) > ADDRESS_RULE_HINT_ENCOUNTER_LIMIT:
-                    issues.append(f"{label}.hinted_chapters exceeds the hint encounter limit")
-                if (
-                    isinstance(first_seen, int)
-                    and not isinstance(first_seen, bool)
-                    and any(value < first_seen for value in valid_hints)
-                ):
-                    issues.append(f"{label}.hinted_chapters must not precede first_seen")
+                evaluation_chapters = []
+                for evaluation_index, evaluation in enumerate(evaluations):
+                    evaluation_label = f"{label}.evaluations[{evaluation_index}]"
+                    if not isinstance(evaluation, dict):
+                        issues.append(f"{evaluation_label} must be an object")
+                        continue
+                    evaluation_chapter = evaluation.get("chapter")
+                    if isinstance(evaluation_chapter, bool) or not isinstance(evaluation_chapter, int) or evaluation_chapter <= 0:
+                        issues.append(f"{evaluation_label}.chapter must be a positive integer")
+                    else:
+                        evaluation_chapters.append(evaluation_chapter)
+                        if isinstance(first_seen, int) and not isinstance(first_seen, bool) and evaluation_chapter < first_seen:
+                            issues.append(f"{evaluation_label}.chapter must not precede first_seen")
+                    verdict = evaluation.get("verdict")
+                    if not isinstance(verdict, str) or verdict not in ADDRESS_RULE_CANDIDATE_VERDICTS:
+                        issues.append(f"{evaluation_label}.verdict is invalid")
+                if len(set(evaluation_chapters)) != len(evaluation_chapters):
+                    issues.append(f"{label}.evaluations must not contain duplicate chapters")
+                if len(evaluations) > ADDRESS_RULE_CANDIDATE_EVALUATION_LIMIT:
+                    issues.append(f"{label}.evaluations exceeds the candidate evaluation limit")
 
     summaries = data.get("chapter_summaries", {})
     if summaries is not None and not isinstance(summaries, dict):

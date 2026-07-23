@@ -98,5 +98,8 @@ class TestRenderPrompt:
         assert "only when the source supports it independently" in result
         assert "translation may help with target wording but not with persistence" in result
         assert "neither the hypothesis nor the resulting translated" in result
-        assert "Re-evaluate every relevant pending hypothesis from the source" in result
-        assert "this rejects the hypothesis" in result
+        assert "Return exactly one address_rule_candidate_verdict" in result
+        assert "another chapter that continues the same relationship" in result
+        assert "Exact source equivalents" in result
+        assert 'Use "inconclusive" only when this chapter has no relevant interaction' in result
+        assert '"verdict": "confirmed | temporary | rejected | inconclusive"' in result

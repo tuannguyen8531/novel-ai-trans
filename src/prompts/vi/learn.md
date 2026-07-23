@@ -75,8 +75,14 @@ RULES FOR ADDRESS RULES (VIETNAMESE XƯNG HÔ):
 - Determine persistence primarily from source events, dialogue context, tone, and relationship development
 - The translated pronouns may have been influenced by existing address rules; do not treat them as proof that the existing rule is still stable
 - A pending address hypothesis may also have influenced the translation; neither the hypothesis nor the resulting translated pronouns count as confirmation
-- Re-evaluate every relevant pending hypothesis from the source: emit the same form as "stable" only when independently supported, as "temporary" when it is a local joke/roleplay/etc., or as "uncertain" when the source is inconclusive
-- If the source explicitly contradicts a pending hypothesis and continues the confirmed form, re-emit that confirmed form as "stable" even though it is otherwise unchanged; this rejects the hypothesis
+- Return exactly one address_rule_candidate_verdict for every pending address hypothesis listed above
+- Judge each verdict from source events, the continuing relationship, relative status, conversational register, and explicit forms of address — never from the translated pronouns
+- For a pair with no confirmed address rule yet, another chapter that continues the same relationship, relative status, and ordinary conversational register without contradiction is independent support for "confirmed"
+- Source languages such as Chinese may not lexically distinguish Vietnamese pronoun choices. Exact source equivalents of "tớ/cậu", "anh/em", etc. are not required when the source independently preserves the social relationship and register that justify them
+- For a relationship_change hypothesis, use "confirmed" only when the changed relationship or register continues in the current source
+- Use "temporary" when the hypothesized form is shown to be a local joke, roleplay, drunken speech, nickname, sarcasm, or emotional outburst
+- Use "rejected" when the source contradicts the hypothesis or clearly continues the previously confirmed relationship/register
+- Use "inconclusive" only when this chapter has no relevant interaction or insufficient source evidence
 - Treat an existing address rule as a prior default, not as evidence against an explicit source-supported relationship change
 - Emit a stable change only when the source supports it independently of the translation's chosen pronouns
 - Use original names for "speaker" and "listener"; never use translated names as keys
@@ -89,7 +95,8 @@ RULES FOR ADDRESS RULES (VIETNAMESE XƯNG HÔ):
 - Always emit a temporary observation so an earlier false stable candidate can be cancelled; it will not be stored as a lasting rule
 - Use "reason": "default" for an ordinary stable pattern and "relationship_change" only for an explicit lasting relationship change
 - For temporary observations, use the closest reason: "joke", "roleplay", "drunken_speech", "nickname", or "emotional_outburst"
-- Do not repeat an unchanged existing stable rule unless it explicitly rejects a pending hypothesis
+- Do not copy a pending hypothesis into address_rules merely to confirm it; use address_rule_candidate_verdicts
+- Do not repeat an unchanged existing stable rule
 - Do NOT add generic third-person pronoun examples here
 - Use "since": {{chapter_number}} for every observation
 
@@ -119,6 +126,13 @@ Respond with JSON ONLY (no other text):
                 "scope": "stable | temporary | uncertain",
                 "reason": "default | relationship_change | joke | roleplay | drunken_speech | nickname | emotional_outburst",
                 "notes": "optional short reason or context"
+            }
+        ],
+        "address_rule_candidate_verdicts": [
+            {
+                "speaker": "pending_candidate_speaker_original_name",
+                "listener": "pending_candidate_listener_original_name",
+                "verdict": "confirmed | temporary | rejected | inconclusive"
             }
         ]
     }

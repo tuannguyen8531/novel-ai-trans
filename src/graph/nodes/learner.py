@@ -12,8 +12,10 @@ import re
 
 from src.config import config
 from src.domain.characters import (
+    ADDRESS_RULE_CANDIDATE_VERDICTS,
     get_character_translated_name,
     normalize_character_edges,
+    resolve_character_ref,
 )
 from src.domain.language import target_language_name
 from src.domain.terms import filter_extracted_terms
@@ -456,6 +458,40 @@ def _normalize_relationship(rel_type: str) -> str:
     return rel_type
 
 
+def _prepare_address_rule_candidate_verdicts(
+    raw_verdicts: object,
+    candidates: list,
+    entities: dict,
+) -> list[dict[str, str]]:
+    """Return one valid verdict per presented candidate, defaulting omissions to inconclusive."""
+    explicit_by_pair: dict[tuple[str, str], str] = {}
+    if isinstance(raw_verdicts, list):
+        for raw_verdict in raw_verdicts:
+            if not isinstance(raw_verdict, dict):
+                continue
+            speaker = resolve_character_ref(str(raw_verdict.get("speaker", "")).strip(), entities)
+            listener = resolve_character_ref(str(raw_verdict.get("listener", "")).strip(), entities)
+            verdict_value = raw_verdict.get("verdict", "")
+            verdict = verdict_value.strip().casefold() if isinstance(verdict_value, str) else ""
+            if speaker and listener and speaker != listener and verdict in ADDRESS_RULE_CANDIDATE_VERDICTS:
+                explicit_by_pair[(speaker, listener)] = verdict
+
+    prepared = []
+    for candidate in candidates:
+        speaker = candidate.get("speaker", "")
+        listener = candidate.get("listener", "")
+        if not isinstance(speaker, str) or not isinstance(listener, str) or not speaker or not listener:
+            continue
+        prepared.append(
+            {
+                "speaker": speaker,
+                "listener": listener,
+                "verdict": explicit_by_pair.get((speaker, listener), "inconclusive"),
+            }
+        )
+    return prepared
+
+
 def _build_existing_chars_str(
     entities: dict,
     edges: list,
@@ -489,8 +525,8 @@ def _build_existing_chars_str(
     if address_rules:
         rule_parts = []
         for rule in address_rules:
-            speaker = get_character_translated_name(entities.get(rule.get("speaker", ""), {})) or rule.get("speaker", "")
-            listener = get_character_translated_name(entities.get(rule.get("listener", ""), {})) or rule.get("listener", "")
+            speaker = rule.get("speaker", "")
+            listener = rule.get("listener", "")
             refs = []
             if rule.get("self"):
                 refs.append(f'self="{rule["self"]}"')
@@ -504,12 +540,8 @@ def _build_existing_chars_str(
     if address_rule_candidates:
         candidate_parts = []
         for candidate in address_rule_candidates:
-            speaker = get_character_translated_name(entities.get(candidate.get("speaker", ""), {})) or candidate.get(
-                "speaker", ""
-            )
-            listener = get_character_translated_name(entities.get(candidate.get("listener", ""), {})) or candidate.get(
-                "listener", ""
-            )
+            speaker = candidate.get("speaker", "")
+            listener = candidate.get("listener", "")
             refs = []
             if candidate.get("self"):
                 refs.append(f'self="{candidate["self"]}"')
@@ -571,12 +603,14 @@ def learner_node(state: TranslationState) -> dict:
     new_terms = {}
     new_characters = {}
     learn_response = ""
+    learn_succeeded = False
     try:
         learn_response = get_llm().generate(learn_system_prompt, learn_user_prompt, "learn")
 
         learn_data = parse_json_object(learn_response)
         new_terms = learn_data.get("terms", {})
         new_characters = learn_data.get("characters", {})
+        learn_succeeded = True
     except Exception as e:
         log_error("Failed to extract terms and characters", e, chapter=chapter_number)
         _logger.warning(
@@ -641,28 +675,43 @@ def learner_node(state: TranslationState) -> dict:
     new_entities = new_characters.get("entities", {})
     raw_address_rule_observations = new_characters.get("address_rules", [])
     address_rule_observations = raw_address_rule_observations if isinstance(raw_address_rule_observations, list) else []
+    raw_candidate_verdicts = new_characters.get("address_rule_candidate_verdicts", [])
+    candidate_verdicts = (
+        _prepare_address_rule_candidate_verdicts(
+            raw_candidate_verdicts,
+            existing_address_rule_candidates,
+            existing_entities,
+        )
+        if learn_succeeded
+        else []
+    )
     new_edges = new_characters.get("edges", [])
 
     new_characters["address_rules"] = address_rule_observations
+    new_characters["address_rule_candidate_verdicts"] = candidate_verdicts
 
-    if new_entities or new_edges or address_rule_observations:
+    if new_entities or new_edges or address_rule_observations or candidate_verdicts:
         save_characters_batch(
             novel_name,
             new_entities,
             new_edges,
             address_rules=address_rule_observations,
+            address_rule_candidate_verdicts=candidate_verdicts,
             chapter=chapter_number,
         )
         _logger.info(
-            "Updated %s character(s), %s relationship(s); observed %s address rule observation(s)",
+            "Updated %s character(s), %s relationship(s); observed %s address rule observation(s), "
+            "evaluated %s pending hypothesis(es)",
             len(new_entities),
             len(new_edges),
             len(address_rule_observations),
+            len(candidate_verdicts),
             extra={
                 "presentation_event": "cli_message",
                 "presentation_message": (
                     f"  📝 Updated {len(new_entities)} character(s), {len(new_edges)} relationship(s), "
-                    f"observed {len(address_rule_observations)} address rule observation(s)"
+                    f"observed {len(address_rule_observations)} address rule observation(s), "
+                    f"evaluated {len(candidate_verdicts)} pending hypothesis(es)"
                 ),
             },
         )

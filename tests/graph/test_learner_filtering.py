@@ -5,6 +5,7 @@ from src.graph.nodes.learner import (
     _is_english,
     _is_kinship_or_role,
     _normalize_relationship,
+    _prepare_address_rule_candidate_verdicts,
     _sample_across_text,
 )
 
@@ -141,7 +142,29 @@ def test_existing_character_context_labels_pending_address_hypotheses():
 
     result = _build_existing_chars_str(entities, [], rules, candidates)
 
-    assert 'Lý Minh->Trương Vĩ: self="tôi", other="cô"' in result
+    assert '李明->张伟: self="tôi", other="cô"' in result
     assert "Pending address hypotheses (re-evaluate from source only):" in result
-    assert 'Lý Minh->Trương Vĩ: self="anh", other="em", observations=1' in result
+    assert '李明->张伟: self="anh", other="em", observations=1' in result
     assert 'reason="relationship_change"' in result
+
+
+def test_candidate_verdicts_accept_translated_names_and_default_omissions_to_inconclusive():
+    entities = {
+        "许韵": {"translated_name": "Hứa Vận"},
+        "温渝": {"translated_name": "Ôn Du"},
+    }
+    candidates = [
+        {"speaker": "许韵", "listener": "温渝"},
+        {"speaker": "温渝", "listener": "许韵"},
+    ]
+
+    result = _prepare_address_rule_candidate_verdicts(
+        [{"speaker": "Hứa Vận", "listener": "Ôn Du", "verdict": "CONFIRMED"}],
+        candidates,
+        entities,
+    )
+
+    assert result == [
+        {"speaker": "许韵", "listener": "温渝", "verdict": "confirmed"},
+        {"speaker": "温渝", "listener": "许韵", "verdict": "inconclusive"},
+    ]

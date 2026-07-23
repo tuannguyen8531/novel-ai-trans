@@ -8,7 +8,8 @@ ADDRESS_RULE_CANDIDATES_KEY = "_address_rule_candidates"
 ADDRESS_RULE_INITIAL_CONFIRMATION_COUNT = 2
 ADDRESS_RULE_CHANGE_CONFIRMATION_COUNT = 3
 ADDRESS_RULE_CONFIRMATION_WINDOW = 20
-ADDRESS_RULE_HINT_ENCOUNTER_LIMIT = 2
+ADDRESS_RULE_CANDIDATE_EVALUATION_LIMIT = 2
+ADDRESS_RULE_CANDIDATE_VERDICTS = frozenset({"confirmed", "temporary", "rejected", "inconclusive"})
 ADDRESS_RULE_SCOPES = frozenset({"stable", "temporary", "uncertain"})
 ADDRESS_RULE_STABLE_REASONS = frozenset({"default", "relationship_change"})
 ADDRESS_RULE_TRANSIENT_REASONS = frozenset(
@@ -545,13 +546,22 @@ def normalize_address_rule_candidates(candidates: list, entities: dict) -> list[
             "last_seen": last_seen,
             "observations": max(1, _coerce_chapter(candidate.get("observations"), fallback=1)),
         }
-        raw_hinted_chapters = candidate.get("hinted_chapters", [])
-        hinted_values = raw_hinted_chapters if isinstance(raw_hinted_chapters, list) else []
-        hinted_chapters = sorted(
-            {hinted_chapter for value in hinted_values if (hinted_chapter := _coerce_chapter(value)) >= first_seen}
-        )
-        if hinted_chapters:
-            item["hinted_chapters"] = hinted_chapters[:ADDRESS_RULE_HINT_ENCOUNTER_LIMIT]
+        raw_evaluations = candidate.get("evaluations", [])
+        evaluations_by_chapter: dict[int, dict[str, str | int]] = {}
+        for evaluation in raw_evaluations if isinstance(raw_evaluations, list) else []:
+            if not isinstance(evaluation, dict):
+                continue
+            evaluation_chapter = _coerce_chapter(evaluation.get("chapter"))
+            verdict_value = evaluation.get("verdict", "")
+            verdict = verdict_value.strip().casefold() if isinstance(verdict_value, str) else ""
+            if evaluation_chapter >= first_seen and verdict in ADDRESS_RULE_CANDIDATE_VERDICTS:
+                evaluations_by_chapter[evaluation_chapter] = {
+                    "chapter": evaluation_chapter,
+                    "verdict": verdict,
+                }
+        evaluations = [evaluations_by_chapter[key] for key in sorted(evaluations_by_chapter)]
+        if evaluations:
+            item["evaluations"] = evaluations[:ADDRESS_RULE_CANDIDATE_EVALUATION_LIMIT]
         if rule.get("notes"):
             item["notes"] = rule["notes"]
         if rule.get("scope"):
@@ -566,6 +576,7 @@ def merge_address_rule_candidates(
     address_rules: list,
     candidates: list,
     incoming_rules: list,
+    candidate_verdicts: list,
     entities: dict,
     chapter: int,
 ) -> tuple[list[dict], list[dict]]:
@@ -577,9 +588,51 @@ def merge_address_rule_candidates(
         pending = [item for item in pending if observed_chapter - item["last_seen"] <= ADDRESS_RULE_CONFIRMATION_WINDOW]
 
     pending_by_pair = {(item["speaker"], item["listener"]): item for item in pending}
+    evaluated_signatures: dict[tuple[str, str, str, str, int], str] = {}
+    verdict_blocked_forms: set[tuple[tuple[str, str], tuple[str, str]]] = set()
+    rules_to_merge = list(incoming_rules) if isinstance(incoming_rules, list) else []
+    seen_verdict_pairs: set[tuple[str, str]] = set()
+    for raw_verdict in candidate_verdicts if isinstance(candidate_verdicts, list) else []:
+        if not isinstance(raw_verdict, dict):
+            continue
+        speaker = resolve_character_ref(str(raw_verdict.get("speaker", "")).strip(), entities)
+        listener = resolve_character_ref(str(raw_verdict.get("listener", "")).strip(), entities)
+        verdict_value = raw_verdict.get("verdict", "")
+        verdict = verdict_value.strip().casefold() if isinstance(verdict_value, str) else ""
+        pair = (speaker, listener)
+        if (
+            not speaker
+            or not listener
+            or speaker == listener
+            or verdict not in ADDRESS_RULE_CANDIDATE_VERDICTS
+            or pair in seen_verdict_pairs
+        ):
+            continue
+        seen_verdict_pairs.add(pair)
+        verdict_candidate = pending_by_pair.get(pair)
+        if verdict_candidate is None:
+            continue
+
+        form = (verdict_candidate.get("self", ""), verdict_candidate.get("other", ""))
+        evaluated_signatures[(pair[0], pair[1], form[0], form[1], verdict_candidate["first_seen"])] = verdict
+        if verdict == "confirmed":
+            rules_to_merge.append(
+                {
+                    "speaker": pair[0],
+                    "listener": pair[1],
+                    "self": form[0],
+                    "other": form[1],
+                    "scope": "stable",
+                    "reason": verdict_candidate.get("reason", "default"),
+                }
+            )
+        elif verdict in {"temporary", "rejected"}:
+            verdict_blocked_forms.add((pair, form))
+            pending_by_pair.pop(pair, None)
+
     incoming_by_pair: dict[tuple[str, str], dict] = {}
-    blocked_forms: set[tuple[tuple[str, str], tuple[str, str]]] = set()
-    for raw_rule in incoming_rules if isinstance(incoming_rules, list) else []:
+    blocked_forms = set(verdict_blocked_forms)
+    for raw_rule in rules_to_merge:
         item = normalize_address_rule(raw_rule, entities, chapter=observed_chapter)
         if not item:
             continue
@@ -683,6 +736,23 @@ def merge_address_rule_candidates(
                 promoted["reason"] = candidate["reason"]
             stable_rules = normalize_address_rules([*stable_rules, promoted], entities)
             pending_by_pair.pop(pair, None)
+
+    if observed_chapter > 0:
+        for candidate in pending_by_pair.values():
+            signature = (
+                candidate["speaker"],
+                candidate["listener"],
+                candidate.get("self", ""),
+                candidate.get("other", ""),
+                candidate["first_seen"],
+            )
+            verdict = evaluated_signatures.get(signature)
+            if verdict is None:
+                continue
+            evaluations = candidate.setdefault("evaluations", [])
+            evaluated_chapters = {evaluation.get("chapter") for evaluation in evaluations if isinstance(evaluation, dict)}
+            if observed_chapter not in evaluated_chapters and len(evaluations) < ADDRESS_RULE_CANDIDATE_EVALUATION_LIMIT:
+                evaluations.append({"chapter": observed_chapter, "verdict": verdict})
 
     return stable_rules, list(pending_by_pair.values())
 
@@ -803,7 +873,7 @@ def select_active_address_rule_candidates(
     active_entities: dict,
     current_chapter: int = 0,
 ) -> list[dict]:
-    """Select pending stable hypotheses for active pairs with remaining hint encounters."""
+    """Select pending hypotheses for active pairs with remaining learner evaluations."""
     if not candidates or not active_entities:
         return []
 
@@ -814,16 +884,19 @@ def select_active_address_rule_candidates(
             continue
         first_seen = candidate.get("first_seen", 0)
         last_seen = candidate.get("last_seen", first_seen)
+        evaluations = candidate.get("evaluations", [])
+        evaluation_items = evaluations if isinstance(evaluations, list) else []
+        evaluated_chapters = {evaluation.get("chapter") for evaluation in evaluation_items if isinstance(evaluation, dict)}
         if current_chapter > 0:
             if not isinstance(first_seen, int) or first_seen > current_chapter:
                 continue
             if isinstance(last_seen, int) and last_seen > current_chapter:
                 continue
+            if isinstance(last_seen, int) and last_seen == current_chapter and current_chapter not in evaluated_chapters:
+                continue
             if isinstance(last_seen, int) and current_chapter - last_seen > ADDRESS_RULE_CONFIRMATION_WINDOW:
                 continue
-        hinted_chapters = candidate.get("hinted_chapters", [])
-        hinted = hinted_chapters if isinstance(hinted_chapters, list) else []
-        if current_chapter not in hinted and len(hinted) >= ADDRESS_RULE_HINT_ENCOUNTER_LIMIT:
+        if current_chapter not in evaluated_chapters and len(evaluation_items) >= ADDRESS_RULE_CANDIDATE_EVALUATION_LIMIT:
             continue
         selected.append(candidate)
     return selected
@@ -834,6 +907,7 @@ def merge_character_context(
     entities: dict,
     edges: list,
     address_rules: list | None = None,
+    address_rule_candidate_verdicts: list | None = None,
     chapter: int = 0,
 ) -> dict:
     """Merge character entities and relationship edges into glossary data."""
@@ -869,6 +943,7 @@ def merge_character_context(
         data.get("address_rules", []),
         data.get(ADDRESS_RULE_CANDIDATES_KEY, []),
         address_rules or [],
+        address_rule_candidate_verdicts or [],
         existing_entities,
         chapter,
     )

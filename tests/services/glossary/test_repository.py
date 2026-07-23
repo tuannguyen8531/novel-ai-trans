@@ -355,7 +355,7 @@ class TestGlossary:
         assert edges == [["陆远秋", "白清夏", "friend", 1]]
         assert address_rules == [rules[0]]
 
-    def test_translation_context_bounds_candidate_hints_by_active_encounters(self):
+    def test_candidate_budget_counts_completed_learner_evaluations_not_context_reads(self):
         entities = {
             "李明": {"translated_name": "Lý Minh", "role": "supporting"},
             "张伟": {"translated_name": "Trương Vĩ", "role": "supporting"},
@@ -380,18 +380,61 @@ class TestGlossary:
         save_characters_batch("test-novel", {}, [], address_rules=[confirmed], chapter=2)
         save_characters_batch("test-novel", {}, [], address_rules=[candidate], chapter=10)
 
+        _, _, _, same_chapter_hints = get_active_context_with_candidates(
+            "test-novel",
+            "李明和张伟说话。",
+            chapter_number=10,
+        )
         _, _, rules, first_hints = get_active_context_with_candidates("test-novel", "李明和张伟说话。", chapter_number=11)
         _, _, _, retried_hints = get_active_context_with_candidates("test-novel", "李明和张伟说话。", chapter_number=11)
-        _, _, _, second_hints = get_active_context_with_candidates("test-novel", "李明和张伟说话。", chapter_number=12)
+        assert "evaluations" not in load_glossary_data("test-novel")["_address_rule_candidates"][0]
+
+        inconclusive = [
+            {
+                "speaker": "李明",
+                "listener": "张伟",
+                "verdict": "inconclusive",
+            }
+        ]
+        save_characters_batch(
+            "test-novel",
+            {},
+            [],
+            address_rule_candidate_verdicts=inconclusive,
+            chapter=11,
+        )
+        save_characters_batch(
+            "test-novel",
+            {},
+            [],
+            address_rule_candidate_verdicts=inconclusive,
+            chapter=11,
+        )
+        _, _, _, second_hints = get_active_context_with_candidates(
+            "test-novel",
+            "李明和张伟说话。",
+            chapter_number=12,
+        )
+        save_characters_batch(
+            "test-novel",
+            {},
+            [],
+            address_rule_candidate_verdicts=inconclusive,
+            chapter=12,
+        )
         _, _, _, exhausted_hints = get_active_context_with_candidates("test-novel", "李明和张伟说话。", chapter_number=13)
 
         assert rules[0]["self"] == "tôi"
+        assert same_chapter_hints == []
         assert first_hints[0]["self"] == "anh"
-        assert retried_hints[0]["hinted_chapters"] == [11]
-        assert second_hints[0]["hinted_chapters"] == [11, 12]
+        assert retried_hints[0]["self"] == "anh"
+        assert second_hints[0]["evaluations"] == [{"chapter": 11, "verdict": "inconclusive"}]
         assert exhausted_hints == []
         stored = load_glossary_data("test-novel")["_address_rule_candidates"][0]
-        assert stored["hinted_chapters"] == [11, 12]
+        assert stored["evaluations"] == [
+            {"chapter": 11, "verdict": "inconclusive"},
+            {"chapter": 12, "verdict": "inconclusive"},
+        ]
 
     def test_validate_glossary(self):
         save_glossary("test-novel", {"李白": "Lý Bạch"})

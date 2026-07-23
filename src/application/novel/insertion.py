@@ -115,6 +115,14 @@ def _shift_glossary(data: dict[str, Any], number: int) -> dict[str, Any]:
                 value = candidate.get(key)
                 if isinstance(value, int) and value >= number:
                     candidate[key] = value + 1
+            evaluations = candidate.get("evaluations")
+            if isinstance(evaluations, list):
+                for evaluation in evaluations:
+                    if not isinstance(evaluation, dict):
+                        continue
+                    value = evaluation.get("chapter")
+                    if isinstance(value, int) and value >= number:
+                        evaluation["chapter"] = value + 1
             hinted_chapters = candidate.get("hinted_chapters")
             if isinstance(hinted_chapters, list):
                 candidate["hinted_chapters"] = [

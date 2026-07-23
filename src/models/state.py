@@ -22,7 +22,7 @@ class TranslationState(TypedDict):
     translation_rules: str  # Rules from rules/{language}.md
     glossary: dict[str, str]  # Term → Translation mapping
     previous_summary: str  # Summary of previous chapter
-    characters: dict  # Active entities, edges, confirmed address rules, and bounded pending address hints
+    characters: dict  # Active entities, edges, confirmed rules, and pending candidates awaiting learner verdicts
 
     # --- Chunk Processing ---
     chunks: list[str]  # Text split into translatable chunks

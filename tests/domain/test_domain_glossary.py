@@ -168,7 +168,10 @@ def test_validate_glossary_data_accepts_address_rule_candidate_schema():
                 "first_seen": 10,
                 "last_seen": 10,
                 "observations": 1,
-                "hinted_chapters": [11, 12],
+                "evaluations": [
+                    {"chapter": 11, "verdict": "confirmed"},
+                    {"chapter": 12, "verdict": "inconclusive"},
+                ],
             }
         ],
     }
@@ -190,7 +193,11 @@ def test_validate_glossary_data_reports_invalid_address_rule_candidates():
                     "first_seen": "10",
                     "last_seen": -1,
                     "observations": 0,
-                    "hinted_chapters": [9, 9, 10, "bad"],
+                    "evaluations": [
+                        {"chapter": 9, "verdict": "bad"},
+                        {"chapter": 9, "verdict": "confirmed"},
+                        {"chapter": "10", "verdict": 3},
+                    ],
                 },
                 {
                     "speaker": "李明",
@@ -199,7 +206,7 @@ def test_validate_glossary_data_reports_invalid_address_rule_candidates():
                     "first_seen": 10,
                     "last_seen": 9,
                     "observations": "two",
-                    "hinted_chapters": [9],
+                    "evaluations": [{"chapter": 9, "verdict": "inconclusive"}],
                 },
             ],
         }
@@ -213,13 +220,15 @@ def test_validate_glossary_data_reports_invalid_address_rule_candidates():
     assert "address rule candidate 0.first_seen must be a positive integer" in issues
     assert "address rule candidate 0.last_seen must be a positive integer" in issues
     assert "address rule candidate 0.observations must be a positive integer" in issues
-    assert "address rule candidate 0.hinted_chapters must contain positive integers" in issues
-    assert "address rule candidate 0.hinted_chapters must not contain duplicates" in issues
-    assert "address rule candidate 0.hinted_chapters exceeds the hint encounter limit" in issues
+    assert "address rule candidate 0.evaluations[0].verdict is invalid" in issues
+    assert "address rule candidate 0.evaluations[2].chapter must be a positive integer" in issues
+    assert "address rule candidate 0.evaluations[2].verdict is invalid" in issues
+    assert "address rule candidate 0.evaluations must not contain duplicate chapters" in issues
+    assert "address rule candidate 0.evaluations exceeds the candidate evaluation limit" in issues
     assert "address rule candidate 1 speaker and listener must differ" in issues
     assert "address rule candidate 1.last_seen must not precede first_seen" in issues
     assert "address rule candidate 1.observations must be a positive integer" in issues
-    assert "address rule candidate 1.hinted_chapters must not precede first_seen" in issues
+    assert "address rule candidate 1.evaluations[0].chapter must not precede first_seen" in issues
 
 
 def test_validate_glossary_data_reports_candidate_collection_shape():
@@ -647,6 +656,121 @@ def test_merge_character_context_confirms_address_rule_in_two_distinct_chapters(
         }
     ]
     assert ADDRESS_RULE_CANDIDATES_KEY not in confirmed
+
+
+def test_candidate_verdict_confirms_first_address_rule_from_continuing_context():
+    entities = {
+        "许韵": {"translated_name": "Hứa Vận"},
+        "温渝": {"translated_name": "Ôn Du"},
+    }
+    first_observation = [
+        {
+            "speaker": "许韵",
+            "listener": "温渝",
+            "self": "tớ",
+            "other": "cậu",
+            "scope": "stable",
+            "reason": "default",
+        }
+    ]
+
+    pending = merge_character_context({}, entities, [], first_observation, chapter=2)
+    confirmed = merge_character_context(
+        pending,
+        {},
+        [],
+        address_rule_candidate_verdicts=[
+            {
+                "speaker": "许韵",
+                "listener": "温渝",
+                "verdict": "confirmed",
+            }
+        ],
+        chapter=3,
+    )
+
+    assert confirmed["address_rules"] == [
+        {
+            "speaker": "许韵",
+            "listener": "温渝",
+            "self": "tớ",
+            "other": "cậu",
+            "since": 2,
+            "scope": "stable",
+            "reason": "default",
+        }
+    ]
+    assert ADDRESS_RULE_CANDIDATES_KEY not in confirmed
+
+
+@pytest.mark.parametrize("verdict", ["temporary", "rejected"])
+def test_decisive_negative_verdict_removes_candidate_without_changing_stable_memory(verdict):
+    entities = {
+        "许韵": {"translated_name": "Hứa Vận"},
+        "温渝": {"translated_name": "Ôn Du"},
+    }
+    pending = merge_character_context(
+        {},
+        entities,
+        [],
+        [
+            {
+                "speaker": "许韵",
+                "listener": "温渝",
+                "self": "tớ",
+                "other": "cậu",
+                "scope": "stable",
+                "reason": "default",
+            }
+        ],
+        chapter=2,
+    )
+
+    resolved = merge_character_context(
+        pending,
+        {},
+        [],
+        address_rule_candidate_verdicts=[
+            {
+                "speaker": "许韵",
+                "listener": "温渝",
+                "verdict": verdict,
+            }
+        ],
+        chapter=3,
+    )
+
+    assert resolved["address_rules"] == []
+    assert ADDRESS_RULE_CANDIDATES_KEY not in resolved
+
+
+def test_legacy_hint_history_does_not_consume_learner_evaluation_budget():
+    normalized = normalize_glossary_data(
+        {
+            "entities": {
+                "许韵": {"translated_name": "Hứa Vận"},
+                "温渝": {"translated_name": "Ôn Du"},
+            },
+            ADDRESS_RULE_CANDIDATES_KEY: [
+                {
+                    "speaker": "许韵",
+                    "listener": "温渝",
+                    "self": "tớ",
+                    "other": "cậu",
+                    "first_seen": 2,
+                    "last_seen": 2,
+                    "observations": 1,
+                    "hinted_chapters": [3, 4],
+                    "scope": "stable",
+                    "reason": "default",
+                }
+            ],
+        }
+    )
+
+    candidate = normalized[ADDRESS_RULE_CANDIDATES_KEY][0]
+    assert "hinted_chapters" not in candidate
+    assert "evaluations" not in candidate
 
 
 def test_merge_character_context_ignores_observation_without_scope():

@@ -90,7 +90,7 @@ def context_node(state: TranslationState) -> dict:
     )
     if entities:
         _logger.info(
-            "Loaded %s active character(s) with %s relationship(s), %s address rule(s), %s pending hint(s)",
+            "Loaded %s active character(s) with %s relationship(s), %s address rule(s), %s pending candidate(s)",
             len(entities),
             len(edges),
             len(address_rules),
@@ -100,7 +100,7 @@ def context_node(state: TranslationState) -> dict:
                 "presentation_message": (
                     f"  👥 Loaded {len(entities)} active character(s) with "
                     f"{len(edges)} relationship(s), {len(address_rules)} address rule(s), "
-                    f"{len(address_rule_candidates)} pending hint(s)"
+                    f"{len(address_rule_candidates)} pending candidate(s)"
                 ),
             },
         )

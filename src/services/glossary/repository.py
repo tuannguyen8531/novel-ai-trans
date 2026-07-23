@@ -46,7 +46,6 @@ from src.config import config
 from src.domain import glossary as glossary_domain
 from src.domain.characters import (
     ADDRESS_RULE_CANDIDATES_KEY,
-    ADDRESS_RULE_HINT_ENCOUNTER_LIMIT,
     get_character_translated_name,
     merge_character_context,
     normalize_character_info,
@@ -398,51 +397,6 @@ def _load_active_context(novel_name: str, source_text: str, chapter_number: int)
     return entities, edges, address_rules, candidates
 
 
-def _mark_address_rule_candidates_hinted(novel_name: str, candidates: list, chapter_number: int) -> None:
-    if chapter_number <= 0 or not candidates:
-        return
-
-    unmarked = [candidate for candidate in candidates if chapter_number not in candidate.get("hinted_chapters", [])]
-    if not unmarked:
-        return
-
-    selected = {
-        (
-            candidate.get("speaker"),
-            candidate.get("listener"),
-            candidate.get("self", ""),
-            candidate.get("other", ""),
-            candidate.get("first_seen"),
-        )
-        for candidate in unmarked
-    }
-
-    def updater(data: dict) -> dict:
-        normalized = normalize_glossary_data(data)
-        pending = normalized.get(ADDRESS_RULE_CANDIDATES_KEY, [])
-        for candidate in pending:
-            signature = (
-                candidate.get("speaker"),
-                candidate.get("listener"),
-                candidate.get("self", ""),
-                candidate.get("other", ""),
-                candidate.get("first_seen"),
-            )
-            if signature not in selected:
-                continue
-            hinted = candidate.setdefault("hinted_chapters", [])
-            if chapter_number not in hinted and len(hinted) < ADDRESS_RULE_HINT_ENCOUNTER_LIMIT:
-                hinted.append(chapter_number)
-        return normalized
-
-    _merge_json_locked(_glossary_path(novel_name), updater)
-
-    for candidate in unmarked:
-        hinted = candidate.setdefault("hinted_chapters", [])
-        if chapter_number not in hinted and len(hinted) < ADDRESS_RULE_HINT_ENCOUNTER_LIMIT:
-            hinted.append(chapter_number)
-
-
 def get_active_context(novel_name: str, source_text: str, chapter_number: int = 0) -> tuple[dict, list, list]:
     """Load confirmed character context relevant to the current source text.
 
@@ -467,9 +421,7 @@ def get_active_context_with_candidates(
     chapter_number: int = 0,
 ) -> tuple[dict, list, list, list]:
     """Load confirmed context plus bounded provisional address hints for translation."""
-    entities, edges, address_rules, candidates = _load_active_context(novel_name, source_text, chapter_number)
-    _mark_address_rule_candidates_hinted(novel_name, candidates, chapter_number)
-    return entities, edges, address_rules, candidates
+    return _load_active_context(novel_name, source_text, chapter_number)
 
 
 def save_characters_batch(
@@ -477,6 +429,7 @@ def save_characters_batch(
     entities: dict,
     edges: list,
     address_rules: list | None = None,
+    address_rule_candidate_verdicts: list | None = None,
     chapter: int = 0,
 ):
     """Save character entities and relationship edges (thread-safe).
@@ -487,14 +440,22 @@ def save_characters_batch(
                   Each relationship should be stored ONCE (no bidirectional duplicates).
         address_rules: Learned address/reference observations for character pairs.
                        Only confirmed stable observations are persisted as rules.
+        address_rule_candidate_verdicts: Source-grounded learner decisions for pending hypotheses.
         chapter:  Current chapter number (used as since_chapter fallback).
     """
-    if not entities and not edges and not address_rules:
+    if not entities and not edges and not address_rules and not address_rule_candidate_verdicts:
         return
 
     path = _glossary_path(novel_name)
 
     def updater(data: dict) -> dict:
-        return merge_character_context(data, entities, edges, address_rules=address_rules, chapter=chapter)
+        return merge_character_context(
+            data,
+            entities,
+            edges,
+            address_rules=address_rules,
+            address_rule_candidate_verdicts=address_rule_candidate_verdicts,
+            chapter=chapter,
+        )
 
     _merge_json_locked(path, updater)
