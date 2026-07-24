@@ -9,7 +9,7 @@ from src import paths as _paths
 from src.application.errors import ResourceNotFoundError
 from src.application.locks import novel_lock, novel_runtime_key
 from src.config import active_config_scope, config
-from src.domain.characters import count_name_occurrences
+from src.domain.entities import count_name_occurrences
 from src.domain.glossary import (
     PENDING_REPLACEMENTS_KEY,
     find_glossary_replacement_conflicts,

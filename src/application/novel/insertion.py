@@ -20,7 +20,7 @@ from src.application.errors import (
 from src.application.locks import novel_lock
 from src.application.novel.identity import require_path
 from src.application.progress import ProgressEvent
-from src.domain.characters import ADDRESS_RULE_CANDIDATES_KEY
+from src.domain.candidates import ADDRESS_RULE_CANDIDATES_KEY
 from src.domain.language import SUPPORTED_TARGET_LANGUAGES
 from src.services import chapters as chapter_service
 from src.services import insertion as insertion_storage

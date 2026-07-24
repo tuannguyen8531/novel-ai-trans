@@ -9,7 +9,7 @@ Builds a system prompt from template with:
 - Review feedback (if retrying)
 """
 
-from src.domain.characters import (
+from src.domain.formatting import (
     format_address_rule_candidates,
     format_address_rules,
     format_relationships_shorthand,

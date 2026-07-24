@@ -44,15 +44,19 @@ from pathlib import Path
 from src import paths as _paths
 from src.config import config
 from src.domain import glossary as glossary_domain
-from src.domain.characters import (
+from src.domain.addressing import select_active_address_rules
+from src.domain.candidates import (
     ADDRESS_RULE_CANDIDATES_KEY,
-    get_character_translated_name,
-    merge_character_context,
-    normalize_character_info,
     select_active_address_rule_candidates,
-    select_active_address_rules,
+)
+from src.domain.context import (
+    merge_character_context,
     select_active_character_context,
     upsert_relationship,
+)
+from src.domain.entities import (
+    get_character_translated_name,
+    normalize_character_info,
 )
 from src.domain.glossary import (
     normalize_glossary_data,

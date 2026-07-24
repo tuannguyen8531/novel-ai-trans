@@ -1,16 +1,16 @@
 import pytest
 
-from src.domain.characters import (
-    ADDRESS_RULE_CANDIDATES_KEY,
+from src.domain.addressing import normalize_address_rules, select_active_address_rules
+from src.domain.candidates import ADDRESS_RULE_CANDIDATES_KEY
+from src.domain.context import (
+    merge_character_context,
+    select_active_character_context,
+    upsert_relationship,
+)
+from src.domain.formatting import (
     format_address_rule_candidates,
     format_address_rules,
     format_relationships_shorthand,
-    merge_character_context,
-    normalize_address_rules,
-    normalize_character_edges,
-    select_active_address_rules,
-    select_active_character_context,
-    upsert_relationship,
 )
 from src.domain.glossary import (
     PENDING_REPLACEMENTS_KEY,
@@ -25,6 +25,7 @@ from src.domain.glossary import (
     select_active_glossary_terms,
     validate_glossary_data,
 )
+from src.domain.relationships import normalize_character_edges
 
 
 def test_queue_pending_replacement_collapses_edit_chain_and_revert():

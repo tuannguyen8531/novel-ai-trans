@@ -1,8 +1,5 @@
-from src.domain.characters import (
-    count_name_occurrences,
-    find_name_in_text,
-    normalize_character_data,
-)
+from src.domain.context import normalize_character_data
+from src.domain.entities import count_name_occurrences, find_name_in_text
 
 
 def test_normalize_character_data_normalizes_sections_and_drops_legacy_examples() -> None:

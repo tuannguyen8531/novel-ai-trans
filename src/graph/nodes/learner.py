@@ -11,13 +11,13 @@ import logging
 import re
 
 from src.config import config
-from src.domain.characters import (
-    ADDRESS_RULE_CANDIDATE_VERDICTS,
+from src.domain.candidates import ADDRESS_RULE_CANDIDATE_VERDICTS
+from src.domain.entities import (
     get_character_translated_name,
-    normalize_character_edges,
     resolve_character_ref,
 )
 from src.domain.language import target_language_name
+from src.domain.relationships import normalize_character_edges
 from src.domain.terms import filter_extracted_terms
 from src.models.state import TranslationState
 from src.prompts import render_prompt

@@ -69,12 +69,19 @@ The runner owns worker threads and configuration context, streaming owns SSE
 fan-out, the filesystem `JobStore` owns persistence, and the manager only
 coordinates those collaborators.
 
-## Cohesive large modules
+## Cohesive modules
 
-The Phase 9 review intentionally keeps these modules together:
+Character policies are separated by independently changing domain concern:
 
-- `src/domain/characters.py` contains character normalization and relationship
-  policies, one domain concern.
+- `src/domain/entities.py` owns character identity, aliases, and name matching;
+- `src/domain/relationships.py` owns directed relationship rules;
+- `src/domain/addressing.py` owns stable direct-address timelines;
+- `src/domain/candidates.py` owns provisional address-rule confirmation;
+- `src/domain/context.py` composes persisted and active character context;
+- `src/domain/formatting.py` serializes that context for LLM prompts.
+
+Other intentionally cohesive modules include:
+
 - `src/graph/nodes/learner.py` owns the learner graph step: extracting and
   normalizing learned terms, entities, relationships, and summaries.
 - `src/api/schemas.py` owns API request and response contracts.

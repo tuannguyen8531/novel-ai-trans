@@ -2,14 +2,14 @@
 
 import re
 
-from src.domain.characters import (
+from src.domain.addressing import ADDRESS_RULE_STABLE_REASONS
+from src.domain.candidates import (
     ADDRESS_RULE_CANDIDATE_EVALUATION_LIMIT,
     ADDRESS_RULE_CANDIDATE_VERDICTS,
     ADDRESS_RULE_CANDIDATES_KEY,
-    ADDRESS_RULE_STABLE_REASONS,
-    find_name_in_text,
-    normalize_character_data,
 )
+from src.domain.context import normalize_character_data
+from src.domain.entities import find_name_in_text
 
 PENDING_REPLACEMENTS_KEY = "_pending_replacements"
 
