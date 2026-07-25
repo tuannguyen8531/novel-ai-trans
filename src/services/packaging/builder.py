@@ -69,7 +69,7 @@ class EPUBBuilder:
             mode = stat.S_IMODE(output_path.stat().st_mode) if output_path.exists() else 0o644
             temporary_path.chmod(mode)
             self._write_archive(temporary_path)
-            with temporary_path.open("rb") as artifact:
+            with temporary_path.open("r+b") as artifact:
                 os.fsync(artifact.fileno())
             os.replace(temporary_path, output_path)
         except Exception:
