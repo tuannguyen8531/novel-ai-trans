@@ -63,6 +63,22 @@ class TestRenderPrompt:
         assert "Chinese to English" in result
         assert "English translation" in result
 
+    def test_vietnamese_translation_formats_source_chapter_heading(self):
+        result = render_prompt("translate", target_language="vi", lang_name="Chinese", target_name="Vietnamese")
+
+        assert "always translate it; never omit it or copy it unchanged" in result
+        assert "Chương N: <tiêu đề chương đã dịch>" in result
+        assert "preserve the source number" in result
+        assert 'without adding "Chương" or inventing a number' in result
+
+    def test_english_translation_formats_source_chapter_heading(self):
+        result = render_prompt("translate", target_language="en", lang_name="Chinese", target_name="English")
+
+        assert "always translate it; never omit it or copy it unchanged" in result
+        assert "Chapter N: <translated chapter title>" in result
+        assert "preserve the source number" in result
+        assert 'without adding "Chapter" or inventing a number' in result
+
     @pytest.mark.parametrize(("target_language", "target_name"), [("vi", "Vietnamese"), ("en", "English")])
     def test_translate_uses_address_rules_as_source_overridable_defaults(self, target_language, target_name):
         result = render_prompt(

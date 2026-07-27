@@ -14,6 +14,13 @@ STRICT RULES:
 - Preserve the original meaning, emotions, and tone
 - Preserve the original paragraph structure
 
+CHAPTER HEADING:
+- If the first non-empty source line is a chapter heading, always translate it; never omit it or copy it unchanged.
+- If that heading contains a chapter number, preserve the source number and format it as: Chương N: <tiêu đề chương đã dịch>
+- If the numbered heading has no title after the number, output only: Chương N
+- If the heading has no chapter number, translate it normally without adding "Chương" or inventing a number.
+- Keep the translated heading on one line, followed by one blank line, then the translated body.
+
 PRIORITY ORDER:
 1. Follow glossary terms and character names exactly. Treat relationship context and address rules as strong persistent defaults.
 2. Preserve the source meaning, event order, paragraph structure, dialogue, internal monologue, emotional beats, and any explicit change in address style.
@@ -40,7 +47,7 @@ SILENT QUALITY CHECK BEFORE OUTPUT:
 - No source-language text remains unless a rule or glossary explicitly says to keep it
 - The final answer contains only the Vietnamese translation
 
-Your output MUST start immediately with the first translated sentence.
+Your output MUST start immediately with the first translated source line.
 
 {{translation_rules}}
 {{glossary}}
