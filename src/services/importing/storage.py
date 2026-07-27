@@ -14,6 +14,7 @@ from src.services.importing.extractor import EPUB_IMAGE_PLACEHOLDER
 from src.services.importing.selection import ProcessedChapter
 from src.services.metadata import metadata_to_dict
 from src.utils.files import merge_json_locked, write_bytes_atomic, write_json_atomic, write_text_atomic
+from src.utils.text import normalize_text
 
 ILLUSTRATION_MARKER = "[[ILLUSTRATION:{filename}]]"
 
@@ -137,7 +138,7 @@ def persist_chapters(
                 )
 
             path = chapter_service.chapter_path(paths.chapter_output_dir, chapter_number)
-            imported_text = chapter_text.strip() + "\n"
+            imported_text = format_imported_chapter(section.title, chapter_text, chapter_number)
             status = classify_chapter(path, imported_text)
             if status == "unchanged":
                 unchanged_chapters.append(chapter_number)
@@ -176,6 +177,18 @@ def persist_chapters(
     )
 
 
+def format_imported_chapter(title: str, body: str, chapter_number: int) -> str:
+    normalized_title = " ".join(normalize_text(title).split()) or f"Chapter {chapter_number}"
+    normalized_body = body.strip()
+    if normalized_body:
+        first_line, separator, remainder = normalized_body.partition("\n")
+        if normalize_text(first_line).lstrip("\ufeff").casefold() == normalized_title.casefold():
+            normalized_body = remainder.strip() if separator else ""
+    if not normalized_body:
+        return normalized_title + "\n"
+    return f"{normalized_title}\n\n{normalized_body}\n"
+
+
 def clean_existing_illustrations(illustrations_dir: Path) -> None:
     for existing_file in illustrations_dir.glob("*-*.*"):
         if existing_file.is_file():
@@ -194,6 +207,7 @@ __all__ = [
     "PersistedImport",
     "StoragePaths",
     "clean_existing_illustrations",
+    "format_imported_chapter",
     "illustration_filename",
     "persist_chapters",
     "persist_metadata",

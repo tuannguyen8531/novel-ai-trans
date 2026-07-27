@@ -6,7 +6,12 @@ import pytest
 from src.models import NovelMetadata
 from src.services.importing.extractor import EpubSection
 from src.services.importing.selection import ProcessedChapter
-from src.services.importing.storage import persist_chapters, persist_metadata, prepare_storage
+from src.services.importing.storage import (
+    format_imported_chapter,
+    persist_chapters,
+    persist_metadata,
+    prepare_storage,
+)
 from src.utils.files import write_text_atomic
 
 
@@ -35,8 +40,22 @@ def test_persistence_accepts_prepared_parsed_data(tmp_path) -> None:
     )
 
     assert result.changes.added == (1, 2)
-    assert (paths.chapter_output_dir / "chapter_001.txt").read_text(encoding="utf-8") == "First body.\n"
+    assert (paths.chapter_output_dir / "chapter_001.txt").read_text(encoding="utf-8") == ("Chapter 1\n\nFirst body.\n")
     assert (paths.novel_dir / "metadata.json").is_file()
+
+
+def test_imported_chapter_does_not_duplicate_existing_leading_title() -> None:
+    assert format_imported_chapter("  Chapter   1  ", "CHAPTER 1\n\nFirst body.", 1) == ("Chapter 1\n\nFirst body.\n")
+
+
+def test_imported_chapter_keeps_a_different_first_body_line() -> None:
+    assert format_imported_chapter("Chapter 1", "Previously...\n\nFirst body.", 1) == (
+        "Chapter 1\n\nPreviously...\n\nFirst body.\n"
+    )
+
+
+def test_imported_chapter_uses_numbered_fallback_for_empty_title() -> None:
+    assert format_imported_chapter("", "First body.", 7) == "Chapter 7\n\nFirst body.\n"
 
 
 def test_persistence_failure_keeps_existing_partial_writes(tmp_path) -> None:
@@ -69,5 +88,5 @@ def test_persistence_failure_keeps_existing_partial_writes(tmp_path) -> None:
         )
 
     assert (paths.novel_dir / "metadata.json").is_file()
-    assert (paths.chapter_output_dir / "chapter_001.txt").read_text(encoding="utf-8") == "First body.\n"
+    assert (paths.chapter_output_dir / "chapter_001.txt").read_text(encoding="utf-8") == ("Chapter 1\n\nFirst body.\n")
     assert not (paths.chapter_output_dir / "chapter_002.txt").exists()
