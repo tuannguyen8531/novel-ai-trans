@@ -131,3 +131,52 @@ def test_failed_count_reads_runtime_progress_written_by_translation(client, tmp_
 
     targets = {item["target"]: item for item in response.json()[0]["targets"]}
     assert targets["vi"]["failed"] == 1
+
+
+def test_source_warning_count_and_chapters_are_exposed(client):
+    test_client, translated = client
+    novel = translated / "demo"
+    _write_chapter(novel / "input", 1)
+    _write_chapter(novel / "output", 1)
+    reports_dir = translated.parent / "reports" / "demo"
+    reports_dir.mkdir(parents=True)
+    (reports_dir / "chapter_001.json").write_text(
+        json.dumps(
+            {
+                "chapter": 1,
+                "chunks": [{"post_check_issues": ["contains_source_language_chars"]}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    list_response = test_client.get("/api/novels")
+    progress_response = test_client.get("/api/novels/demo/translation-progress?target=vi")
+
+    targets = {item["target"]: item for item in list_response.json()[0]["targets"]}
+    assert targets["vi"]["warnings"] == 1
+    assert progress_response.json()["warnings"] == [1]
+
+
+def test_manual_translation_edit_refreshes_source_warning(client):
+    test_client, translated = client
+    novel = translated / "demo"
+    source_dir = novel / "input"
+    source_dir.mkdir(parents=True)
+    (source_dir / "chapter_001.txt").write_text("囡囡来了", encoding="utf-8")
+
+    response = test_client.put(
+        "/api/novels/demo/chapters/1?view=translation&target=vi",
+        json={"content": "Cô bé 囡 đến rồi."},
+    )
+    assert response.status_code == 200
+    progress_response = test_client.get("/api/novels/demo/translation-progress?target=vi")
+    assert progress_response.json()["warnings"] == [1]
+
+    response = test_client.put(
+        "/api/novels/demo/chapters/1?view=translation&target=vi",
+        json={"content": "Cô bé đã đến."},
+    )
+    assert response.status_code == 200
+    progress_response = test_client.get("/api/novels/demo/translation-progress?target=vi")
+    assert progress_response.json()["warnings"] == []

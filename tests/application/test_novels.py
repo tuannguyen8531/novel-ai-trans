@@ -33,10 +33,41 @@ def test_summary_combines_progress_with_stored_outputs(tmp_path: Path) -> None:
     assert vietnamese.total == 2
     assert vietnamese.completed == 2
     assert vietnamese.failed == 1
+    assert vietnamese.warnings == 0
     assert catalog.progress(root, "demo", "vi", progress_root=progress_root) == {
         "completed": [2],
         "failed": [3],
+        "warnings": [],
     }
+
+
+def test_summary_and_progress_include_source_warning_chapters(tmp_path: Path) -> None:
+    root = tmp_path / "translated"
+    novel_root = root / "demo"
+    _write_chapter(novel_root / "input", 1)
+    _write_chapter(novel_root / "output", 1)
+    report_root = tmp_path / "reports"
+    report_dir = report_root / "demo"
+    report_dir.mkdir(parents=True)
+    (report_dir / "chapter_001.json").write_text(
+        json.dumps(
+            {
+                "chapter": 1,
+                "chunks": [
+                    {
+                        "post_check_issues": ["contains_source_language_chars"],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    summary = catalog.summarize(root, "demo", report_root=report_root)
+    vietnamese = next(progress for progress in summary.targets if progress.target == "vi")
+
+    assert vietnamese.warnings == 1
+    assert catalog.progress(root, "demo", "vi", report_root=report_root)["warnings"] == [1]
 
 
 def test_summary_resolves_title_for_requested_target_language(tmp_path: Path) -> None:
@@ -116,6 +147,47 @@ def test_write_chapter_can_update_translation(tmp_path: Path, target: str, relat
     assert result.target == target
     assert (novel_root / relative_path).read_text(encoding="utf-8") == "Translated chapter"
     assert chapters.read_chapter(root, "demo", 7, view="translation", target=target).content == "Translated chapter"
+
+
+def test_write_translation_refreshes_manual_source_warning(tmp_path: Path) -> None:
+    root = tmp_path / "translated"
+    novel_root = root / "demo"
+    _write_chapter(novel_root / "input", 7, "囡囡来了")
+    report_root = tmp_path / "reports"
+    report_path = report_root / "demo" / "chapter_007.json"
+    report_path.parent.mkdir(parents=True)
+    report_path.write_text(
+        json.dumps(
+            {
+                "chapter": 7,
+                "chunks": [{"post_check_issues": ["contains_source_language_chars"]}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    chapters.write_chapter(
+        root,
+        "demo",
+        7,
+        "Cô bé 囡 đến rồi.",
+        view="translation",
+        target="vi",
+        report_root=report_root,
+    )
+    assert catalog.progress(root, "demo", "vi", report_root=report_root)["warnings"] == [7]
+
+    chapters.write_chapter(
+        root,
+        "demo",
+        7,
+        "Cô bé đã đến.",
+        view="translation",
+        target="vi",
+        report_root=report_root,
+    )
+    assert catalog.progress(root, "demo", "vi", report_root=report_root)["warnings"] == []
+    assert json.loads(report_path.read_text(encoding="utf-8"))["manual_post_check_issues"] == []
 
 
 def test_write_chapter_preserves_legacy_unpadded_translation_filename(tmp_path: Path) -> None:

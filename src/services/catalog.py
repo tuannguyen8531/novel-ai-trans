@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 from pathlib import Path
 
 from src import paths
+
+_REPORT_FILE_RE = re.compile(r"^chapter_(\d+)\.json$")
+_SOURCE_WARNING_CODE = "contains_source_language_chars"
 
 
 def list_directories(root: Path) -> list[Path]:
@@ -41,6 +45,41 @@ def load_progress(path: Path) -> dict[str, list[int]]:
     }
 
 
+def load_source_warning_chapters(directory: Path) -> list[int]:
+    """Return chapters whose accepted quality report contains source characters."""
+    if not directory.exists():
+        return []
+
+    chapters: set[int] = set()
+    for path in directory.iterdir():
+        match = _REPORT_FILE_RE.fullmatch(path.name)
+        if match is None or not path.is_file():
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError, OSError:
+            continue
+        if not isinstance(data, dict):
+            continue
+        manual_issues = data.get("manual_post_check_issues")
+        if isinstance(manual_issues, list):
+            if _SOURCE_WARNING_CODE in manual_issues:
+                chapters.add(int(match.group(1)))
+            continue
+        chunks = data.get("chunks")
+        if not isinstance(chunks, list):
+            continue
+        has_warning = any(
+            isinstance(chunk, dict)
+            and isinstance(chunk.get("post_check_issues"), list)
+            and _SOURCE_WARNING_CODE in chunk["post_check_issues"]
+            for chunk in chunks
+        )
+        if has_warning:
+            chapters.add(int(match.group(1)))
+    return sorted(chapters)
+
+
 def glossary_counts(path: Path) -> tuple[int, int, int]:
     if not path.exists():
         return 0, 0, 0
@@ -66,4 +105,5 @@ __all__ = [
     "has_files",
     "list_directories",
     "load_progress",
+    "load_source_warning_chapters",
 ]

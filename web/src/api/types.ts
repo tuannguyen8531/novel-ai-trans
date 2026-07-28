@@ -86,6 +86,7 @@ export interface NovelTargetProgress {
   target: string
   completed: number
   failed: number
+  warnings: number
   total: number
 }
 

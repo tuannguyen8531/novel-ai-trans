@@ -9,7 +9,7 @@ from typing import Literal
 
 from fastapi import APIRouter
 
-from src.api.dependencies import AuthenticatedPrincipal, JobManagerDependency
+from src.api.dependencies import AuthenticatedPrincipal, JobManagerDependency, get_state
 from src.api.events import build_progress_emitter
 from src.api.schemas import JobStartResponse, TranslationRequestPayload
 from src.application import config as app_config
@@ -148,10 +148,16 @@ def translation_progress(
 
         raise ResourceNotFoundError(f"Invalid novel name: {name!r}")
     resolved_target: Literal["vi", "en"] = target or ("en" if config.target_language == "en" else "vi")
-    saved = catalog.progress(root, name, resolved_target)
+    saved = catalog.progress(
+        root,
+        name,
+        resolved_target,
+        report_root=get_state().jobs_dir.parent / "reports",
+    )
     return {
         "novel": name,
         "target": resolved_target,
         "completed": saved["completed"],
         "failed": saved["failed"],
+        "warnings": saved["warnings"],
     }

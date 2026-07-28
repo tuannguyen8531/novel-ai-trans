@@ -7,10 +7,15 @@ from pathlib import Path
 from typing import Literal
 
 from src import paths
+from src.application import config as app_config
 from src.application.errors import ResourceNotFoundError
 from src.application.novel.identity import require_path
 from src.domain.language import SUPPORTED_TARGET_LANGUAGES, normalize_target_language
+from src.domain.quality import post_check_translation
 from src.services import chapters as chapter_service
+from src.services.translation.reports import ReportStore
+
+_SOURCE_WARNING_CODE = "contains_source_language_chars"
 
 
 @dataclass(frozen=True)
@@ -92,6 +97,7 @@ def write_chapter(
     *,
     view: Literal["source", "translation"] = "source",
     target: str | None = None,
+    report_root: Path | None = None,
 ) -> Content:
     novel_root = require_path(root, name)
     if view == "source":
@@ -102,6 +108,23 @@ def write_chapter(
     normalized_target = normalize_target_language(target)
     output_dir = paths.novel_output_dir_from_root(novel_root, normalized_target)
     chapter_service.write(output_dir, number, content)
+    input_dir = paths.novel_input_dir_from_root(novel_root)
+    source_path = chapter_service.chapter_path(input_dir, number)
+    if source_path.exists():
+        source = chapter_service.read(input_dir, number)
+        issue_codes = [issue.code for issue in post_check_translation(source, content) if issue.code == _SOURCE_WARNING_CODE]
+        ReportStore().save_manual_check(
+            paths.translation_report_path(
+                app_config.get_config(),
+                name,
+                number,
+                normalized_target,
+                report_root=report_root,
+            ),
+            chapter=number,
+            target_language=normalized_target,
+            issue_codes=issue_codes,
+        )
     return Content(name, number, view, normalized_target, content)
 
 

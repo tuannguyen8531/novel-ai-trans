@@ -24,6 +24,15 @@ def test_post_check_flags_leftover_source_chars_as_blocking():
     assert has_blocking_issues(issues)
 
 
+def test_post_check_warns_for_one_or_two_leftover_source_chars():
+    for untranslated in ("囡", "囡囡"):
+        issues = post_check_translation("囡囡来了", f"Cô bé {untranslated} đến rồi.", {})
+
+        issue = next(issue for issue in issues if issue.code == "contains_source_language_chars")
+        assert issue.severity == "warning"
+        assert not has_blocking_issues(issues)
+
+
 def test_post_check_gives_actionable_unique_source_fragments():
     issues = post_check_translation("囡囡来了", "N囡囡 đến rồi. Cứ nghe lời 囡囡!", {})
 

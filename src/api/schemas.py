@@ -157,6 +157,7 @@ class NovelTargetProgress(BaseModel):
     target: str
     completed: int
     failed: int
+    warnings: int
     total: int
 
 

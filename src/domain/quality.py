@@ -63,13 +63,14 @@ def post_check_translation(
         )
 
     source_runs = _source_runs(translation)
-    if sum(len(run) for run in source_runs) >= 3:
+    source_char_count = sum(len(run) for run in source_runs)
+    if source_char_count:
         unique_runs = list(dict.fromkeys(source_runs))
         fragments = ", ".join(run[:20] for run in unique_runs[:10])
         issues.append(
             TranslationIssue(
                 "contains_source_language_chars",
-                "error",
+                "error" if source_char_count >= 3 else "warning",
                 "Translation still contains source-language characters. "
                 f"Translate or transliterate every occurrence of these source fragments: {fragments}. "
                 "Do not retain source characters, including in notes or parentheses.",

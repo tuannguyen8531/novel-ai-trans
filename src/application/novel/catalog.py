@@ -12,7 +12,7 @@ from src.application.novel.identity import is_valid_slug, require_path, resolve_
 from src.application.novel.metadata import load as load_metadata
 from src.application.novel.metadata import write as write_metadata
 from src.domain.language import SUPPORTED_TARGET_LANGUAGES, normalize_source_language, normalize_target_language
-from src.paths import PROGRESS_DIR
+from src.paths import PROGRESS_DIR, REPORT_DIR
 from src.services import catalog as catalog_repository
 from src.services import chapters as chapter_service
 from src.services.metadata import localized_value
@@ -23,6 +23,7 @@ class Progress:
     target: str
     completed: int
     failed: int
+    warnings: int
     total: int
 
 
@@ -107,17 +108,26 @@ def _merge_progress(progress_paths: tuple[Path, ...]) -> dict[str, list[int]]:
     return {"completed": sorted(completed), "failed": sorted(failed)}
 
 
+def _report_directory(name: str, target: str, report_root: Path) -> Path:
+    paths.validate_novel_name(name)
+    if target == "vi":
+        return paths.resolve_within(report_root, name)
+    return paths.resolve_within(report_root, target, name)
+
+
 def summarize(
     root: Path,
     name: str,
     *,
     progress_root: Path | None = None,
+    report_root: Path | None = None,
     target_language: str | None = None,
 ) -> Summary:
     novel_root = resolve_path(root, name)
     metadata = load_metadata(novel_root)
     total = len(chapter_service.scan(paths.novel_input_dir_from_root(novel_root)))
     progress_dir = progress_root or PROGRESS_DIR
+    reports_dir = report_root or REPORT_DIR
 
     targets: list[Progress] = []
     for target in SUPPORTED_TARGET_LANGUAGES:
@@ -125,7 +135,16 @@ def summarize(
         on_disk = chapter_service.numbers(paths.novel_output_dir_from_root(novel_root, target))
         completed = on_disk | set(saved.get("completed", []))
         failed = set(saved.get("failed", []))
-        targets.append(Progress(target=target, completed=len(completed), failed=len(failed), total=total))
+        warnings = catalog_repository.load_source_warning_chapters(_report_directory(name, target, reports_dir))
+        targets.append(
+            Progress(
+                target=target,
+                completed=len(completed),
+                failed=len(failed),
+                warnings=len(warnings),
+                total=total,
+            )
+        )
 
     illustrations_dir = novel_root / "illustrations"
     display_title = metadata.get("title")
@@ -146,9 +165,19 @@ def list_summaries(
     root: Path,
     *,
     progress_root: Path | None = None,
+    report_root: Path | None = None,
     target_language: str | None = None,
 ) -> list[Summary]:
-    return [summarize(root, name, progress_root=progress_root, target_language=target_language) for name in list_names(root)]
+    return [
+        summarize(
+            root,
+            name,
+            progress_root=progress_root,
+            report_root=report_root,
+            target_language=target_language,
+        )
+        for name in list_names(root)
+    ]
 
 
 def progress(
@@ -157,16 +186,22 @@ def progress(
     target: str,
     *,
     progress_root: Path | None = None,
+    report_root: Path | None = None,
 ) -> dict[str, list[int]]:
     novel_root = resolve_path(root, name)
-    return _merge_progress(
+    resolved_target = normalize_target_language(target)
+    saved = _merge_progress(
         _progress_paths(
             novel_root,
             name,
-            normalize_target_language(target),
+            resolved_target,
             progress_root or PROGRESS_DIR,
         )
     )
+    saved["warnings"] = catalog_repository.load_source_warning_chapters(
+        _report_directory(name, resolved_target, report_root or REPORT_DIR)
+    )
+    return saved
 
 
 def detail(
@@ -174,10 +209,17 @@ def detail(
     name: str,
     *,
     progress_root: Path | None = None,
+    report_root: Path | None = None,
     target_language: str | None = None,
 ) -> Detail:
     novel_root = require_path(root, name)
-    base = summarize(root, name, progress_root=progress_root, target_language=target_language)
+    base = summarize(
+        root,
+        name,
+        progress_root=progress_root,
+        report_root=report_root,
+        target_language=target_language,
+    )
     terms, entities, edges = catalog_repository.glossary_counts(novel_root / "glossary.json")
     return Detail(
         **base.__dict__,

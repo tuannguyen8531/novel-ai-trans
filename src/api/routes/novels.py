@@ -76,7 +76,15 @@ def list_novels_endpoint(
 ) -> list[NovelSummary]:
     config = app_config.get_config()
     root = identity.resolve_root(config.translated_dir)
-    return [NovelSummary(**asdict(summary)) for summary in catalog.list_summaries(root, target_language=config.target_language)]
+    report_root = get_state().jobs_dir.parent / "reports"
+    return [
+        NovelSummary(**asdict(summary))
+        for summary in catalog.list_summaries(
+            root,
+            report_root=report_root,
+            target_language=config.target_language,
+        )
+    ]
 
 
 @router.get("/novels/{name}", response_model=NovelDetail)
@@ -86,7 +94,16 @@ def novel_detail(
 ) -> NovelDetail:
     config = app_config.get_config()
     root = identity.resolve_root(config.translated_dir)
-    return NovelDetail(**asdict(catalog.detail(root, name, target_language=config.target_language)))
+    return NovelDetail(
+        **asdict(
+            catalog.detail(
+                root,
+                name,
+                report_root=get_state().jobs_dir.parent / "reports",
+                target_language=config.target_language,
+            )
+        )
+    )
 
 
 @router.get("/novels/{name}/chapters", response_model=list[NovelChapterStatus])
@@ -181,6 +198,7 @@ def put_chapter_content(
         payload.content,
         view=view,
         target=target or config.target_language,
+        report_root=get_state().jobs_dir.parent / "reports",
     )
     return ChapterContentResponse(**asdict(content))
 

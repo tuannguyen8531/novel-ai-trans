@@ -16,6 +16,11 @@ const failedNovel = ref<NovelSummary | null>(null)
 const failedChapters = ref<number[]>([])
 const failedChaptersLoading = ref(false)
 const failedChaptersError = ref<string | null>(null)
+const showWarningDialog = ref(false)
+const warningNovel = ref<NovelSummary | null>(null)
+const warningChapters = ref<number[]>([])
+const warningChaptersLoading = ref(false)
+const warningChaptersError = ref<string | null>(null)
 
 // Add novel modal state
 const showAddModal = ref(false)
@@ -147,6 +152,29 @@ function closeFailedDialog() {
   failedChaptersError.value = null
 }
 
+async function showWarningChapters(novel: NovelSummary) {
+  warningNovel.value = novel
+  warningChapters.value = []
+  warningChaptersError.value = null
+  warningChaptersLoading.value = true
+  showWarningDialog.value = true
+  try {
+    const progress = await novels.progress(novel.name, defaultTarget.value)
+    warningChapters.value = [...progress.warnings].sort((a, b) => a - b)
+  } catch (err) {
+    warningChaptersError.value = (err as Error).message
+  } finally {
+    warningChaptersLoading.value = false
+  }
+}
+
+function closeWarningDialog() {
+  showWarningDialog.value = false
+  warningNovel.value = null
+  warningChapters.value = []
+  warningChaptersError.value = null
+}
+
 const deleteMessage = computed(() => {
   if (!novelToDelete.value) return ''
   const label = novelToDelete.value.title
@@ -203,15 +231,31 @@ const deleteMessage = computed(() => {
               {{ translatedProgress(novel)?.completed ?? 0 }} / {{ translatedProgress(novel)?.total ?? novel.total_input_chapters }}
             </td>
             <td>
-              <button
-                v-if="(translatedProgress(novel)?.failed ?? 0) > 0"
-                type="button"
-                class="badge danger status-badge"
-                @click="showFailedChapters(novel)"
-              >
-                {{ translatedProgress(novel)?.failed }} failed
-              </button>
-              <span v-else class="badge ok">normal</span>
+              <div class="status-badges">
+                <button
+                  v-if="(translatedProgress(novel)?.failed ?? 0) > 0"
+                  type="button"
+                  class="badge danger status-badge"
+                  @click="showFailedChapters(novel)"
+                >
+                  {{ translatedProgress(novel)?.failed }} failed
+                </button>
+                <button
+                  v-if="(translatedProgress(novel)?.warnings ?? 0) > 0"
+                  type="button"
+                  class="badge warn status-badge"
+                  title="Chapters that still contain source-language characters"
+                  @click="showWarningChapters(novel)"
+                >
+                  {{ translatedProgress(novel)?.warnings }} source
+                </button>
+                <span
+                  v-if="(translatedProgress(novel)?.failed ?? 0) === 0 && (translatedProgress(novel)?.warnings ?? 0) === 0"
+                  class="badge ok"
+                >
+                  normal
+                </span>
+              </div>
             </td>
             <td class="novel-actions">
               <div class="novel-actions-inner">
@@ -266,6 +310,38 @@ const deleteMessage = computed(() => {
               class="failed-chapter-link"
               :to="`/novels/${failedNovel?.name}/chapters/${chapter}`"
               @click="closeFailedDialog"
+            >
+              Chapter {{ chapter }}
+            </RouterLink>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="showWarningDialog" class="modal-overlay" @click.self="closeWarningDialog">
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="warning-chapters-title">
+        <div class="modal-header">
+          <h3 id="warning-chapters-title">
+            Source-character warnings — {{ warningNovel?.name }}
+          </h3>
+          <button class="modal-close" type="button" aria-label="Close" @click="closeWarningDialog">
+            &times;
+          </button>
+        </div>
+        <div class="modal-body">
+          <p class="muted">
+            These chapters still contain source-language characters.
+          </p>
+          <p v-if="warningChaptersLoading" class="muted">Loading warning chapters...</p>
+          <p v-else-if="warningChaptersError" class="error">{{ warningChaptersError }}</p>
+          <p v-else-if="!warningChapters.length" class="muted">No source-character warnings.</p>
+          <div v-else class="failed-chapter-list">
+            <RouterLink
+              v-for="chapter in warningChapters"
+              :key="chapter"
+              class="failed-chapter-link"
+              :to="`/novels/${warningNovel?.name}/chapters/${chapter}`"
+              @click="closeWarningDialog"
             >
               Chapter {{ chapter }}
             </RouterLink>
@@ -373,15 +449,31 @@ const deleteMessage = computed(() => {
   color: var(--fg);
 }
 
-button.status-badge,
-button.status-badge:hover:not(:disabled) {
+button.status-badge {
   background: var(--bg-elev-2);
+}
+
+button.status-badge.danger,
+button.status-badge.danger:hover:not(:disabled) {
   color: var(--danger);
   border-color: var(--danger);
 }
 
+button.status-badge.warn,
+button.status-badge.warn:hover:not(:disabled) {
+  color: var(--warn);
+  border-color: var(--warn);
+}
+
 button.status-badge:hover:not(:disabled) {
   text-decoration: underline;
+}
+
+.status-badges {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
 }
 
 .failed-chapter-list {

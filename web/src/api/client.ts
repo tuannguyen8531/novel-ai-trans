@@ -204,7 +204,7 @@ export const api = {
   getTranslationProgress: (name: string, target?: string) => {
     const params = new URLSearchParams()
     if (target) params.set('target', target)
-    return request<{ completed: number[]; failed: number[] }>(
+    return request<{ completed: number[]; failed: number[]; warnings: number[] }>(
       `/api/novels/${encodeURIComponent(name)}/translation-progress${
         params.toString() ? `?${params.toString()}` : ''
       }`
