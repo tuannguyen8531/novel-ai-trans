@@ -24,6 +24,15 @@ def test_post_check_flags_leftover_source_chars_as_blocking():
     assert has_blocking_issues(issues)
 
 
+def test_post_check_gives_actionable_unique_source_fragments():
+    issues = post_check_translation("囡囡来了", "N囡囡 đến rồi. Cứ nghe lời 囡囡!", {})
+
+    issue = next(issue for issue in issues if issue.code == "contains_source_language_chars")
+    assert "Translate or transliterate every occurrence" in issue.message
+    assert "source fragments: 囡囡." in issue.message
+    assert "including in notes or parentheses" in issue.message
+
+
 def test_post_check_accepts_explained_terminology():
     issues = post_check_translation("ひきこもり", "Anh ấy là hikikomori (ひきこもり).", {})
     assert "contains_source_language_chars" not in [issue.code for issue in issues]

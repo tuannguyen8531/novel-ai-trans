@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from src.domain.illustrations import illustration_marker_counts
 
 SOURCE_CHAR_RE = re.compile(r"[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]")
+SOURCE_RUN_RE = re.compile(SOURCE_CHAR_RE.pattern + "+")
 EXPLAINED_TERM_RE = re.compile(
     r"(?:\(|（|\[|【|「|『|“|'|\")"
     r"[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]{1,10}"
@@ -29,10 +30,10 @@ def _count_dialogue_lines(text: str) -> int:
     return sum(1 for line in text.splitlines() if any(mark in line for mark in QUOTE_MARKS))
 
 
-def _source_chars(text: str) -> list[str]:
-    """Return source-language characters still present in text, ignoring explained terminology in brackets."""
+def _source_runs(text: str) -> list[str]:
+    """Return source-language runs still present in text, ignoring explained terminology in brackets."""
     cleaned = EXPLAINED_TERM_RE.sub("", text)
-    return SOURCE_CHAR_RE.findall(cleaned)
+    return SOURCE_RUN_RE.findall(cleaned)
 
 
 def post_check_translation(
@@ -61,14 +62,17 @@ def post_check_translation(
             )
         )
 
-    source_chars = _source_chars(translation)
-    if len(source_chars) >= 3:
-        sample = "".join(source_chars[:20])
+    source_runs = _source_runs(translation)
+    if sum(len(run) for run in source_runs) >= 3:
+        unique_runs = list(dict.fromkeys(source_runs))
+        fragments = ", ".join(run[:20] for run in unique_runs[:10])
         issues.append(
             TranslationIssue(
                 "contains_source_language_chars",
                 "error",
-                f"Translation still contains source-language characters: {sample}",
+                "Translation still contains source-language characters. "
+                f"Translate or transliterate every occurrence of these source fragments: {fragments}. "
+                "Do not retain source characters, including in notes or parentheses.",
             )
         )
 

@@ -39,7 +39,7 @@
 
 ## Internet/Modern Slang
 - Translate internet slang to Vietnamese equivalents when possible
-- If no equivalent exists, keep the original with context
+- If no exact equivalent exists, translate by meaning, paraphrase naturally, or transliterate into Latin script; do not keep source-script characters
 
 ## Anti-Translationese
 - Avoid overusing "một cách"; prefer concise, idiomatic Vietnamese
