@@ -130,6 +130,27 @@ class TestAfterQuality:
         with pytest.raises(TranslationQualityError, match="translation_empty"):
             _reject_chunk(state)
 
+    def test_rejected_error_carries_candidate_and_post_check_context(self):
+        state = initial_state("source", "chinese", "novel", 1)
+        state["chunks"] = ["source-1", "source-2"]
+        state["translated_chunks"] = ["translated-1"]
+        state["current_chunk_index"] = 1
+        state["current_translation"] = "张三 untranslated"
+        state["post_check_issues"] = ["contains_source_language_chars"]
+        state["review_feedback"] = "Translate 张三."
+        state["retry_count"] = 2
+
+        with pytest.raises(TranslationQualityError) as raised:
+            _reject_chunk(state)
+
+        error = raised.value
+        assert error.issue_codes == ["contains_source_language_chars"]
+        assert error.feedback == "Translate 张三."
+        assert error.retry_count == 2
+        assert error.failed_chunk_index == 1
+        assert error.total_chunks == 2
+        assert error.candidate_translation == "translated-1\n\n张三 untranslated"
+
 
 class TestHasMoreChunks:
     def test_more_chunks(self):

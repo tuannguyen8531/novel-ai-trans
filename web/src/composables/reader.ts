@@ -1,7 +1,7 @@
 import { computed, onMounted, onUnmounted, ref, toValue, watch, type MaybeRefOrGetter } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '@/api/client'
-import type { ChapterSourceWarning, NovelChapterStatus } from '@/api/types'
+import type { ChapterPostCheck, NovelChapterStatus } from '@/api/types'
 import { useSettingsStore } from '@/composables/settings'
 
 export type ReaderLanguage = 'source' | 'vi' | 'en'
@@ -26,9 +26,9 @@ export function useReader(
   const showDeleteDialog = ref(false)
   const deleteLoading = ref(false)
   const showScrollToTop = ref(false)
-  const sourceWarning = ref<ChapterSourceWarning | null>(null)
-  const sourceWarningLoading = ref(false)
-  const sourceWarningError = ref<string | null>(null)
+  const postCheck = ref<ChapterPostCheck | null>(null)
+  const postCheckLoading = ref(false)
+  const postCheckError = ref<string | null>(null)
 
   const chapterNumbers = computed(() => {
     const available = new Set<number>()
@@ -100,21 +100,20 @@ export function useReader(
     }
   }
 
-  async function loadSourceWarning(number: number, mode: ReaderLanguage) {
-    sourceWarning.value = null
-    sourceWarningError.value = null
-    if (mode === 'source') return
-    sourceWarningLoading.value = true
+  async function loadPostCheck(number: number, target: 'vi' | 'en') {
+    postCheck.value = null
+    postCheckError.value = null
+    postCheckLoading.value = true
     try {
-      sourceWarning.value = await api.getChapterSourceWarning(
+      postCheck.value = await api.getChapterPostCheck(
         toValue(novel),
         number,
-        mode
+        target
       )
     } catch (err) {
-      sourceWarningError.value = (err as Error).message
+      postCheckError.value = (err as Error).message
     } finally {
-      sourceWarningLoading.value = false
+      postCheckLoading.value = false
     }
   }
 
@@ -129,7 +128,7 @@ export function useReader(
       const response = await api.getChapterContent(toValue(novel), number, view, target)
       content.value = response.content
       editContent.value = response.content
-      await loadSourceWarning(number, mode)
+      await loadPostCheck(number, mode === 'source' ? targetLanguage.value : mode)
     } catch (err) {
       error.value = (err as Error).message
     } finally {
@@ -153,7 +152,10 @@ export function useReader(
       content.value = response.content
       editContent.value = response.content
       viewMode.value = mode
-      await loadSourceWarning(toValue(chapter), mode)
+      await loadPostCheck(
+        toValue(chapter),
+        mode === 'source' ? targetLanguage.value : mode
+      )
     } catch (err) {
       error.value = (err as Error).message
     } finally {
@@ -187,7 +189,10 @@ export function useReader(
       content.value = response.content
       editContent.value = response.content
       editing.value = false
-      await loadSourceWarning(toValue(chapter), viewMode.value)
+      await loadPostCheck(
+        toValue(chapter),
+        viewMode.value === 'source' ? targetLanguage.value : viewMode.value
+      )
     } catch (err) {
       error.value = (err as Error).message
     } finally {
@@ -195,21 +200,21 @@ export function useReader(
     }
   }
 
-  async function reviewSourceWarning(ignored: boolean) {
-    if (viewMode.value === 'source') return
-    sourceWarningLoading.value = true
-    sourceWarningError.value = null
+  async function reviewPostCheckItem(key: string, ignored: boolean) {
+    postCheckLoading.value = true
+    postCheckError.value = null
     try {
-      sourceWarning.value = await api.reviewChapterSourceWarning(
+      postCheck.value = await api.reviewChapterPostCheck(
         toValue(novel),
         toValue(chapter),
-        viewMode.value,
+        viewMode.value === 'source' ? targetLanguage.value : viewMode.value,
+        key,
         ignored
       )
     } catch (err) {
-      sourceWarningError.value = (err as Error).message
+      postCheckError.value = (err as Error).message
     } finally {
-      sourceWarningLoading.value = false
+      postCheckLoading.value = false
     }
   }
 
@@ -291,9 +296,9 @@ export function useReader(
     showDeleteDialog,
     deleteLoading,
     showScrollToTop,
-    sourceWarning,
-    sourceWarningLoading,
-    sourceWarningError,
+    postCheck,
+    postCheckLoading,
+    postCheckError,
     currentIndex,
     previousChapter,
     nextChapter,
@@ -307,7 +312,7 @@ export function useReader(
     startEdit,
     cancelEdit,
     saveEdit,
-    reviewSourceWarning,
+    reviewPostCheckItem,
     confirmDelete,
     goTo,
     goBack,

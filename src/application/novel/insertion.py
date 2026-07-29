@@ -211,6 +211,7 @@ def insert_chapter(
     config: Any | None = None,
     progress_root: Path | None = None,
     report_root: Path | None = None,
+    rejected_root: Path | None = None,
     backup_root: Path | None = None,
     lock_dir: Path | None = None,
 ) -> InsertResult:
@@ -225,6 +226,7 @@ def insert_chapter(
     active_config = config or app_config.get_config()
     progress_root = progress_root or paths.PROGRESS_DIR
     report_root = report_root or paths.REPORT_DIR
+    rejected_root = rejected_root or paths.REJECTED_DIR
     backup_root = backup_root or paths.INSERT_BACKUP_DIR
     translated_root = Path(active_config.translated_dir or paths.DEFAULT_TRANSLATED_ROOT)
     novel_root = require_path(translated_root, request.novel)
@@ -258,8 +260,22 @@ def insert_chapter(
         )
         for target in SUPPORTED_TARGET_LANGUAGES
     ]
+    rejected_groups = [
+        insertion_storage.FileGroup(
+            f"rejected-{target}",
+            paths.translation_rejected_path(
+                active_config,
+                request.novel,
+                request.number,
+                target,
+                rejected_root=rejected_root,
+            ).parent,
+            "json",
+        )
+        for target in SUPPORTED_TARGET_LANGUAGES
+    ]
     source_group = insertion_storage.FileGroup("input", input_dir, "txt")
-    groups = [source_group, *output_groups, *report_groups]
+    groups = [source_group, *output_groups, *report_groups, *rejected_groups]
 
     with novel_lock(request.novel, lock_dir=lock_dir):
         _emit(
@@ -270,7 +286,7 @@ def insert_chapter(
             message=f"Preparing to insert chapter {request.number}...",
         )
         state_files = _prepare_state_files(request, active_config, progress_root=progress_root)
-        for group in report_groups:
+        for group in [*report_groups, *rejected_groups]:
             for _, report_path in insertion_storage.numbered_files(group, start=request.number):
                 _load_json(report_path, label="translation report")
 
@@ -315,7 +331,7 @@ def insert_chapter(
                 total=5,
                 message="Shifting translation reports...",
             )
-            for group in report_groups:
+            for group in [*report_groups, *rejected_groups]:
                 shifted = insertion_storage.shift_group(group, request.number)
                 insertion_storage.write_shifted_reports(shifted)
                 shifted_reports += len(shifted)

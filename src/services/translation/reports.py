@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -20,8 +21,22 @@ def issue_is_ignored(report: dict[str, Any], code: str, fingerprint: str) -> boo
     if not isinstance(ignored, list):
         return False
     return any(
-        isinstance(item, dict) and item.get("code") == code and item.get("content_hash") == fingerprint for item in ignored
+        isinstance(item, dict) and "key" not in item and item.get("code") == code and item.get("content_hash") == fingerprint
+        for item in ignored
     )
+
+
+def review_key_is_ignored(report: dict[str, Any], key: str, fingerprint: str) -> bool:
+    """Return whether one granular post-check item was reviewed."""
+    ignored = report.get("ignored_post_checks")
+    if not isinstance(ignored, list):
+        return False
+    return any(isinstance(item, dict) and item.get("key") == key and item.get("content_hash") == fingerprint for item in ignored)
+
+
+def post_check_review_key(code: str, detail: str) -> str:
+    """Build a stable key for one granular post-check item."""
+    return f"{code}:{content_hash(detail)[:16]}"
 
 
 class ReportStore:
@@ -33,6 +48,11 @@ class ReportStore:
             json.dumps(report, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+
+    def delete(self, path: Path) -> None:
+        """Delete one report when it exists."""
+        with suppress(OSError):
+            path.unlink(missing_ok=True)
 
     def load(self, path: Path) -> dict[str, Any]:
         """Load a report defensively."""
@@ -94,6 +114,45 @@ class ReportStore:
                 {
                     "code": code,
                     "fragments": fragments,
+                    "content_hash": content_hash(content),
+                    "reason": "manual_review",
+                }
+            )
+        report.update(
+            {
+                "chapter": chapter,
+                "target_language": target_language,
+                "ignored_post_checks": retained,
+            }
+        )
+        self.save(path, report)
+
+    def set_review_ignored(
+        self,
+        path: Path,
+        *,
+        chapter: int,
+        target_language: str,
+        key: str,
+        code: str,
+        detail: str,
+        content: str,
+        ignored: bool,
+    ) -> None:
+        """Set or clear a granular review decision for exact content."""
+        report = self.load(path)
+        decisions = report.get("ignored_post_checks")
+        retained = (
+            [item for item in decisions if isinstance(item, dict) and item.get("key") != key]
+            if isinstance(decisions, list)
+            else []
+        )
+        if ignored:
+            retained.append(
+                {
+                    "key": key,
+                    "code": code,
+                    "detail": detail,
                     "content_hash": content_hash(content),
                     "reason": "manual_review",
                 }

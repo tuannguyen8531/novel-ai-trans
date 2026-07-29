@@ -6,6 +6,7 @@ import time
 from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from threading import Event
 from typing import Protocol, cast
@@ -21,7 +22,7 @@ from src.application.translation.selection import select_chapters
 from src.application.translation.validation import apply_request_overrides, validate_provider
 from src.config import Config
 from src.domain.chunking import estimate_token_count
-from src.graph.builder import build_graph
+from src.graph.builder import TranslationQualityError, build_graph
 from src.services.logger import log_error
 from src.services.metadata import load_source_language
 from src.services.translation.checkpoints import CheckpointStore
@@ -45,6 +46,7 @@ class TranslationWorkflow:
     source_language_loader: Callable[[str], str]
     progress_root: Path | None = None
     report_root: Path | None = None
+    rejected_root: Path | None = None
     clock: Callable[[], float] = time.time
 
     def run(
@@ -188,29 +190,66 @@ class TranslationWorkflow:
             except OperationCancelledError:
                 cancelled = True
                 break
-            except Exception as error:  # noqa: BLE001 - record and continue
-                failures.append(chapter_number)
-                attempted.append(chapter_number)
-                checkpoint.setdefault("failed", []).append(chapter_number)
-                self.checkpoints.save(checkpoint_path, checkpoint)
-                log_error(
-                    f"Translation failed for chapter {chapter_number}",
-                    error,
-                    chapter=chapter_number,
-                    novel=novel,
+            except TranslationQualityError as error:
+                rejected_path = paths.translation_rejected_path(
+                    self.config,
+                    novel,
+                    chapter_number,
+                    target,
+                    rejected_root=self.rejected_root,
                 )
-                post_count = success_count + len(failures)
-                self._emit(
+                self.reports.save(
+                    rejected_path,
+                    {
+                        "chapter": chapter_number,
+                        "target_language": target,
+                        "created_at": datetime.fromtimestamp(self.clock(), UTC).isoformat(),
+                        "issues": [
+                            {
+                                "key": f"rejected:{index}:{code}",
+                                "code": code,
+                                "severity": "error",
+                                "message": error.feedback,
+                            }
+                            for index, code in enumerate(error.issue_codes)
+                        ],
+                        "feedback": error.feedback,
+                        "retry_count": error.retry_count,
+                        "failed_chunk_index": error.failed_chunk_index,
+                        "total_chunks": error.total_chunks,
+                        "partial": error.failed_chunk_index < error.total_chunks - 1,
+                        "candidate_translation": error.candidate_translation,
+                        "previous_output_exists": chapter_number in self.storage.translated_numbers(output_dir),
+                    },
+                )
+                self._record_failure(
+                    checkpoint,
+                    checkpoint_path,
+                    failures,
+                    attempted,
+                    chapter_number,
+                    error,
                     progress_callback,
-                    ProgressEvent(
-                        kind="chapter_failed",
-                        novel=novel,
-                        current=post_count,
-                        total=total,
-                        chapter=chapter_number,
-                        pct=round(post_count / total * 100, 2),
-                        extra={"error": str(error)},
-                    ),
+                    success_count,
+                    total,
+                    novel,
+                )
+                if cancel_event is not None and cancel_event.is_set():
+                    cancelled = True
+                    break
+                continue
+            except Exception as error:  # noqa: BLE001 - record and continue
+                self._record_failure(
+                    checkpoint,
+                    checkpoint_path,
+                    failures,
+                    attempted,
+                    chapter_number,
+                    error,
+                    progress_callback,
+                    success_count,
+                    total,
+                    novel,
                 )
                 if cancel_event is not None and cancel_event.is_set():
                     cancelled = True
@@ -220,6 +259,15 @@ class TranslationWorkflow:
             attempted.append(chapter_number)
             if ok:
                 success_count += 1
+                self.reports.delete(
+                    paths.translation_rejected_path(
+                        self.config,
+                        novel,
+                        chapter_number,
+                        target,
+                        rejected_root=self.rejected_root,
+                    )
+                )
                 checkpoint.setdefault("completed", []).append(chapter_number)
                 checkpoint["failed"] = [chapter for chapter in checkpoint.get("failed", []) if chapter != chapter_number]
             else:
@@ -275,6 +323,43 @@ class TranslationWorkflow:
             cancelled=cancelled,
         )
 
+    def _record_failure(
+        self,
+        checkpoint: dict,
+        checkpoint_path: Path,
+        failures: list[int],
+        attempted: list[int],
+        chapter_number: int,
+        error: Exception,
+        progress_callback: Callable[[ProgressEvent], None] | None,
+        success_count: int,
+        total: int,
+        novel: str,
+    ) -> None:
+        failures.append(chapter_number)
+        attempted.append(chapter_number)
+        checkpoint.setdefault("failed", []).append(chapter_number)
+        self.checkpoints.save(checkpoint_path, checkpoint)
+        log_error(
+            f"Translation failed for chapter {chapter_number}",
+            error,
+            chapter=chapter_number,
+            novel=novel,
+        )
+        post_count = success_count + len(failures)
+        self._emit(
+            progress_callback,
+            ProgressEvent(
+                kind="chapter_failed",
+                novel=novel,
+                current=post_count,
+                total=total,
+                chapter=chapter_number,
+                pct=round(post_count / total * 100, 2),
+                extra={"error": str(error)},
+            ),
+        )
+
     def _source_size(self, chapter_path: Path) -> tuple[int, int, str]:
         try:
             source = self.storage.read(chapter_path)
@@ -318,6 +403,7 @@ def run_translation(
     progress_callback: Callable[[ProgressEvent], None] | None = None,
     cancel_event: Event | None = None,
     report_root: Path | None = None,
+    rejected_root: Path | None = None,
 ) -> TranslationResult:
     """Construct default collaborators and run one locked translation batch."""
     with novel_lock(request.novel):
@@ -329,6 +415,7 @@ def run_translation(
             graph_factory=cast(GraphFactory, build_graph),
             source_language_loader=load_source_language,
             report_root=report_root,
+            rejected_root=rejected_root,
         )
         return workflow.run(
             request,

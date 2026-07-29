@@ -34,6 +34,7 @@ def _run_insert(
         config=Config(translated_dir=str(translated)),
         progress_root=tmp_path / "runtime" / "progress",
         report_root=tmp_path / "runtime" / "reports",
+        rejected_root=tmp_path / "runtime" / "rejected",
         backup_root=tmp_path / "runtime" / "insert-backups",
         lock_dir=tmp_path / "runtime" / "locks",
     )
@@ -52,6 +53,10 @@ def test_insert_shifts_chapter_indexed_files_and_state(tmp_path: Path) -> None:
     _write_json(runtime / "reports" / "demo" / "chapter_002.json", {"chapter": 2, "target_language": "vi"})
     _write_json(runtime / "reports" / "demo" / "chapter_003.json", {"chapter": 3, "target_language": "vi"})
     _write_json(runtime / "reports" / "en" / "demo" / "chapter_003.json", {"chapter": 3, "target_language": "en"})
+    _write_json(
+        runtime / "rejected" / "vi" / "demo" / "chapter_003.json",
+        {"chapter": 3, "target_language": "vi"},
+    )
     _write_json(runtime / "progress" / "demo.json", {"completed": [1, 2, 3], "failed": [4]})
     _write_json(runtime / "progress" / "en" / "demo.json", {"completed": [3], "failed": []})
     _write_json(
@@ -93,6 +98,8 @@ def test_insert_shifts_chapter_indexed_files_and_state(tmp_path: Path) -> None:
     en_report = json.loads((runtime / "reports" / "en" / "demo" / "chapter_004.json").read_text(encoding="utf-8"))
     assert vi_report["chapter"] == 3
     assert en_report["chapter"] == 4
+    rejected = json.loads((runtime / "rejected" / "vi" / "demo" / "chapter_004.json").read_text(encoding="utf-8"))
+    assert rejected["chapter"] == 4
     assert json.loads((runtime / "progress" / "demo.json").read_text(encoding="utf-8")) == {
         "completed": [1, 3, 4],
         "failed": [5],
@@ -111,7 +118,7 @@ def test_insert_shifts_chapter_indexed_files_and_state(tmp_path: Path) -> None:
     assert glossary["chapter_summaries"] == {"1": "one", "3": "two", "4": "three"}
     assert result.shifted_sources == 2
     assert result.shifted_translations == 3
-    assert result.shifted_reports == 3
+    assert result.shifted_reports == 4
     assert result.current_last_chapter == 4
     assert result.repack_required is True
     backup_manifest = runtime / "insert-backups" / "demo" / "insert-test" / "manifest.json"
