@@ -30,7 +30,7 @@ def _count_dialogue_lines(text: str) -> int:
     return sum(1 for line in text.splitlines() if any(mark in line for mark in QUOTE_MARKS))
 
 
-def _source_runs(text: str) -> list[str]:
+def source_language_fragments(text: str) -> list[str]:
     """Return source-language runs still present in text, ignoring explained terminology in brackets."""
     cleaned = EXPLAINED_TERM_RE.sub("", text)
     return SOURCE_RUN_RE.findall(cleaned)
@@ -62,7 +62,7 @@ def post_check_translation(
             )
         )
 
-    source_runs = _source_runs(translation)
+    source_runs = source_language_fragments(translation)
     source_char_count = sum(len(run) for run in source_runs)
     if source_char_count:
         unique_runs = list(dict.fromkeys(source_runs))

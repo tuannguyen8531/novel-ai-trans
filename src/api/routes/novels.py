@@ -15,6 +15,8 @@ from src.api.schemas import (
     ArtifactInfoResponse,
     ChapterContentPayload,
     ChapterContentResponse,
+    ChapterSourceWarningResponse,
+    ChapterWarningReviewPayload,
     CreateNovelPayload,
     InsertChapterPayload,
     JobStartResponse,
@@ -201,6 +203,50 @@ def put_chapter_content(
         report_root=get_state().jobs_dir.parent / "reports",
     )
     return ChapterContentResponse(**asdict(content))
+
+
+@router.get(
+    "/novels/{name}/chapters/{number}/warnings/source",
+    response_model=ChapterSourceWarningResponse,
+)
+def get_chapter_source_warning(
+    name: str,
+    number: int,
+    _: AuthenticatedPrincipal,
+    target: Annotated[Literal["vi", "en"] | None, Query()] = None,
+) -> ChapterSourceWarningResponse:
+    config = app_config.get_config()
+    status = chapters.source_warning_status(
+        identity.resolve_root(config.translated_dir),
+        name,
+        number,
+        target or config.target_language,
+        report_root=get_state().jobs_dir.parent / "reports",
+    )
+    return ChapterSourceWarningResponse(**asdict(status))
+
+
+@router.put(
+    "/novels/{name}/chapters/{number}/warnings/source",
+    response_model=ChapterSourceWarningResponse,
+)
+def review_chapter_source_warning(
+    name: str,
+    number: int,
+    payload: ChapterWarningReviewPayload,
+    _: AuthenticatedPrincipal,
+    target: Annotated[Literal["vi", "en"] | None, Query()] = None,
+) -> ChapterSourceWarningResponse:
+    config = app_config.get_config()
+    status = chapters.review_source_warning(
+        identity.resolve_root(config.translated_dir),
+        name,
+        number,
+        target or config.target_language,
+        ignored=payload.ignored,
+        report_root=get_state().jobs_dir.parent / "reports",
+    )
+    return ChapterSourceWarningResponse(**asdict(status))
 
 
 @router.delete("/novels/{name}/chapters/{number}", status_code=204)

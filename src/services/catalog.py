@@ -8,6 +8,7 @@ import shutil
 from pathlib import Path
 
 from src import paths
+from src.services.translation.reports import content_hash, issue_is_ignored
 
 _REPORT_FILE_RE = re.compile(r"^chapter_(\d+)\.json$")
 _SOURCE_WARNING_CODE = "contains_source_language_chars"
@@ -45,7 +46,7 @@ def load_progress(path: Path) -> dict[str, list[int]]:
     }
 
 
-def load_source_warning_chapters(directory: Path) -> list[int]:
+def load_source_warning_chapters(directory: Path, output_directory: Path | None = None) -> list[int]:
     """Return chapters whose accepted quality report contains source characters."""
     if not directory.exists():
         return []
@@ -63,20 +64,30 @@ def load_source_warning_chapters(directory: Path) -> list[int]:
             continue
         manual_issues = data.get("manual_post_check_issues")
         if isinstance(manual_issues, list):
-            if _SOURCE_WARNING_CODE in manual_issues:
-                chapters.add(int(match.group(1)))
+            has_warning = _SOURCE_WARNING_CODE in manual_issues
+        else:
+            chunks = data.get("chunks")
+            has_warning = isinstance(chunks, list) and any(
+                isinstance(chunk, dict)
+                and isinstance(chunk.get("post_check_issues"), list)
+                and _SOURCE_WARNING_CODE in chunk["post_check_issues"]
+                for chunk in chunks
+            )
+        if not has_warning:
             continue
-        chunks = data.get("chunks")
-        if not isinstance(chunks, list):
-            continue
-        has_warning = any(
-            isinstance(chunk, dict)
-            and isinstance(chunk.get("post_check_issues"), list)
-            and _SOURCE_WARNING_CODE in chunk["post_check_issues"]
-            for chunk in chunks
-        )
-        if has_warning:
-            chapters.add(int(match.group(1)))
+
+        chapter = int(match.group(1))
+        if output_directory is not None:
+            output_path = output_directory / f"chapter_{chapter:03d}.txt"
+            if not output_path.exists():
+                output_path = output_directory / f"chapter_{chapter}.txt"
+            try:
+                fingerprint = content_hash(output_path.read_bytes())
+            except OSError:
+                fingerprint = ""
+            if fingerprint and issue_is_ignored(data, _SOURCE_WARNING_CODE, fingerprint):
+                continue
+        chapters.add(chapter)
     return sorted(chapters)
 
 

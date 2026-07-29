@@ -247,7 +247,8 @@ const deleteMessage = computed(() => {
                   title="Chapters that still contain source-language characters"
                   @click="showWarningChapters(novel)"
                 >
-                  {{ translatedProgress(novel)?.warnings }} source
+                  {{ translatedProgress(novel)?.warnings }}
+                  {{ translatedProgress(novel)?.warnings === 1 ? 'warning' : 'warnings' }}
                 </button>
                 <span
                   v-if="(translatedProgress(novel)?.failed ?? 0) === 0 && (translatedProgress(novel)?.warnings ?? 0) === 0"

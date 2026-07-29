@@ -1,6 +1,7 @@
 import type {
   ArtifactInfo,
   ChapterContentResponse,
+  ChapterSourceWarning,
   ConfigSummary,
   DraftDetail,
   DraftSummary,
@@ -163,6 +164,24 @@ export const api = {
       body: JSON.stringify({ content })
     })
   },
+  getChapterSourceWarning: (name: string, chapter: number, target: string) =>
+    request<ChapterSourceWarning>(
+      `/api/novels/${encodeURIComponent(name)}/chapters/${chapter}/warnings/source?target=${encodeURIComponent(target)}`
+    ),
+  reviewChapterSourceWarning: (
+    name: string,
+    chapter: number,
+    target: string,
+    ignored: boolean
+  ) =>
+    request<ChapterSourceWarning>(
+      `/api/novels/${encodeURIComponent(name)}/chapters/${chapter}/warnings/source?target=${encodeURIComponent(target)}`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ignored })
+      }
+    ),
   insertChapter: (name: string, number: number, content: string) =>
     request<{ job_id: string }>(`/api/novels/${encodeURIComponent(name)}/chapters/insert`, {
       method: 'POST',

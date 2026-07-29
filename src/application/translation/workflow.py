@@ -317,6 +317,7 @@ def run_translation(
     *,
     progress_callback: Callable[[ProgressEvent], None] | None = None,
     cancel_event: Event | None = None,
+    report_root: Path | None = None,
 ) -> TranslationResult:
     """Construct default collaborators and run one locked translation batch."""
     with novel_lock(request.novel):
@@ -327,6 +328,7 @@ def run_translation(
             reports=ReportStore(),
             graph_factory=cast(GraphFactory, build_graph),
             source_language_loader=load_source_language,
+            report_root=report_root,
         )
         return workflow.run(
             request,

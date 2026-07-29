@@ -135,7 +135,11 @@ def summarize(
         on_disk = chapter_service.numbers(paths.novel_output_dir_from_root(novel_root, target))
         completed = on_disk | set(saved.get("completed", []))
         failed = set(saved.get("failed", []))
-        warnings = catalog_repository.load_source_warning_chapters(_report_directory(name, target, reports_dir))
+        output_dir = paths.novel_output_dir_from_root(novel_root, target)
+        warnings = catalog_repository.load_source_warning_chapters(
+            _report_directory(name, target, reports_dir),
+            output_dir,
+        )
         targets.append(
             Progress(
                 target=target,
@@ -199,7 +203,8 @@ def progress(
         )
     )
     saved["warnings"] = catalog_repository.load_source_warning_chapters(
-        _report_directory(name, resolved_target, report_root or REPORT_DIR)
+        _report_directory(name, resolved_target, report_root or REPORT_DIR),
+        paths.novel_output_dir_from_root(novel_root, resolved_target),
     )
     return saved
 

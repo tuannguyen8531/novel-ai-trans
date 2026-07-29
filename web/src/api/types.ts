@@ -114,6 +114,13 @@ export interface ChapterContentResponse {
   content: string
 }
 
+export interface ChapterSourceWarning {
+  code: 'contains_source_language_chars'
+  present: boolean
+  ignored: boolean
+  fragments: string[]
+}
+
 export interface JobError {
   code: string
   message: string

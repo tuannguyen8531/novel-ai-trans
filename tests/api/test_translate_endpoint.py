@@ -6,6 +6,7 @@ import os
 import tempfile
 import time
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -86,3 +87,30 @@ def test_translate_accepts_missing_fields(client):
     """Frontend may POST only the novel name; all overrides are optional."""
     response = client.post("/api/translate", json={"novel": "demo"})
     assert response.status_code == 202, response.text
+
+
+def test_translate_writes_reports_next_to_custom_jobs_directory(client):
+    result = SimpleNamespace(
+        novel="demo",
+        total=1,
+        success=1,
+        failed=0,
+        skipped=False,
+        cancelled=False,
+        chapters_attempted=[1],
+        failures=[],
+        started_at=time.time(),
+    )
+    with patch("src.api.routes.translate.run_translation", return_value=result) as translate:
+        response = client.post(
+            "/api/translate",
+            json={"novel": "demo", "translate_metadata": False},
+        )
+        assert response.status_code == 202, response.text
+
+        deadline = time.time() + 2
+        while time.time() < deadline and not translate.called:
+            time.sleep(0.01)
+
+        assert translate.called
+        assert translate.call_args.kwargs["report_root"] == client.app.state.app_state.jobs_dir.parent / "reports"

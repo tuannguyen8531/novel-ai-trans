@@ -15,12 +15,14 @@ withDefaults(defineProps<{
   targetLanguage: 'vi' | 'en'
   targetLanguageLabel: string
   hasTargetTranslation: boolean
+  hasSourceWarning?: boolean
   previousChapter: number | null
   nextChapter: number | null
   currentIndex: number
   chapterCount: number
 }>(), {
-  showControls: true
+  showControls: true,
+  hasSourceWarning: false
 })
 
 const emit = defineEmits<{
@@ -28,6 +30,7 @@ const emit = defineEmits<{
   changeView: [mode: ReaderLanguage]
   edit: []
   delete: []
+  reviewWarning: []
   save: []
   cancel: []
   navigate: [chapter: number]
@@ -40,9 +43,10 @@ function closeMenu() {
   showMenu.value = false
 }
 
-function selectAction(action: 'edit' | 'delete') {
+function selectAction(action: 'edit' | 'delete' | 'review-warning') {
   showMenu.value = false
   if (action === 'edit') emit('edit')
+  else if (action === 'review-warning') emit('reviewWarning')
   else emit('delete')
 }
 
@@ -88,6 +92,12 @@ onUnmounted(() => window.removeEventListener('click', closeMenu))
           >⋮</button>
           <div v-if="showMenu" class="dropdown-menu">
             <button type="button" class="menu-item" @click="selectAction('edit')">Edit</button>
+            <button
+              v-if="viewMode !== 'source' && hasSourceWarning"
+              type="button"
+              class="menu-item"
+              @click="selectAction('review-warning')"
+            >Review</button>
             <button
               v-if="viewMode === 'source'"
               type="button"

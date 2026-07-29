@@ -173,6 +173,34 @@ def test_manual_translation_edit_refreshes_source_warning(client):
     progress_response = test_client.get("/api/novels/demo/translation-progress?target=vi")
     assert progress_response.json()["warnings"] == [1]
 
+    warning_response = test_client.get("/api/novels/demo/chapters/1/warnings/source?target=vi")
+    assert warning_response.json() == {
+        "code": "contains_source_language_chars",
+        "present": True,
+        "ignored": False,
+        "fragments": ["囡"],
+    }
+
+    review_response = test_client.put(
+        "/api/novels/demo/chapters/1/warnings/source?target=vi",
+        json={"ignored": True},
+    )
+    assert review_response.status_code == 200
+    assert review_response.json()["ignored"] is True
+    progress_response = test_client.get("/api/novels/demo/translation-progress?target=vi")
+    assert progress_response.json()["warnings"] == []
+    list_response = test_client.get("/api/novels")
+    targets = {item["target"]: item for item in list_response.json()[0]["targets"]}
+    assert targets["vi"]["warnings"] == 0
+
+    review_response = test_client.put(
+        "/api/novels/demo/chapters/1/warnings/source?target=vi",
+        json={"ignored": False},
+    )
+    assert review_response.json()["ignored"] is False
+    progress_response = test_client.get("/api/novels/demo/translation-progress?target=vi")
+    assert progress_response.json()["warnings"] == [1]
+
     response = test_client.put(
         "/api/novels/demo/chapters/1?view=translation&target=vi",
         json={"content": "Cô bé đã đến."},

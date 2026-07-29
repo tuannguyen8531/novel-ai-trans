@@ -192,6 +192,19 @@ class ChapterContentPayload(BaseModel):
     content: str
 
 
+class ChapterSourceWarningResponse(BaseModel):
+    code: Literal["contains_source_language_chars"]
+    present: bool
+    ignored: bool
+    fragments: list[str]
+
+
+class ChapterWarningReviewPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ignored: bool
+
+
 class InsertChapterPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, toRef } from 'vue'
+import { computed, ref, toRef } from 'vue'
 import ChapterEditor from '@/components/ChapterEditor.vue'
 import ChapterToc from '@/components/ChapterToc.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
@@ -22,6 +22,9 @@ const {
   showDeleteDialog,
   deleteLoading,
   showScrollToTop,
+  sourceWarning,
+  sourceWarningLoading,
+  sourceWarningError,
   currentIndex,
   previousChapter,
   nextChapter,
@@ -35,6 +38,7 @@ const {
   startEdit,
   cancelEdit,
   saveEdit,
+  reviewSourceWarning,
   confirmDelete,
   goTo,
   goBack,
@@ -42,6 +46,21 @@ const {
 } = useReader(toRef(props, 'name'), toRef(props, 'chapter'))
 
 const showToc = ref(false)
+const showWarningDialog = ref(false)
+const warningReviewMessage = computed(() => {
+  if (!sourceWarning.value) return ''
+  const fragments = sourceWarning.value.fragments.join(', ')
+  if (sourceWarning.value.ignored) {
+    return `Source fragments: ${fragments}\n\nThis warning is currently ignored for this exact chapter content. Restore it to include the chapter in the warning list again.`
+  }
+  return `Source fragments: ${fragments}\n\nIgnore this warning only when these fragments are intentionally preserved, such as a kaomoji. The decision will expire if the chapter content changes.`
+})
+
+async function confirmWarningReview() {
+  if (!sourceWarning.value) return
+  await reviewSourceWarning(!sourceWarning.value.ignored)
+  showWarningDialog.value = false
+}
 </script>
 
 <template>
@@ -58,6 +77,7 @@ const showToc = ref(false)
       :target-language="targetLanguage"
       :target-language-label="targetLanguageLabel"
       :has-target-translation="hasTargetTranslation"
+      :has-source-warning="Boolean(sourceWarning?.present)"
       :previous-chapter="previousChapter"
       :next-chapter="nextChapter"
       :current-index="currentIndex"
@@ -65,6 +85,7 @@ const showToc = ref(false)
       @back="goBack"
       @change-view="changeView"
       @edit="startEdit"
+      @review-warning="showWarningDialog = true"
       @delete="showDeleteDialog = true"
       @save="saveEdit"
       @cancel="cancelEdit"
@@ -73,6 +94,7 @@ const showToc = ref(false)
     />
 
     <p v-if="error" class="error card">{{ error }}</p>
+    <p v-if="sourceWarningError" class="error card">{{ sourceWarningError }}</p>
 
     <div class="chapter-body card">
       <ReaderContent
@@ -114,6 +136,16 @@ const showToc = ref(false)
       :target-language="targetLanguage"
       :target-language-label="targetLanguageLabel"
       @select="goTo"
+    />
+
+    <ConfirmDialog
+      :show="showWarningDialog"
+      title="Review warning"
+      :message="warningReviewMessage"
+      :confirm-label="sourceWarning?.ignored ? 'Restore warning' : 'Ignore warning'"
+      :loading="sourceWarningLoading"
+      @confirm="confirmWarningReview"
+      @cancel="showWarningDialog = false"
     />
 
     <ConfirmDialog

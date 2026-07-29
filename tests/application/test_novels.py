@@ -190,6 +190,63 @@ def test_write_translation_refreshes_manual_source_warning(tmp_path: Path) -> No
     assert json.loads(report_path.read_text(encoding="utf-8"))["manual_post_check_issues"] == []
 
 
+def test_source_warning_review_is_tied_to_exact_translation(tmp_path: Path) -> None:
+    root = tmp_path / "translated"
+    novel_root = root / "demo"
+    _write_chapter(novel_root / "input", 7, "囡囡来了")
+    report_root = tmp_path / "reports"
+    translation = "Cô bé 囡 đến rồi."
+    chapters.write_chapter(
+        root,
+        "demo",
+        7,
+        translation,
+        view="translation",
+        target="vi",
+        report_root=report_root,
+    )
+
+    status = chapters.source_warning_status(root, "demo", 7, "vi", report_root=report_root)
+    assert status.present is True
+    assert status.ignored is False
+    assert status.fragments == ["囡"]
+
+    status = chapters.review_source_warning(
+        root,
+        "demo",
+        7,
+        "vi",
+        ignored=True,
+        report_root=report_root,
+    )
+    assert status.ignored is True
+    assert catalog.progress(root, "demo", "vi", report_root=report_root)["warnings"] == []
+
+    chapters.write_chapter(
+        root,
+        "demo",
+        7,
+        translation,
+        view="translation",
+        target="vi",
+        report_root=report_root,
+    )
+    assert catalog.progress(root, "demo", "vi", report_root=report_root)["warnings"] == []
+
+    chapters.write_chapter(
+        root,
+        "demo",
+        7,
+        "Cô bé 囡 đang đến.",
+        view="translation",
+        target="vi",
+        report_root=report_root,
+    )
+    status = chapters.source_warning_status(root, "demo", 7, "vi", report_root=report_root)
+    assert status.ignored is False
+    assert catalog.progress(root, "demo", "vi", report_root=report_root)["warnings"] == [7]
+
+
 def test_write_chapter_preserves_legacy_unpadded_translation_filename(tmp_path: Path) -> None:
     root = tmp_path / "translated"
     legacy_path = root / "demo" / "output" / "chapter_7.txt"

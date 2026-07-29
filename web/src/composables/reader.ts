@@ -1,7 +1,7 @@
 import { computed, onMounted, onUnmounted, ref, toValue, watch, type MaybeRefOrGetter } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '@/api/client'
-import type { NovelChapterStatus } from '@/api/types'
+import type { ChapterSourceWarning, NovelChapterStatus } from '@/api/types'
 import { useSettingsStore } from '@/composables/settings'
 
 export type ReaderLanguage = 'source' | 'vi' | 'en'
@@ -26,6 +26,9 @@ export function useReader(
   const showDeleteDialog = ref(false)
   const deleteLoading = ref(false)
   const showScrollToTop = ref(false)
+  const sourceWarning = ref<ChapterSourceWarning | null>(null)
+  const sourceWarningLoading = ref(false)
+  const sourceWarningError = ref<string | null>(null)
 
   const chapterNumbers = computed(() => {
     const available = new Set<number>()
@@ -97,6 +100,24 @@ export function useReader(
     }
   }
 
+  async function loadSourceWarning(number: number, mode: ReaderLanguage) {
+    sourceWarning.value = null
+    sourceWarningError.value = null
+    if (mode === 'source') return
+    sourceWarningLoading.value = true
+    try {
+      sourceWarning.value = await api.getChapterSourceWarning(
+        toValue(novel),
+        number,
+        mode
+      )
+    } catch (err) {
+      sourceWarningError.value = (err as Error).message
+    } finally {
+      sourceWarningLoading.value = false
+    }
+  }
+
   async function loadContent(number: number, mode: ReaderLanguage = 'source') {
     loading.value = true
     error.value = null
@@ -108,6 +129,7 @@ export function useReader(
       const response = await api.getChapterContent(toValue(novel), number, view, target)
       content.value = response.content
       editContent.value = response.content
+      await loadSourceWarning(number, mode)
     } catch (err) {
       error.value = (err as Error).message
     } finally {
@@ -131,6 +153,7 @@ export function useReader(
       content.value = response.content
       editContent.value = response.content
       viewMode.value = mode
+      await loadSourceWarning(toValue(chapter), mode)
     } catch (err) {
       error.value = (err as Error).message
     } finally {
@@ -164,10 +187,29 @@ export function useReader(
       content.value = response.content
       editContent.value = response.content
       editing.value = false
+      await loadSourceWarning(toValue(chapter), viewMode.value)
     } catch (err) {
       error.value = (err as Error).message
     } finally {
       saving.value = false
+    }
+  }
+
+  async function reviewSourceWarning(ignored: boolean) {
+    if (viewMode.value === 'source') return
+    sourceWarningLoading.value = true
+    sourceWarningError.value = null
+    try {
+      sourceWarning.value = await api.reviewChapterSourceWarning(
+        toValue(novel),
+        toValue(chapter),
+        viewMode.value,
+        ignored
+      )
+    } catch (err) {
+      sourceWarningError.value = (err as Error).message
+    } finally {
+      sourceWarningLoading.value = false
     }
   }
 
@@ -249,6 +291,9 @@ export function useReader(
     showDeleteDialog,
     deleteLoading,
     showScrollToTop,
+    sourceWarning,
+    sourceWarningLoading,
+    sourceWarningError,
     currentIndex,
     previousChapter,
     nextChapter,
@@ -262,6 +307,7 @@ export function useReader(
     startEdit,
     cancelEdit,
     saveEdit,
+    reviewSourceWarning,
     confirmDelete,
     goTo,
     goBack,

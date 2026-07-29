@@ -8,12 +8,12 @@ from typing import Literal
 
 from src import paths
 from src.application import config as app_config
-from src.application.errors import ResourceNotFoundError
+from src.application.errors import ApplicationValidationError, ResourceNotFoundError
 from src.application.novel.identity import require_path
 from src.domain.language import SUPPORTED_TARGET_LANGUAGES, normalize_target_language
-from src.domain.quality import post_check_translation
+from src.domain.quality import post_check_translation, source_language_fragments
 from src.services import chapters as chapter_service
-from src.services.translation.reports import ReportStore
+from src.services.translation.reports import ReportStore, content_hash, issue_is_ignored
 
 _SOURCE_WARNING_CODE = "contains_source_language_chars"
 
@@ -35,6 +35,14 @@ class Content:
     view: str
     target: str | None
     content: str
+
+
+@dataclass(frozen=True)
+class SourceWarning:
+    code: str
+    present: bool
+    ignored: bool
+    fragments: list[str]
 
 
 def list_chapters(root: Path, name: str) -> list[Chapter]:
@@ -124,8 +132,100 @@ def write_chapter(
             chapter=number,
             target_language=normalized_target,
             issue_codes=issue_codes,
+            content=content,
         )
     return Content(name, number, view, normalized_target, content)
+
+
+def source_warning_status(
+    root: Path,
+    name: str,
+    number: int,
+    target: str,
+    *,
+    report_root: Path | None = None,
+) -> SourceWarning:
+    """Return the source-character warning and review state for one translation."""
+    normalized_target = normalize_target_language(target)
+    translation = read_chapter(
+        root,
+        name,
+        number,
+        view="translation",
+        target=normalized_target,
+    ).content
+    source_fragments = source_language_fragments(translation)
+    fragments = list(dict.fromkeys(fragment[:20] for fragment in source_fragments))[:10]
+    report_path = paths.translation_report_path(
+        app_config.get_config(),
+        name,
+        number,
+        normalized_target,
+        report_root=report_root,
+    )
+    report = ReportStore().load(report_path)
+    ignored = bool(source_fragments) and issue_is_ignored(
+        report,
+        _SOURCE_WARNING_CODE,
+        content_hash(translation),
+    )
+    return SourceWarning(
+        code=_SOURCE_WARNING_CODE,
+        present=bool(source_fragments),
+        ignored=ignored,
+        fragments=fragments,
+    )
+
+
+def review_source_warning(
+    root: Path,
+    name: str,
+    number: int,
+    target: str,
+    *,
+    ignored: bool,
+    report_root: Path | None = None,
+) -> SourceWarning:
+    """Set the manual review decision for the current translation."""
+    normalized_target = normalize_target_language(target)
+    status = source_warning_status(
+        root,
+        name,
+        number,
+        normalized_target,
+        report_root=report_root,
+    )
+    if ignored and not status.present:
+        raise ApplicationValidationError("The chapter has no source-character warning to ignore.")
+    translation = read_chapter(
+        root,
+        name,
+        number,
+        view="translation",
+        target=normalized_target,
+    ).content
+    ReportStore().set_issue_ignored(
+        paths.translation_report_path(
+            app_config.get_config(),
+            name,
+            number,
+            normalized_target,
+            report_root=report_root,
+        ),
+        chapter=number,
+        target_language=normalized_target,
+        code=_SOURCE_WARNING_CODE,
+        fragments=status.fragments,
+        content=translation,
+        ignored=ignored,
+    )
+    return source_warning_status(
+        root,
+        name,
+        number,
+        normalized_target,
+        report_root=report_root,
+    )
 
 
 def delete_chapter(root: Path, name: str, number: int) -> None:
@@ -136,4 +236,14 @@ def delete_chapter(root: Path, name: str, number: int) -> None:
     chapter_service.delete(paths.novel_input_dir_from_root(novel_root), number)
 
 
-__all__ = ["Chapter", "Content", "delete_chapter", "list_chapters", "read_chapter", "write_chapter"]
+__all__ = [
+    "Chapter",
+    "Content",
+    "SourceWarning",
+    "delete_chapter",
+    "list_chapters",
+    "read_chapter",
+    "review_source_warning",
+    "source_warning_status",
+    "write_chapter",
+]
