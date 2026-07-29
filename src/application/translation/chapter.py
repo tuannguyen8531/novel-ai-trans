@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from src.models.state import TranslationState, initial_state
+from src.services.chapters import deduplicate_leading_headings
 from src.services.translation.reports import ReportStore
 from src.services.translation.storage import TranslationStorage
 from src.utils.text import normalize_paragraph_spacing
@@ -32,7 +33,7 @@ def translate_chapter(
     clock: Callable[[], float] = time.time,
 ) -> tuple[bool, int, float, int]:
     """Translate a chapter and return success, output size, duration, and new terms."""
-    source_text = storage.read(input_path)
+    source_text = deduplicate_leading_headings(storage.read(input_path))
     if not source_text.strip():
         return False, 0, 0, 0
 
@@ -49,7 +50,7 @@ def translate_chapter(
     elapsed = clock() - started_at
 
     final_text = result.get("final_translation", "")
-    normalized_text = normalize_paragraph_spacing(str(final_text))
+    normalized_text = deduplicate_leading_headings(normalize_paragraph_spacing(str(final_text)))
     new_terms = result.get("new_terms", {})
     new_characters = result.get("new_characters", {})
     quality_reports = result.get("quality_reports", [])

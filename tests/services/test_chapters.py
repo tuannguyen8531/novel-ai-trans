@@ -93,6 +93,30 @@ def test_detect_chapter_number_ignores_unmarked_numbers() -> None:
     assert all(chapters.detect_chapter_number(title) is None for title in titles)
 
 
+def test_deduplicate_leading_headings_removes_exact_duplicate_and_preserves_spacing() -> None:
+    source = "第213章 黎知决定主动出击（1W）\n\n第213章 黎知决定主动出击（1W）\n沈元绷着脸。\n"
+
+    assert chapters.deduplicate_leading_headings(source) == ("第213章 黎知决定主动出击（1W）\n\n沈元绷着脸。\n")
+
+
+def test_deduplicate_leading_headings_keeps_later_punctuation_variant() -> None:
+    source = "第206章 黎知，我（1w）\n\n第206章 黎知，我……（1w）\n正文"
+
+    assert chapters.deduplicate_leading_headings(source) == "第206章 黎知，我……（1w）\n\n正文"
+
+
+def test_deduplicate_leading_headings_keeps_distinct_body_line() -> None:
+    source = "第213章 黎知决定主动出击（1W）\n\n沈元绷着脸。\n"
+
+    assert chapters.deduplicate_leading_headings(source) == source
+
+
+def test_deduplicate_leading_headings_does_not_collapse_unnumbered_prose_by_default() -> None:
+    source = "Run!\n\nRun!\n\nThen the race began."
+
+    assert chapters.deduplicate_leading_headings(source) == source
+
+
 def test_numbered_chapter_with_notice_marker_is_not_filtered() -> None:
     titles = ["作品更新通知", "Notice: 550화까지 왔습니다!!", "第301章 是通知还是邀请", "第302章 是体香"]
 

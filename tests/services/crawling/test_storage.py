@@ -58,3 +58,37 @@ def test_storage_writes_normalized_chapter(tmp_path) -> None:
     storage.write_chapter(path, "  Chapter   1  ", " Body. \n")
 
     assert path.read_text(encoding="utf-8") == "Chapter 1\n\nBody.\n"
+
+
+def test_storage_does_not_prepend_title_already_present_in_body(tmp_path) -> None:
+    storage = CrawlStorage(config(), tmp_path / "runtime", tmp_path / "translated")
+    storage.prepare()
+    path = storage.chapter_path(213)
+
+    storage.write_chapter(
+        path,
+        "第213章 黎知决定主动出击（1W）",
+        "第213章 黎知决定主动出击（1W）\n沈元绷着脸。",
+    )
+
+    assert path.read_text(encoding="utf-8") == "第213章 黎知决定主动出击（1W）\n\n沈元绷着脸。\n"
+
+
+def test_storage_prefers_later_heading_when_punctuation_differs(tmp_path) -> None:
+    storage = CrawlStorage(config(), tmp_path / "runtime", tmp_path / "translated")
+    storage.prepare()
+    path = storage.chapter_path(206)
+
+    storage.write_chapter(path, "第206章 黎知，我（1w）", "第206章 黎知，我……（1w）\n正文")
+
+    assert path.read_text(encoding="utf-8") == "第206章 黎知，我……（1w）\n\n正文\n"
+
+
+def test_storage_deduplicates_unnumbered_title_known_to_crawler(tmp_path) -> None:
+    storage = CrawlStorage(config(), tmp_path / "runtime", tmp_path / "translated")
+    storage.prepare()
+    path = storage.chapter_path(352)
+
+    storage.write_chapter(path, "番外：不完全的陌生人", "番外：不完全的陌生人\n正文")
+
+    assert path.read_text(encoding="utf-8") == "番外：不完全的陌生人\n\n正文\n"

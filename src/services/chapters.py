@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections.abc import Callable
 from pathlib import Path
 
@@ -153,6 +154,43 @@ def detect_chapter_number(title: str) -> int | None:
         if match:
             return int(match.group(1))
     return None
+
+
+def deduplicate_leading_headings(text: str, *, allow_unnumbered: bool = False) -> str:
+    """Collapse equivalent leading chapter headings, keeping the last."""
+    lines = text.splitlines(keepends=True)
+    while True:
+        headings = [(index, line.strip().lstrip("\ufeff")) for index, line in enumerate(lines) if line.strip()][:2]
+        if len(headings) < 2:
+            break
+
+        (first_index, first), (second_index, second) = headings
+        if not _equivalent_headings(first, second, allow_unnumbered=allow_unnumbered):
+            break
+
+        separator = lines[first_index + 1 : second_index]
+        following_line = second_index + 1
+        has_following_separator = following_line < len(lines) and not lines[following_line].strip()
+        replacement = [lines[second_index]] if has_following_separator else [lines[second_index], *separator]
+        lines[first_index : second_index + 1] = replacement
+
+    return "".join(lines)
+
+
+def _equivalent_headings(first: str, second: str, *, allow_unnumbered: bool) -> bool:
+    first_number = detect_chapter_number(first)
+    if first_number is not None and first_number == detect_chapter_number(second):
+        return True
+    if not allow_unnumbered:
+        return False
+
+    first_key = _heading_key(first)
+    return bool(first_key and first_key == _heading_key(second))
+
+
+def _heading_key(value: str) -> str:
+    normalized = unicodedata.normalize("NFKC", value).casefold()
+    return "".join(character for character in normalized if unicodedata.category(character)[0] not in {"C", "P", "S", "Z"})
 
 
 def is_obvious_non_chapter_title(title: str) -> bool:

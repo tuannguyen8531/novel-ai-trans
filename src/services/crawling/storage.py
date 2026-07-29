@@ -11,6 +11,7 @@ from src.config import SiteConfig
 from src.models import ChapterLink, ChapterResult, CrawlError, NovelMetadata
 from src.paths import resolve_novel_root
 from src.services.chapters import chapter_path as resolve_chapter_path
+from src.services.chapters import deduplicate_leading_headings
 from src.services.metadata import metadata_to_dict
 from src.utils.files import write_text_atomic
 from src.utils.text import normalize_text, slugify
@@ -74,7 +75,7 @@ class CrawlStorage:
 
     def write_chapter(self, path: Path, title: str, body: str) -> None:
         content = f"{normalize_text(title)}\n\n{body.strip()}\n"
-        write_text_atomic(path, content)
+        write_text_atomic(path, deduplicate_leading_headings(content, allow_unnumbered=True))
 
     def write_metadata(self, metadata: NovelMetadata) -> None:
         data = metadata_to_dict(metadata)
