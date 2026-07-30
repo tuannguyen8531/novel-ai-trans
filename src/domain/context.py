@@ -12,7 +12,11 @@ from src.domain.entities import (
     normalize_character_entities,
     resolve_character_ref,
 )
-from src.domain.relationships import normalize_character_edges
+from src.domain.relationships import merge_character_edges, normalize_character_edges
+
+_EMPTY_CHARACTER_ROLES = frozenset({"", "unknown"})
+_CHARACTER_ROLES = frozenset({"protagonist", "antagonist", "supporting", "minor"})
+_SPECIFIC_CHARACTER_ROLES = frozenset({"protagonist", "antagonist", "supporting"})
 
 
 def normalize_character_data(data: dict) -> dict:
@@ -86,8 +90,14 @@ def merge_character_context(
             existing_name = get_character_translated_name(existing_entities[name])
             if translated_name and not existing_name:
                 existing_entities[name]["translated_name"] = translated_name
+            existing_role = existing_entities[name].get("role", "")
             new_role = info.get("role", "")
-            if new_role and new_role != "unknown":
+            if (
+                existing_role in _EMPTY_CHARACTER_ROLES
+                and new_role in _CHARACTER_ROLES
+                or existing_role == "minor"
+                and new_role in _SPECIFIC_CHARACTER_ROLES
+            ):
                 existing_entities[name]["role"] = new_role
             if not existing_entities[name].get("pronoun"):
                 existing_entities[name]["pronoun"] = info.get("pronoun", "")
@@ -99,7 +109,7 @@ def merge_character_context(
             tagged_edges.append([edge[0], edge[1], edge[2], since])
 
     existing_entities = normalize_character_entities(existing_entities)
-    existing_edges = normalize_character_edges(data.get("edges", []) + tagged_edges, existing_entities)
+    existing_edges = merge_character_edges(data.get("edges", []), tagged_edges, existing_entities)
     existing_address_rules, address_rule_candidates = merge_address_rule_candidates(
         data.get("address_rules", []),
         data.get(ADDRESS_RULE_CANDIDATES_KEY, []),

@@ -90,8 +90,8 @@ def test_localize_metadata_uses_only_active_terms_and_characters(tmp_path: Path)
     user_prompt = llm.generate.call_args.args[1]
     assert "校花 → hoa khôi" in user_prompt
     assert "洛城 → Lạc Thành" not in user_prompt
-    assert "墨青川=Mặc Thanh Xuyên" in user_prompt
-    assert "于苗苗=Vu Miêu Miêu" in user_prompt
+    assert "墨青川 => Mặc Thanh Xuyên [protagonist]" in user_prompt
+    assert "于苗苗 => Vu Miêu Miêu [supporting]" in user_prompt
     assert "墨青川(classmate)->于苗苗" in user_prompt
     assert "叶凡" not in user_prompt
 

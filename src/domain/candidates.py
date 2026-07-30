@@ -143,7 +143,7 @@ def merge_address_rule_candidates(
             continue
         pair = (item["speaker"], item["listener"])
         form = (item.get("self", ""), item.get("other", ""))
-        scope = item.get("scope", "uncertain")
+        scope = item.get("scope", "")
         if is_explicit_temporary_address_observation(item):
             # Explicit temporary evidence may cancel pending evidence, but confirmed stable phases stay sticky.
             blocked_forms.add((pair, form))
@@ -163,7 +163,9 @@ def merge_address_rule_candidates(
         # Free-form notes and structural heuristics are weak evidence: ignore the observation without mutating memory.
         if has_transient_address_note(item) or is_transient_address_rule(item, entities):
             continue
-        if scope != "stable" or (pair, form) in blocked_forms:
+        # A source-grounded uncertain observation is useful evidence for a pending
+        # hypothesis, but it must never become an active rule without confirmation.
+        if scope not in {"stable", "uncertain"} or (pair, form) in blocked_forms:
             continue
         incoming_by_pair[pair] = item
 
@@ -201,8 +203,7 @@ def merge_address_rule_candidates(
                 candidate["observations"] += 1
                 if item.get("notes"):
                     candidate["notes"] = item["notes"]
-                if item.get("scope"):
-                    candidate["scope"] = item["scope"]
+                candidate["scope"] = "stable"
                 if item.get("reason") and (item["reason"] == "relationship_change" or not candidate.get("reason")):
                     candidate["reason"] = item["reason"]
         else:
@@ -218,8 +219,7 @@ def merge_address_rule_candidates(
             }
             if item.get("notes"):
                 candidate["notes"] = item["notes"]
-            if item.get("scope"):
-                candidate["scope"] = item["scope"]
+            candidate["scope"] = "stable"
             if item.get("reason"):
                 candidate["reason"] = item["reason"]
             pending_by_pair[pair] = candidate

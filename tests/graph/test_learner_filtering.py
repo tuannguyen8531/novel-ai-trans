@@ -7,6 +7,7 @@ from src.graph.nodes.learner import (
     _normalize_relationship,
     _prepare_address_rule_candidate_verdicts,
     _sample_across_text,
+    _sample_aligned_chunks,
 )
 
 
@@ -121,6 +122,18 @@ def test_sample_across_text_covers_beginning_middle_and_end():
     assert "MIDDLE" in sample
     assert sample.endswith("ENDING")
     assert len(sample) <= 300
+
+
+def test_sample_aligned_chunks_uses_matching_beginning_middle_and_end_pairs():
+    source_chunks = [f"source-{index}" for index in range(5)]
+    translated_chunks = [f"translated-{index}" for index in range(5)]
+
+    sample = _sample_aligned_chunks(source_chunks, translated_chunks, "chinese", "Vietnamese")
+
+    assert "source-0" in sample and "translated-0" in sample
+    assert "source-2" in sample and "translated-2" in sample
+    assert "source-4" in sample and "translated-4" in sample
+    assert "source-1" not in sample and "translated-1" not in sample
 
 
 def test_existing_character_context_labels_pending_address_hypotheses():

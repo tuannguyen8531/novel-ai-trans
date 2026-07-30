@@ -24,14 +24,30 @@ def filter_terms_by_frequency(text: str, terms: dict[str, str], min_count: int) 
     return filtered
 
 
-def filter_extracted_terms(source_text: str, terms: dict[str, str]) -> dict[str, str]:
-    """Keep LLM-extracted terms that are present in the source text."""
+def filter_extracted_terms(
+    source_text: str,
+    terms: dict[str, str],
+    *,
+    translated_text: str | None = None,
+    existing_terms: dict[str, str] | None = None,
+) -> dict[str, str]:
+    """Keep new LLM-extracted term pairs grounded in source and translation."""
     filtered = {}
+    translated_folded = translated_text.casefold() if translated_text is not None else None
+    existing_keys = {original.casefold() for original in (existing_terms or {}) if isinstance(original, str)}
     for original, translation in terms.items():
         if not isinstance(original, str) or not isinstance(translation, str):
             continue
         original = original.strip()
         translation = translation.strip()
-        if original and translation and original in source_text and not SOURCE_CHAR_RE.search(translation):
+        translation_is_grounded = translated_folded is None or translation.casefold() in translated_folded
+        if (
+            original
+            and translation
+            and original.casefold() not in existing_keys
+            and original in source_text
+            and not SOURCE_CHAR_RE.search(translation)
+            and translation_is_grounded
+        ):
             filtered[original] = translation
     return filtered

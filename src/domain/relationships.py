@@ -97,3 +97,32 @@ def normalize_character_edges(edges: list, entities: dict) -> list[list]:
             continue
 
     return normalized
+
+
+def merge_character_edges(existing_edges: list, incoming_edges: list, entities: dict) -> list[list]:
+    """Merge current relationship state without resetting unchanged edges."""
+    merged = normalize_character_edges(existing_edges, entities)
+    incoming = normalize_character_edges(incoming_edges, entities)
+    pair_indexes = {frozenset((edge[0], edge[1])): index for index, edge in enumerate(merged)}
+
+    for edge in incoming:
+        pair = frozenset((edge[0], edge[1]))
+        existing_index = pair_indexes.get(pair)
+        if existing_index is None:
+            pair_indexes[pair] = len(merged)
+            merged.append(edge)
+            continue
+
+        current = merged[existing_index]
+        same_direction = current[0] == edge[0] and current[1] == edge[1]
+        same_relationship = (
+            current[2] == edge[2]
+            if same_direction
+            else edge[2] == invert_relationship(current[2]) or current[2] == invert_relationship(edge[2])
+        )
+        if same_relationship:
+            continue
+
+        merged[existing_index] = edge
+
+    return merged

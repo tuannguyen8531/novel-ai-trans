@@ -66,3 +66,31 @@ class TestFilterByFrequency:
         result = filter_extracted_terms(text, terms)
 
         assert result == {}
+
+    def test_keeps_term_translation_grounded_in_translated_text(self):
+        result = filter_extracted_terms(
+            "他加入了玄天宗。",
+            {"玄天宗": "Huyền Thiên Tông"},
+            translated_text="Cậu gia nhập Huyền Thiên Tông.",
+        )
+
+        assert result == {"玄天宗": "Huyền Thiên Tông"}
+
+    def test_drops_term_translation_absent_from_translated_text(self):
+        result = filter_extracted_terms(
+            "他加入了玄天宗。",
+            {"玄天宗": "Thiên Đạo Tông"},
+            translated_text="Cậu gia nhập Huyền Thiên Tông.",
+        )
+
+        assert result == {}
+
+    def test_drops_existing_term_instead_of_overwriting_it(self):
+        result = filter_extracted_terms(
+            "他加入了玄天宗。",
+            {"玄天宗": "Thiên Đạo Tông"},
+            translated_text="Cậu gia nhập Thiên Đạo Tông.",
+            existing_terms={"玄天宗": "Huyền Thiên Tông"},
+        )
+
+        assert result == {}
