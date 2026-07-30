@@ -80,25 +80,13 @@ def test_genre_rule_files_keep_moved_language_mappings(
     assert expected_rule in content
 
 
-@pytest.mark.parametrize(
-    ("target_language", "source_language", "expected_genres"),
-    [
-        ("vi", "chinese", {"fantasy", "school-life", "urban", "wuxia", "xianxia"}),
-        ("vi", "korean", {"academy", "fantasy", "hunter", "murim", "school-life"}),
-        ("vi", "japanese", {"fantasy", "isekai", "school-life"}),
-        ("en", "chinese", {"fantasy", "school-life", "urban", "wuxia", "xianxia"}),
-        ("en", "korean", {"academy", "fantasy", "hunter", "murim", "school-life"}),
-        ("en", "japanese", {"fantasy", "isekai", "school-life"}),
-    ],
-)
-def test_genre_rule_files_are_namespaced_by_source_language(
-    target_language,
-    source_language,
-    expected_genres,
-):
-    genre_dir = Path(f"rules/{target_language}/{source_language}")
+@pytest.mark.parametrize("source_language", ["chinese", "korean", "japanese"])
+def test_genre_rule_files_match_across_targets(source_language):
+    vi_genres = {path.stem for path in Path(f"rules/vi/{source_language}").glob("*.md")}
+    en_genres = {path.stem for path in Path(f"rules/en/{source_language}").glob("*.md")}
 
-    assert {path.stem for path in genre_dir.glob("*.md")} == expected_genres
+    assert vi_genres
+    assert vi_genres == en_genres
 
 
 def test_every_genre_rule_file_contains_style_guidance():

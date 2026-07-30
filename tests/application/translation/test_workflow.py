@@ -8,6 +8,7 @@ from typing import Literal
 
 import pytest
 
+from src.application.errors import ApplicationValidationError
 from src.application.progress import ProgressEvent
 from src.application.translation.models import TranslationRequest
 from src.application.translation.workflow import TranslationWorkflow
@@ -54,6 +55,16 @@ class QualityFailingGraph:
         )
 
 
+class RecordingGraph(SuccessGraph):
+    def __init__(self) -> None:
+        super().__init__()
+        self.genre_snapshots: list[list[str]] = []
+
+    def invoke(self, state):
+        self.genre_snapshots.append(state["genres"])
+        return super().invoke(state)
+
+
 def make_workflow(
     tmp_path,
     graph,
@@ -67,6 +78,7 @@ def make_workflow(
         reports=ReportStore(),
         graph_factory=lambda: graph,
         source_language_loader=lambda _novel: "chinese",
+        genre_loader=lambda _novel: [],
         progress_root=tmp_path / "progress",
         report_root=tmp_path / "reports",
         rejected_root=tmp_path / "rejected",
@@ -212,3 +224,32 @@ def test_dry_run_emits_selection_without_building_graph(tmp_path) -> None:
     assert result.dry_run is True
     assert result.chapters_attempted == [1]
     assert built is False
+
+
+def test_genres_are_loaded_once_and_snapshotted_for_every_chapter(tmp_path) -> None:
+    write_chapters(tmp_path, (1, 2))
+    graph = RecordingGraph()
+    workflow = make_workflow(tmp_path, graph)
+    load_calls = 0
+
+    def load_genre_snapshot(_novel):
+        nonlocal load_calls
+        load_calls += 1
+        return ["urban"]
+
+    workflow.genre_loader = load_genre_snapshot
+
+    result = workflow.run(TranslationRequest(novel="novel"))
+
+    assert result.success == 2
+    assert load_calls == 1
+    assert graph.genre_snapshots == [["urban"], ["urban"]]
+
+
+def test_source_override_cannot_reinterpret_stored_genres(tmp_path) -> None:
+    write_chapters(tmp_path, (1,))
+    workflow = make_workflow(tmp_path, SuccessGraph())
+    workflow.genre_loader = lambda _novel: ["urban"]
+
+    with pytest.raises(ApplicationValidationError, match="does not match"):
+        workflow.run(TranslationRequest(novel="novel", source_language="korean"))

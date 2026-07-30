@@ -31,6 +31,7 @@ const metadataDisplay = ref<MetadataDisplay>({
   title: '',
   author: '',
   sourceLanguage: '',
+  genres: [],
   summary: '',
   targetTitle: '',
   targetSummary: '',

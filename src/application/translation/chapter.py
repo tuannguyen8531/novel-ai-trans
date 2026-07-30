@@ -30,6 +30,7 @@ def translate_chapter(
     report_path: Path,
     storage: TranslationStorage,
     reports: ReportStore,
+    genres: list[str] | None = None,
     clock: Callable[[], float] = time.time,
 ) -> tuple[bool, int, float, int]:
     """Translate a chapter and return success, output size, duration, and new terms."""
@@ -45,6 +46,7 @@ def translate_chapter(
             target_language=target_language,
             novel_name=novel,
             chapter_number=chapter,
+            genres=genres,
         )
     )
     elapsed = clock() - started_at

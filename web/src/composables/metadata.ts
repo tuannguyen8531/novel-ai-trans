@@ -1,4 +1,4 @@
-import { computed, onScopeDispose, ref, toValue, type MaybeRefOrGetter } from 'vue'
+import { computed, onScopeDispose, ref, toValue, watch, type MaybeRefOrGetter } from 'vue'
 import { api } from '@/api/client'
 import { useNovelsStore } from '@/composables/novels'
 
@@ -10,6 +10,7 @@ export interface MetadataDisplay {
   title: string
   author: string
   sourceLanguage: string
+  genres: string[]
   summary: string
   targetTitle: string
   targetSummary: string
@@ -33,6 +34,8 @@ export function useMetadata(
   const illustrationUrl = ref('')
   const summary = ref('')
   const sourceLanguage = ref('')
+  const genreCatalog = ref<Record<string, string[]>>({})
+  const genres = ref<string[]>([])
   const translatedVi = ref('')
   const translatedEn = ref('')
   const summaryVi = ref('')
@@ -65,6 +68,14 @@ export function useMetadata(
     }
   })
 
+  const availableGenres = computed(() => genreCatalog.value[sourceLanguage.value] ?? [])
+
+  watch([sourceLanguage, genreCatalog], () => {
+    if (!Object.keys(genreCatalog.value).length) return
+    const available = new Set(availableGenres.value)
+    genres.value = genres.value.filter((genre) => available.has(genre))
+  })
+
   const hasAny = computed(() => Boolean(
     title.value.trim() ||
     author.value.trim() ||
@@ -73,6 +84,7 @@ export function useMetadata(
     coverFile.value ||
     summary.value.trim() ||
     sourceLanguage.value.trim() ||
+    genres.value.length ||
     translatedVi.value.trim() ||
     translatedEn.value.trim() ||
     summaryVi.value.trim() ||
@@ -98,6 +110,7 @@ export function useMetadata(
     title: title.value,
     author: author.value,
     sourceLanguage: sourceLanguage.value,
+    genres: [...genres.value],
     summary: summary.value,
     targetTitle: targetTitle.value,
     targetSummary: targetSummary.value,
@@ -110,8 +123,12 @@ export function useMetadata(
     loading.value = true
     loadError.value = null
     try {
-      const response = await api.getNovelMetadata(toValue(novel))
+      const [response, catalog] = await Promise.all([
+        api.getNovelMetadata(toValue(novel)),
+        api.getGenres()
+      ])
       const inner = (response.data as Record<string, unknown>) ?? {}
+      genreCatalog.value = catalog
       metadata.value = Object.keys(inner).length ? inner : null
       title.value = (inner.title as string) ?? ''
       author.value = (inner.author as string) ?? ''
@@ -119,6 +136,9 @@ export function useMetadata(
       illustrationUrl.value = (inner.illustration_url as string) ?? ''
       summary.value = (inner.summary as string) ?? ''
       sourceLanguage.value = (inner.source_language as string) ?? ''
+      genres.value = Array.isArray(inner.genres)
+        ? inner.genres.filter((genre): genre is string => typeof genre === 'string')
+        : []
       const localized = (inner.localized as Record<string, Record<string, string | null>> | undefined) ?? {}
       translatedVi.value = localized.vi?.title ?? ''
       translatedEn.value = localized.en?.title ?? ''
@@ -140,7 +160,8 @@ export function useMetadata(
       author: author.value.trim(),
       source_url: sourceUrl.value.trim(),
       summary: summary.value.trim(),
-      source_language: sourceLanguage.value.trim() || null
+      source_language: sourceLanguage.value.trim() || null,
+      genres: genres.value
     }
     if (!coverFile.value) patch.illustration_url = illustrationUrl.value.trim()
     const currentLocalized = (
@@ -201,6 +222,8 @@ export function useMetadata(
     illustrationUrl,
     summary,
     sourceLanguage,
+    genres,
+    availableGenres,
     force,
     coverFile,
     setCoverFile,

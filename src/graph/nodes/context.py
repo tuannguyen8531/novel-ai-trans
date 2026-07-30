@@ -4,6 +4,8 @@ Context Node — Load translation rules, glossary, and previous chapter summarie
 Loads rules in order:
 1. rules/{target}/common.md (or legacy rules/common.md)
 2. rules/{target}/{language}.md (or legacy rules/{language}.md)
+3. rules/{target}/{language}/{genre}.md for selected genre profiles
+4. translated/{novel}/rules.md
 
 For chapter summaries, only loads the last 3 chapters for conciseness.
 """
@@ -15,6 +17,7 @@ from src.config import config
 from src.domain.glossary import select_active_glossary_terms
 from src.domain.rules import select_relevant_rules
 from src.models.state import TranslationState
+from src.services.genres import normalize_genres
 from src.services.glossary.memory import load_recent_chapter_summaries
 from src.services.glossary.repository import (
     get_active_context_with_candidates,
@@ -64,6 +67,20 @@ def context_node(state: TranslationState) -> dict:
         language_rules = select_relevant_rules(lang_rules_file.read_text(encoding="utf-8"), source_text)
         if language_rules:
             rules_parts.append(language_rules)
+
+    selected_genres = normalize_genres(
+        language,
+        state.get("genres", []),
+        rules_dir=RULES_DIR,
+    )
+    for genre in selected_genres:
+        genre_rules_file = RULES_DIR / target_language / language / f"{genre}.md"
+        genre_rules = select_relevant_rules(
+            genre_rules_file.read_text(encoding="utf-8"),
+            source_text,
+        )
+        if genre_rules:
+            rules_parts.append(genre_rules)
 
     # Load novel-specific rules if they exist
     if config.translated_dir:

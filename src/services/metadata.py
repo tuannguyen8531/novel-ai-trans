@@ -88,6 +88,21 @@ def load_source_language(novel_name: str) -> str:
     return source_language
 
 
+def load_genres(novel_name: str) -> list[str]:
+    """Load the novel's selected genre profile IDs without validating rule files."""
+    path = metadata_path(novel_name)
+    if not path.exists():
+        return []
+
+    metadata = file_utils.read_json_locked(path)
+    genres = metadata.get("genres")
+    if genres is None:
+        return []
+    if not isinstance(genres, list) or any(not isinstance(genre, str) for genre in genres):
+        raise ValueError("Novel metadata field 'genres' must be a list of strings.")
+    return genres
+
+
 def save_source_language(novel_name: str, language: str) -> None:
     """Persist a detected source language and remove its legacy glossary field."""
     if not language:

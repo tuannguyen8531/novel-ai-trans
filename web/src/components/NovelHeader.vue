@@ -27,6 +27,14 @@ const displayTitle = computed(() => (
 const displayAuthor = computed(() => (
   props.metadata.author.trim() || props.novel.author?.trim() || 'Not updated'
 ))
+const displayGenres = computed(() => (
+  props.metadata.genres
+    .map((genre) => genre
+      .split('-')
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' '))
+    .join(', ')
+))
 const displaySummary = computed(() => (
   props.metadata.targetSummary.trim() || props.metadata.summary.trim()
 ))
@@ -54,8 +62,15 @@ function metaDisplayValue(current: string, fallback: string | null | undefined):
       />
       <div class="novel-cover-info">
         <h2 :title="displayTitle">{{ displayTitle }}</h2>
-        <p class="novel-author" :title="`Author: ${displayAuthor}`">
+        <p
+          class="novel-author"
+          :title="`Author: ${displayAuthor}${displayGenres ? `    Genres: ${displayGenres}` : ''}`"
+        >
           <span>Author:</span> {{ displayAuthor }}
+          <template v-if="displayGenres">
+            <span class="novel-meta-separator" aria-hidden="true">    </span>
+            <span>Genres:</span> {{ displayGenres }}
+          </template>
         </p>
         <div v-if="displaySummary" class="novel-summary">
           <span class="novel-summary-label">Summary</span>
@@ -206,6 +221,12 @@ function metaDisplayValue(current: string, fallback: string | null | undefined):
 .novel-author span {
   color: var(--fg);
   font-weight: 600;
+}
+
+.novel-author .novel-meta-separator {
+  margin: 0 0.35rem;
+  color: var(--fg-dim);
+  font-weight: 400;
 }
 
 .novel-summary {

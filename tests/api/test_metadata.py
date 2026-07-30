@@ -64,6 +64,19 @@ def test_get_metadata_returns_existing(client):
     assert body["data"]["author"] == "Old Author"
 
 
+def test_get_genres_discovers_rule_files(client):
+    test_client, _ = client
+
+    response = test_client.get("/api/genres")
+
+    assert response.status_code == 200
+    catalog = response.json()
+    assert "urban" in catalog["chinese"]
+    assert "academy" in catalog["korean"]
+    assert "isekai" in catalog["japanese"]
+    assert catalog["chinese"] == sorted(catalog["chinese"])
+
+
 def test_get_metadata_missing_novel_returns_404(client):
     test_client, _ = client
     response = test_client.get("/api/novels/does-not-exist/metadata")
@@ -129,6 +142,71 @@ def test_patch_metadata_source_language_set_and_clear(client):
 
     on_disk = json.loads((novel_dir / "metadata.json").read_text(encoding="utf-8"))
     assert on_disk["source_language"] is None
+
+
+def test_patch_metadata_validates_deduplicates_and_orders_genres(client):
+    test_client, novel_dir = client
+
+    response = test_client.patch(
+        "/api/novels/demo/metadata",
+        json={
+            "source_language": "zh",
+            "genres": ["urban", "fantasy", "urban"],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["genres"] == ["fantasy", "urban"]
+    on_disk = json.loads((novel_dir / "metadata.json").read_text(encoding="utf-8"))
+    assert on_disk["source_language"] == "chinese"
+    assert on_disk["genres"] == ["fantasy", "urban"]
+
+
+def test_patch_metadata_rejects_genre_from_another_source(client):
+    test_client, _ = client
+
+    response = test_client.patch(
+        "/api/novels/demo/metadata",
+        json={"source_language": "korean", "genres": ["urban"]},
+    )
+
+    assert response.status_code == 422
+    assert "Unsupported genre(s) for korean: urban" in response.text
+
+
+def test_patch_metadata_requires_source_language_for_genres(client):
+    test_client, _ = client
+
+    response = test_client.patch(
+        "/api/novels/demo/metadata",
+        json={"genres": ["fantasy"]},
+    )
+
+    assert response.status_code == 422
+    assert "Select a source language" in response.text
+
+
+def test_patch_metadata_requires_explicit_genre_clear_when_source_changes(client):
+    test_client, _ = client
+    initial = test_client.patch(
+        "/api/novels/demo/metadata",
+        json={"source_language": "chinese", "genres": ["urban"]},
+    )
+    assert initial.status_code == 200
+
+    rejected = test_client.patch(
+        "/api/novels/demo/metadata",
+        json={"source_language": None},
+    )
+    assert rejected.status_code == 422
+
+    cleared = test_client.patch(
+        "/api/novels/demo/metadata",
+        json={"source_language": None, "genres": []},
+    )
+    assert cleared.status_code == 200
+    assert cleared.json()["data"]["source_language"] is None
+    assert cleared.json()["data"]["genres"] == []
 
 
 def test_patch_metadata_creates_file_if_missing(client):

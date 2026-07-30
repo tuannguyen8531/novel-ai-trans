@@ -27,6 +27,8 @@ const {
   illustrationUrl,
   summary,
   sourceLanguage,
+  genres,
+  availableGenres,
   force,
   coverFile,
   setCoverFile,
@@ -59,6 +61,13 @@ function close() {
 function selectCover(event: Event) {
   const input = event.target as HTMLInputElement
   setCoverFile(input.files?.[0] ?? null)
+}
+
+function genreLabel(genre: string) {
+  return genre
+    .split('-')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
 }
 
 async function saveAndClose() {
@@ -140,6 +149,21 @@ defineExpose({ load })
               <option value="chinese">Chinese</option>
             </select>
           </div>
+          <fieldset class="genre-fieldset" :disabled="!sourceLanguage">
+            <legend>Genres</legend>
+            <p v-if="!sourceLanguage" class="muted genre-help">
+              Select a source language before choosing genre profiles.
+            </p>
+            <p v-else-if="!availableGenres.length" class="muted genre-help">
+              No specialized genre profiles are available.
+            </p>
+            <div v-else class="genre-options">
+              <label v-for="genre in availableGenres" :key="genre" class="check genre-option">
+                <input v-model="genres" type="checkbox" :value="genre" />
+                <span>{{ genreLabel(genre) }}</span>
+              </label>
+            </div>
+          </fieldset>
           <div class="localization-fields">
             <div>
               <label>Translated title — {{ targetLanguage }}</label>
@@ -199,6 +223,31 @@ defineExpose({ load })
   width: 100%;
   height: 10rem;
   resize: none;
+}
+
+.genre-fieldset {
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.genre-fieldset legend {
+  padding: 0 0.25rem;
+}
+
+.genre-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  gap: 0.5rem 1rem;
+}
+
+.genre-option {
+  margin: 0;
+}
+
+.genre-help {
+  margin: 0.45rem 0 0;
+  font-size: 0.85rem;
 }
 
 .operation-error {

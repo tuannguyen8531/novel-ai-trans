@@ -6,6 +6,7 @@ import type {
   ConfigSummary,
   DraftDetail,
   DraftSummary,
+  GenreCatalog,
   GlossaryApplyResponse,
   GlossaryResponse,
   HealthResponse,
@@ -251,6 +252,7 @@ export const api = {
   },
   getNovelMetadata: (name: string) =>
     request<NovelMetadataResponse>(`/api/novels/${encodeURIComponent(name)}/metadata`),
+  getGenres: () => request<GenreCatalog>('/api/genres'),
   patchNovelMetadata: (name: string, patch: Record<string, unknown>) =>
     request<NovelMetadataResponse>(`/api/novels/${encodeURIComponent(name)}/metadata`, {
       method: 'PATCH',

@@ -31,6 +31,7 @@ from src.api.schemas import (
     NovelSummary,
 )
 from src.application import config as app_config
+from src.application import genres as genre_profiles
 from src.application.errors import ApplicationValidationError, PersistenceError
 from src.application.languages import normalize_source_language
 from src.application.novel import artifacts, catalog, chapters, covers, identity, metadata, rules
@@ -38,6 +39,13 @@ from src.application.novel.insertion import InsertRequest, insert_chapter
 from src.application.novel.localization import localize_metadata
 
 router = APIRouter(tags=["novels"])
+
+
+@router.get("/genres", response_model=dict[str, list[str]])
+def list_genres(
+    _: AuthenticatedPrincipal,
+) -> dict[str, list[str]]:
+    return genre_profiles.genre_catalog()
 
 
 @router.post("/novels", status_code=status.HTTP_201_CREATED)
@@ -327,9 +335,14 @@ def patch_novel_metadata(
     _: AuthenticatedPrincipal,
 ) -> NovelMetadataResponse:
     root = identity.resolve_root(app_config.get_config().translated_dir)
+    current = metadata.metadata(root, name)
     updates = payload.model_dump(exclude_unset=True)
     if "source_language" in payload.model_fields_set:
         updates["source_language"] = normalize_source_language(payload.source_language) or None
+    if {"source_language", "genres"}.intersection(payload.model_fields_set):
+        source_language = updates.get("source_language", current.get("source_language"))
+        selected_genres = updates.get("genres", current.get("genres", []))
+        updates["genres"] = genre_profiles.normalize_genres(source_language, selected_genres)
     return NovelMetadataResponse(
         novel=name,
         data=metadata.update_metadata(root, name, updates, localized_origin="manual"),

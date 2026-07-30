@@ -18,6 +18,7 @@ class TestInitialState:
             "target_language",
             "novel_name",
             "chapter_number",
+            "genres",
             "translation_rules",
             "glossary",
             "previous_summary",
@@ -50,6 +51,7 @@ class TestInitialState:
         assert state["target_language"] == "vi"
         assert state["novel_name"] == "my-novel"
         assert state["chapter_number"] == 5
+        assert state["genres"] == []
 
     def test_defaults(self):
         state = initial_state(
@@ -59,6 +61,7 @@ class TestInitialState:
             chapter_number=1,
         )
         assert state["translation_rules"] == ""
+        assert state["genres"] == []
         assert state["target_language"] == "vi"
         assert state["glossary"] == {}
         assert state["previous_summary"] == ""
@@ -95,3 +98,16 @@ class TestInitialState:
             chapter_number=1,
         )
         assert state["target_language"] == "en"
+
+    def test_genres_are_copied_into_state(self):
+        genres = ["academy", "fantasy"]
+        state = initial_state(
+            source_text="test",
+            source_language="korean",
+            novel_name="test",
+            chapter_number=1,
+            genres=genres,
+        )
+
+        genres.append("school-life")
+        assert state["genres"] == ["academy", "fantasy"]
