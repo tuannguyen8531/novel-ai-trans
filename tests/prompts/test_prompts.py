@@ -180,7 +180,7 @@ class TestRenderPrompt:
         )
 
         assert "Determine persistence primarily from source events" in result
-        assert "do not treat them as proof that the existing rule is still stable" in result
+        assert "Existing rules and pending hypotheses may have influenced the translation" in result
         assert "Treat an existing address rule as a prior default" in result
         assert "only when the source supports it independently" in result
         assert "translation may help with target wording but not with persistence" in result
@@ -190,3 +190,39 @@ class TestRenderPrompt:
         assert "Exact source equivalents" in result
         assert 'Use "inconclusive" only when this chapter has no relevant interaction' in result
         assert '"verdict": "confirmed | temporary | rejected | inconclusive"' in result
+
+    @pytest.mark.parametrize("target_language", ["vi", "en"])
+    def test_learner_applies_novel_rules_and_separates_narrative_pronoun_from_dialogue(
+        self,
+        target_language,
+    ):
+        result = render_prompt(
+            "learn",
+            target_language=target_language,
+            translation_rules="USE THIS NOVEL NAMING RULE",
+            existing_terms_str="(none)",
+            existing_chars_str="(none)",
+            chapter_number="12",
+        )
+
+        assert "USE THIS NOVEL NAMING RULE" in result
+        assert "pronoun is the stable reference used for this character in narration outside dialogue" in result
+        assert "It is not dialogue self-reference or direct address" in result
+        assert "Infer pronoun only for a new character or one whose existing pronoun is empty" in result
+        assert "must not overwrite the narrative pronoun" in result
+        assert "Emit a clear new source-grounded form as uncertain rather than omit it" in result
+        assert "Do not repeat or reclassify established entity metadata" in result
+        assert "Do not repeat an unchanged existing edge" in result
+
+    @pytest.mark.parametrize("target_language", ["vi", "en"])
+    def test_learner_prompt_stays_within_token_budget(self, target_language):
+        result = render_prompt(
+            "learn",
+            target_language=target_language,
+            translation_rules="(none)",
+            existing_terms_str="(none)",
+            existing_chars_str="(none)",
+            chapter_number="12",
+        )
+
+        assert estimate_token_count(result) < 2200

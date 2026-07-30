@@ -253,6 +253,36 @@ def _sample_across_text(text: str, max_chars: int = LEARNER_SAMPLE_CHARS) -> str
     return separator.join(section.strip() for section in sections)
 
 
+def _sample_aligned_chunks(
+    source_chunks: list[str],
+    translated_chunks: list[str],
+    source_language: str,
+    target_name: str,
+    max_chars_per_language: int = LEARNER_SAMPLE_CHARS,
+) -> str:
+    """Sample matching beginning, middle, and ending chunk pairs."""
+    pair_count = min(len(source_chunks), len(translated_chunks))
+    if pair_count == 0:
+        return ""
+
+    indexes = list(range(pair_count)) if pair_count <= 3 else [0, pair_count // 2, pair_count - 1]
+
+    per_chunk_budget = max(1, max_chars_per_language // len(indexes))
+    sections = []
+    for index in indexes:
+        source_sample = _sample_across_text(source_chunks[index], per_chunk_budget)
+        translated_sample = _sample_across_text(translated_chunks[index], per_chunk_budget)
+        sections.append(
+            f"""=== ALIGNED CHUNK {index + 1}/{pair_count} ===
+SOURCE ({source_language}):
+{source_sample}
+
+TRANSLATION ({target_name}):
+{translated_sample}"""
+        )
+    return "\n\n".join(sections)
+
+
 def _is_kinship_or_role(name: str) -> bool:
     """Check if a name is actually a kinship term or role descriptor."""
     return name.strip().lower() in KINSHIP_TERMS
@@ -594,11 +624,12 @@ def learner_node(state: TranslationState) -> dict:
         chapter_number=str(chapter_number),
     )
 
-    learn_user_prompt = f"""=== SOURCE TEXT ({language}) ===
-{_sample_across_text(source_text)}
-
-=== {target_name.upper()} TRANSLATION ===
-{_sample_across_text(full_translation)}"""
+    learn_user_prompt = _sample_aligned_chunks(
+        state["chunks"],
+        state["translated_chunks"],
+        language,
+        target_name,
+    )
 
     new_terms = {}
     new_characters = {}
@@ -667,7 +698,12 @@ def learner_node(state: TranslationState) -> dict:
 
     # Keep learner-selected terms only when they are grounded in this chapter.
     if new_terms:
-        new_terms = filter_extracted_terms(source_text, new_terms)
+        new_terms = filter_extracted_terms(
+            source_text,
+            new_terms,
+            translated_text=full_translation,
+            existing_terms=existing_glossary,
+        )
 
     if new_terms:
         save_glossary(novel_name, new_terms)
@@ -734,7 +770,7 @@ def learner_node(state: TranslationState) -> dict:
         summary_response = ""
     else:
         summary_system_prompt = render_prompt("summarize", target_language=target_language, target_name=target_name)
-        summary_user_prompt = f"Summarize chapter {chapter_number}:\n\n{full_translation[:4000]}"
+        summary_user_prompt = f"Summarize chapter {chapter_number}:\n\n{_sample_across_text(full_translation)}"
 
         try:
             summary_response = get_llm().generate(summary_system_prompt, summary_user_prompt, "summarize")

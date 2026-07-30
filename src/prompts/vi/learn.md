@@ -1,139 +1,101 @@
-You are analyzing a novel chapter. Extract important terms AND character relationships.
+You are extracting durable translation memory from aligned source and Vietnamese translation excerpts.
+Return only new, source-grounded terms, characters, relationships, narrative references, and address evidence.
 
 === NOVEL-SPECIFIC TRANSLATION RULES ===
-Apply these rules when choosing term translations and character translated_name values:
+Use these rules for term translations and translated_name values; novel-specific naming conventions override generic defaults.
 {{translation_rules}}
 
-If these rules require a specific naming style, that style overrides generic defaults.
-
-=== TERMS ===
-Extract only named/proper terms that need exact consistency across chapters:
-1. Named places, organizations, realms, sects, clans, schools, companies
-2. Named artifacts, techniques, systems, events, titles/ranks tied to a named concept
-3. Recurring named concepts whose translation should stay fixed
-4. In-world system/status-panel named concepts such as abilities, missions, titles, permissions, skills, curses, or blessings
-
-DO NOT include:
-- Character names here; put named people in characters.entities instead
-- Common nouns, verbs, adjectives, descriptive phrases, or everyday setting terms
-- Generic role/kinship/address words unless they are part of a unique proper name
-- One-off mentions, dialogue fragments, idioms, jokes, insults, or tone/style rules, unless they are in-world system/status-panel named concepts
-- Generic terms like "sword", "fire", "mountain" unless they are proper names
-- Terms already in the existing glossary
-
-Existing terms (DO NOT repeat):
+=== EXISTING MEMORY ===
+Terms already known (do not repeat):
 {{existing_terms_str}}
 
-=== CHARACTERS ===
-Identify characters that appear in this chapter and their relationships to each other.
-
-EXISTING CHARACTERS (update relationships if new ones are discovered):
+Active characters, relationships, confirmed address rules, and pending hypotheses:
 {{existing_chars_str}}
 
-RULES FOR ENTITIES:
-- Only extract characters with PROPER NAMES (e.g. "陆远秋", "白清夏")
-- The entity KEY must be the EXACT original-language name and NOTHING ELSE.
-  Do NOT append any romanization, translation, notes, or parenthetical annotations to the key.
-  CORRECT:   "준기": { "translated_name": "Jun Gi", ... }
-  WRONG:     "준기 (Jun Gi)": { ... }
-  WRONG:     "준기 - Jun Gi": { ... }
-  The target-language form belongs ONLY in the "translated_name" field inside the value object.
-- For Vietnamese, do NOT default to Korean romanization. Follow the novel-specific naming rules above.
-- NEVER extract kinship terms or role descriptors as character names:
-  papa, mama, dad, mom, father, mother, uncle, aunt, grandma, grandpa, brother, sister,
-  爸爸, 妈妈, 父亲, 母亲, 叔叔, 阿姨, 爷爷, 奶奶, 哥哥, 姐姐, 弟弟, 妹妹,
-  teacher, student, master, servant, guard, doctor, etc.
-- These kinship/role terms describe relationships TO named characters, they are NOT characters themselves
-- Do NOT create a separate entity for title/address forms such as "白叔叔", "刘妈", "张阿姨", "李老师", "梁先生",
-  "bác Bạch", "dì Lưu", "cô Lý", "ông Lương" when they refer to an existing named character
-- If a title/address form clearly refers to an existing character, mention it only through address_rules or as context; keep the entity key as the canonical original name
-- If the real name is unknown and the person is only a minor one-off role, skip them instead of creating a generic entity
-- Create a temporary title-based entity only when the person recurs or has important relationships before their real name is revealed
-- If a character is only referred to as "Papa" or "Mama" without a real name being revealed, skip them
-- Only include characters that actually appear or are mentioned in this chapter
-- Assign a consistent Vietnamese pronoun for each character based on age, gender, status,
-  and relationship dynamics. Examples: "cậu", "anh ấy", "ông", "bà", "cô ấy", "chị ấy",
-  "hắn", "y", "nó", "ta", "quý ngài", "tiểu thư". Use the SAME pronoun across all chapters.
+=== TERMS ===
+- Extract only proper or recurring named concepts that require consistency: places, organizations, realms, techniques, artifacts, systems, events, titles, abilities, missions, curses, or blessings.
+- Exclude character names, common words, descriptions, generic roles/kinship terms, dialogue fragments, jokes, and one-off phrases.
+- The original key must occur in the supplied source excerpt, and its proposed translation must occur verbatim in the paired Vietnamese excerpt. Otherwise omit it.
 
-RULES FOR EDGES (RELATIONSHIPS):
-- Relationship types MUST be in ENGLISH ONLY — never Vietnamese or other languages
-- Use ONLY these allowed relationship types:
+=== CHARACTERS ===
+- Entity keys must be exact original-language proper names. Put the Vietnamese form only in translated_name; never annotate or romanize the key.
+- Do not create entities from kinship terms, occupations, generic roles, or title-address variants such as "白叔叔", "刘妈", "李老师", papa, mother, teacher, or guard.
+- Reuse the canonical entity when a title refers to an existing character. Skip unnamed one-off roles; use a temporary title-based entity only when an important recurring person has no revealed name.
+- Include only characters present or mentioned in the supplied source excerpts.
+- Do not repeat or reclassify established entity metadata. Return an existing entity only to fill an empty translated_name/pronoun or upgrade an unknown/minor role when the source establishes a stronger role.
+- role must be protagonist, antagonist, supporting, or minor; use minor when uncertain.
+
+NARRATIVE PRONOUN:
+- pronoun is the stable reference used for this character in narration outside dialogue, such as "tôi", "cậu", "anh ấy", "cô ấy", "hắn", or "y".
+- It is not dialogue self-reference or direct address; those belong only in address_rules.self/other.
+- Infer pronoun only for a new character or one whose existing pronoun is empty; never replace an established value automatically.
+- Temporary dialogue, emotion, titles, and relationship changes must not overwrite the narrative pronoun.
+
+RELATIONSHIPS:
+- Edge names use original entity keys and one English type:
   mother, father, parent, son, daughter, child, sibling, brother, sister,
-  husband, wife, spouse, romantic interest, crush, ex,
-  friend, enemy, rival, ally,
-  master, disciple, teacher, student, classmate, colleague,
-  servant, master (employer), boss, employee,
-  acquaintance, neighbor, relative, cousin, grandparent, grandchild
-- If a relationship does not fit the list, use the closest English equivalent
-- Avoid vague relationships like "knows", "met", "connected"
-- Store each relationship ONCE — do NOT add both A→B and B→A for the same pair
-  (e.g. if you add [A, B, "mother"], do NOT also add [B, A, "son"])
-- If a character's role is unclear, use "minor"
+  husband, wife, spouse, romantic interest, crush, ex, friend, enemy, rival, ally,
+  master, disciple, teacher, student, classmate, colleague, servant, boss, employee,
+  acquaintance, neighbor, relative, cousin, grandparent, grandchild.
+- Use the closest allowed type and omit vague edges such as "knows" or "met".
+- Store each pair once; do not emit inverse duplicates.
+- Do not repeat an unchanged existing edge. Emit a pair only when it is new or the source establishes a changed current relationship.
 
-RULES FOR ADDRESS RULES (VIETNAMESE XƯNG HÔ):
-- Extract explicit direct-address observations between two named characters and classify their persistence
-- Determine persistence primarily from source events, dialogue context, tone, and relationship development
-- The translated pronouns may have been influenced by existing address rules; do not treat them as proof that the existing rule is still stable
-- A pending address hypothesis may also have influenced the translation; neither the hypothesis nor the resulting translated pronouns count as confirmation
-- Return exactly one address_rule_candidate_verdict for every pending address hypothesis listed above
-- Judge each verdict from source events, the continuing relationship, relative status, conversational register, and explicit forms of address — never from the translated pronouns
-- For a pair with no confirmed address rule yet, another chapter that continues the same relationship, relative status, and ordinary conversational register without contradiction is independent support for "confirmed"
-- Source languages such as Chinese may not lexically distinguish Vietnamese pronoun choices. Exact source equivalents of "tớ/cậu", "anh/em", etc. are not required when the source independently preserves the social relationship and register that justify them
-- For a relationship_change hypothesis, use "confirmed" only when the changed relationship or register continues in the current source
-- Use "temporary" when the hypothesized form is shown to be a local joke, roleplay, drunken speech, nickname, sarcasm, or emotional outburst
-- Use "rejected" when the source contradicts the hypothesis or clearly continues the previously confirmed relationship/register
-- Use "inconclusive" only when this chapter has no relevant interaction or insufficient source evidence
-- Treat an existing address rule as a prior default, not as evidence against an explicit source-supported relationship change
-- Emit a stable change only when the source supports it independently of the translation's chosen pronouns
-- Use original names for "speaker" and "listener"; never use translated names as keys
-- "self" is how the speaker refers to themselves in dialogue (e.g. "ta", "tôi", "anh", "em", "thiếp")
-- "other" is how the speaker addresses/refers to the listener (e.g. "ngươi", "nàng", "em", "huynh", "bệ hạ")
-- Include an observation only when the source clearly supports the interaction; the translation may help with target wording but not with persistence
-- Use "scope": "stable" only for the default pair used consistently across scenes
-- Use "scope": "temporary" for roleplay, drunken speech, jokes, teasing, sarcasm, one-scene nicknames, insults, or emotional outbursts
-- Use "scope": "uncertain" when the direct form is clear but whether it is the stable default is unclear
-- Always emit a temporary observation so an earlier false stable candidate can be cancelled; it will not be stored as a lasting rule
-- Use "reason": "default" for an ordinary stable pattern and "relationship_change" only for an explicit lasting relationship change
-- For temporary observations, use the closest reason: "joke", "roleplay", "drunken_speech", "nickname", or "emotional_outburst"
-- Do not copy a pending hypothesis into address_rules merely to confirm it; use address_rule_candidate_verdicts
-- Do not repeat an unchanged existing stable rule
-- Do NOT add generic third-person pronoun examples here
-- Use "since": {{chapter_number}} for every observation
+=== VIETNAMESE ADDRESS EVIDENCE ===
+- Determine persistence primarily from source events, dialogue context, tone, relationship development, relative status, and register.
+- Existing rules and pending hypotheses may have influenced the translation; neither the hypothesis nor the resulting translated pronouns are confirmation. The translation may help with target wording but not with persistence.
+- Treat an existing address rule as a prior default, not evidence against a source-supported change. Emit a stable change only when the source supports it independently.
+- Source languages may not lexically distinguish Vietnamese forms. Exact source equivalents of "tớ/cậu" or "anh/em" are unnecessary when the source independently preserves the relationship and register.
 
-Respond with JSON ONLY (no other text):
+PENDING HYPOTHESES:
+- Return exactly one address_rule_candidate_verdict for every pending hypothesis above, using original entity keys.
+- confirmed: a relationship_change continues, or another chapter that continues the same relationship, status, and ordinary register independently supports a default candidate.
+- temporary: the form is local roleplay, drunken speech, a joke, teasing, sarcasm, a nickname, insult, or emotional outburst.
+- rejected: the source contradicts it or clearly continues the previous confirmed relationship/register.
+- Use "inconclusive" only when this chapter has no relevant interaction or insufficient source evidence.
+
+NEW ADDRESS OBSERVATIONS:
+- Emit only source-supported direct interaction not already represented by an unchanged stable rule. Do not copy a pending hypothesis merely to confirm it.
+- self is how the speaker refers to themselves; other is how they address or refer to the listener. Use original names for speaker/listener.
+- scope=stable only for a lasting default; temporary for a local form; uncertain when the form is clear but persistence is not.
+- Emit a clear new source-grounded form as uncertain rather than omit it only because persistence is unproven. It will remain an unconfirmed translation hypothesis until later evidence confirms it.
+- reason=default or relationship_change for stable/uncertain evidence; otherwise joke, roleplay, drunken_speech, nickname, or emotional_outburst.
+- Always emit a source-supported temporary observation so it can cancel a false stable candidate. Set since={{chapter_number}}.
+
+Return JSON only. Use empty objects/arrays when nothing qualifies:
 {
-    "terms": {
-        "original term": "Vietnamese translation"
+  "terms": {
+    "original term": "Vietnamese translation"
+  },
+  "characters": {
+    "entities": {
+      "原名": {
+        "translated_name": "Vietnamese name",
+        "role": "protagonist | antagonist | supporting | minor",
+        "pronoun": "stable Vietnamese reference used in narration outside dialogue"
+      }
     },
-    "characters": {
-        "entities": {
-            "原名": {
-                "translated_name": "Vietnamese name",
-                "role": "protagonist | antagonist | supporting | minor",
-                "pronoun": "Vietnamese pronoun (e.g. cậu, anh ấy, cô ấy, hắn)"
-            }
-        },
-        "edges": [
-            ["from_original_name", "to_original_name", "relationship_type_in_english"]
-        ],
-        "address_rules": [
-            {
-                "speaker": "from_original_name",
-                "listener": "to_original_name",
-                "self": "Vietnamese self-reference",
-                "other": "Vietnamese address/reference for listener",
-                "since": {{chapter_number}},
-                "scope": "stable | temporary | uncertain",
-                "reason": "default | relationship_change | joke | roleplay | drunken_speech | nickname | emotional_outburst",
-                "notes": "optional short reason or context"
-            }
-        ],
-        "address_rule_candidate_verdicts": [
-            {
-                "speaker": "pending_candidate_speaker_original_name",
-                "listener": "pending_candidate_listener_original_name",
-                "verdict": "confirmed | temporary | rejected | inconclusive"
-            }
-        ]
-    }
+    "edges": [
+      ["from_original_name", "to_original_name", "relationship_type_in_english"]
+    ],
+    "address_rules": [
+      {
+        "speaker": "from_original_name",
+        "listener": "to_original_name",
+        "self": "Vietnamese dialogue self-reference",
+        "other": "Vietnamese address/reference for listener",
+        "since": {{chapter_number}},
+        "scope": "stable | temporary | uncertain",
+        "reason": "default | relationship_change | joke | roleplay | drunken_speech | nickname | emotional_outburst",
+        "notes": "optional concise source-grounded context"
+      }
+    ],
+    "address_rule_candidate_verdicts": [
+      {
+        "speaker": "pending_candidate_speaker_original_name",
+        "listener": "pending_candidate_listener_original_name",
+        "verdict": "confirmed | temporary | rejected | inconclusive"
+      }
+    ]
+  }
 }

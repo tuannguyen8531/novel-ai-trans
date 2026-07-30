@@ -328,7 +328,7 @@ def test_select_active_character_context_excludes_first_degree_neighbors():
     assert active_edges == []
 
 
-def test_merge_character_context_keeps_first_pronoun_and_dedupes_reverse_edges():
+def test_merge_character_context_keeps_pronoun_upgrades_minor_role_and_updates_relationship():
     data = {
         "entities": {
             "李明": {"translated_name": "Lý Minh", "role": "minor", "pronoun": "cậu"},
@@ -348,7 +348,51 @@ def test_merge_character_context_keeps_first_pronoun_and_dedupes_reverse_edges()
     assert result["entities"]["李明"]["translated_name"] == "Lý Minh"
     assert "name_vi" not in result["entities"]["李明"]
     assert result["entities"]["李明"]["pronoun"] == "cậu"
+    assert result["edges"] == [["张伟", "李明", "rival", 3]]
+
+
+def test_merge_character_context_preserves_established_role_and_repeated_relationship():
+    data = {
+        "entities": {
+            "李明": {"translated_name": "Lý Minh", "role": "protagonist", "pronoun": "cậu"},
+            "张伟": {"translated_name": "Trương Vĩ", "role": "supporting", "pronoun": ""},
+        },
+        "edges": [["李明", "张伟", "friend", 1]],
+    }
+
+    result = merge_character_context(
+        data,
+        {"李明": {"translated_name": "Lý Minh mới", "role": "minor", "pronoun": "anh ấy"}},
+        [["张伟", "李明", "friend"]],
+        chapter=3,
+    )
+
+    assert result["entities"]["李明"] == {
+        "translated_name": "Lý Minh",
+        "role": "protagonist",
+        "pronoun": "cậu",
+    }
     assert result["edges"] == [["李明", "张伟", "friend", 1]]
+
+
+def test_merge_character_context_preserves_inverse_relationship_and_fills_unknown_role():
+    data = {
+        "entities": {
+            "李明": {"translated_name": "Lý Minh", "role": "unknown", "pronoun": ""},
+            "张伟": {"translated_name": "Trương Vĩ", "role": "supporting", "pronoun": ""},
+        },
+        "edges": [["李明", "张伟", "mother", 1]],
+    }
+
+    result = merge_character_context(
+        data,
+        {"李明": {"translated_name": "Lý Minh", "role": "minor", "pronoun": ""}},
+        [["张伟", "李明", "child"]],
+        chapter=3,
+    )
+
+    assert result["entities"]["李明"]["role"] == "minor"
+    assert result["edges"] == [["李明", "张伟", "mother", 1]]
 
 
 def test_merge_character_context_migrates_legacy_name_vi():
@@ -1065,6 +1109,76 @@ def test_explicit_relationship_change_requires_two_observations():
         "scope": "stable",
         "reason": "relationship_change",
     }
+    assert ADDRESS_RULE_CANDIDATES_KEY not in confirmed
+
+
+def test_uncertain_relationship_change_becomes_candidate_before_confirmation():
+    entities = {
+        "李明": {"translated_name": "Lý Minh"},
+        "张伟": {"translated_name": "Trương Vĩ"},
+    }
+    original_rule = {
+        "speaker": "李明",
+        "listener": "张伟",
+        "self": "tôi",
+        "other": "cậu",
+        "since": 1,
+    }
+    data = {"entities": entities, "address_rules": [original_rule]}
+    uncertain_change = [
+        {
+            "speaker": "李明",
+            "listener": "张伟",
+            "self": "anh",
+            "other": "em",
+            "scope": "uncertain",
+            "reason": "relationship_change",
+        }
+    ]
+
+    pending = merge_character_context(data, {}, [], uncertain_change, chapter=10)
+
+    assert pending["address_rules"] == [original_rule]
+    assert pending[ADDRESS_RULE_CANDIDATES_KEY] == [
+        {
+            "speaker": "李明",
+            "listener": "张伟",
+            "self": "anh",
+            "other": "em",
+            "first_seen": 10,
+            "last_seen": 10,
+            "observations": 1,
+            "scope": "stable",
+            "reason": "relationship_change",
+        }
+    ]
+
+    confirmed = merge_character_context(
+        pending,
+        {},
+        [],
+        address_rule_candidate_verdicts=[
+            {
+                "speaker": "李明",
+                "listener": "张伟",
+                "verdict": "confirmed",
+            }
+        ],
+        chapter=11,
+    )
+
+    assert confirmed["address_rules"] == [
+        {**original_rule, "until": 9},
+        {
+            "speaker": "李明",
+            "listener": "张伟",
+            "self": "anh",
+            "other": "em",
+            "since": 10,
+            "scope": "stable",
+            "reason": "relationship_change",
+        },
+    ]
     assert ADDRESS_RULE_CANDIDATES_KEY not in confirmed
 
 
