@@ -13,6 +13,7 @@ from pathlib import Path
 
 from src.config import config
 from src.domain.glossary import select_active_glossary_terms
+from src.domain.rules import select_relevant_rules
 from src.models.state import TranslationState
 from src.services.glossary.memory import load_recent_chapter_summaries
 from src.services.glossary.repository import (
@@ -60,7 +61,9 @@ def context_node(state: TranslationState) -> dict:
     if not lang_rules_file.exists():
         lang_rules_file = RULES_DIR / f"{language}.md"
     if lang_rules_file.exists():
-        rules_parts.append(lang_rules_file.read_text(encoding="utf-8"))
+        language_rules = select_relevant_rules(lang_rules_file.read_text(encoding="utf-8"), source_text)
+        if language_rules:
+            rules_parts.append(language_rules)
 
     # Load novel-specific rules if they exist
     if config.translated_dir:

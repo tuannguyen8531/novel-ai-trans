@@ -41,10 +41,30 @@ def test_context_loads_vietnamese_rules_from_vi_folder():
 
     assert "# Common Translation Rules (All Languages → Vietnamese)" in result["translation_rules"]
     assert "# Chinese → Vietnamese" in result["translation_rules"]
-    assert "confirmed address rules as persistent defaults, not absolute constraints" in result["translation_rules"]
-    assert "Keep the confirmed address rule when the current source is ambiguous" in result["translation_rules"]
-    assert "Let explicit source evidence override it" in result["translation_rules"]
+    assert "identify the speaker and listener" in result["translation_rules"]
+    assert "use RTAS only as a qualitative fallback" in result["translation_rules"]
+    assert "not by a relationship label alone" in result["translation_rules"]
     assert "follow any provided address rules exactly" not in result["translation_rules"]
+
+
+def test_context_keeps_only_language_term_mappings_used_in_chapter():
+    state = initial_state(
+        source_text="他开始修炼。",
+        source_language="chinese",
+        target_language="vi",
+        novel_name="novel",
+        chapter_number=1,
+    )
+
+    with (
+        patch("src.graph.nodes.context.load_glossary", return_value={}),
+        patch("src.graph.nodes.context.get_active_context_with_candidates", return_value=({}, [], [], [])),
+    ):
+        result = context_node(state)
+
+    assert "修炼 → tu luyện" in result["translation_rules"]
+    assert "丹药 → đan dược" not in result["translation_rules"]
+    assert "Translate character names to Hán Việt when appropriate" in result["translation_rules"]
 
 
 def test_context_filters_glossary_terms_to_source_text():

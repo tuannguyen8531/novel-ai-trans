@@ -1,7 +1,11 @@
 """Tests for prompt template engine."""
 
+from pathlib import Path
+
 import pytest
 
+from src.domain.chunking import estimate_token_count
+from src.domain.rules import select_relevant_rules
 from src.prompts import render_prompt
 
 
@@ -88,10 +92,63 @@ class TestRenderPrompt:
             target_name=target_name,
         )
 
-        assert "including sensitive, violent, or adult material when present" in result
-        assert "Do not omit, sanitize, intensify, or add content" in result
+        assert "Translate sensitive, violent, or adult material when present" in result
+        assert "Do not omit, summarize, rearrange, sanitize, intensify, or add content" in result
         assert "DISCLAIMER" not in result
         assert "It is NOT related to any illegal, harmful, or sexually explicit content" not in result
+
+    @pytest.mark.parametrize(("target_language", "target_name"), [("vi", "Vietnamese"), ("en", "English")])
+    def test_translate_keeps_core_quality_contract(self, target_language, target_name):
+        result = render_prompt(
+            "translate",
+            target_language=target_language,
+            lang_name="Chinese",
+            target_name=target_name,
+        )
+
+        assert "Translate every source sentence and meaningful beat faithfully, naturally, and completely" in result
+        assert "Preserve meaning, event order, tone, emotion, dialogue, internal monologue, paragraph structure" in result
+        assert "Follow supplied glossary terms and character names exactly" in result
+        assert "Leave no source-script text unless a rule or glossary explicitly requires it" in result
+        assert "starting immediately with its first line" in result
+
+    @pytest.mark.parametrize(
+        ("target_language", "target_name", "source_language", "source_name", "source_text"),
+        [
+            ("vi", "Vietnamese", "chinese", "Chinese", "李明开始修炼，师父让他服用丹药。"),
+            ("vi", "Vietnamese", "korean", "Korean", "김수현은 S급 헌터로 각성해 길드에 들어갔다."),
+            ("vi", "Vietnamese", "japanese", "Japanese", "田中太郎さんは異世界でスキルを得た。"),
+            ("en", "English", "chinese", "Chinese", "李明开始修炼，师父让他服用丹药。"),
+            ("en", "English", "korean", "Korean", "김수현은 S급 헌터로 각성해 길드에 들어갔다."),
+            ("en", "English", "japanese", "Japanese", "田中太郎さんは異世界でスキルを得た。"),
+        ],
+    )
+    def test_representative_translation_system_prompt_stays_within_token_budget(
+        self,
+        target_language,
+        target_name,
+        source_language,
+        source_name,
+        source_text,
+    ):
+        common_rules = Path(f"rules/{target_language}/common.md").read_text(encoding="utf-8")
+        language_rules = Path(f"rules/{target_language}/{source_language}.md").read_text(encoding="utf-8")
+        selected_rules = select_relevant_rules(language_rules, source_text)
+        result = render_prompt(
+            "translate",
+            target_language=target_language,
+            lang_name=source_name,
+            target_name=target_name,
+            translation_rules=f"{common_rules}\n\n{selected_rules}",
+            glossary="",
+            characters="",
+            address_rules="",
+            address_rule_candidates="",
+            previous_summary="",
+            review_feedback="",
+        )
+
+        assert estimate_token_count(result) < 2600
 
     @pytest.mark.parametrize(("target_language", "target_name"), [("vi", "Vietnamese"), ("en", "English")])
     def test_translate_uses_address_rules_as_source_overridable_defaults(self, target_language, target_name):

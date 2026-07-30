@@ -1,70 +1,23 @@
 # Common Translation Rules (All Languages → Vietnamese)
 
-## General Guidelines
-- Translate naturally and fluently, as if the text was originally written in Vietnamese
-- Do NOT translate word-by-word; translate by meaning and context
-- Preserve the original tone: formal scenes stay formal, casual scenes stay casual
-- Preserve paragraph structure and dialogue formatting
+## Vietnamese Prose
+- Write idiomatic Vietnamese while preserving the source register: formal, casual, archaic, comic, or intimate.
+- Action: maintain momentum with clear spatial flow and concise clauses where the source supports them.
+- Romance/drama: preserve subtext, hesitation, silence, and tension without explaining or embellishing them.
+- Exposition: prioritize clarity; use Hán-Việt vocabulary only when it is natural for the genre and register.
+- Internal monologue: preserve the character's rhythm, bias, uncertainty, and emotional movement.
+- Avoid translationese such as stiff source-language word order, unnecessary "một cách" or "của", and repetitive sentence frames.
 
-## Scene Analysis & Dynamic Filtering
-- Before translating, infer the scene type and adjust the style accordingly
-- Action scenes: prioritize brevity, short punchy sentences, fewer conjunctions, and vivid verbs
-- Romance or drama scenes: soften the tone, increase reduplicatives, and favor emotional resonance
-- Info-dump or exposition scenes: use clear formal Vietnamese, including Hán-Việt terms when they improve clarity
+## Dialogue and Address Fallback
+- Use natural Vietnamese dialogue punctuation and preserve meaningful pauses, interruptions, ellipses, and exclamations.
+- Match diction to the speaker's age, status, personality, relationship, and scene.
+- Before choosing address forms, identify the speaker and listener, then evaluate kinship, relative age/status, social distance, hierarchy, affection/hostility, public/private setting, current emotion, and source-supported relationship changes.
+- When no address rule exists, use RTAS only as a qualitative fallback: distant/formal, familiar, warm/intimate, deeply intimate, or kinship-based. Never invent, persist, or output a numeric score.
+- Choose the pronoun pair supported by that context (for example tôi–anh/cô, tớ–cậu, anh–em, or a kinship pair), not by a relationship label alone.
+- Keep the pair stable within a scene unless the source changes it; omit pronouns naturally when Vietnamese allows.
 
-## Dialogue
-- Use Vietnamese quotation marks: "" or dashes (—) for dialogue
-- Match the speaker's personality and relationship in pronoun choice
-- Keep exclamations, ellipses (...), and emotional markers intact
-
-## Contextual Pronoun System (RTAS)
-- Treat confirmed address rules as persistent defaults, not absolute constraints
-- Keep the confirmed address rule when the current source is ambiguous
-- Let explicit source evidence override it for a temporary local shift or a lasting change in relationship, tone, or address style
-- If no address rule is provided for a pair, infer pronouns from age, status, relationship, politeness level, and scene tension
-- Keep the same pronoun pair for the same speaker/listener within a scene unless the source clearly shows a relationship or emotional shift
-- Do not randomly alternate between "tôi/cậu", "anh/em", "ta/ngươi", names, and zero pronouns for the same pair
-- Prefer natural Vietnamese omission of pronouns when the speaker/listener is obvious
-- Use RTAS (Relationship Tension & Affection Score) only as an internal fallback heuristic; do not mention the score in the output
-- Estimate RTAS from the characters' words, actions, and relationship context
-- RTAS 1.0 - 2.5: distant, formal, or antagonistic relationships. Prefer forms like Tôi - Anh/Cô, Ngài - Tôi, or other respectful equivalents
-- RTAS 2.5 - 3.5: social, familiar, or neutral relationships. Prefer forms like Tớ - Cậu, Mình - Bạn, or Tôi - Ông/Bà when appropriate
-- RTAS 3.5 - 4.2: warm, intimate, or transitional relationships. Prefer forms like Anh - Em (light), Tớ - Anh, or other close-but-natural pairings
-- RTAS 4.2 - 5.0: deeply intimate relationships, lovers, spouses, or life-and-death moments. Prefer forms like Anh - Em (strong), Mình - Cậu, or similarly affectionate forms
-- Family override: prioritize Anh/Chị - Em, Ba/Mẹ - Con, or equivalent kinship-based forms for close family relations. Do not use Tao - Mày for siblings
-- Shock bypass: if a character is furious or shocked enough that the relationship abruptly collapses, a brief switch to Tao - Mày is allowed when it clearly serves the scene
-
-## Names & Proper Nouns
-- Keep character names consistent throughout the entire novel
-- Refer to the GLOSSARY for established translations
-- For new names not in the glossary, choose a natural Vietnamese rendering
-
-## Internet/Modern Slang
-- Translate internet slang to Vietnamese equivalents when possible
-- If no exact equivalent exists, translate by meaning, paraphrase naturally, or transliterate into Latin script; do not keep source-script characters
-
-## Anti-Translationese
-- Avoid overusing "một cách"; prefer concise, idiomatic Vietnamese
-- Prefer active voice unless passive voice carries a clear meaning advantage
-- Reduce unnecessary possessive "của" in close or natural speech
-- Avoid repeating the same exclamation too often; vary naturally to match the scene
-- Replace neutral verbs with stronger, more specific Vietnamese verbs when they better fit the scene
-
-## Boldness & Sensory Writing
-- When the scene is intense, allow shorter, broken sentences to create rhythm and tension
-- Prefer vivid Vietnamese verbs over neutral ones when they sharpen the image
-- Use reduplicative forms when they strengthen emotion, motion, or atmosphere
-- For extreme emotional intensity, fragmented sentences are allowed when they heighten shock, breathlessness, or crying
-- For sensitive or adult content, prefer metaphorical and literary language over clinical description
-- Use Vietnamese onomatopoeia and reduplicatives to strengthen sound, texture, and motion
-
-## Formatting
-- Preserve line breaks between paragraphs
-- Keep special formatting like【brackets】for in-story posts, messages, etc.
-- Keep『brackets』for chat messages or system notifications
-
-## Quality Standards
-- No missing sentences or paragraphs — translate EVERYTHING
-- No added content — do not invent details not in the source
-- No translator notes, footnotes, or explanations in the output
-- Preserve special symbols and formatting such as 【Posts】, 『Systems』, and 「Dialogue」
+## Names, Slang, and Presentation
+- Use the glossary for established names; otherwise choose one natural Vietnamese rendering and keep it consistent.
+- Translate idioms, jokes, internet slang, and sound effects by function and register; transliterate only when no natural equivalent exists.
+- Preserve recognizable in-world formats for system windows, status screens, posts, messages, and chat logs.
+- Preserve meaningful symbols and brackets such as 【】, 『』, and 「」.
