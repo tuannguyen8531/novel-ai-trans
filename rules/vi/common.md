@@ -18,7 +18,9 @@
 - Keep exclamations, ellipses (...), and emotional markers intact
 
 ## Contextual Pronoun System (RTAS)
-- First follow any provided address rules exactly; they override these general pronoun guidelines
+- Treat confirmed address rules as persistent defaults, not absolute constraints
+- Keep the confirmed address rule when the current source is ambiguous
+- Let explicit source evidence override it for a temporary local shift or a lasting change in relationship, tone, or address style
 - If no address rule is provided for a pair, infer pronouns from age, status, relationship, politeness level, and scene tension
 - Keep the same pronoun pair for the same speaker/listener within a scene unless the source clearly shows a relationship or emotional shift
 - Do not randomly alternate between "tôi/cậu", "anh/em", "ta/ngươi", names, and zero pronouns for the same pair

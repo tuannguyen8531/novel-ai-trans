@@ -41,6 +41,10 @@ def test_context_loads_vietnamese_rules_from_vi_folder():
 
     assert "# Common Translation Rules (All Languages → Vietnamese)" in result["translation_rules"]
     assert "# Chinese → Vietnamese" in result["translation_rules"]
+    assert "confirmed address rules as persistent defaults, not absolute constraints" in result["translation_rules"]
+    assert "Keep the confirmed address rule when the current source is ambiguous" in result["translation_rules"]
+    assert "Let explicit source evidence override it" in result["translation_rules"]
+    assert "follow any provided address rules exactly" not in result["translation_rules"]
 
 
 def test_context_filters_glossary_terms_to_source_text():
