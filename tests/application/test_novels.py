@@ -247,6 +247,72 @@ def test_source_warning_review_is_tied_to_exact_translation(tmp_path: Path) -> N
     assert catalog.progress(root, "demo", "vi", report_root=report_root)["warnings"] == [7]
 
 
+def test_post_check_review_ignores_source_fragments_individually(tmp_path: Path) -> None:
+    root = tmp_path / "translated"
+    novel_root = root / "demo"
+    _write_chapter(novel_root / "input", 7, "囡和李来了")
+    report_root = tmp_path / "reports"
+    chapters.write_chapter(
+        root,
+        "demo",
+        7,
+        "Cô bé 囡 và 李 đã đến.",
+        view="translation",
+        target="vi",
+        report_root=report_root,
+    )
+
+    review = chapters.chapter_post_check(root, "demo", 7, "vi", report_root=report_root)
+    assert [(item.detail, item.ignored) for item in review.items] == [("囡", False), ("李", False)]
+
+    review = chapters.review_post_check_item(
+        root,
+        "demo",
+        7,
+        "vi",
+        review.items[0].key,
+        ignored=True,
+        report_root=report_root,
+    )
+    assert [item.ignored for item in review.items] == [True, False]
+    assert catalog.progress(root, "demo", "vi", report_root=report_root)["warnings"] == [7]
+
+    review = chapters.review_post_check_item(
+        root,
+        "demo",
+        7,
+        "vi",
+        review.items[1].key,
+        ignored=True,
+        report_root=report_root,
+    )
+    assert [item.ignored for item in review.items] == [True, True]
+    assert catalog.progress(root, "demo", "vi", report_root=report_root)["warnings"] == []
+
+
+def test_post_check_review_lists_non_source_issues(tmp_path: Path) -> None:
+    root = tmp_path / "translated"
+    novel_root = root / "demo"
+    _write_chapter(novel_root / "input", 7, "A sufficiently long source paragraph.")
+    report_root = tmp_path / "reports"
+    chapters.write_chapter(
+        root,
+        "demo",
+        7,
+        "```text\nTranslated paragraph.\n```",
+        view="translation",
+        target="vi",
+        report_root=report_root,
+    )
+
+    review = chapters.chapter_post_check(root, "demo", 7, "vi", report_root=report_root)
+
+    code_fence = next(item for item in review.items if item.code == "contains_code_fence")
+    assert code_fence.severity == "error"
+    assert code_fence.reviewable is True
+    assert code_fence.origin == "output"
+
+
 def test_write_chapter_preserves_legacy_unpadded_translation_filename(tmp_path: Path) -> None:
     root = tmp_path / "translated"
     legacy_path = root / "demo" / "output" / "chapter_7.txt"

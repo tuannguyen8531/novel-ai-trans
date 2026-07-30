@@ -121,6 +121,27 @@ export interface ChapterSourceWarning {
   fragments: string[]
 }
 
+export interface ChapterPostCheckItem {
+  key: string
+  code: string
+  severity: 'warning' | 'error'
+  detail: string
+  ignored: boolean
+  reviewable: boolean
+  origin: 'output' | 'rejected'
+}
+
+export interface ChapterPostCheck {
+  chapter: number
+  target: string
+  items: ChapterPostCheckItem[]
+  candidate_translation: string | null
+  partial: boolean
+  failed_chunk_index: number | null
+  total_chunks: number | null
+  previous_output_exists: boolean
+}
+
 export interface JobError {
   code: string
   message: string

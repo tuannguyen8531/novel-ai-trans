@@ -12,8 +12,15 @@ from src.application.errors import ApplicationValidationError, ResourceNotFoundE
 from src.application.novel.identity import require_path
 from src.domain.language import SUPPORTED_TARGET_LANGUAGES, normalize_target_language
 from src.domain.quality import post_check_translation, source_language_fragments
+from src.services import catalog as catalog_repository
 from src.services import chapters as chapter_service
-from src.services.translation.reports import ReportStore, content_hash, issue_is_ignored
+from src.services.translation.reports import (
+    ReportStore,
+    content_hash,
+    issue_is_ignored,
+    post_check_review_key,
+    review_key_is_ignored,
+)
 
 _SOURCE_WARNING_CODE = "contains_source_language_chars"
 
@@ -43,6 +50,29 @@ class SourceWarning:
     present: bool
     ignored: bool
     fragments: list[str]
+
+
+@dataclass(frozen=True)
+class PostCheckItem:
+    key: str
+    code: str
+    severity: str
+    detail: str
+    ignored: bool
+    reviewable: bool
+    origin: str
+
+
+@dataclass(frozen=True)
+class PostCheckReview:
+    chapter: int
+    target: str
+    items: list[PostCheckItem]
+    candidate_translation: str | None
+    partial: bool
+    failed_chunk_index: int | None
+    total_chunks: int | None
+    previous_output_exists: bool
 
 
 def list_chapters(root: Path, name: str) -> list[Chapter]:
@@ -164,16 +194,203 @@ def source_warning_status(
         report_root=report_root,
     )
     report = ReportStore().load(report_path)
-    ignored = bool(source_fragments) and issue_is_ignored(
-        report,
-        _SOURCE_WARNING_CODE,
-        content_hash(translation),
+    fingerprint = content_hash(translation)
+    legacy_ignored = issue_is_ignored(report, _SOURCE_WARNING_CODE, fingerprint)
+    ignored = bool(source_fragments) and (
+        legacy_ignored
+        or all(
+            review_key_is_ignored(
+                report,
+                post_check_review_key(_SOURCE_WARNING_CODE, fragment),
+                fingerprint,
+            )
+            for fragment in dict.fromkeys(source_fragments)
+        )
     )
     return SourceWarning(
         code=_SOURCE_WARNING_CODE,
         present=bool(source_fragments),
         ignored=ignored,
         fragments=fragments,
+    )
+
+
+def chapter_post_check(
+    root: Path,
+    name: str,
+    number: int,
+    target: str,
+    *,
+    report_root: Path | None = None,
+    rejected_root: Path | None = None,
+) -> PostCheckReview:
+    """Build the review table for current output and a rejected candidate."""
+    novel_root = require_path(root, name)
+    normalized_target = normalize_target_language(target)
+    items: list[PostCheckItem] = []
+    output_dir = paths.novel_output_dir_from_root(novel_root, normalized_target)
+    output_path = chapter_service.chapter_path(output_dir, number)
+    previous_output_exists = output_path.exists()
+
+    if previous_output_exists:
+        translation = chapter_service.read(output_dir, number)
+        input_dir = paths.novel_input_dir_from_root(novel_root)
+        input_path = chapter_service.chapter_path(input_dir, number)
+        source = chapter_service.read(input_dir, number) if input_path.exists() else ""
+        glossary_path = novel_root / ("glossary.json" if normalized_target == "vi" else f"glossary.{normalized_target}.json")
+        issues = post_check_translation(
+            source,
+            translation,
+            catalog_repository.load_glossary_terms(glossary_path),
+        )
+        fragments = list(dict.fromkeys(source_language_fragments(translation)))
+        fingerprint = content_hash(translation)
+        report = ReportStore().load(
+            paths.translation_report_path(
+                app_config.get_config(),
+                name,
+                number,
+                normalized_target,
+                report_root=report_root,
+            )
+        )
+        legacy_ignored = issue_is_ignored(report, _SOURCE_WARNING_CODE, fingerprint)
+        for issue in issues:
+            if issue.code == _SOURCE_WARNING_CODE:
+                items.extend(
+                    PostCheckItem(
+                        key=post_check_review_key(issue.code, fragment),
+                        code=issue.code,
+                        severity=issue.severity,
+                        detail=fragment[:40],
+                        ignored=legacy_ignored
+                        or review_key_is_ignored(
+                            report,
+                            post_check_review_key(issue.code, fragment),
+                            fingerprint,
+                        ),
+                        reviewable=True,
+                        origin="output",
+                    )
+                    for fragment in fragments[:20]
+                )
+                continue
+            key = post_check_review_key(issue.code, issue.message)
+            items.append(
+                PostCheckItem(
+                    key=key,
+                    code=issue.code,
+                    severity=issue.severity,
+                    detail=issue.message,
+                    ignored=review_key_is_ignored(report, key, fingerprint),
+                    reviewable=True,
+                    origin="output",
+                )
+            )
+
+    rejected = ReportStore().load(
+        paths.translation_rejected_path(
+            app_config.get_config(),
+            name,
+            number,
+            normalized_target,
+            rejected_root=rejected_root,
+        )
+    )
+    rejected_issues = rejected.get("issues")
+    if isinstance(rejected_issues, list):
+        for issue in rejected_issues:
+            if not isinstance(issue, dict):
+                continue
+            key = issue.get("key")
+            code = issue.get("code")
+            severity = issue.get("severity")
+            message = issue.get("message")
+            if not (
+                isinstance(key, str) and isinstance(code, str) and severity in {"warning", "error"} and isinstance(message, str)
+            ):
+                continue
+            items.append(
+                PostCheckItem(
+                    key=key,
+                    code=code,
+                    severity=severity,
+                    detail=message,
+                    ignored=False,
+                    reviewable=False,
+                    origin="rejected",
+                )
+            )
+
+    candidate = rejected.get("candidate_translation")
+    failed_chunk_index = rejected.get("failed_chunk_index")
+    total_chunks = rejected.get("total_chunks")
+    return PostCheckReview(
+        chapter=number,
+        target=normalized_target,
+        items=items,
+        candidate_translation=candidate if isinstance(candidate, str) else None,
+        partial=bool(rejected.get("partial", False)),
+        failed_chunk_index=failed_chunk_index if isinstance(failed_chunk_index, int) else None,
+        total_chunks=total_chunks if isinstance(total_chunks, int) else None,
+        previous_output_exists=previous_output_exists,
+    )
+
+
+def review_post_check_item(
+    root: Path,
+    name: str,
+    number: int,
+    target: str,
+    key: str,
+    *,
+    ignored: bool,
+    report_root: Path | None = None,
+    rejected_root: Path | None = None,
+) -> PostCheckReview:
+    """Review one current-output post-check row."""
+    normalized_target = normalize_target_language(target)
+    review = chapter_post_check(
+        root,
+        name,
+        number,
+        normalized_target,
+        report_root=report_root,
+        rejected_root=rejected_root,
+    )
+    item = next((item for item in review.items if item.key == key and item.reviewable), None)
+    if item is None:
+        raise ApplicationValidationError("The post-check item is not available for review.")
+    translation = read_chapter(
+        root,
+        name,
+        number,
+        view="translation",
+        target=normalized_target,
+    ).content
+    ReportStore().set_review_ignored(
+        paths.translation_report_path(
+            app_config.get_config(),
+            name,
+            number,
+            normalized_target,
+            report_root=report_root,
+        ),
+        chapter=number,
+        target_language=normalized_target,
+        key=item.key,
+        code=item.code,
+        detail=item.detail,
+        content=translation,
+        ignored=ignored,
+    )
+    return chapter_post_check(
+        root,
+        name,
+        number,
+        normalized_target,
+        report_root=report_root,
+        rejected_root=rejected_root,
     )
 
 
@@ -239,10 +456,14 @@ def delete_chapter(root: Path, name: str, number: int) -> None:
 __all__ = [
     "Chapter",
     "Content",
+    "PostCheckItem",
+    "PostCheckReview",
     "SourceWarning",
     "delete_chapter",
     "list_chapters",
+    "chapter_post_check",
     "read_chapter",
+    "review_post_check_item",
     "review_source_warning",
     "source_warning_status",
     "write_chapter",

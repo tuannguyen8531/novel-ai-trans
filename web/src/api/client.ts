@@ -1,6 +1,7 @@
 import type {
   ArtifactInfo,
   ChapterContentResponse,
+  ChapterPostCheck,
   ChapterSourceWarning,
   ConfigSummary,
   DraftDetail,
@@ -180,6 +181,25 @@ export const api = {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ignored })
+      }
+    ),
+  getChapterPostCheck: (name: string, chapter: number, target: string) =>
+    request<ChapterPostCheck>(
+      `/api/novels/${encodeURIComponent(name)}/chapters/${chapter}/post-check?target=${encodeURIComponent(target)}`
+    ),
+  reviewChapterPostCheck: (
+    name: string,
+    chapter: number,
+    target: string,
+    key: string,
+    ignored: boolean
+  ) =>
+    request<ChapterPostCheck>(
+      `/api/novels/${encodeURIComponent(name)}/chapters/${chapter}/post-check?target=${encodeURIComponent(target)}`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key, ignored })
       }
     ),
   insertChapter: (name: string, number: number, content: string) =>

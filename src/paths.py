@@ -22,6 +22,7 @@ INPUT_DIR = _PROJECT_ROOT / "translated" / "input"
 OUTPUT_DIR = _PROJECT_ROOT / "translated" / "output"
 PROGRESS_DIR = _PROJECT_ROOT / "runtime" / "progress"
 REPORT_DIR = _PROJECT_ROOT / "runtime" / "reports"
+REJECTED_DIR = _PROJECT_ROOT / "runtime" / "rejected"
 RUNTIME_OUTPUT_ROOT = _PROJECT_ROOT / "runtime" / "crawler"
 CONFIG_DIR = _PROJECT_ROOT / "configs"
 DEFAULT_TRANSLATED_ROOT = _PROJECT_ROOT / "translated"
@@ -176,12 +177,27 @@ def translation_report_path(
     return resolve_within(root, target, novel_name, f"chapter_{chapter_number:03d}.json")
 
 
+def translation_rejected_path(
+    config: Any,
+    novel_name: str,
+    chapter_number: int,
+    target_language: str | None = None,
+    *,
+    rejected_root: Path | None = None,
+) -> Path:
+    target = normalize_target_language(target_language or config.target_language)
+    root = rejected_root or REJECTED_DIR
+    validate_novel_name(novel_name)
+    return resolve_within(root, target, novel_name, f"chapter_{chapter_number:03d}.json")
+
+
 __all__ = [
     "INPUT_DIR",
     "RUNTIME_DIR",
     "OUTPUT_DIR",
     "PROGRESS_DIR",
     "REPORT_DIR",
+    "REJECTED_DIR",
     "RUNTIME_OUTPUT_ROOT",
     "CONFIG_DIR",
     "DEFAULT_TRANSLATED_ROOT",
@@ -211,4 +227,5 @@ __all__ = [
     "translation_progress_path_for_target",
     "translation_progress_path",
     "translation_report_path",
+    "translation_rejected_path",
 ]

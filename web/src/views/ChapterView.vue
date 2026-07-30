@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, ref, toRef } from 'vue'
+import { ref, toRef } from 'vue'
 import ChapterEditor from '@/components/ChapterEditor.vue'
 import ChapterToc from '@/components/ChapterToc.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import PostCheckDialog from '@/components/PostCheckDialog.vue'
 import ReaderContent from '@/components/ReaderContent.vue'
 import ReaderToolbar from '@/components/ReaderToolbar.vue'
 import { useReader } from '@/composables/reader'
@@ -22,9 +23,9 @@ const {
   showDeleteDialog,
   deleteLoading,
   showScrollToTop,
-  sourceWarning,
-  sourceWarningLoading,
-  sourceWarningError,
+  postCheck,
+  postCheckLoading,
+  postCheckError,
   currentIndex,
   previousChapter,
   nextChapter,
@@ -38,7 +39,7 @@ const {
   startEdit,
   cancelEdit,
   saveEdit,
-  reviewSourceWarning,
+  reviewPostCheckItem,
   confirmDelete,
   goTo,
   goBack,
@@ -46,21 +47,7 @@ const {
 } = useReader(toRef(props, 'name'), toRef(props, 'chapter'))
 
 const showToc = ref(false)
-const showWarningDialog = ref(false)
-const warningReviewMessage = computed(() => {
-  if (!sourceWarning.value) return ''
-  const fragments = sourceWarning.value.fragments.join(', ')
-  if (sourceWarning.value.ignored) {
-    return `Source fragments: ${fragments}\n\nThis warning is currently ignored for this exact chapter content. Restore it to include the chapter in the warning list again.`
-  }
-  return `Source fragments: ${fragments}\n\nIgnore this warning only when these fragments are intentionally preserved, such as a kaomoji. The decision will expire if the chapter content changes.`
-})
-
-async function confirmWarningReview() {
-  if (!sourceWarning.value) return
-  await reviewSourceWarning(!sourceWarning.value.ignored)
-  showWarningDialog.value = false
-}
+const showPostCheckDialog = ref(false)
 </script>
 
 <template>
@@ -77,7 +64,7 @@ async function confirmWarningReview() {
       :target-language="targetLanguage"
       :target-language-label="targetLanguageLabel"
       :has-target-translation="hasTargetTranslation"
-      :has-source-warning="Boolean(sourceWarning?.present)"
+      :has-post-check-issues="Boolean(postCheck?.items.length)"
       :previous-chapter="previousChapter"
       :next-chapter="nextChapter"
       :current-index="currentIndex"
@@ -85,7 +72,7 @@ async function confirmWarningReview() {
       @back="goBack"
       @change-view="changeView"
       @edit="startEdit"
-      @review-warning="showWarningDialog = true"
+      @review-post-check="showPostCheckDialog = true"
       @delete="showDeleteDialog = true"
       @save="saveEdit"
       @cancel="cancelEdit"
@@ -94,7 +81,7 @@ async function confirmWarningReview() {
     />
 
     <p v-if="error" class="error card">{{ error }}</p>
-    <p v-if="sourceWarningError" class="error card">{{ sourceWarningError }}</p>
+    <p v-if="postCheckError" class="error card">{{ postCheckError }}</p>
 
     <div class="chapter-body card">
       <ReaderContent
@@ -138,14 +125,13 @@ async function confirmWarningReview() {
       @select="goTo"
     />
 
-    <ConfirmDialog
-      :show="showWarningDialog"
-      title="Review warning"
-      :message="warningReviewMessage"
-      :confirm-label="sourceWarning?.ignored ? 'Restore warning' : 'Ignore warning'"
-      :loading="sourceWarningLoading"
-      @confirm="confirmWarningReview"
-      @cancel="showWarningDialog = false"
+    <PostCheckDialog
+      :open="showPostCheckDialog"
+      :review="postCheck"
+      :loading="postCheckLoading"
+      :error="postCheckError"
+      @review-item="reviewPostCheckItem"
+      @close="showPostCheckDialog = false"
     />
 
     <ConfirmDialog

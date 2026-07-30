@@ -8,7 +8,13 @@ import shutil
 from pathlib import Path
 
 from src import paths
-from src.services.translation.reports import content_hash, issue_is_ignored
+from src.domain.quality import source_language_fragments
+from src.services.translation.reports import (
+    content_hash,
+    issue_is_ignored,
+    post_check_review_key,
+    review_key_is_ignored,
+)
 
 _REPORT_FILE_RE = re.compile(r"^chapter_(\d+)\.json$")
 _SOURCE_WARNING_CODE = "contains_source_language_chars"
@@ -82,11 +88,25 @@ def load_source_warning_chapters(directory: Path, output_directory: Path | None 
             if not output_path.exists():
                 output_path = output_directory / f"chapter_{chapter}.txt"
             try:
-                fingerprint = content_hash(output_path.read_bytes())
-            except OSError:
+                output_bytes = output_path.read_bytes()
+                fingerprint = content_hash(output_bytes)
+                translation = output_bytes.decode("utf-8")
+            except OSError, UnicodeDecodeError:
                 fingerprint = ""
-            if fingerprint and issue_is_ignored(data, _SOURCE_WARNING_CODE, fingerprint):
-                continue
+                translation = ""
+            if fingerprint:
+                legacy_ignored = issue_is_ignored(data, _SOURCE_WARNING_CODE, fingerprint)
+                fragments = list(dict.fromkeys(source_language_fragments(translation)))
+                granular_ignored = bool(fragments) and all(
+                    review_key_is_ignored(
+                        data,
+                        post_check_review_key(_SOURCE_WARNING_CODE, fragment),
+                        fingerprint,
+                    )
+                    for fragment in fragments
+                )
+                if legacy_ignored or granular_ignored:
+                    continue
         chapters.add(chapter)
     return sorted(chapters)
 
@@ -105,6 +125,24 @@ def glossary_counts(path: Path) -> tuple[int, int, int]:
     )
 
 
+def load_glossary_terms(path: Path) -> dict[str, str]:
+    """Load string glossary terms defensively."""
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError, OSError:
+        return {}
+    terms = data.get("terms") if isinstance(data, dict) else None
+    if not isinstance(terms, dict):
+        return {}
+    return {
+        original: translated
+        for original, translated in terms.items()
+        if isinstance(original, str) and isinstance(translated, str)
+    }
+
+
 def has_files(path: Path) -> bool:
     return path.exists() and any(path.iterdir())
 
@@ -115,6 +153,7 @@ __all__ = [
     "glossary_counts",
     "has_files",
     "list_directories",
+    "load_glossary_terms",
     "load_progress",
     "load_source_warning_chapters",
 ]

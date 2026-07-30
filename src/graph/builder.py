@@ -34,6 +34,25 @@ from src.models.state import TranslationState
 class TranslationQualityError(RuntimeError):
     """Raised when deterministic quality checks still fail after retries."""
 
+    def __init__(
+        self,
+        message: str,
+        *,
+        issue_codes: list[str],
+        feedback: str,
+        retry_count: int,
+        failed_chunk_index: int,
+        total_chunks: int,
+        candidate_translation: str,
+    ) -> None:
+        super().__init__(message)
+        self.issue_codes = issue_codes
+        self.feedback = feedback
+        self.retry_count = retry_count
+        self.failed_chunk_index = failed_chunk_index
+        self.total_chunks = total_chunks
+        self.candidate_translation = candidate_translation
+
 
 def _after_review(state: TranslationState) -> str:
     """
@@ -61,9 +80,20 @@ def _after_quality(state: TranslationState) -> str:
 
 
 def _reject_chunk(state: TranslationState) -> dict:
-    issue_codes = ", ".join(state.get("post_check_issues", [])) or "unknown_quality_failure"
+    issue_codes = state.get("post_check_issues", []) or ["unknown_quality_failure"]
+    issue_summary = ", ".join(issue_codes)
     feedback = state.get("review_feedback", "").strip() or "The translated chunk failed deterministic quality checks."
-    raise TranslationQualityError(f"Deterministic quality checks failed after retries: {feedback} [{issue_codes}]")
+    candidate_chunks = [*state.get("translated_chunks", []), state.get("current_translation", "")]
+    candidate_translation = "\n\n".join(chunk for chunk in candidate_chunks if chunk)
+    raise TranslationQualityError(
+        f"Deterministic quality checks failed after retries: {feedback} [{issue_summary}]",
+        issue_codes=issue_codes,
+        feedback=feedback,
+        retry_count=state.get("retry_count", 0),
+        failed_chunk_index=state.get("current_chunk_index", 0),
+        total_chunks=len(state.get("chunks", [])),
+        candidate_translation=candidate_translation,
+    )
 
 
 def _accept_chunk(state: TranslationState) -> dict:

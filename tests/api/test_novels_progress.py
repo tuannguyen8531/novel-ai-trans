@@ -208,3 +208,78 @@ def test_manual_translation_edit_refreshes_source_warning(client):
     assert response.status_code == 200
     progress_response = test_client.get("/api/novels/demo/translation-progress?target=vi")
     assert progress_response.json()["warnings"] == []
+
+
+def test_chapter_post_check_reviews_each_fragment_individually(client):
+    test_client, translated = client
+    novel = translated / "demo"
+    source_dir = novel / "input"
+    source_dir.mkdir(parents=True)
+    (source_dir / "chapter_001.txt").write_text("囡和李来了", encoding="utf-8")
+    test_client.put(
+        "/api/novels/demo/chapters/1?view=translation&target=vi",
+        json={"content": "Cô bé 囡 và 李 đã đến."},
+    )
+
+    response = test_client.get("/api/novels/demo/chapters/1/post-check?target=vi")
+    assert response.status_code == 200
+    items = response.json()["items"]
+    assert [(item["detail"], item["ignored"]) for item in items] == [
+        ("囡", False),
+        ("李", False),
+    ]
+
+    response = test_client.put(
+        "/api/novels/demo/chapters/1/post-check?target=vi",
+        json={"key": items[0]["key"], "ignored": True},
+    )
+    assert [item["ignored"] for item in response.json()["items"]] == [True, False]
+    assert test_client.get("/api/novels/demo/translation-progress?target=vi").json()["warnings"] == [1]
+
+    response = test_client.put(
+        "/api/novels/demo/chapters/1/post-check?target=vi",
+        json={"key": items[1]["key"], "ignored": True},
+    )
+    assert [item["ignored"] for item in response.json()["items"]] == [True, True]
+    assert test_client.get("/api/novels/demo/translation-progress?target=vi").json()["warnings"] == []
+
+
+def test_chapter_post_check_includes_rejected_candidate_without_output(client):
+    test_client, translated = client
+    novel = translated / "demo"
+    _write_chapter(novel / "input", 1)
+    rejected_path = translated.parent / "rejected" / "vi" / "demo" / "chapter_001.json"
+    rejected_path.parent.mkdir(parents=True)
+    rejected_path.write_text(
+        json.dumps(
+            {
+                "chapter": 1,
+                "target_language": "vi",
+                "issues": [
+                    {
+                        "key": "rejected:0:translation_empty",
+                        "code": "translation_empty",
+                        "severity": "error",
+                        "message": "Translation is empty.",
+                    }
+                ],
+                "candidate_translation": "",
+                "partial": True,
+                "failed_chunk_index": 0,
+                "total_chunks": 2,
+                "previous_output_exists": False,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    response = test_client.get("/api/novels/demo/chapters/1/post-check?target=vi")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["items"][0]["origin"] == "rejected"
+    assert body["items"][0]["severity"] == "error"
+    assert body["items"][0]["reviewable"] is False
+    assert body["candidate_translation"] == ""
+    assert body["partial"] is True
+    assert body["previous_output_exists"] is False

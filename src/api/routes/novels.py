@@ -15,6 +15,8 @@ from src.api.schemas import (
     ArtifactInfoResponse,
     ChapterContentPayload,
     ChapterContentResponse,
+    ChapterPostCheckResponse,
+    ChapterPostCheckReviewPayload,
     ChapterSourceWarningResponse,
     ChapterWarningReviewPayload,
     CreateNovelPayload,
@@ -147,6 +149,7 @@ async def insert_novel_chapter(
             cancel_event=cancel_event,
             progress_root=runtime_root / "progress",
             report_root=runtime_root / "reports",
+            rejected_root=runtime_root / "rejected",
             backup_root=runtime_root / "insert-backups",
             lock_dir=runtime_root / "locks",
         )
@@ -247,6 +250,55 @@ def review_chapter_source_warning(
         report_root=get_state().jobs_dir.parent / "reports",
     )
     return ChapterSourceWarningResponse(**asdict(status))
+
+
+@router.get(
+    "/novels/{name}/chapters/{number}/post-check",
+    response_model=ChapterPostCheckResponse,
+)
+def get_chapter_post_check(
+    name: str,
+    number: int,
+    _: AuthenticatedPrincipal,
+    target: Annotated[Literal["vi", "en"] | None, Query()] = None,
+) -> ChapterPostCheckResponse:
+    config = app_config.get_config()
+    runtime_root = get_state().jobs_dir.parent
+    review = chapters.chapter_post_check(
+        identity.resolve_root(config.translated_dir),
+        name,
+        number,
+        target or config.target_language,
+        report_root=runtime_root / "reports",
+        rejected_root=runtime_root / "rejected",
+    )
+    return ChapterPostCheckResponse(**asdict(review))
+
+
+@router.put(
+    "/novels/{name}/chapters/{number}/post-check",
+    response_model=ChapterPostCheckResponse,
+)
+def review_chapter_post_check(
+    name: str,
+    number: int,
+    payload: ChapterPostCheckReviewPayload,
+    _: AuthenticatedPrincipal,
+    target: Annotated[Literal["vi", "en"] | None, Query()] = None,
+) -> ChapterPostCheckResponse:
+    config = app_config.get_config()
+    runtime_root = get_state().jobs_dir.parent
+    review = chapters.review_post_check_item(
+        identity.resolve_root(config.translated_dir),
+        name,
+        number,
+        target or config.target_language,
+        payload.key,
+        ignored=payload.ignored,
+        report_root=runtime_root / "reports",
+        rejected_root=runtime_root / "rejected",
+    )
+    return ChapterPostCheckResponse(**asdict(review))
 
 
 @router.delete("/novels/{name}/chapters/{number}", status_code=204)

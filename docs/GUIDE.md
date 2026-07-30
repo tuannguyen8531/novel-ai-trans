@@ -414,6 +414,11 @@ severe truncation, code fences, or missing illustration markers are retried up
 to `MAX_RETRIES`; if they still fail, the chapter is recorded as failed instead
 of saving a known-bad translation.
 
+The final rejected post-check candidate is kept as a single JSON file under
+`runtime/rejected/{target}/{novel}/chapter_NNN.json`. It contains the candidate
+text, issue codes, feedback, retry count, and failed chunk position so the GUI
+can review the failure without exposing it as a completed translation.
+
 Use `Ctrl+C` to stop gracefully. The chapter currently being processed finishes
 and is saved, then the run stops before starting the next chapter. Resume later
 with `--resume`.

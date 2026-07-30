@@ -39,7 +39,7 @@ async def post_translate(
         snapshot.enable_summary = payload.enable_summary
 
     loop = asyncio.get_running_loop()
-    report_root = get_state().jobs_dir.parent / "reports"
+    runtime_root = get_state().jobs_dir.parent
 
     def _run(job, emit, cancel_event):
         started_at = time.time()
@@ -80,7 +80,8 @@ async def post_translate(
                 request,
                 progress_callback=progress_cb,
                 cancel_event=cancel_event,
-                report_root=report_root,
+                report_root=runtime_root / "reports",
+                rejected_root=runtime_root / "rejected",
             )
         except Exception as error:
             interrupted = cancel_event.is_set()

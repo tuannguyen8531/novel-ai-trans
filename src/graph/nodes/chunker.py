@@ -1,6 +1,4 @@
-"""
-Chunker Node — Split source text into translatable chunks.
-"""
+"""Chunker Node — Split source text into non-overlapping translatable chunks."""
 
 from src.config import config
 from src.domain.chunking import split_into_chunks
@@ -12,7 +10,7 @@ def chunker_node(state: TranslationState) -> dict:
     chunks = split_into_chunks(
         state["source_text"],
         chunk_size=config.chunk_size,
-        overlap=config.chunk_overlap,
+        overlap=0,
         mode=config.chunk_mode,
     )
 

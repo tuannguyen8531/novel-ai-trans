@@ -205,6 +205,34 @@ class ChapterWarningReviewPayload(BaseModel):
     ignored: bool
 
 
+class ChapterPostCheckItemResponse(BaseModel):
+    key: str
+    code: str
+    severity: Literal["warning", "error"]
+    detail: str
+    ignored: bool
+    reviewable: bool
+    origin: Literal["output", "rejected"]
+
+
+class ChapterPostCheckResponse(BaseModel):
+    chapter: int
+    target: str
+    items: list[ChapterPostCheckItemResponse]
+    candidate_translation: str | None = None
+    partial: bool
+    failed_chunk_index: int | None = None
+    total_chunks: int | None = None
+    previous_output_exists: bool
+
+
+class ChapterPostCheckReviewPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    key: str = Field(min_length=1)
+    ignored: bool
+
+
 class InsertChapterPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

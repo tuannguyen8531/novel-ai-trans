@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from threading import Event
 from typing import Literal
 
@@ -11,6 +12,7 @@ from src.application.progress import ProgressEvent
 from src.application.translation.models import TranslationRequest
 from src.application.translation.workflow import TranslationWorkflow
 from src.config import Config
+from src.graph.builder import TranslationQualityError
 from src.services.translation.checkpoints import CheckpointStore
 from src.services.translation.reports import ReportStore
 from src.services.translation.storage import TranslationStorage
@@ -39,6 +41,19 @@ class FailingGraph:
         raise RuntimeError("provider failed")
 
 
+class QualityFailingGraph:
+    def invoke(self, state):
+        raise TranslationQualityError(
+            "post-check failed",
+            issue_codes=["contains_source_language_chars"],
+            feedback="Source fragment: 张三",
+            retry_count=2,
+            failed_chunk_index=0,
+            total_chunks=2,
+            candidate_translation="Rejected 张三 candidate",
+        )
+
+
 def make_workflow(
     tmp_path,
     graph,
@@ -54,6 +69,7 @@ def make_workflow(
         source_language_loader=lambda _novel: "chinese",
         progress_root=tmp_path / "progress",
         report_root=tmp_path / "reports",
+        rejected_root=tmp_path / "rejected",
     )
 
 
@@ -102,6 +118,44 @@ def test_chapter_exception_is_counted_once(tmp_path) -> None:
     failed_event = next(event for event in events if event.kind == "chapter_failed")
     assert failed_event.current == 1
     assert failed_event.pct == 100.0
+
+
+def test_quality_failure_saves_one_rejected_json(tmp_path) -> None:
+    write_chapters(tmp_path, (1,))
+
+    result = make_workflow(tmp_path, QualityFailingGraph()).run(
+        TranslationRequest(novel="novel"),
+    )
+
+    assert result.failed == 1
+    rejected_path = tmp_path / "rejected" / "vi" / "novel" / "chapter_001.json"
+    rejected = json.loads(rejected_path.read_text(encoding="utf-8"))
+    assert rejected["candidate_translation"] == "Rejected 张三 candidate"
+    assert rejected["issues"] == [
+        {
+            "key": "rejected:0:contains_source_language_chars",
+            "code": "contains_source_language_chars",
+            "severity": "error",
+            "message": "Source fragment: 张三",
+        }
+    ]
+    assert rejected["partial"] is True
+    assert rejected["failed_chunk_index"] == 0
+    assert rejected["total_chunks"] == 2
+    assert rejected["previous_output_exists"] is False
+    assert "source_hash" not in rejected
+
+
+def test_successful_translation_removes_previous_rejected_candidate(tmp_path) -> None:
+    write_chapters(tmp_path, (1,))
+    rejected_path = tmp_path / "rejected" / "vi" / "novel" / "chapter_001.json"
+    rejected_path.parent.mkdir(parents=True)
+    rejected_path.write_text("{}", encoding="utf-8")
+
+    result = make_workflow(tmp_path, SuccessGraph()).run(TranslationRequest(novel="novel"))
+
+    assert result.success == 1
+    assert not rejected_path.exists()
 
 
 def test_cancel_finishes_current_chapter_then_stops_before_next(tmp_path) -> None:
