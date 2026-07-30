@@ -9,6 +9,8 @@ Builds a system prompt from template with:
 - Review feedback (if retrying)
 """
 
+from src.config import config
+from src.domain.chunking import overlap_suffix
 from src.domain.formatting import (
     format_address_rule_candidates,
     format_address_rules,
@@ -33,6 +35,11 @@ def translator_node(state: TranslationState) -> dict:
     retry_count = state.get("retry_count", 0)
     total_chunks = len(state["chunks"])
     translatable_chunk, illustration_placements = detach_illustration_markers(chunk)
+
+    source_context = ""
+    if chunk_index > 0 and config.chunk_overlap > 0:
+        previous_chunk, _ = detach_illustration_markers(state["chunks"][chunk_index - 1])
+        source_context = overlap_suffix(previous_chunk, config.chunk_overlap, config.chunk_mode)
 
     lang_names = {
         "chinese": "Chinese",
@@ -84,10 +91,21 @@ def translator_node(state: TranslationState) -> dict:
         review_feedback=review_feedback,
     )
 
-    user_prompt = (
-        f"Translate the following {lang_name} text to {target_name} "
-        f"(chunk {chunk_index + 1}/{total_chunks}):\n\n{translatable_chunk}"
-    )
+    context_section = ""
+    if source_context:
+        context_section = f"""=== PRECEDING SOURCE CONTEXT — DO NOT TRANSLATE ===
+Use this only to understand continuity. Do not repeat or include any part of it in the output.
+{source_context}
+=== END PRECEDING SOURCE CONTEXT ===
+
+"""
+
+    user_prompt = f"""Translate only the source text marked for translation from {lang_name} to {target_name} \
+(chunk {chunk_index + 1}/{total_chunks}).
+
+{context_section}=== SOURCE TEXT TO TRANSLATE ===
+{translatable_chunk}
+=== END SOURCE TEXT TO TRANSLATE ==="""
 
     translation = get_llm().generate(system_prompt, user_prompt, "translate") if translatable_chunk else ""
     translation = restore_illustration_markers(translation, illustration_placements)

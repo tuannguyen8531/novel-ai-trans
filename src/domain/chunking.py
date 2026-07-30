@@ -22,7 +22,8 @@ def _measure(text: str, mode: str) -> int:
     return len(text) if mode == "chars" else estimate_token_count(text)
 
 
-def _overlap_suffix(text: str, overlap: int, mode: str) -> str:
+def overlap_suffix(text: str, overlap: int, mode: str) -> str:
+    """Return the trailing source context for the next translation chunk."""
     if overlap <= 0:
         return ""
     if mode == "chars":
@@ -98,7 +99,7 @@ def split_into_chunks(
                     chunks.append("\n\n".join(current_chunk_parts))
                     if overlap > 0 and current_chunk_parts:
                         overlap_size = overlap if mode == "chars" else min(overlap, max(0, chunk_size - sent_size))
-                        overlap_text = _overlap_suffix(current_chunk_parts[-1], overlap_size, mode)
+                        overlap_text = overlap_suffix(current_chunk_parts[-1], overlap_size, mode)
                         current_chunk_parts = [overlap_text]
                         current_size = _measure(overlap_text, mode)
                     else:
@@ -117,7 +118,7 @@ def split_into_chunks(
                     current_size = 0
                 else:
                     overlap_size = overlap if mode == "chars" else min(overlap, max(0, chunk_size - para_size))
-                    overlap_text = _overlap_suffix(last_part, overlap_size, mode)
+                    overlap_text = overlap_suffix(last_part, overlap_size, mode)
                     current_chunk_parts = [overlap_text]
                     current_size = _measure(overlap_text, mode)
             else:
