@@ -222,9 +222,12 @@ onUnmounted(() => {
   min-width: 48rem;
 }
 
-.review-table th,
-.review-table td {
+.review-table th {
   vertical-align: top;
+}
+
+.review-table td {
+  vertical-align: middle;
 }
 
 .check-code {
