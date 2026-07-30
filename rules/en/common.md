@@ -3,7 +3,7 @@
 ## English Prose
 - Write idiomatic English while preserving the source register: formal, casual, archaic, comic, or intimate.
 - Action: maintain momentum and clear spatial flow; use short clauses only where the source rhythm supports them.
-- Romance/drama: preserve subtext, hesitation, silence, and tension without explaining or embellishing them.
+- Emotional relationships: preserve subtext, intimacy changes, hesitation, romantic banter, deliberate misunderstandings, silence, and tension without making feelings more explicit or embellishing them.
 - Comedy: preserve timing, contrast, wordplay, and punchlines by function rather than literal syntax.
 - Exposition: prioritize clarity without sounding more academic than the source.
 - Internal monologue: preserve the character's rhythm, bias, uncertainty, and emotional movement.

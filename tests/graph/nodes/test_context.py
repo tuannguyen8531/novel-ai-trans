@@ -47,7 +47,7 @@ def test_context_loads_vietnamese_rules_from_vi_folder():
     assert "follow any provided address rules exactly" not in result["translation_rules"]
 
 
-def test_context_keeps_only_language_term_mappings_used_in_chapter():
+def test_context_does_not_load_split_genre_rules_before_genre_selection_is_implemented():
     state = initial_state(
         source_text="他开始修炼。",
         source_language="chinese",
@@ -62,7 +62,7 @@ def test_context_keeps_only_language_term_mappings_used_in_chapter():
     ):
         result = context_node(state)
 
-    assert "修炼 → tu luyện" in result["translation_rules"]
+    assert "修炼 → tu luyện" not in result["translation_rules"]
     assert "丹药 → đan dược" not in result["translation_rules"]
     assert "Translate character names to Hán Việt when appropriate" in result["translation_rules"]
 
