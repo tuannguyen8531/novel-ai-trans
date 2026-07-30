@@ -80,6 +80,20 @@ class TestRenderPrompt:
         assert 'without adding "Chapter" or inventing a number' in result
 
     @pytest.mark.parametrize(("target_language", "target_name"), [("vi", "Vietnamese"), ("en", "English")])
+    def test_translate_describes_sensitive_content_without_false_disclaimer(self, target_language, target_name):
+        result = render_prompt(
+            "translate",
+            target_language=target_language,
+            lang_name="Chinese",
+            target_name=target_name,
+        )
+
+        assert "including sensitive, violent, or adult material when present" in result
+        assert "Do not omit, sanitize, intensify, or add content" in result
+        assert "DISCLAIMER" not in result
+        assert "It is NOT related to any illegal, harmful, or sexually explicit content" not in result
+
+    @pytest.mark.parametrize(("target_language", "target_name"), [("vi", "Vietnamese"), ("en", "English")])
     def test_translate_uses_address_rules_as_source_overridable_defaults(self, target_language, target_name):
         result = render_prompt(
             "translate",

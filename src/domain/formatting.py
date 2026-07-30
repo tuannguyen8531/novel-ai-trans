@@ -9,22 +9,21 @@ def format_relationships_shorthand(entities: dict, edges: list) -> str:
     if not entities:
         return ""
 
-    notable_roles = {"protagonist", "antagonist", "supporting"}
-    name_parts = []
-    roles_parts = []
+    character_parts = []
     for name, info in entities.items():
         translated_name = get_character_translated_name(info)
-        if translated_name and translated_name != name:
-            name_parts.append(f"{name}={translated_name}")
         role = info.get("role", "")
         pronoun = info.get("pronoun", "")
-        if role in notable_roles or pronoun:
-            tag = role
-            if pronoun:
-                tag += f', pronoun="{pronoun}"'
-            roles_parts.append(f"{name}[{tag}]")
-        elif role:
-            roles_parts.append(f"{name}[{role}]")
+
+        identity = f"{name} => {translated_name}" if translated_name and translated_name != name else name
+        attributes = []
+        if role:
+            attributes.append(role)
+        if pronoun:
+            attributes.append(f'pronoun="{pronoun}"')
+
+        suffix = f" [{', '.join(attributes)}]" if attributes else ""
+        character_parts.append(f"- {identity}{suffix}")
 
     rel_parts = []
     for edge in edges:
@@ -33,11 +32,7 @@ def format_relationships_shorthand(entities: dict, edges: list) -> str:
         from_char, to_char, rel_type = edge[0], edge[1], edge[2]
         rel_parts.append(f"{from_char}({rel_type})->{to_char}")
 
-    lines = ["=== CHARACTERS ==="]
-    if name_parts:
-        lines.append("Names: " + ", ".join(name_parts))
-    if roles_parts:
-        lines.append("Roles: " + ", ".join(roles_parts))
+    lines = ["=== CHARACTERS ===", *character_parts]
     if rel_parts:
         lines.append("Relations: " + "; ".join(rel_parts))
     lines.append("=== END CHARACTERS ===")

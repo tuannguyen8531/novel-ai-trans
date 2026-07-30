@@ -1274,10 +1274,24 @@ def test_format_relationships_shorthand():
 
     result = format_relationships_shorthand(entities, edges)
 
-    assert "=== CHARACTERS ===" in result
-    assert "Names: 李明=Lý Minh, 张伟=Trương Vĩ" in result
-    assert '李明[protagonist, pronoun="cậu"]' in result
-    assert "李明(friend)->张伟" in result
+    assert (
+        result
+        == """=== CHARACTERS ===
+- 李明 => Lý Minh [protagonist, pronoun="cậu"]
+- 张伟 => Trương Vĩ [supporting]
+Relations: 李明(friend)->张伟
+=== END CHARACTERS ==="""
+    )
+
+
+def test_format_relationships_shorthand_keeps_pronoun_with_character_without_role():
+    entities = {"李明": {"translated_name": "Lý Minh", "pronoun": "cậu"}}
+
+    result = format_relationships_shorthand(entities, [])
+
+    assert '- 李明 => Lý Minh [pronoun="cậu"]' in result
+    assert "Names:" not in result
+    assert "Roles:" not in result
 
 
 def test_format_address_rules():
