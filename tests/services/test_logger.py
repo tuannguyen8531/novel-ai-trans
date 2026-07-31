@@ -3,7 +3,12 @@
 import json
 from datetime import datetime
 
+from src import paths
 from src.services import logger as logger_module
+
+
+def test_pytest_logs_use_shared_cache_root():
+    assert paths.RUNTIME_DIR.parent / ".cache" / "pytest" / "logs" == logger_module.LOG_DIR
 
 
 def test_new_daily_folder_removes_old_logs_beyond_retention(tmp_path, monkeypatch):

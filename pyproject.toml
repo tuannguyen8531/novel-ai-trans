@@ -70,10 +70,12 @@ dev = [
 # ---------------------------------------------------------------------------
 
 [tool.pytest.ini_options]
+cache_dir = ".cache/pytest"
 testpaths = ["tests"]
 addopts = "-ra"
 
 [tool.ruff]
+cache-dir = ".cache/ruff"
 target-version = "py314"
 line-length = 130
 

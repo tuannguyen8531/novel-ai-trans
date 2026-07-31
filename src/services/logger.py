@@ -20,7 +20,7 @@ from uuid import uuid4
 from src import paths
 from src.config import config
 
-LOG_DIR = paths.RUNTIME_DIR.parent / ".pytest_cache" / "logs" if "pytest" in sys.modules else paths.LOG_DIR
+LOG_DIR = paths.RUNTIME_DIR.parent / ".cache" / "pytest" / "logs" if "pytest" in sys.modules else paths.LOG_DIR
 LOG_REQUEST_NAME = "request.log"
 LOG_RESPONSE_NAME = "response.log"
 LOG_ERROR_NAME = "error.log"
