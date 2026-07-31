@@ -1,8 +1,7 @@
-from pathlib import Path
-
 import pytest
 
 from src.domain.rules import select_relevant_rules
+from src.prompts import RULES_DIR
 
 
 def test_select_relevant_rules_keeps_only_mappings_used_in_source():
@@ -75,15 +74,15 @@ def test_genre_rule_files_keep_moved_language_mappings(
     genre,
     expected_rule,
 ):
-    content = Path(f"rules/{target_language}/{source_language}/{genre}.md").read_text(encoding="utf-8")
+    content = (RULES_DIR / target_language / source_language / f"{genre}.md").read_text(encoding="utf-8")
 
     assert expected_rule in content
 
 
 @pytest.mark.parametrize("source_language", ["chinese", "korean", "japanese"])
 def test_genre_rule_files_match_across_targets(source_language):
-    vi_genres = {path.stem for path in Path(f"rules/vi/{source_language}").glob("*.md")}
-    en_genres = {path.stem for path in Path(f"rules/en/{source_language}").glob("*.md")}
+    vi_genres = {path.stem for path in (RULES_DIR / "vi" / source_language).glob("*.md")}
+    en_genres = {path.stem for path in (RULES_DIR / "en" / source_language).glob("*.md")}
 
     assert vi_genres
     assert vi_genres == en_genres
@@ -94,7 +93,7 @@ def test_every_genre_rule_file_contains_style_guidance():
         path
         for target_language in ("vi", "en")
         for source_language in ("chinese", "korean", "japanese")
-        for path in Path(f"rules/{target_language}/{source_language}").glob("*.md")
+        for path in (RULES_DIR / target_language / source_language).glob("*.md")
     ]
 
     assert genre_files
@@ -113,14 +112,14 @@ def test_every_genre_rule_file_contains_style_guidance():
     ],
 )
 def test_every_language_base_contains_narrative_style(target_language, source_language):
-    content = Path(f"rules/{target_language}/{source_language}.md").read_text(encoding="utf-8")
+    content = (RULES_DIR / target_language / f"{source_language}.md").read_text(encoding="utf-8")
 
     assert "## Narrative Style" in content
 
 
 @pytest.mark.parametrize("target_language", ["vi", "en"])
 def test_common_rules_preserve_emotional_relationship_style(target_language):
-    content = Path(f"rules/{target_language}/common.md").read_text(encoding="utf-8")
+    content = (RULES_DIR / target_language / "common.md").read_text(encoding="utf-8")
 
     assert "preserve subtext, intimacy changes, hesitation, romantic banter" in content
     assert "without making feelings more explicit" in content
@@ -128,8 +127,8 @@ def test_common_rules_preserve_emotional_relationship_style(target_language):
 
 @pytest.mark.parametrize("target_language", ["vi", "en"])
 def test_chinese_urban_owns_contemporary_style(target_language):
-    base = Path(f"rules/{target_language}/chinese.md").read_text(encoding="utf-8")
-    urban = Path(f"rules/{target_language}/chinese/urban.md").read_text(encoding="utf-8")
+    base = (RULES_DIR / target_language / "chinese.md").read_text(encoding="utf-8")
+    urban = (RULES_DIR / target_language / "chinese" / "urban.md").read_text(encoding="utf-8")
 
     assert "## Contemporary Settings" not in base
     assert "Preserve differences between narration, speech, messages, posts, livestreams" in urban
@@ -150,7 +149,7 @@ def test_non_genre_rules_are_merged_into_language_base(
     source_language,
     expected_rule,
 ):
-    content = Path(f"rules/{target_language}/{source_language}.md").read_text(encoding="utf-8")
+    content = (RULES_DIR / target_language / f"{source_language}.md").read_text(encoding="utf-8")
 
     assert expected_rule in content
 
@@ -171,15 +170,15 @@ def test_language_naming_policy_handles_western_derived_names(
     source_language,
     expected_rule,
 ):
-    content = Path(f"rules/{target_language}/{source_language}.md").read_text(encoding="utf-8")
+    content = (RULES_DIR / target_language / f"{source_language}.md").read_text(encoding="utf-8")
 
     assert expected_rule in content
 
 
 @pytest.mark.parametrize(("target_language", "arrow"), [("vi", "→"), ("en", "->")])
 def test_isekai_keeps_only_otherworld_specific_terms(target_language, arrow):
-    fantasy = Path(f"rules/{target_language}/japanese/fantasy.md").read_text(encoding="utf-8")
-    isekai = Path(f"rules/{target_language}/japanese/isekai.md").read_text(encoding="utf-8")
+    fantasy = (RULES_DIR / target_language / "japanese" / "fantasy.md").read_text(encoding="utf-8")
+    isekai = (RULES_DIR / target_language / "japanese" / "isekai.md").read_text(encoding="utf-8")
 
     assert f"魔法 {arrow}" in fantasy
     assert f"魔法 {arrow}" not in isekai
@@ -202,7 +201,7 @@ def test_language_base_keeps_minimal_source_specific_humor(
     source_language,
     expected_style,
 ):
-    content = Path(f"rules/{target_language}/{source_language}.md").read_text(encoding="utf-8")
+    content = (RULES_DIR / target_language / f"{source_language}.md").read_text(encoding="utf-8")
 
     assert expected_style in content
 
@@ -219,6 +218,6 @@ def test_language_base_keeps_minimal_source_specific_humor(
     ],
 )
 def test_language_rule_files_no_longer_embed_genre_sections(target_language, source_language, genre_heading):
-    content = Path(f"rules/{target_language}/{source_language}.md").read_text(encoding="utf-8")
+    content = (RULES_DIR / target_language / f"{source_language}.md").read_text(encoding="utf-8")
 
     assert genre_heading not in content

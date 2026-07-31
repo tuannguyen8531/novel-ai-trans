@@ -20,7 +20,7 @@ class TranslationState(TypedDict):
     genres: list[str]  # Selected source-specific genre rule profiles
 
     # --- Context (loaded by context node) ---
-    translation_rules: str  # Rules from rules/{language}.md
+    translation_rules: str  # Bundled and per-novel translation rules
     glossary: dict[str, str]  # Term → Translation mapping
     previous_summary: str  # Summary of previous chapter
     characters: dict  # Active entities, edges, confirmed rules, and pending candidates awaiting learner verdicts

@@ -2,6 +2,7 @@
 
 Templates live in src/prompts/ as .md files with {{var}} placeholders.
 Target-language prompts can live in src/prompts/{target}/.
+Bundled translation-rule fragments live in src/prompts/rules/.
 Usage:
     from src.prompts import render_prompt
     prompt = render_prompt("translate", target_language="vi", lang_name="Chinese")
@@ -12,7 +13,8 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from pathlib import Path
 
-_PROMPTS_DIR = Path(__file__).parent
+PROMPTS_DIR = Path(__file__).parent
+RULES_DIR = PROMPTS_DIR / "rules"
 _prompt_cache: ContextVar[dict[tuple[str, str | None], str] | None] = ContextVar(
     "translation_prompt_cache",
     default=None,
@@ -33,8 +35,8 @@ def _resolve_template_path(template_name: str, target_language: str | None = Non
     """Resolve a template path, checking target-specific folders first."""
     candidates = []
     if target_language:
-        candidates.append(_PROMPTS_DIR / target_language / f"{template_name}.md")
-    candidates.append(_PROMPTS_DIR / f"{template_name}.md")
+        candidates.append(PROMPTS_DIR / target_language / f"{template_name}.md")
+    candidates.append(PROMPTS_DIR / f"{template_name}.md")
 
     for path in candidates:
         if path.exists():
@@ -82,4 +84,4 @@ def render_prompt(template_name: str, target_language: str | None = None, **vari
     return content.strip()
 
 
-__all__ = ["prompt_cache_scope", "render_prompt"]
+__all__ = ["PROMPTS_DIR", "RULES_DIR", "prompt_cache_scope", "render_prompt"]

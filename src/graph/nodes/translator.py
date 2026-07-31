@@ -2,7 +2,7 @@
 Translator Node — Core translation using LLM.
 
 Builds a system prompt from template with:
-- Translation rules (from rules/*.md)
+- Translation rules (from src/prompts/rules/*.md)
 - Glossary terms
 - Previous chapter summary (for context continuity)
 - Character relationships and direct-address rules

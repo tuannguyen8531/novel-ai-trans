@@ -16,6 +16,7 @@ For provider setup, see [PROVIDERS.md](PROVIDERS.md).
   - [Import an EPUB](#import-an-epub)
   - [Insert a missing chapter](#insert-a-missing-chapter)
 - [2. Translate](#2-translate)
+  - [Translation rules](#translation-rules)
   - [Localize title and novel summary](#localize-title-and-novel-summary)
 - [3. Glossary](#3-glossary)
 - [4. Package](#4-package)
@@ -330,6 +331,29 @@ uv run translate my-novel --verbose
 | `-R, --resume` | Skip chapters marked completed | off |
 | `-F, --failed-only` | Translate only chapters marked failed | off |
 | `-m, --limit` | Translate at most N chapters (`0` = no limit) | `0` |
+
+### Translation rules
+
+The translator builds its rule context from separate Markdown fragments; they
+are not merged into the prompt templates:
+
+```text
+src/prompts/rules/<target>/common.md
+src/prompts/rules/<target>/<source>.md
+src/prompts/rules/<target>/<source>/<genre>.md
+translated/<novel>/rules.md
+```
+
+`<target>` is `vi` or `en`, and `<source>` is `chinese`, `korean`, or
+`japanese`. Common rules always apply. Source-language rules are selected from
+the detected or requested source language, and genre rules are selected from
+the novel metadata. The optional per-novel file is applied last and is the
+place for book-specific naming, tone, address, or terminology instructions.
+
+The files under `src/prompts/rules/` are bundled application defaults. Edit
+`translated/<novel>/rules.md`—directly or through the GUI Rules editor—for
+novel-specific customization. Rule contents are snapshotted at the start of a
+translation job, so changes take effect on the next job.
 
 ### Localize title and novel summary
 

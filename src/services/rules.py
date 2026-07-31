@@ -9,9 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from src.domain.language import normalize_source_language
+from src.prompts import RULES_DIR
 from src.services.genres import normalize_genres
-
-RULES_DIR = Path("rules")
 
 
 @dataclass(frozen=True, slots=True)

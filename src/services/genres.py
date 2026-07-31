@@ -13,8 +13,8 @@ from src.domain.language import (
     SUPPORTED_TARGET_LANGUAGES,
     normalize_source_language,
 )
+from src.prompts import RULES_DIR
 
-RULES_DIR = Path("rules")
 _GENRE_ID_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _genre_cache: ContextVar[dict[tuple[str, str], tuple[str, ...]] | None] = ContextVar(
     "translation_genre_cache",

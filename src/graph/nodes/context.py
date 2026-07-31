@@ -2,9 +2,9 @@
 Context Node — Load translation rules, glossary, and previous chapter summaries.
 
 Loads rules in order:
-1. rules/{target}/common.md (or legacy rules/common.md)
-2. rules/{target}/{language}.md (or legacy rules/{language}.md)
-3. rules/{target}/{language}/{genre}.md for selected genre profiles
+1. src/prompts/rules/{target}/common.md
+2. src/prompts/rules/{target}/{language}.md
+3. src/prompts/rules/{target}/{language}/{genre}.md for selected genre profiles
 4. translated/{novel}/rules.md
 
 For chapter summaries, only loads the last 3 chapters for conciseness.
@@ -23,9 +23,8 @@ from src.services.glossary.repository import (
     load_glossary,
 )
 from src.services.metadata import load_source_language
-from src.services.rules import load_translation_snapshot
+from src.services.rules import RULES_DIR, load_translation_snapshot
 
-RULES_DIR = Path("rules")
 MAX_RECENT_SUMMARIES = 3  # Only keep context from last 3 chapters
 _logger = logging.getLogger("novel_ai_trans.job")
 

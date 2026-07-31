@@ -39,6 +39,43 @@ Translation storage, checkpoints, and reports live under
 generation collaborators under `services/generation/`. Application modules
 resolve use-case inputs and coordinate those collaborators.
 
+## Prompt assets and translation rules
+
+All bundled text sent to an LLM lives under `src/prompts/` so it is anchored to
+the installed package instead of the process working directory:
+
+```text
+src/prompts/
+├── detect.md
+├── en/                         English-target prompt templates
+├── vi/                         Vietnamese-target prompt templates
+└── rules/
+    ├── en/
+    │   ├── common.md
+    │   ├── <source>.md
+    │   └── <source>/<genre>.md
+    └── vi/
+        ├── common.md
+        ├── <source>.md
+        └── <source>/<genre>.md
+```
+
+Prompt templates and translation rules remain separate assets. The prompt
+renderer owns `{{variable}}` substitution, while `services/rules.py` loads a
+static rule snapshot and `services/genres.py` discovers and validates genre
+profiles. A translation job assembles rules in this order:
+
+1. target-language common rules;
+2. source-language rules for that target;
+3. selected source-language genre profiles;
+4. optional `translated/<novel>/rules.md`.
+
+Bundled rules are version-controlled application resources and are included in
+the Python wheel. Per-novel `rules.md` is mutable user data and must remain
+under the novel root. Both prompt templates and rule files are snapshotted
+within a translation job so edits affect the next job, not a job already in
+progress.
+
 ## Frontend dependency direction
 
 ```text

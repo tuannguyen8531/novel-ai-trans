@@ -31,19 +31,6 @@ runtime/
 configs/*
 !configs/*.json
 
-# Translation rule templates
-rules/*
-!rules/.gitkeep
-!rules/en/
-!rules/vi/
-!rules/en/chinese.md
-!rules/en/common.md
-!rules/en/japanese.md
-!rules/en/korean.md
-!rules/vi/chinese.md
-!rules/vi/common.md
-!rules/vi/japanese.md
-
 # OS
 .DS_Store
 Thumbs.db

@@ -1,6 +1,5 @@
 """Tests for prompt template engine."""
 
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -17,9 +16,9 @@ COMMON_TRANSLATION_PROMPT_BUDGET = {"vi": 1450, "en": 1370}
 
 def _all_bundled_rules(target_language: str, source_language: str) -> str:
     """Build the production static-rule combination with every genre selected."""
-    common_rules = Path(f"rules/{target_language}/common.md").read_text(encoding="utf-8")
-    language_path = Path(f"rules/{target_language}/{source_language}.md")
-    genre_paths = sorted(Path(f"rules/{target_language}/{source_language}").glob("*.md"))
+    common_rules = (prompts.RULES_DIR / target_language / "common.md").read_text(encoding="utf-8")
+    language_path = prompts.RULES_DIR / target_language / f"{source_language}.md"
+    genre_paths = sorted((prompts.RULES_DIR / target_language / source_language).glob("*.md"))
     source_text = "\n\n".join(path.read_text(encoding="utf-8") for path in (language_path, *genre_paths))
     selected_rules = [
         select_relevant_rules(language_path.read_text(encoding="utf-8"), source_text),
@@ -174,7 +173,7 @@ class TestRenderPrompt:
         target_name,
         prose_rule,
     ):
-        common_rules = Path(f"rules/{target_language}/common.md").read_text(encoding="utf-8")
+        common_rules = (prompts.RULES_DIR / target_language / "common.md").read_text(encoding="utf-8")
         result = render_prompt(
             "translate",
             target_language=target_language,
@@ -212,8 +211,8 @@ class TestRenderPrompt:
         source_name,
         source_text,
     ):
-        common_rules = Path(f"rules/{target_language}/common.md").read_text(encoding="utf-8")
-        language_rules = Path(f"rules/{target_language}/{source_language}.md").read_text(encoding="utf-8")
+        common_rules = (prompts.RULES_DIR / target_language / "common.md").read_text(encoding="utf-8")
+        language_rules = (prompts.RULES_DIR / target_language / f"{source_language}.md").read_text(encoding="utf-8")
         selected_rules = select_relevant_rules(language_rules, source_text)
         result = render_prompt(
             "translate",
