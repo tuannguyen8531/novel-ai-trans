@@ -29,6 +29,8 @@ const {
   sourceLanguage,
   genres,
   availableGenres,
+  genreLoading,
+  genreLoadError,
   force,
   coverFile,
   setCoverFile,
@@ -149,10 +151,19 @@ defineExpose({ load })
               <option value="chinese">Chinese</option>
             </select>
           </div>
-          <fieldset class="genre-fieldset" :disabled="!sourceLanguage">
+          <fieldset
+            class="genre-fieldset"
+            :disabled="!sourceLanguage || genreLoading || Boolean(genreLoadError)"
+          >
             <legend>Genres</legend>
             <p v-if="!sourceLanguage" class="muted genre-help">
               Select a source language before choosing genre profiles.
+            </p>
+            <p v-else-if="genreLoading" class="muted genre-help">
+              Loading genre profiles…
+            </p>
+            <p v-else-if="genreLoadError" class="error genre-help">
+              Failed to load genre profiles: {{ genreLoadError }}
             </p>
             <p v-else-if="!availableGenres.length" class="muted genre-help">
               No specialized genre profiles are available.

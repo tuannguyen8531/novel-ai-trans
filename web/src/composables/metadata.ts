@@ -35,6 +35,8 @@ export function useMetadata(
   const summary = ref('')
   const sourceLanguage = ref('')
   const genreCatalog = ref<Record<string, string[]>>({})
+  const genreLoading = ref(false)
+  const genreLoadError = ref<string | null>(null)
   const genres = ref<string[]>([])
   const translatedVi = ref('')
   const translatedEn = ref('')
@@ -70,8 +72,8 @@ export function useMetadata(
 
   const availableGenres = computed(() => genreCatalog.value[sourceLanguage.value] ?? [])
 
-  watch([sourceLanguage, genreCatalog], () => {
-    if (!Object.keys(genreCatalog.value).length) return
+  watch([sourceLanguage, genreCatalog, genreLoading, genreLoadError], () => {
+    if (genreLoading.value || genreLoadError.value || !Object.keys(genreCatalog.value).length) return
     const available = new Set(availableGenres.value)
     genres.value = genres.value.filter((genre) => available.has(genre))
   })
@@ -118,17 +120,26 @@ export function useMetadata(
     hasAny: hasAny.value
   }))
 
+  async function loadGenreCatalog() {
+    genreLoading.value = true
+    genreLoadError.value = null
+    try {
+      genreCatalog.value = await api.getGenres()
+    } catch (err) {
+      genreLoadError.value = (err as Error).message
+    } finally {
+      genreLoading.value = false
+    }
+  }
+
   async function load() {
     setCoverFile(null)
     loading.value = true
     loadError.value = null
+    const genreRequest = loadGenreCatalog()
     try {
-      const [response, catalog] = await Promise.all([
-        api.getNovelMetadata(toValue(novel)),
-        api.getGenres()
-      ])
+      const response = await api.getNovelMetadata(toValue(novel))
       const inner = (response.data as Record<string, unknown>) ?? {}
-      genreCatalog.value = catalog
       metadata.value = Object.keys(inner).length ? inner : null
       title.value = (inner.title as string) ?? ''
       author.value = (inner.author as string) ?? ''
@@ -150,6 +161,7 @@ export function useMetadata(
     } finally {
       loading.value = false
     }
+    await genreRequest
   }
 
   async function save(): Promise<boolean> {
@@ -224,6 +236,8 @@ export function useMetadata(
     sourceLanguage,
     genres,
     availableGenres,
+    genreLoading,
+    genreLoadError,
     force,
     coverFile,
     setCoverFile,

@@ -14,6 +14,7 @@ from src.application.translation.models import TranslationRequest
 from src.application.translation.workflow import TranslationWorkflow
 from src.config import Config
 from src.graph.builder import TranslationQualityError
+from src.models import TranslationProfile
 from src.services.translation.checkpoints import CheckpointStore
 from src.services.translation.reports import ReportStore
 from src.services.translation.storage import TranslationStorage
@@ -77,8 +78,7 @@ def make_workflow(
         checkpoints=CheckpointStore(),
         reports=ReportStore(),
         graph_factory=lambda: graph,
-        source_language_loader=lambda _novel: "chinese",
-        genre_loader=lambda _novel: [],
+        profile_loader=lambda _novel: TranslationProfile("chinese"),
         progress_root=tmp_path / "progress",
         report_root=tmp_path / "reports",
         rejected_root=tmp_path / "rejected",
@@ -226,18 +226,18 @@ def test_dry_run_emits_selection_without_building_graph(tmp_path) -> None:
     assert built is False
 
 
-def test_genres_are_loaded_once_and_snapshotted_for_every_chapter(tmp_path) -> None:
+def test_profile_is_loaded_once_and_snapshotted_for_every_chapter(tmp_path) -> None:
     write_chapters(tmp_path, (1, 2))
     graph = RecordingGraph()
     workflow = make_workflow(tmp_path, graph)
     load_calls = 0
 
-    def load_genre_snapshot(_novel):
+    def load_profile_snapshot(_novel):
         nonlocal load_calls
         load_calls += 1
-        return ["urban"]
+        return TranslationProfile("chinese", ("urban",))
 
-    workflow.genre_loader = load_genre_snapshot
+    workflow.profile_loader = load_profile_snapshot
 
     result = workflow.run(TranslationRequest(novel="novel"))
 
@@ -249,7 +249,7 @@ def test_genres_are_loaded_once_and_snapshotted_for_every_chapter(tmp_path) -> N
 def test_source_override_cannot_reinterpret_stored_genres(tmp_path) -> None:
     write_chapters(tmp_path, (1,))
     workflow = make_workflow(tmp_path, SuccessGraph())
-    workflow.genre_loader = lambda _novel: ["urban"]
+    workflow.profile_loader = lambda _novel: TranslationProfile("chinese", ("urban",))
 
     with pytest.raises(ApplicationValidationError, match="does not match"):
         workflow.run(TranslationRequest(novel="novel", source_language="korean"))

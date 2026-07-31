@@ -25,8 +25,9 @@ from src.config import Config
 from src.domain.chunking import estimate_token_count
 from src.domain.language import normalize_source_language
 from src.graph.builder import TranslationQualityError, build_graph
+from src.models import TranslationProfile
 from src.services.logger import log_error
-from src.services.metadata import load_genres, load_source_language
+from src.services.metadata import load_translation_profile
 from src.services.translation.checkpoints import CheckpointStore
 from src.services.translation.reports import ReportStore
 from src.services.translation.storage import TranslationStorage
@@ -45,8 +46,7 @@ class TranslationWorkflow:
     checkpoints: CheckpointStore
     reports: ReportStore
     graph_factory: GraphFactory
-    source_language_loader: Callable[[str], str]
-    genre_loader: Callable[[str], list[str]]
+    profile_loader: Callable[[str], TranslationProfile]
     progress_root: Path | None = None
     report_root: Path | None = None
     rejected_root: Path | None = None
@@ -142,13 +142,14 @@ class TranslationWorkflow:
             ),
         )
 
-        metadata_source_language = normalize_source_language(self.source_language_loader(novel))
         requested_source_language = normalize_source_language(request.source_language)
-        source_language = requested_source_language or metadata_source_language
         try:
-            stored_genres = self.genre_loader(novel)
+            profile = self.profile_loader(novel)
         except ValueError as error:
             raise ApplicationValidationError(str(error)) from error
+        metadata_source_language = normalize_source_language(profile.source_language)
+        source_language = requested_source_language or metadata_source_language
+        stored_genres = list(profile.genres)
         if stored_genres and requested_source_language and requested_source_language != metadata_source_language:
             raise ApplicationValidationError("Translation source-language override does not match the novel metadata genres.")
         genres = normalize_genres(source_language, stored_genres)
@@ -426,8 +427,7 @@ def run_translation(
             checkpoints=CheckpointStore(),
             reports=ReportStore(),
             graph_factory=cast(GraphFactory, build_graph),
-            source_language_loader=load_source_language,
-            genre_loader=load_genres,
+            profile_loader=load_translation_profile,
             report_root=report_root,
             rejected_root=rejected_root,
         )

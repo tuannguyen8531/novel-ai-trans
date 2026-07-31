@@ -20,7 +20,7 @@
 - Keep each character's naming and reference style consistent with the glossary and current relationship.
 
 ## Names, Slang, and Presentation
-- Use the glossary for established names; otherwise choose one readable rendering or romanization and keep it consistent.
+- For names absent from the glossary, choose one readable rendering or romanization and keep it consistent.
 - Translate idioms, jokes, internet slang, and sound effects by function and register; retain a source term only when established or contextually clear.
 - Preserve recognizable in-world formats for system windows, status screens, posts, messages, and chat logs.
 - Preserve meaningful source-specific symbols and brackets such as 【】, 『』, and 「」.

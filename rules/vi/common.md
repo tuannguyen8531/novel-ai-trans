@@ -17,7 +17,7 @@
 - Keep the pair stable within a scene unless the source changes it; omit pronouns naturally when Vietnamese allows.
 
 ## Names, Slang, and Presentation
-- Use the glossary for established names; otherwise choose one natural Vietnamese rendering and keep it consistent.
+- For names absent from the glossary, choose one natural Vietnamese rendering and keep it consistent.
 - Translate idioms, jokes, internet slang, and sound effects by function and register; transliterate only when no natural equivalent exists.
 - Preserve recognizable in-world formats for system windows, status screens, posts, messages, and chat logs.
 - Preserve meaningful symbols and brackets such as 【】, 『』, and 「」.
