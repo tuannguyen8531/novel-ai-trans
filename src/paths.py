@@ -18,6 +18,7 @@ _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 _NOVEL_NAME_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
 
 RUNTIME_DIR = _PROJECT_ROOT / "runtime"
+LOG_DIR = RUNTIME_DIR / "logs"
 INPUT_DIR = _PROJECT_ROOT / "translated" / "input"
 OUTPUT_DIR = _PROJECT_ROOT / "translated" / "output"
 PROGRESS_DIR = _PROJECT_ROOT / "runtime" / "progress"
@@ -193,6 +194,7 @@ def translation_rejected_path(
 
 __all__ = [
     "INPUT_DIR",
+    "LOG_DIR",
     "RUNTIME_DIR",
     "OUTPUT_DIR",
     "PROGRESS_DIR",

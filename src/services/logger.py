@@ -2,9 +2,9 @@
 AI Call Logger — Logs every LLM invocation with full request/response details.
 
 Three daily log files:
-- logs/YYYY-MM-DD/request.log   — API request JSON lines
-- logs/YYYY-MM-DD/response.log  — API response JSON lines
-- logs/YYYY-MM-DD/error.log     — Error log with stack traces
+- runtime/logs/YYYY-MM-DD/request.log   — API request JSON lines
+- runtime/logs/YYYY-MM-DD/response.log  — API response JSON lines
+- runtime/logs/YYYY-MM-DD/error.log     — Error log with stack traces
 """
 
 import json
@@ -17,9 +17,10 @@ from datetime import date, datetime
 from pathlib import Path
 from uuid import uuid4
 
+from src import paths
 from src.config import config
 
-LOG_DIR = Path(".pytest_cache/logs") if "pytest" in sys.modules else Path("logs")
+LOG_DIR = paths.RUNTIME_DIR.parent / ".pytest_cache" / "logs" if "pytest" in sys.modules else paths.LOG_DIR
 LOG_REQUEST_NAME = "request.log"
 LOG_RESPONSE_NAME = "response.log"
 LOG_ERROR_NAME = "error.log"

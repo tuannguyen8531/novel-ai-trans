@@ -14,9 +14,6 @@ venv
 !.env.example
 
 # Runtime data — generated during crawls / translations / packaging
-# logs/ stays at the repo root.
-logs/*
-!logs/.gitkeep
 *.log
 
 # Per-novel artefacts

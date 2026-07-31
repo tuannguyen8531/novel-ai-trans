@@ -12,6 +12,7 @@ def test_default_roots_are_anchored_at_project_root() -> None:
 
     assert project_root / "translated" == paths.DEFAULT_TRANSLATED_ROOT
     assert project_root / "runtime" == paths.RUNTIME_DIR
+    assert project_root / "runtime" / "logs" == paths.LOG_DIR
     assert project_root / "configs" == paths.CONFIG_DIR
 
 

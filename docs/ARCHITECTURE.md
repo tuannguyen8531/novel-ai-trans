@@ -37,7 +37,9 @@ Translation storage, checkpoints, and reports live under
 `services/translation/`; glossary persistence, memory, and backups live under
 `services/glossary/`; generated config drafts live with the other config
 generation collaborators under `services/generation/`. Application modules
-resolve use-case inputs and coordinate those collaborators.
+resolve use-case inputs and coordinate those collaborators. Operational LLM
+request, response, and error logs live under `runtime/logs/`; their writer and
+daily retention policy remain owned by `services/logger.py`.
 
 ## Prompt assets and translation rules
 
