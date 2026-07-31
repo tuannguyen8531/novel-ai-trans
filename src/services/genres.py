@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from pathlib import Path
 
 from src.domain.language import (
@@ -14,6 +16,20 @@ from src.domain.language import (
 
 RULES_DIR = Path("rules")
 _GENRE_ID_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+_genre_cache: ContextVar[dict[tuple[str, str], tuple[str, ...]] | None] = ContextVar(
+    "translation_genre_cache",
+    default=None,
+)
+
+
+@contextmanager
+def genre_cache_scope() -> Iterator[None]:
+    """Cache filesystem-backed genre discovery within one translation job."""
+    token = _genre_cache.set({})
+    try:
+        yield
+    finally:
+        _genre_cache.reset(token)
 
 
 def _target_genres(rules_dir: Path, target_language: str, source_language: str) -> set[str]:
@@ -40,13 +56,21 @@ def available_genres(
     if source not in SUPPORTED_SOURCE_LANGUAGES:
         raise ValueError(f"Unsupported source language for genres: {source_language!r}")
 
+    cache = _genre_cache.get()
+    cache_key = (str(rules_dir), source)
+    if cache is not None and cache_key in cache:
+        return list(cache[cache_key])
+
     by_target = {target: _target_genres(rules_dir, target, source) for target in SUPPORTED_TARGET_LANGUAGES}
     reference_target = next(iter(SUPPORTED_TARGET_LANGUAGES))
     reference = by_target[reference_target]
     if any(genres != reference for genres in by_target.values()):
         details = ", ".join(f"{target}={genres}" for target, genres in sorted(by_target.items()))
         raise ValueError(f"Genre rules differ across targets for {source}: {details}")
-    return sorted(reference)
+    available = tuple(sorted(reference))
+    if cache is not None:
+        cache[cache_key] = available
+    return list(available)
 
 
 def genre_catalog(*, rules_dir: Path = RULES_DIR) -> dict[str, list[str]]:
@@ -87,4 +111,4 @@ def normalize_genres(
     return [genre for genre in available if genre in selected]
 
 
-__all__ = ["RULES_DIR", "available_genres", "genre_catalog", "normalize_genres"]
+__all__ = ["RULES_DIR", "available_genres", "genre_cache_scope", "genre_catalog", "normalize_genres"]

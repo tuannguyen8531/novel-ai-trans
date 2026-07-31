@@ -17,13 +17,13 @@ from src.config import config
 from src.domain.glossary import select_active_glossary_terms
 from src.domain.rules import select_relevant_rules
 from src.models.state import TranslationState
-from src.services.genres import normalize_genres
 from src.services.glossary.memory import load_recent_chapter_summaries
 from src.services.glossary.repository import (
     get_active_context_with_candidates,
     load_glossary,
 )
 from src.services.metadata import load_source_language
+from src.services.rules import load_translation_snapshot
 
 RULES_DIR = Path("rules")
 MAX_RECENT_SUMMARIES = 3  # Only keep context from last 3 chapters
@@ -51,44 +51,31 @@ def context_node(state: TranslationState) -> dict:
                 },
             )
 
-    # 1. Load translation rules (common + language-specific)
+    # 1. Load or reuse the job's static rule snapshot, then filter in memory.
     rules_parts = []
-
-    common_rules_file = RULES_DIR / target_language / "common.md"
-    if not common_rules_file.exists():
-        common_rules_file = RULES_DIR / "common.md"
-    if common_rules_file.exists():
-        rules_parts.append(common_rules_file.read_text(encoding="utf-8"))
-
-    lang_rules_file = RULES_DIR / target_language / f"{language}.md"
-    if not lang_rules_file.exists():
-        lang_rules_file = RULES_DIR / f"{language}.md"
-    if lang_rules_file.exists():
-        language_rules = select_relevant_rules(lang_rules_file.read_text(encoding="utf-8"), source_text)
-        if language_rules:
-            rules_parts.append(language_rules)
-
-    selected_genres = normalize_genres(
-        language,
-        state.get("genres", []),
+    novel_root = Path(config.translated_dir) / novel_name if config.translated_dir else None
+    snapshot = load_translation_snapshot(
+        target_language=target_language,
+        source_language=language,
+        genres=state.get("genres", []),
+        novel_root=novel_root,
         rules_dir=RULES_DIR,
     )
-    for genre in selected_genres:
-        genre_rules_file = RULES_DIR / target_language / language / f"{genre}.md"
-        genre_rules = select_relevant_rules(
-            genre_rules_file.read_text(encoding="utf-8"),
-            source_text,
-        )
+
+    if snapshot.common:
+        rules_parts.append(snapshot.common)
+
+    language_rules = select_relevant_rules(snapshot.language, source_text)
+    if language_rules:
+        rules_parts.append(language_rules)
+
+    for _, raw_genre_rules in snapshot.genres:
+        genre_rules = select_relevant_rules(raw_genre_rules, source_text)
         if genre_rules:
             rules_parts.append(genre_rules)
 
-    # Load novel-specific rules if they exist
-    if config.translated_dir:
-        novel_rules_file = Path(config.translated_dir) / novel_name / "rules.md"
-        if novel_rules_file.exists():
-            content = novel_rules_file.read_text(encoding="utf-8").strip()
-            if content:
-                rules_parts.append(content)
+    if snapshot.novel:
+        rules_parts.append(snapshot.novel)
 
     rules = "\n\n".join(rules_parts)
 

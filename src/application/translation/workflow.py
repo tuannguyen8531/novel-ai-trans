@@ -26,8 +26,11 @@ from src.domain.chunking import estimate_token_count
 from src.domain.language import normalize_source_language
 from src.graph.builder import TranslationQualityError, build_graph
 from src.models import TranslationProfile
+from src.prompts import prompt_cache_scope
+from src.services.genres import genre_cache_scope
 from src.services.logger import log_error
 from src.services.metadata import load_translation_profile
+from src.services.rules import rule_snapshot_scope
 from src.services.translation.checkpoints import CheckpointStore
 from src.services.translation.reports import ReportStore
 from src.services.translation.storage import TranslationStorage
@@ -420,7 +423,12 @@ def run_translation(
     rejected_root: Path | None = None,
 ) -> TranslationResult:
     """Construct default collaborators and run one locked translation batch."""
-    with novel_lock(request.novel):
+    with (
+        novel_lock(request.novel),
+        genre_cache_scope(),
+        rule_snapshot_scope(),
+        prompt_cache_scope(),
+    ):
         workflow = TranslationWorkflow(
             config=app_config.get_config(),
             storage=TranslationStorage(),

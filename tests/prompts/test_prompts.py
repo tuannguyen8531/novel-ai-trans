@@ -1,12 +1,14 @@
 """Tests for prompt template engine."""
 
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
+import src.prompts as prompts
 from src.domain.chunking import estimate_token_count
 from src.domain.rules import select_relevant_rules
-from src.prompts import render_prompt
+from src.prompts import prompt_cache_scope, render_prompt
 
 STATIC_TRANSLATION_PROMPT_BUDGET = 3800
 STATIC_LEARNER_PROMPT_BUDGET = 5100
@@ -27,6 +29,36 @@ def _all_bundled_rules(target_language: str, source_language: str) -> str:
 
 
 class TestRenderPrompt:
+    def test_job_scope_reads_each_raw_template_once(self):
+        with patch("src.prompts._read_template", wraps=prompts._read_template) as read_template:
+            with prompt_cache_scope():
+                first = render_prompt(
+                    "translate",
+                    target_language="vi",
+                    lang_name="Chinese",
+                    target_name="Vietnamese",
+                )
+                second = render_prompt(
+                    "translate",
+                    target_language="vi",
+                    lang_name="Japanese",
+                    target_name="Vietnamese",
+                )
+
+            assert "Chinese" in first
+            assert "Japanese" in second
+            assert read_template.call_count == 1
+
+            with prompt_cache_scope():
+                render_prompt(
+                    "translate",
+                    target_language="vi",
+                    lang_name="Korean",
+                    target_name="Vietnamese",
+                )
+
+            assert read_template.call_count == 2
+
     def test_render_simple_template(self):
         result = render_prompt("detect")
         assert "language detector" in result
