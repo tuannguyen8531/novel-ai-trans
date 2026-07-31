@@ -12,13 +12,10 @@ from src.utils import files as file_utils
 
 def load(root: Path) -> dict[str, Any]:
     path = root / "metadata.json"
-    if not path.exists():
-        return {}
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        return file_utils.read_json_locked(path)
     except json.JSONDecodeError, OSError:
         return {}
-    return data if isinstance(data, dict) else {}
 
 
 def write(root: Path, metadata: dict[str, Any], *, trailing_newline: bool = True) -> None:

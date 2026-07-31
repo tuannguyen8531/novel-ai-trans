@@ -6,6 +6,7 @@ SUPPORTED_TARGET_LANGUAGES = {
     "vi": "Vietnamese",
     "en": "English",
 }
+SUPPORTED_SOURCE_LANGUAGES = ("chinese", "korean", "japanese")
 
 
 def normalize_source_language(language: str | None) -> str:

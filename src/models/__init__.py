@@ -10,6 +10,7 @@ __all__ = [
     "CrawlError",
     "CrawlResult",
     "CrawlProgress",
+    "TranslationProfile",
     "TranslationState",
     "initial_state",
 ]
@@ -68,6 +69,14 @@ class CrawlProgress:
     source_url: str
     path: str | None = None
     error: str | None = None
+
+
+@dataclass(frozen=True)
+class TranslationProfile:
+    """Atomic metadata snapshot used to configure one translation run."""
+
+    source_language: str
+    genres: tuple[str, ...] = ()
 
 
 # Re-export TranslationState and initial_state from the state module

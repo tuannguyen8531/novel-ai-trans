@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from src.application.errors import ResourceNotFoundError
+from src.application.errors import ApplicationValidationError, ResourceNotFoundError
 from src.application.novel import artifacts, catalog, chapters, metadata, rules
 
 
@@ -120,6 +120,24 @@ def test_update_metadata_deep_merges_localized_fields_as_manual(tmp_path: Path) 
     }
     assert updated["localization_meta"]["vi"]["summary"]["origin"] == "manual"
     assert updated["localization_meta"]["en"]["title"]["origin"] == "manual"
+
+
+def test_update_metadata_validates_genres_against_locked_current_profile(tmp_path: Path) -> None:
+    root = tmp_path / "translated"
+    novel_root = root / "demo"
+    novel_root.mkdir(parents=True)
+    (novel_root / "metadata.json").write_text(
+        json.dumps({"source_language": "korean", "genres": ["fantasy"]}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ApplicationValidationError, match="Unsupported genre"):
+        metadata.update_metadata(root, "demo", {"genres": ["urban"]})
+
+    assert json.loads((novel_root / "metadata.json").read_text(encoding="utf-8")) == {
+        "source_language": "korean",
+        "genres": ["fantasy"],
+    }
 
 
 @pytest.mark.parametrize(

@@ -3,7 +3,7 @@
 ## Vietnamese Prose
 - Write idiomatic Vietnamese while preserving the source register: formal, casual, archaic, comic, or intimate.
 - Action: maintain momentum with clear spatial flow and concise clauses where the source supports them.
-- Romance/drama: preserve subtext, hesitation, silence, and tension without explaining or embellishing them.
+- Emotional relationships: preserve subtext, intimacy changes, hesitation, romantic banter, deliberate misunderstandings, silence, and tension without making feelings more explicit or embellishing them.
 - Exposition: prioritize clarity; use Hán-Việt vocabulary only when it is natural for the genre and register.
 - Internal monologue: preserve the character's rhythm, bias, uncertainty, and emotional movement.
 - Avoid translationese such as stiff source-language word order, unnecessary "một cách" or "của", and repetitive sentence frames.
@@ -17,7 +17,7 @@
 - Keep the pair stable within a scene unless the source changes it; omit pronouns naturally when Vietnamese allows.
 
 ## Names, Slang, and Presentation
-- Use the glossary for established names; otherwise choose one natural Vietnamese rendering and keep it consistent.
+- For names absent from the glossary, choose one natural Vietnamese rendering and keep it consistent.
 - Translate idioms, jokes, internet slang, and sound effects by function and register; transliterate only when no natural equivalent exists.
 - Preserve recognizable in-world formats for system windows, status screens, posts, messages, and chat logs.
 - Preserve meaningful symbols and brackets such as 【】, 『』, and 「」.

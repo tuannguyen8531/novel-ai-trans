@@ -76,6 +76,7 @@ def create(
             "illustration_url": illustration_url or None,
             "summary": None,
             "site_name": None,
+            "genres": [],
         }
         write_metadata(novel_root, metadata, trailing_newline=False)
     except Exception as error:

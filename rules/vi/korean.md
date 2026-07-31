@@ -2,6 +2,8 @@
 
 ## Names
 - Keep Korean names in romanized form (e.g., 김수현 → Kim Su Hyun)
+- For Western-derived or invented fantasy names written in Hangul, restore the canonical or context-supported Latin spelling instead of romanizing them as Korean names (e.g., 카일 → Kyle)
+- Ambiguous forms such as 리온 may be Rion or Leon; follow glossary and story evidence, then keep the chosen spelling consistent
 - Do NOT convert to Hán Việt
 
 ## Honorific System
@@ -13,30 +15,9 @@
 - 선배 → tiền bối / đàn anh / đàn chị
 - 후배 → hậu bối / đàn em
 
-## Regression / Hunter Genre Terms
-- 회귀 → hồi quy
-- 회귀자 → người hồi quy
-- 각성 → giác tỉnh / thức tỉnh
-- 각성자 → giác tỉnh giả
-- 헌터 → Hunter (keep original)
-- 던전 → dungeon (keep original)
-- 레이드 → raid (keep original)
-- 길드 → guild (keep original)
-- 마나 → mana (keep original)
-- 스킬 → skill (keep original)
-
-## Murim / Korean Martial Arts Terms
-- 무림 → Murim / Võ lâm
-- 내공 → nội công
-- 강호 → giang hồ
-- 문파 → môn phái
-- 장로 → trưởng lão
-
-## Ranking System
-- S급 → hạng S
-- A급 → hạng A
-- 랭킹 → ranking (keep original)
-
-## Style Notes
-- Korean novels tend to have fast pacing — maintain short, punchy dialogue
-- Keep strong expressions (!, ...)
+## Narrative Style
+- Maintain short, punchy dialogue when the source uses fast pacing
+- Keep strong expressions and meaningful punctuation such as ! and ...
+- Preserve short paragraphs, rapid scene transitions, and cliffhanger rhythm without artificially fragmenting the prose
+- Keep internal reactions immediate and readable; do not expand repeated beats into explanations
+- When humor is present, preserve deadpan delivery, reaction beats, and comic shifts in 존댓말, 반말, or titles without explaining or inventing jokes

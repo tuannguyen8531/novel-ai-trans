@@ -1,15 +1,64 @@
 """Tests for prompt template engine."""
 
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
+import src.prompts as prompts
 from src.domain.chunking import estimate_token_count
 from src.domain.rules import select_relevant_rules
-from src.prompts import render_prompt
+from src.prompts import prompt_cache_scope, render_prompt
+
+STATIC_TRANSLATION_PROMPT_BUDGET = 3800
+STATIC_LEARNER_PROMPT_BUDGET = 5100
+COMMON_TRANSLATION_PROMPT_BUDGET = {"vi": 1450, "en": 1370}
+
+
+def _all_bundled_rules(target_language: str, source_language: str) -> str:
+    """Build the production static-rule combination with every genre selected."""
+    common_rules = Path(f"rules/{target_language}/common.md").read_text(encoding="utf-8")
+    language_path = Path(f"rules/{target_language}/{source_language}.md")
+    genre_paths = sorted(Path(f"rules/{target_language}/{source_language}").glob("*.md"))
+    source_text = "\n\n".join(path.read_text(encoding="utf-8") for path in (language_path, *genre_paths))
+    selected_rules = [
+        select_relevant_rules(language_path.read_text(encoding="utf-8"), source_text),
+        *[select_relevant_rules(path.read_text(encoding="utf-8"), source_text) for path in genre_paths],
+    ]
+    return "\n\n".join([common_rules, *selected_rules])
 
 
 class TestRenderPrompt:
+    def test_job_scope_reads_each_raw_template_once(self):
+        with patch("src.prompts._read_template", wraps=prompts._read_template) as read_template:
+            with prompt_cache_scope():
+                first = render_prompt(
+                    "translate",
+                    target_language="vi",
+                    lang_name="Chinese",
+                    target_name="Vietnamese",
+                )
+                second = render_prompt(
+                    "translate",
+                    target_language="vi",
+                    lang_name="Japanese",
+                    target_name="Vietnamese",
+                )
+
+            assert "Chinese" in first
+            assert "Japanese" in second
+            assert read_template.call_count == 1
+
+            with prompt_cache_scope():
+                render_prompt(
+                    "translate",
+                    target_language="vi",
+                    lang_name="Korean",
+                    target_name="Vietnamese",
+                )
+
+            assert read_template.call_count == 2
+
     def test_render_simple_template(self):
         result = render_prompt("detect")
         assert "language detector" in result
@@ -106,11 +155,43 @@ class TestRenderPrompt:
             target_name=target_name,
         )
 
-        assert "Translate every source sentence and meaningful beat faithfully, naturally, and completely" in result
-        assert "Preserve meaning, event order, tone, emotion, dialogue, internal monologue, paragraph structure" in result
+        assert "Translate every source sentence and meaningful beat faithfully and completely" in result
+        assert "Preserve meaning, event order, paragraph structure, and significant formatting" in result
         assert "Follow supplied glossary terms and character names exactly" in result
         assert "Leave no source-script text unless a rule or glossary explicitly requires it" in result
         assert "starting immediately with its first line" in result
+
+    @pytest.mark.parametrize(
+        ("target_language", "target_name", "prose_rule"),
+        [
+            ("vi", "Vietnamese", "Write idiomatic Vietnamese"),
+            ("en", "English", "Write idiomatic English"),
+        ],
+    )
+    def test_translate_and_common_rules_stay_within_deduplicated_budget(
+        self,
+        target_language,
+        target_name,
+        prose_rule,
+    ):
+        common_rules = Path(f"rules/{target_language}/common.md").read_text(encoding="utf-8")
+        result = render_prompt(
+            "translate",
+            target_language=target_language,
+            lang_name="Chinese",
+            target_name=target_name,
+            translation_rules=common_rules,
+            glossary="",
+            characters="",
+            address_rules="",
+            address_rule_candidates="",
+            previous_summary="",
+            review_feedback="",
+        )
+
+        assert prose_rule in result
+        assert "Internal monologue:" in result
+        assert estimate_token_count(result) < COMMON_TRANSLATION_PROMPT_BUDGET[target_language]
 
     @pytest.mark.parametrize(
         ("target_language", "target_name", "source_language", "source_name", "source_text"),
@@ -123,7 +204,7 @@ class TestRenderPrompt:
             ("en", "English", "japanese", "Japanese", "田中太郎さんは異世界でスキルを得た。"),
         ],
     )
-    def test_representative_translation_system_prompt_stays_within_token_budget(
+    def test_representative_base_translation_prompt_stays_within_token_budget(
         self,
         target_language,
         target_name,
@@ -149,6 +230,37 @@ class TestRenderPrompt:
         )
 
         assert estimate_token_count(result) < 2600
+
+    @pytest.mark.parametrize(
+        ("target_language", "target_name"),
+        [("vi", "Vietnamese"), ("en", "English")],
+    )
+    @pytest.mark.parametrize(
+        ("source_language", "source_name"),
+        [("chinese", "Chinese"), ("korean", "Korean"), ("japanese", "Japanese")],
+    )
+    def test_translation_prompt_with_all_genres_stays_within_static_budget(
+        self,
+        target_language,
+        target_name,
+        source_language,
+        source_name,
+    ):
+        result = render_prompt(
+            "translate",
+            target_language=target_language,
+            lang_name=source_name,
+            target_name=target_name,
+            translation_rules=_all_bundled_rules(target_language, source_language),
+            glossary="",
+            characters="",
+            address_rules="",
+            address_rule_candidates="",
+            previous_summary="",
+            review_feedback="",
+        )
+
+        assert estimate_token_count(result) < STATIC_TRANSLATION_PROMPT_BUDGET
 
     @pytest.mark.parametrize(("target_language", "target_name"), [("vi", "Vietnamese"), ("en", "English")])
     def test_translate_uses_address_rules_as_source_overridable_defaults(self, target_language, target_name):
@@ -215,7 +327,7 @@ class TestRenderPrompt:
         assert "Do not repeat an unchanged existing edge" in result
 
     @pytest.mark.parametrize("target_language", ["vi", "en"])
-    def test_learner_prompt_stays_within_token_budget(self, target_language):
+    def test_learner_template_stays_within_token_budget(self, target_language):
         result = render_prompt(
             "learn",
             target_language=target_language,
@@ -226,3 +338,26 @@ class TestRenderPrompt:
         )
 
         assert estimate_token_count(result) < 2200
+
+    @pytest.mark.parametrize(
+        ("target_language", "target_name"),
+        [("vi", "Vietnamese"), ("en", "English")],
+    )
+    @pytest.mark.parametrize("source_language", ["chinese", "korean", "japanese"])
+    def test_learner_prompt_with_all_genres_stays_within_static_budget(
+        self,
+        target_language,
+        target_name,
+        source_language,
+    ):
+        result = render_prompt(
+            "learn",
+            target_language=target_language,
+            target_name=target_name,
+            translation_rules=_all_bundled_rules(target_language, source_language),
+            existing_terms_str="(none)",
+            existing_chars_str="(none)",
+            chapter_number="12",
+        )
+
+        assert estimate_token_count(result) < STATIC_LEARNER_PROMPT_BUDGET

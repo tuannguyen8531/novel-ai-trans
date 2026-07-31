@@ -32,12 +32,19 @@ from src.api.schemas import (
 )
 from src.application import config as app_config
 from src.application.errors import ApplicationValidationError, PersistenceError
-from src.application.languages import normalize_source_language
+from src.application.genres import genre_catalog
 from src.application.novel import artifacts, catalog, chapters, covers, identity, metadata, rules
 from src.application.novel.insertion import InsertRequest, insert_chapter
 from src.application.novel.localization import localize_metadata
 
 router = APIRouter(tags=["novels"])
+
+
+@router.get("/genres", response_model=dict[str, list[str]])
+def list_genres(
+    _: AuthenticatedPrincipal,
+) -> dict[str, list[str]]:
+    return genre_catalog()
 
 
 @router.post("/novels", status_code=status.HTTP_201_CREATED)
@@ -328,8 +335,6 @@ def patch_novel_metadata(
 ) -> NovelMetadataResponse:
     root = identity.resolve_root(app_config.get_config().translated_dir)
     updates = payload.model_dump(exclude_unset=True)
-    if "source_language" in payload.model_fields_set:
-        updates["source_language"] = normalize_source_language(payload.source_language) or None
     return NovelMetadataResponse(
         novel=name,
         data=metadata.update_metadata(root, name, updates, localized_origin="manual"),

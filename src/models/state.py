@@ -17,6 +17,7 @@ class TranslationState(TypedDict):
     target_language: str  # "vi" | "en"
     novel_name: str  # For glossary lookup
     chapter_number: int  # Current chapter number
+    genres: list[str]  # Selected source-specific genre rule profiles
 
     # --- Context (loaded by context node) ---
     translation_rules: str  # Rules from rules/{language}.md
@@ -53,6 +54,7 @@ def initial_state(
     novel_name: str,
     chapter_number: int,
     target_language: str = "vi",
+    genres: list[str] | None = None,
 ) -> TranslationState:
     """Create a properly initialized TranslationState."""
     return TranslationState(
@@ -61,6 +63,7 @@ def initial_state(
         target_language=target_language,
         novel_name=novel_name,
         chapter_number=chapter_number,
+        genres=list(genres or []),
         translation_rules="",
         glossary={},
         previous_summary="",

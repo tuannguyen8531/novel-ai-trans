@@ -47,7 +47,7 @@ def test_context_loads_vietnamese_rules_from_vi_folder():
     assert "follow any provided address rules exactly" not in result["translation_rules"]
 
 
-def test_context_keeps_only_language_term_mappings_used_in_chapter():
+def test_context_does_not_load_unselected_genre_rules():
     state = initial_state(
         source_text="他开始修炼。",
         source_language="chinese",
@@ -62,9 +62,53 @@ def test_context_keeps_only_language_term_mappings_used_in_chapter():
     ):
         result = context_node(state)
 
-    assert "修炼 → tu luyện" in result["translation_rules"]
+    assert "修炼 → tu luyện" not in result["translation_rules"]
     assert "丹药 → đan dược" not in result["translation_rules"]
     assert "Translate character names to Hán Việt when appropriate" in result["translation_rules"]
+
+
+def test_context_loads_selected_genre_and_filters_unused_mappings():
+    state = initial_state(
+        source_text="他开始修炼。",
+        source_language="chinese",
+        target_language="vi",
+        novel_name="novel",
+        chapter_number=1,
+        genres=["xianxia"],
+    )
+
+    with (
+        patch("src.graph.nodes.context.load_glossary", return_value={}),
+        patch("src.graph.nodes.context.get_active_context_with_candidates", return_value=({}, [], [], [])),
+    ):
+        result = context_node(state)
+
+    assert "# Xianxia / Xuanhuan Genre Rules" in result["translation_rules"]
+    assert "修炼 → tu luyện" in result["translation_rules"]
+    assert "丹药 → đan dược" not in result["translation_rules"]
+    assert "# Urban Genre Rules" not in result["translation_rules"]
+
+
+def test_context_loads_multiple_selected_genres_in_stable_order():
+    state = initial_state(
+        source_text="카일은 아카데미 마법학부의 생도다.",
+        source_language="korean",
+        target_language="en",
+        novel_name="novel",
+        chapter_number=1,
+        genres=["fantasy", "academy"],
+    )
+
+    with (
+        patch("src.graph.nodes.context.load_glossary", return_value={}),
+        patch("src.graph.nodes.context.get_active_context_with_candidates", return_value=({}, [], [], [])),
+    ):
+        result = context_node(state)
+
+    rules = result["translation_rules"]
+    assert "아카데미 -> academy" in rules
+    assert "마법학부 -> magic department / faculty of magic" in rules
+    assert rules.index("# Academy Genre Rules") < rules.index("# Fantasy Genre Rules")
 
 
 def test_context_filters_glossary_terms_to_source_text():

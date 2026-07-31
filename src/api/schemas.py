@@ -255,6 +255,7 @@ class NovelMetadataPatch(BaseModel):
     illustration_url: str | None = None
     summary: str | None = None
     site_name: str | None = None
+    genres: list[str] | None = None
     localized: dict[Literal["vi", "en"], dict[Literal["title", "summary"], str | None]] | None = None
 
 

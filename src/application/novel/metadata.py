@@ -7,8 +7,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from src.application import genres as genre_profiles
 from src.application.errors import ApplicationValidationError, PersistenceError
 from src.application.novel.identity import require_path
+from src.domain.language import normalize_source_language
 from src.services import documents
 
 
@@ -41,11 +43,22 @@ def update_metadata(
         raise ApplicationValidationError("At least one metadata field must be provided.")
 
     def updater(current: dict[str, Any]) -> dict[str, Any]:
+        validated_updates = dict(updates)
+        if "source_language" in validated_updates:
+            raw_source_language = validated_updates["source_language"]
+            if raw_source_language is not None and not isinstance(raw_source_language, str):
+                raise ApplicationValidationError("Source language must be a string or null.")
+            validated_updates["source_language"] = normalize_source_language(raw_source_language) or None
+        if {"source_language", "genres"}.intersection(validated_updates):
+            source_language = validated_updates.get("source_language", current.get("source_language"))
+            selected_genres = validated_updates.get("genres", current.get("genres", []))
+            validated_updates["genres"] = genre_profiles.normalize_genres(source_language, selected_genres)
+
         next_data = dict(current)
-        shallow_updates = {key: value for key, value in updates.items() if key != "localized"}
+        shallow_updates = {key: value for key, value in validated_updates.items() if key != "localized"}
         next_data.update(shallow_updates)
 
-        localized_updates = updates.get("localized")
+        localized_updates = validated_updates.get("localized")
         if isinstance(localized_updates, dict):
             localized = dict(current.get("localized", {})) if isinstance(current.get("localized"), dict) else {}
             localization_meta = (

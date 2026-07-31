@@ -2,6 +2,9 @@
 
 ## Names
 - Keep names in romanized form, Surname-First order (e.g., 田中太郎 → Tanaka Tarou)
+- Apply surname-first order only to Japanese names; preserve the established order of non-Japanese in-world names
+- For Western-derived or invented fantasy names written in kana, restore the canonical or context-supported Latin spelling (e.g., カイル → Kyle)
+- Ambiguous forms such as リオン may be Rion or Leon; follow glossary and story evidence, then keep the chosen spelling consistent
 - Do NOT convert to Hán Việt
 
 ## Name Suffixes
@@ -18,26 +21,13 @@
 - 尊敬語 (sonkeigo): use respectful language
 - 謙譲語 (kenjougo): use humble language
 
-## Isekai / Light Novel Terms
-- 異世界 → dị giới
-- 勇者 → dũng giả
-- 魔王 → ma vương
-- スキル → skill (keep original)
-- レベル → level (keep original)
-- ステータス → status (keep original)
-- ダンジョン → dungeon (keep original)
-- 冒険者 → mạo hiểm giả / phiêu lưu gia
-- ギルド → guild (keep original)
-- 魔法 → ma pháp
-- 魔物 → ma vật / quái vật
-- 聖女 → thánh nữ
-- 騎士 → kỵ sĩ
-
 ## Onomatopoeia
 - Translate meaning, not sound (e.g., ドキドキ → đập thình thịch)
 - バタバタ → lộp bộp / xôn xao
 - シーン → im lặng
 
-## Style Notes
-- Light novels often use first-person internal monologue — preserve the introspective tone
-- Keep the light, humorous style typical of LN writing
+## Narrative Style
+- Preserve first-person internal monologue and its introspective tone when present
+- Preserve the contrast between narration, inner monologue, and spoken dialogue
+- Retain deliberate repetition, pauses, and short paragraph rhythm only when they serve character voice or timing
+- When humor is present, preserve boke/tsukkomi roles, punchline timing, pauses, reaction cuts, self-deprecation, and overreaction without explaining or inventing jokes

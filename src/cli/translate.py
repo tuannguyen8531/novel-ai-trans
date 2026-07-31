@@ -185,7 +185,8 @@ def main(argv: list[str] | None = None) -> None:
     total = len(chapters)
     print(f"{DIM}📕 {novel}: {total} chapters found{RESET}")
 
-    language = args.lang or source_language(novel)
+    metadata_language = source_language(novel)
+    language = args.lang or metadata_language
     if args.lang:
         print(f"{DIM}🌐 Language: {language} (specified){RESET}")
     elif language:
@@ -200,7 +201,7 @@ def main(argv: list[str] | None = None) -> None:
     signal.signal(signal.SIGINT, _signal_handler)
     request = TranslationRequest(
         novel=novel,
-        source_language=language,
+        source_language=args.lang or "",
         target_language=args.target,
         provider=args.provider,
         enable_review=args.review,

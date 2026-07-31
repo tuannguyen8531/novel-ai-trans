@@ -232,6 +232,8 @@ export interface NovelMetadataResponse {
   data: Record<string, unknown>
 }
 
+export type GenreCatalog = Record<string, string[]>
+
 export interface HealthResponse {
   status: 'ok'
   active_job_id: string | null

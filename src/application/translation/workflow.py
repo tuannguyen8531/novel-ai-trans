@@ -13,7 +13,8 @@ from typing import Protocol, cast
 
 from src import paths
 from src.application import config as app_config
-from src.application.errors import OperationCancelledError, ResourceNotFoundError
+from src.application.errors import ApplicationValidationError, OperationCancelledError, ResourceNotFoundError
+from src.application.genres import normalize_genres
 from src.application.locks import novel_lock
 from src.application.progress import ProgressEvent
 from src.application.translation.chapter import TranslationGraph, translate_chapter
@@ -22,9 +23,14 @@ from src.application.translation.selection import select_chapters
 from src.application.translation.validation import apply_request_overrides, validate_provider
 from src.config import Config
 from src.domain.chunking import estimate_token_count
+from src.domain.language import normalize_source_language
 from src.graph.builder import TranslationQualityError, build_graph
+from src.models import TranslationProfile
+from src.prompts import prompt_cache_scope
+from src.services.genres import genre_cache_scope
 from src.services.logger import log_error
-from src.services.metadata import load_source_language
+from src.services.metadata import load_translation_profile
+from src.services.rules import rule_snapshot_scope
 from src.services.translation.checkpoints import CheckpointStore
 from src.services.translation.reports import ReportStore
 from src.services.translation.storage import TranslationStorage
@@ -43,7 +49,7 @@ class TranslationWorkflow:
     checkpoints: CheckpointStore
     reports: ReportStore
     graph_factory: GraphFactory
-    source_language_loader: Callable[[str], str]
+    profile_loader: Callable[[str], TranslationProfile]
     progress_root: Path | None = None
     report_root: Path | None = None
     rejected_root: Path | None = None
@@ -139,7 +145,17 @@ class TranslationWorkflow:
             ),
         )
 
-        source_language = request.source_language or self.source_language_loader(novel) or ""
+        requested_source_language = normalize_source_language(request.source_language)
+        try:
+            profile = self.profile_loader(novel)
+        except ValueError as error:
+            raise ApplicationValidationError(str(error)) from error
+        metadata_source_language = normalize_source_language(profile.source_language)
+        source_language = requested_source_language or metadata_source_language
+        stored_genres = list(profile.genres)
+        if stored_genres and requested_source_language and requested_source_language != metadata_source_language:
+            raise ApplicationValidationError("Translation source-language override does not match the novel metadata genres.")
+        genres = normalize_genres(source_language, stored_genres)
         graph = self.graph_factory()
         success_count = 0
         failures: list[int] = []
@@ -174,6 +190,7 @@ class TranslationWorkflow:
                     chapter=chapter_number,
                     source_language=source_language,
                     target_language=target,
+                    genres=genres,
                     graph=graph,
                     output_dir=output_dir,
                     report_path=paths.translation_report_path(
@@ -406,14 +423,19 @@ def run_translation(
     rejected_root: Path | None = None,
 ) -> TranslationResult:
     """Construct default collaborators and run one locked translation batch."""
-    with novel_lock(request.novel):
+    with (
+        novel_lock(request.novel),
+        genre_cache_scope(),
+        rule_snapshot_scope(),
+        prompt_cache_scope(),
+    ):
         workflow = TranslationWorkflow(
             config=app_config.get_config(),
             storage=TranslationStorage(),
             checkpoints=CheckpointStore(),
             reports=ReportStore(),
             graph_factory=cast(GraphFactory, build_graph),
-            source_language_loader=load_source_language,
+            profile_loader=load_translation_profile,
             report_root=report_root,
             rejected_root=rejected_root,
         )
