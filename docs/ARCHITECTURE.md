@@ -57,7 +57,10 @@ runtime/
 ├── logs/
 ├── manifests/
 ├── progress/
-└── reports/
+├── reports/
+└── transactions/
+    ├── en/
+    └── vi/
 ```
 
 Crawler manifests belong to `manifests/`; browser profiles and fetched pages
@@ -65,6 +68,13 @@ are disposable cache. Translation warnings deliberately depend on `reports/`
 and may disappear when runtime state is cleaned. Glossaries and translated
 chapter output are durable novel data and therefore stay under
 `translated/<novel>/`.
+
+Recoverable chapter-publication journals use
+`transactions/<target>/<novel>/<transaction-id>.json`. Output and report stage
+files remain beside their destinations so each final replacement is atomic on
+its own filesystem. Each transaction writes its journal once; recovery infers
+the commit state from content hashes. Progress has no staged copy because its
+completed set is reconstructed from published output and saved atomically.
 
 ## Prompt assets and translation rules
 

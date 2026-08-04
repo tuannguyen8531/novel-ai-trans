@@ -44,10 +44,10 @@ class ReportStore:
     """Persist per-chapter translation quality reports."""
 
     def save(self, path: Path, report: dict[str, Any]) -> None:
-        write_text_atomic(
-            path,
-            json.dumps(report, ensure_ascii=False, indent=2),
-        )
+        write_text_atomic(path, self.serialize(report))
+
+    def serialize(self, report: dict[str, Any]) -> str:
+        return json.dumps(report, ensure_ascii=False, indent=2)
 
     def load(self, path: Path) -> dict[str, Any]:
         """Load a report defensively."""
@@ -67,6 +67,19 @@ class ReportStore:
         content: str,
     ) -> None:
         """Record current-output warnings and clear any rejected candidate."""
+        self.save(
+            path,
+            self.prepare_output_check(path, issue_codes=issue_codes, content=content),
+        )
+
+    def prepare_output_check(
+        self,
+        path: Path,
+        *,
+        issue_codes: list[str],
+        content: str,
+    ) -> dict[str, Any]:
+        """Build current-output warning state without publishing it."""
         report = self.load(path)
         fingerprint = content_hash(content)
         ignored = report.get("ignored_post_checks")
@@ -75,18 +88,15 @@ class ReportStore:
             if isinstance(ignored, list)
             else []
         )
-        self.save(
-            path,
-            {
-                "manual_post_check_issues": list(dict.fromkeys(issue_codes)),
-                "ignored_post_checks": retained,
-                "issues": [],
-                "candidate_translation": None,
-                "partial": False,
-                "failed_chunk_index": None,
-                "total_chunks": None,
-            },
-        )
+        return {
+            "manual_post_check_issues": list(dict.fromkeys(issue_codes)),
+            "ignored_post_checks": retained,
+            "issues": [],
+            "candidate_translation": None,
+            "partial": False,
+            "failed_chunk_index": None,
+            "total_chunks": None,
+        }
 
     def save_rejection(
         self,

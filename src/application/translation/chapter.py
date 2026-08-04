@@ -10,13 +10,15 @@ from typing import Any, Protocol
 from src.domain.quality import post_check_translation
 from src.models.state import TranslationState, initial_state
 from src.services.chapters import deduplicate_leading_headings
-from src.services.translation.reports import ReportStore
 from src.services.translation.storage import TranslationStorage
 from src.utils.text import normalize_paragraph_spacing
 
 
 class TranslationGraph(Protocol):
     def invoke(self, state: TranslationState) -> Mapping[str, Any]: ...
+
+
+PublishChapter = Callable[[str, list[str]], None]
 
 
 def translate_chapter(
@@ -27,10 +29,8 @@ def translate_chapter(
     source_language: str,
     target_language: str,
     graph: TranslationGraph,
-    output_dir: Path,
-    report_path: Path,
     storage: TranslationStorage,
-    reports: ReportStore,
+    publish: PublishChapter,
     genres: list[str] | None = None,
     clock: Callable[[], float] = time.time,
 ) -> tuple[bool, int, float, int]:
@@ -60,10 +60,5 @@ def translate_chapter(
     new_terms_count = len(new_terms) if isinstance(new_terms, Mapping) else 0
     issue_codes = [issue.code for issue in post_check_translation(source_text, normalized_text, glossary)]
 
-    storage.write(output_dir, chapter, normalized_text)
-    reports.save_output_check(
-        report_path,
-        issue_codes=issue_codes,
-        content=normalized_text,
-    )
+    publish(normalized_text, issue_codes)
     return True, len(normalized_text), elapsed, new_terms_count

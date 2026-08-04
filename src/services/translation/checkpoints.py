@@ -26,11 +26,16 @@ class CheckpointStore:
         }
 
     def save(self, path: Path, checkpoint: dict[str, list[int]]) -> None:
-        normalized = {
+        write_text_atomic(path, self.serialize(checkpoint))
+
+    def normalize(self, checkpoint: dict[str, list[int]]) -> dict[str, list[int]]:
+        return {
             "completed": sorted(set(checkpoint.get("completed", []))),
             "failed": sorted(set(checkpoint.get("failed", []))),
         }
-        write_text_atomic(path, _format_progress(normalized))
+
+    def serialize(self, checkpoint: dict[str, list[int]]) -> str:
+        return _format_progress(self.normalize(checkpoint))
 
 
 def _format_progress(progress: dict[str, list[int]], *, values_per_line: int = 12) -> str:

@@ -15,6 +15,7 @@ def test_default_roots_are_anchored_at_project_root() -> None:
     assert project_root / "runtime" / "logs" == paths.LOG_DIR
     assert project_root / "runtime" / "jobs" == paths.JOB_DIR
     assert project_root / "runtime" / "manifests" == paths.MANIFEST_DIR
+    assert project_root / "runtime" / "transactions" == paths.TRANSACTION_DIR
     assert project_root / "runtime" / "backups" / "insertions" == paths.INSERT_BACKUP_DIR
     assert project_root / "runtime" / "backups" / "replacements" == paths.GLOSSARY_BACKUP_DIR
     assert project_root / "runtime" / "cache" / "browser" == paths.BROWSER_CACHE_DIR
@@ -46,6 +47,10 @@ def test_novel_config_path_uses_translated_root(tmp_path: Path) -> None:
 def test_translation_progress_path_for_target(tmp_path: Path) -> None:
     assert paths.translation_progress_path_for_target("demo", "vi", progress_root=tmp_path) == tmp_path / "demo.json"
     assert paths.translation_progress_path_for_target("demo", "en", progress_root=tmp_path) == (tmp_path / "en" / "demo.json")
+
+
+def test_translation_transaction_directory_uses_target_and_novel(tmp_path: Path) -> None:
+    assert paths.translation_transaction_dir("demo", "vi", transaction_root=tmp_path) == tmp_path / "vi" / "demo"
 
 
 def test_novel_glossary_path_uses_novel_root_and_target(tmp_path: Path) -> None:

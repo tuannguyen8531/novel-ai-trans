@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from threading import Event
 from typing import Literal
 
@@ -16,6 +17,7 @@ from src.config import Config
 from src.graph.builder import TranslationQualityError
 from src.models import TranslationProfile
 from src.services.translation.checkpoints import CheckpointStore
+from src.services.translation.publisher import ChapterPublication, ChapterPublisher, PublicationError
 from src.services.translation.reports import ReportStore
 from src.services.translation.storage import TranslationStorage
 
@@ -81,6 +83,7 @@ def make_workflow(
         profile_loader=lambda _novel: TranslationProfile("chinese"),
         progress_root=tmp_path / "progress",
         report_root=tmp_path / "reports",
+        transaction_root=tmp_path / "transactions",
     )
 
 
@@ -213,6 +216,52 @@ def test_quality_failure_preserves_current_output_warnings(tmp_path) -> None:
     assert report["candidate_translation"] == "Rejected 张三 candidate"
 
 
+def test_workflow_recovers_committed_output_before_chapter_selection(tmp_path) -> None:
+    write_chapters(tmp_path, (1,))
+    output_dir = tmp_path / "translated" / "novel" / "output"
+    report_path = tmp_path / "reports" / "vi" / "novel" / "chapter_001.json"
+    progress_path = tmp_path / "progress" / "novel.json"
+    transaction_dir = tmp_path / "transactions" / "vi" / "novel"
+
+    def fail_report(source, destination) -> None:
+        if destination == report_path:
+            raise OSError("fault injection")
+        os.replace(source, destination)
+
+    publisher = ChapterPublisher(
+        TranslationStorage(),
+        ReportStore(),
+        CheckpointStore(),
+        id_factory=lambda: "interrupted",
+        replace=fail_report,
+    )
+    with pytest.raises(PublicationError):
+        publisher.publish(
+            ChapterPublication(
+                chapter=1,
+                output_dir=output_dir,
+                report_path=report_path,
+                progress_path=progress_path,
+                transaction_dir=transaction_dir,
+                content="committed output",
+                report={"manual_post_check_issues": [], "ignored_post_checks": []},
+                checkpoint={"completed": [], "failed": [1]},
+            )
+        )
+
+    graph = SuccessGraph()
+    result = make_workflow(tmp_path, graph).run(TranslationRequest(novel="novel"))
+
+    assert result.skipped is True
+    assert graph.calls == 0
+    assert json.loads(report_path.read_text(encoding="utf-8")) == {
+        "manual_post_check_issues": [],
+        "ignored_post_checks": [],
+    }
+    assert CheckpointStore().load(progress_path) == {"completed": [1], "failed": []}
+    assert list(transaction_dir.glob("*.json")) == []
+
+
 def test_cancel_finishes_current_chapter_then_stops_before_next(tmp_path) -> None:
     write_chapters(tmp_path, (1, 2))
     cancel_event = Event()
@@ -227,6 +276,24 @@ def test_cancel_finishes_current_chapter_then_stops_before_next(tmp_path) -> Non
     assert result.success == 1
     assert result.chapters_attempted == [1]
     assert graph.calls == 1
+
+
+def test_failed_only_requires_force_when_failed_chapter_has_output(tmp_path) -> None:
+    write_chapters(tmp_path, (1,))
+    output_dir = tmp_path / "translated" / "novel" / "output"
+    output_dir.mkdir(parents=True)
+    (output_dir / "chapter_001.txt").write_text("existing", encoding="utf-8")
+    CheckpointStore().save(tmp_path / "progress" / "novel.json", {"completed": [1], "failed": [1]})
+
+    skipped_graph = SuccessGraph()
+    skipped = make_workflow(tmp_path, skipped_graph).run(TranslationRequest(novel="novel", failed_only=True))
+    translated_graph = SuccessGraph()
+    translated = make_workflow(tmp_path, translated_graph).run(TranslationRequest(novel="novel", failed_only=True, force=True))
+
+    assert skipped.skipped is True
+    assert skipped_graph.calls == 0
+    assert translated.success == 1
+    assert translated_graph.calls == 1
 
 
 @pytest.mark.parametrize(

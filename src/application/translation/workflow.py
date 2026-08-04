@@ -12,7 +12,12 @@ from typing import Protocol, cast
 
 from src import paths
 from src.application import config as app_config
-from src.application.errors import ApplicationValidationError, OperationCancelledError, ResourceNotFoundError
+from src.application.errors import (
+    ApplicationValidationError,
+    OperationCancelledError,
+    PersistenceError,
+    ResourceNotFoundError,
+)
 from src.application.genres import normalize_genres
 from src.application.locks import novel_lock
 from src.application.progress import ProgressEvent
@@ -31,6 +36,7 @@ from src.services.logger import log_error
 from src.services.metadata import load_translation_profile
 from src.services.rules import rule_snapshot_scope
 from src.services.translation.checkpoints import CheckpointStore
+from src.services.translation.publisher import ChapterPublication, ChapterPublisher, PublicationError
 from src.services.translation.reports import ReportStore
 from src.services.translation.storage import TranslationStorage
 
@@ -51,6 +57,8 @@ class TranslationWorkflow:
     profile_loader: Callable[[str], TranslationProfile]
     progress_root: Path | None = None
     report_root: Path | None = None
+    transaction_root: Path | None = None
+    publisher: ChapterPublisher | None = None
     clock: Callable[[], float] = time.time
 
     def run(
@@ -71,12 +79,35 @@ class TranslationWorkflow:
             target,
             progress_root=self.progress_root,
         )
+        report_dir = paths.translation_report_path(
+            self.config,
+            novel,
+            1,
+            target,
+            report_root=self.report_root,
+        ).parent
+        transaction_dir = paths.translation_transaction_dir(
+            novel,
+            target,
+            transaction_root=self.transaction_root,
+        )
 
         if not self.storage.directory_exists(input_dir):
             raise ResourceNotFoundError(f"Input directory not found: {input_dir}")
         chapters = self.storage.scan(input_dir)
         if not chapters:
             raise ResourceNotFoundError(f"No chapter files found in {input_dir}")
+
+        publisher = self.publisher or ChapterPublisher(self.storage, self.reports, self.checkpoints)
+        try:
+            publisher.recover(
+                output_dir=output_dir,
+                report_dir=report_dir,
+                progress_path=checkpoint_path,
+                transaction_dir=transaction_dir,
+            )
+        except PublicationError as error:
+            raise PersistenceError(f"Could not recover interrupted publication for {novel!r}.") from error
 
         translated_numbers = self.storage.translated_numbers(output_dir)
         checkpoint = self.checkpoints.load(checkpoint_path)
@@ -184,6 +215,42 @@ class TranslationWorkflow:
             )
 
             try:
+                report_path = paths.translation_report_path(
+                    self.config,
+                    novel,
+                    chapter_number,
+                    target,
+                    report_root=self.report_root,
+                )
+                published_checkpoint: dict[str, list[int]] | None = None
+
+                def publish(
+                    content: str,
+                    issue_codes: list[str],
+                    *,
+                    active_report_path: Path = report_path,
+                    active_chapter: int = chapter_number,
+                    active_checkpoint: dict[str, list[int]] = checkpoint,
+                ) -> None:
+                    nonlocal published_checkpoint
+                    report = self.reports.prepare_output_check(
+                        active_report_path,
+                        issue_codes=issue_codes,
+                        content=content,
+                    )
+                    published_checkpoint = publisher.publish(
+                        ChapterPublication(
+                            chapter=active_chapter,
+                            output_dir=output_dir,
+                            report_path=active_report_path,
+                            progress_path=checkpoint_path,
+                            transaction_dir=transaction_dir,
+                            content=content,
+                            report=report,
+                            checkpoint=active_checkpoint,
+                        )
+                    )
+
                 ok, output_chars, elapsed, new_terms = translate_chapter(
                     chapter_path,
                     novel=novel,
@@ -192,16 +259,8 @@ class TranslationWorkflow:
                     target_language=target,
                     genres=genres,
                     graph=graph,
-                    output_dir=output_dir,
-                    report_path=paths.translation_report_path(
-                        self.config,
-                        novel,
-                        chapter_number,
-                        target,
-                        report_root=self.report_root,
-                    ),
                     storage=self.storage,
-                    reports=self.reports,
+                    publish=publish,
                     clock=self.clock,
                 )
             except OperationCancelledError:
@@ -247,6 +306,14 @@ class TranslationWorkflow:
                     cancelled = True
                     break
                 continue
+            except PublicationError as error:
+                log_error(
+                    f"Publication failed for chapter {chapter_number}",
+                    error,
+                    chapter=chapter_number,
+                    novel=novel,
+                )
+                raise PersistenceError(f"Could not safely publish chapter {chapter_number}; recovery is required.") from error
             except Exception as error:  # noqa: BLE001 - record and continue
                 self._record_failure(
                     checkpoint,
@@ -267,13 +334,14 @@ class TranslationWorkflow:
 
             attempted.append(chapter_number)
             if ok:
+                if published_checkpoint is None:
+                    raise PersistenceError(f"Chapter {chapter_number} completed without publication state.")
+                checkpoint = published_checkpoint
                 success_count += 1
-                checkpoint.setdefault("completed", []).append(chapter_number)
-                checkpoint["failed"] = [chapter for chapter in checkpoint.get("failed", []) if chapter != chapter_number]
             else:
                 failures.append(chapter_number)
                 checkpoint.setdefault("failed", []).append(chapter_number)
-            self.checkpoints.save(checkpoint_path, checkpoint)
+                self.checkpoints.save(checkpoint_path, checkpoint)
 
             post_count = success_count + len(failures)
             output_size, output_unit = self._output_size(output_dir, chapter_number, output_chars, ok)
@@ -403,6 +471,7 @@ def run_translation(
     progress_callback: Callable[[ProgressEvent], None] | None = None,
     cancel_event: Event | None = None,
     report_root: Path | None = None,
+    transaction_root: Path | None = None,
 ) -> TranslationResult:
     """Construct default collaborators and run one locked translation batch."""
     with (
@@ -419,6 +488,7 @@ def run_translation(
             graph_factory=cast(GraphFactory, build_graph),
             profile_loader=load_translation_profile,
             report_root=report_root,
+            transaction_root=transaction_root,
         )
         return workflow.run(
             request,

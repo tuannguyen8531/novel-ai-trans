@@ -113,5 +113,7 @@ def test_translate_writes_reports_next_to_custom_jobs_directory(client):
             time.sleep(0.01)
 
         assert translate.called
-        assert translate.call_args.kwargs["report_root"] == client.app.state.app_state.jobs_dir.parent / "reports"
+        runtime_root = client.app.state.app_state.jobs_dir.parent
+        assert translate.call_args.kwargs["report_root"] == runtime_root / "reports"
+        assert translate.call_args.kwargs["transaction_root"] == runtime_root / "transactions"
         assert "rejected_root" not in translate.call_args.kwargs

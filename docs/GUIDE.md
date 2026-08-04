@@ -430,6 +430,9 @@ or `runtime/progress/en/{novel}.json` (English):
 The chapter output files are authoritative for completion. `completed` is
 reconciled from those files; `failed` remains runtime retry/diagnostic state, so
 a chapter may be both completed and failed after a failed retranslation.
+Publication stages only output and its matching report. Progress is written
+atomically without another staged transaction file and can be repaired from
+output during recovery.
 
 Per-chapter quality state is written to
 `runtime/reports/{target}/{novel}/chapter_NNN.json`. One report contains current
@@ -447,6 +450,13 @@ The current output warnings and final rejected post-check candidate share one
 report at `runtime/reports/{target}/{novel}/chapter_NNN.json`. Candidate text,
 issues, and failed chunk position remain reviewable without making the candidate
 a completed translation.
+
+Chapter output, report, and progress are published through a recoverable journal
+under `runtime/transactions/{target}/{novel}/`. Successful publication removes
+the journal immediately. If a process stops between publication steps, the next
+translation run finishes or safely discards the interrupted transaction before
+selecting chapters. Do not delete this directory while a translation job or
+recovery is active.
 
 Use `Ctrl+C` to stop gracefully. The chapter currently being processed finishes
 and is saved, then the run stops before starting the next chapter. Resume later

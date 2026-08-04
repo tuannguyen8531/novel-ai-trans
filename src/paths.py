@@ -23,6 +23,7 @@ INPUT_DIR = _PROJECT_ROOT / "translated" / "input"
 OUTPUT_DIR = _PROJECT_ROOT / "translated" / "output"
 PROGRESS_DIR = RUNTIME_DIR / "progress"
 REPORT_DIR = RUNTIME_DIR / "reports"
+TRANSACTION_DIR = RUNTIME_DIR / "transactions"
 MANIFEST_DIR = RUNTIME_DIR / "manifests"
 BACKUP_DIR = RUNTIME_DIR / "backups"
 CACHE_DIR = RUNTIME_DIR / "cache"
@@ -171,6 +172,19 @@ def translation_report_path(
     return resolve_within(root, target, novel_name, f"chapter_{chapter_number:03d}.json")
 
 
+def translation_transaction_dir(
+    novel_name: str,
+    target_language: str,
+    *,
+    transaction_root: Path | None = None,
+) -> Path:
+    """Return the recoverable-publication journal directory for a novel target."""
+    target = normalize_target_language(target_language)
+    root = transaction_root or TRANSACTION_DIR
+    validate_novel_name(novel_name)
+    return resolve_within(root, target, novel_name)
+
+
 __all__ = [
     "INPUT_DIR",
     "LOG_DIR",
@@ -178,6 +192,7 @@ __all__ = [
     "OUTPUT_DIR",
     "PROGRESS_DIR",
     "REPORT_DIR",
+    "TRANSACTION_DIR",
     "MANIFEST_DIR",
     "BACKUP_DIR",
     "CACHE_DIR",
@@ -211,4 +226,5 @@ __all__ = [
     "translation_progress_path_for_target",
     "translation_progress_path",
     "translation_report_path",
+    "translation_transaction_dir",
 ]
