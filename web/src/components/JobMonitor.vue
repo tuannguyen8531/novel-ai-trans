@@ -7,19 +7,16 @@ const props = withDefaults(defineProps<{ job?: JobModel; jobId?: string; live?: 
   live: true
 })
 const jobs = useJobsStore()
-const localJob = ref<JobModel | null>(props.job ?? null)
 const error = ref<string | null>(null)
 const consoleLog = ref<HTMLElement | null>(null)
+const cancellingRequest = ref(false)
 
-const followId = computed(() => props.live ? (props.jobId ?? props.job?.id ?? null) : null)
-
-function findLocal(id: string): JobModel | null {
-  if (localJob.value?.id === id) return localJob.value
-  if (jobs.current?.id === id) return jobs.current
-  const active = jobs.active.find((j) => j.id === id)
-  if (active) return active
-  return jobs.history.find((j) => j.id === id) ?? null
-}
+const jobId = computed(() => props.jobId ?? props.job?.id ?? null)
+const followId = computed(() => props.live ? jobId.value : null)
+const localJob = computed<JobModel | null>(() => {
+  const id = jobId.value
+  return (id ? jobs.findJob(id) : null) ?? props.job ?? null
+})
 
 onUnmounted(() => {
   jobs.closeStream(followId.value)
@@ -33,27 +30,6 @@ watch(
     }
   },
   { immediate: true }
-)
-
-watch(
-  () => props.job,
-  (value) => {
-    if (value) {
-      localJob.value = value
-    }
-  }
-)
-
-watch(
-  () => [jobs.current, jobs.active, jobs.history] as const,
-  () => {
-    if (!followId.value) return
-    const fresh = findLocal(followId.value)
-    if (fresh) {
-      localJob.value = fresh
-    }
-  },
-  { deep: true }
 )
 
 watch(
@@ -84,8 +60,16 @@ const statusBadge = computed(() => {
 })
 
 async function cancel() {
-  if (!followId.value) return
-  await jobs.cancel(followId.value)
+  if (!jobId.value || cancellingRequest.value) return
+  cancellingRequest.value = true
+  error.value = null
+  try {
+    await jobs.cancel(jobId.value)
+  } catch (err) {
+    error.value = (err as Error).message
+  } finally {
+    cancellingRequest.value = false
+  }
 }
 </script>
 
@@ -118,9 +102,10 @@ async function cancel() {
           v-if="localJob.kind !== 'insert' && ['running', 'queued', 'cancelling'].includes(localJob.status)"
           class="secondary"
           type="button"
+          :disabled="cancellingRequest || localJob.status === 'cancelling'"
           @click="cancel"
         >
-          Cancel
+          {{ cancellingRequest || localJob.status === 'cancelling' ? 'Cancelling…' : 'Cancel' }}
         </button>
       </div>
       <details v-if="localJob.result" style="margin-top: 0.5rem;">

@@ -4,7 +4,16 @@ import { api, getAuthToken } from '@/api/client'
 import { openSse, type SseClient } from '@/api/sse'
 import type { JobModel } from '@/api/types'
 
-const ACTIVE_STATUSES = new Set(['queued', 'running', 'cancelling'])
+const ACTIVE_STATUSES = new Set<JobModel['status']>(['queued', 'running', 'cancelling'])
+const TERMINAL_STATUSES = new Set<JobModel['status']>(['completed', 'failed', 'cancelled'])
+const EVENT_STATUSES: Partial<Record<string, JobModel['status']>> = {
+  queued: 'queued',
+  started: 'running',
+  cancelling: 'cancelling',
+  completed: 'completed',
+  failed: 'failed',
+  cancelled: 'cancelled'
+}
 const POLL_INTERVAL_MS = 10_000
 
 export const useJobsStore = defineStore('jobs', () => {
@@ -18,6 +27,8 @@ export const useJobsStore = defineStore('jobs', () => {
   let activeStream: SseClient | null = null
   let activeStreamJobId: string | null = null
   let pollTimer: number | null = null
+  let refreshSequence = 0
+  let activeRefreshSequence = 0
 
   function isActive(job: JobModel | null): job is JobModel {
     return !!job && ACTIVE_STATUSES.has(job.status)
@@ -30,22 +41,51 @@ export const useJobsStore = defineStore('jobs', () => {
     return history.value.find((j) => j.id === jobId) ?? null
   }
 
+  function applyJob(target: JobModel, fresh: JobModel): JobModel {
+    Object.assign(target, fresh)
+    return target
+  }
+
+  function reconcileJobs(response: Awaited<ReturnType<typeof api.listJobs>>) {
+    const known = new Map<string, JobModel>()
+    for (const job of active.value) known.set(job.id, job)
+    if (current.value) known.set(current.value.id, current.value)
+    for (const job of history.value) known.set(job.id, job)
+
+    const reconcile = (fresh: JobModel): JobModel => {
+      const existing = known.get(fresh.id)
+      if (existing) return applyJob(existing, fresh)
+      known.set(fresh.id, fresh)
+      return fresh
+    }
+
+    active.value = response.active.map(reconcile)
+    current.value = active.value[0] ?? (response.current ? reconcile(response.current) : null)
+    history.value = response.history.map(reconcile)
+  }
+
   async function refresh() {
+    const sequence = ++refreshSequence
+    activeRefreshSequence += 1
     loading.value = true
     error.value = null
     try {
       const response = await api.listJobs()
-      active.value = response.active
-      current.value = active.value[0] ?? response.current ?? null
-      history.value = response.history
+      if (sequence !== refreshSequence) return
+      reconcileJobs(response)
     } catch (err) {
-      error.value = (err as Error).message
+      if (sequence === refreshSequence) {
+        error.value = (err as Error).message
+      }
     } finally {
-      loading.value = false
+      if (sequence === refreshSequence) {
+        loading.value = false
+      }
     }
   }
 
   async function refreshActiveJobs() {
+    const sequence = ++activeRefreshSequence
     const jobsToRefresh: JobModel[] = []
     for (const job of activeJobs.value) {
       if (isActive(job)) jobsToRefresh.push(job)
@@ -57,15 +97,19 @@ export const useJobsStore = defineStore('jobs', () => {
     const results = await Promise.allSettled(
       jobsToRefresh.map((job) => api.getJob(job.id))
     )
+    if (sequence !== activeRefreshSequence) return
+    let foundTerminalJob = false
     for (let i = 0; i < results.length; i += 1) {
       const result = results[i]
       if (result.status !== 'fulfilled') continue
       const fresh = result.value
       const slot = findJob(fresh.id)
       if (slot) {
-        Object.assign(slot, fresh)
+        applyJob(slot, fresh)
       }
+      if (TERMINAL_STATUSES.has(fresh.status)) foundTerminalJob = true
     }
+    if (foundTerminalJob) await refresh()
   }
 
   function startPolling() {
@@ -125,6 +169,10 @@ export const useJobsStore = defineStore('jobs', () => {
               if (evt.event === 'snapshot' && existing) {
                 Object.assign(existing, d)
               }
+              const eventStatus = EVENT_STATUSES[evt.event]
+              if (eventStatus && existing) {
+                existing.status = eventStatus
+              }
               if (evt.event === 'log' && existing) {
                 const message = typeof d.message === 'string' ? d.message : ''
                 if (message) {
@@ -137,9 +185,8 @@ export const useJobsStore = defineStore('jobs', () => {
                   existing.progress = { ...existing.progress, ...d }
                 }
               }
-              if (['completed', 'failed', 'cancelled'].includes(evt.event)) {
+              if (eventStatus && TERMINAL_STATUSES.has(eventStatus)) {
                 if (existing) {
-                  existing.status = evt.event as JobModel['status']
                   if (d.result && typeof d.result === 'object') existing.result = d.result as Record<string, unknown>
                   if (d.error && typeof d.error === 'object') existing.error = d.error as JobModel['error']
                 }
@@ -163,11 +210,16 @@ export const useJobsStore = defineStore('jobs', () => {
   }
 
   async function cancel(jobId: string) {
+    error.value = null
     try {
-      await api.cancelJob(jobId)
+      const fresh = await api.cancelJob(jobId)
+      activeRefreshSequence += 1
+      const existing = findJob(jobId)
+      if (existing) applyJob(existing, fresh)
       await refresh()
     } catch (err) {
       error.value = (err as Error).message
+      throw err
     }
   }
 
