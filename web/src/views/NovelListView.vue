@@ -238,7 +238,7 @@ const deleteMessage = computed(() => {
                   class="badge danger status-badge"
                   @click="showFailedChapters(novel)"
                 >
-                  {{ translatedProgress(novel)?.failed }} failed
+                  failed: {{ translatedProgress(novel)?.failed }}
                 </button>
                 <button
                   v-if="(translatedProgress(novel)?.warnings ?? 0) > 0"
@@ -247,8 +247,7 @@ const deleteMessage = computed(() => {
                   title="Chapters that still contain source-language characters"
                   @click="showWarningChapters(novel)"
                 >
-                  {{ translatedProgress(novel)?.warnings }}
-                  {{ translatedProgress(novel)?.warnings === 1 ? 'warning' : 'warnings' }}
+                  warning: {{ translatedProgress(novel)?.warnings }}
                 </button>
                 <span
                   v-if="(translatedProgress(novel)?.failed ?? 0) === 0 && (translatedProgress(novel)?.warnings ?? 0) === 0"
@@ -323,19 +322,16 @@ const deleteMessage = computed(() => {
       <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="warning-chapters-title">
         <div class="modal-header">
           <h3 id="warning-chapters-title">
-            Source-character warnings — {{ warningNovel?.name }}
+            Warning chapters — {{ warningNovel?.name }}
           </h3>
           <button class="modal-close" type="button" aria-label="Close" @click="closeWarningDialog">
             &times;
           </button>
         </div>
         <div class="modal-body">
-          <p class="muted">
-            These chapters still contain source-language characters.
-          </p>
           <p v-if="warningChaptersLoading" class="muted">Loading warning chapters...</p>
           <p v-else-if="warningChaptersError" class="error">{{ warningChaptersError }}</p>
-          <p v-else-if="!warningChapters.length" class="muted">No source-character warnings.</p>
+          <p v-else-if="!warningChapters.length" class="muted">No warning chapters.</p>
           <div v-else class="failed-chapter-list">
             <RouterLink
               v-for="chapter in warningChapters"
