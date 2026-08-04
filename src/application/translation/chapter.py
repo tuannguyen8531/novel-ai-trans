@@ -7,6 +7,7 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any, Protocol
 
+from src.domain.quality import post_check_translation
 from src.models.state import TranslationState, initial_state
 from src.services.chapters import deduplicate_leading_headings
 from src.services.translation.reports import ReportStore
@@ -54,22 +55,15 @@ def translate_chapter(
     final_text = result.get("final_translation", "")
     normalized_text = deduplicate_leading_headings(normalize_paragraph_spacing(str(final_text)))
     new_terms = result.get("new_terms", {})
-    new_characters = result.get("new_characters", {})
-    quality_reports = result.get("quality_reports", [])
+    glossary_value = result.get("glossary", {})
+    glossary = dict(glossary_value) if isinstance(glossary_value, Mapping) else {}
     new_terms_count = len(new_terms) if isinstance(new_terms, Mapping) else 0
-    entities = new_characters.get("entities", {}) if isinstance(new_characters, Mapping) else {}
+    issue_codes = [issue.code for issue in post_check_translation(source_text, normalized_text, glossary)]
 
     storage.write(output_dir, chapter, normalized_text)
-    reports.save(
+    reports.save_output_check(
         report_path,
-        {
-            "chapter": chapter,
-            "target_language": target_language,
-            "output_chars": len(normalized_text),
-            "elapsed_seconds": round(elapsed, 3),
-            "new_terms_count": new_terms_count,
-            "new_characters_count": len(entities) if isinstance(entities, Mapping) else 0,
-            "chunks": quality_reports,
-        },
+        issue_codes=issue_codes,
+        content=normalized_text,
     )
     return True, len(normalized_text), elapsed, new_terms_count

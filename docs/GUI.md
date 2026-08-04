@@ -357,7 +357,7 @@ Job snapshots are written to `runtime/jobs/{job_id}.json`; finished jobs
 survive a server restart up to the on-disk retention window. A queued or
 running job found after a restart is marked failed because its worker cannot be
 resumed. Logs are not restored. Expired files are removed at startup. Generated
-config drafts are stored separately under `runtime/config-drafts/` and are kept
+config drafts are stored separately under `runtime/drafts/` and are kept
 for seven days.
 
 ### Event contract

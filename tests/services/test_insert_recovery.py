@@ -22,7 +22,7 @@ def test_recover_prepared_backup_restores_interrupted_insert(tmp_path: Path) -> 
         {"completed": [1, 2], "failed": []},
         {"completed": [2, 3], "failed": []},
     )
-    backup_root = tmp_path / "runtime" / "insert-backups"
+    backup_root = tmp_path / "runtime" / "backups" / "insertions"
     backup_dir = insertion.create_backup(
         novel="demo",
         operation_id="interrupted-job",

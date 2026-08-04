@@ -114,7 +114,7 @@ uv run crawl my-novel --fail-fast
 
 The two browser modes are intentionally separate and cannot be combined. `-b`
 uses a temporary profile on every run. `-h` reuses state per source domain under
-`runtime/crawler/browser-profiles/`. If a site fingerprints headless and headed
+`runtime/cache/browser/`. If a site fingerprints headless and headed
 sessions differently, use `-h` for the entire crawl instead of expecting its
 profile to unblock later `-b` runs.
 
@@ -206,7 +206,7 @@ uv run insert my-novel 301
 The command moves that chapter and every later source chapter, translation,
 report, progress entry, and chapter-indexed glossary record forward by one. It
 then creates an empty `chapter_301.txt` and stores a recovery backup under
-`runtime/insert-backups/`. Fill the new source chapter in the GUI or edit the
+`runtime/backups/insertions/`. Fill the new source chapter in the GUI or edit the
 file, then translate that chapter explicitly. If a translation already exists,
 use `--force`:
 
@@ -427,10 +427,15 @@ or `runtime/progress/en/{novel}.json` (English):
 }
 ```
 
-Per-chapter quality reports are written to
-`runtime/reports/{novel}/chapter_NNN.json` (or `runtime/reports/en/...`) with
-output char count, elapsed seconds, new terms/characters count, and chunk-level
-quality reports.
+The chapter output files are authoritative for completion. `completed` is
+reconciled from those files; `failed` remains runtime retry/diagnostic state, so
+a chapter may be both completed and failed after a failed retranslation.
+
+Per-chapter quality state is written to
+`runtime/reports/{target}/{novel}/chapter_NNN.json`. One report contains current
+output warning codes, exact-content ignore decisions, and the latest complete
+rejected candidate when one exists. Unused timing, character-count, and
+chunk-score metrics are not persisted.
 
 Token-free checks run on every translated chunk, even when `--review` is off.
 Blocking issues such as empty output, substantial untranslated source text,
@@ -438,10 +443,10 @@ severe truncation, code fences, or missing illustration markers are retried up
 to `MAX_RETRIES`; if they still fail, the chapter is recorded as failed instead
 of saving a known-bad translation.
 
-The final rejected post-check candidate is kept as a single JSON file under
-`runtime/rejected/{target}/{novel}/chapter_NNN.json`. It contains the candidate
-text, issue codes, feedback, retry count, and failed chunk position so the GUI
-can review the failure without exposing it as a completed translation.
+The current output warnings and final rejected post-check candidate share one
+report at `runtime/reports/{target}/{novel}/chapter_NNN.json`. Candidate text,
+issues, and failed chunk position remain reviewable without making the candidate
+a completed translation.
 
 Use `Ctrl+C` to stop gracefully. The chapter currently being processed finishes
 and is saved, then the run stops before starting the next chapter. Resume later
@@ -449,11 +454,11 @@ with `--resume`.
 
 ## 3. Glossary
 
-Each novel has its own glossary at `runtime/glossary/{novel}.json` (copied from
-`translated/{novel}/glossary.json` if present). It stores:
+Each novel has its own target-aware glossary at
+`translated/{novel}/glossary.json` or `translated/{novel}/glossary.{target}.json`.
+It stores:
 
 - `terms` — source term → target translation
-- `source_language` — detected source language
 - `entities` — characters with translated name, role, pronoun, aliases
 - `edges` — character relationships `[from, to, type, since_chapter]`
 - `address_rules` — per-pair direct address/reference timelines

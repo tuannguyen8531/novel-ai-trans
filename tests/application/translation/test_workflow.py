@@ -81,7 +81,6 @@ def make_workflow(
         profile_loader=lambda _novel: TranslationProfile("chinese"),
         progress_root=tmp_path / "progress",
         report_root=tmp_path / "reports",
-        rejected_root=tmp_path / "rejected",
     )
 
 
@@ -132,7 +131,24 @@ def test_chapter_exception_is_counted_once(tmp_path) -> None:
     assert failed_event.pct == 100.0
 
 
-def test_quality_failure_saves_one_rejected_json(tmp_path) -> None:
+def test_failed_retranslation_keeps_existing_output_completed(tmp_path) -> None:
+    write_chapters(tmp_path, (1,))
+    output_dir = tmp_path / "translated" / "novel" / "output"
+    output_dir.mkdir(parents=True)
+    (output_dir / "chapter_001.txt").write_text("existing output", encoding="utf-8")
+
+    result = make_workflow(tmp_path, FailingGraph()).run(
+        TranslationRequest(novel="novel", force=True),
+    )
+
+    assert result.failed == 1
+    assert CheckpointStore().load(tmp_path / "progress" / "novel.json") == {
+        "completed": [1],
+        "failed": [1],
+    }
+
+
+def test_quality_failure_saves_candidate_in_unified_report(tmp_path) -> None:
     write_chapters(tmp_path, (1,))
 
     result = make_workflow(tmp_path, QualityFailingGraph()).run(
@@ -140,10 +156,10 @@ def test_quality_failure_saves_one_rejected_json(tmp_path) -> None:
     )
 
     assert result.failed == 1
-    rejected_path = tmp_path / "rejected" / "vi" / "novel" / "chapter_001.json"
-    rejected = json.loads(rejected_path.read_text(encoding="utf-8"))
-    assert rejected["candidate_translation"] == "Rejected 张三 candidate"
-    assert rejected["issues"] == [
+    report_path = tmp_path / "reports" / "vi" / "novel" / "chapter_001.json"
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["candidate_translation"] == "Rejected 张三 candidate"
+    assert report["issues"] == [
         {
             "key": "rejected:0:contains_source_language_chars",
             "code": "contains_source_language_chars",
@@ -151,23 +167,50 @@ def test_quality_failure_saves_one_rejected_json(tmp_path) -> None:
             "message": "Source fragment: 张三",
         }
     ]
-    assert rejected["partial"] is True
-    assert rejected["failed_chunk_index"] == 0
-    assert rejected["total_chunks"] == 2
-    assert rejected["previous_output_exists"] is False
-    assert "source_hash" not in rejected
+    assert report["partial"] is True
+    assert report["failed_chunk_index"] == 0
+    assert report["total_chunks"] == 2
+    assert report["manual_post_check_issues"] == []
+    assert report["ignored_post_checks"] == []
 
 
-def test_successful_translation_removes_previous_rejected_candidate(tmp_path) -> None:
+def test_successful_translation_clears_previous_candidate_in_unified_report(tmp_path) -> None:
     write_chapters(tmp_path, (1,))
-    rejected_path = tmp_path / "rejected" / "vi" / "novel" / "chapter_001.json"
-    rejected_path.parent.mkdir(parents=True)
-    rejected_path.write_text("{}", encoding="utf-8")
+    report_path = tmp_path / "reports" / "vi" / "novel" / "chapter_001.json"
+    ReportStore().save_rejection(
+        report_path,
+        issues=[],
+        candidate_translation="old candidate",
+        partial=False,
+        failed_chunk_index=0,
+        total_chunks=1,
+    )
 
     result = make_workflow(tmp_path, SuccessGraph()).run(TranslationRequest(novel="novel"))
 
     assert result.success == 1
-    assert not rejected_path.exists()
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["candidate_translation"] is None
+    assert report["issues"] == []
+
+
+def test_quality_failure_preserves_current_output_warnings(tmp_path) -> None:
+    write_chapters(tmp_path, (1,))
+    output_dir = tmp_path / "translated" / "novel" / "output"
+    output_dir.mkdir(parents=True)
+    (output_dir / "chapter_001.txt").write_text("existing 张 output", encoding="utf-8")
+    report_path = tmp_path / "reports" / "vi" / "novel" / "chapter_001.json"
+    ReportStore().save_output_check(
+        report_path,
+        issue_codes=["contains_source_language_chars"],
+        content="existing 张 output",
+    )
+
+    make_workflow(tmp_path, QualityFailingGraph()).run(TranslationRequest(novel="novel", force=True))
+
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["manual_post_check_issues"] == ["contains_source_language_chars"]
+    assert report["candidate_translation"] == "Rejected 张三 candidate"
 
 
 def test_cancel_finishes_current_chapter_then_stops_before_next(tmp_path) -> None:
@@ -195,6 +238,10 @@ def test_cancel_finishes_current_chapter_then_stops_before_next(tmp_path) -> Non
 )
 def test_checkpoint_filters_translation_selection(tmp_path, options, checkpoint, expected) -> None:
     write_chapters(tmp_path, (1, 2, 3))
+    output_dir = tmp_path / "translated" / "novel" / "output"
+    output_dir.mkdir(parents=True)
+    for number in checkpoint["completed"]:
+        (output_dir / f"chapter_{number:03d}.txt").write_text("existing", encoding="utf-8")
     store = CheckpointStore()
     checkpoint_path = tmp_path / "progress" / "novel.json"
     store.save(checkpoint_path, checkpoint)

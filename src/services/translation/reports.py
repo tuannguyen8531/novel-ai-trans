@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import json
-from contextlib import suppress
 from pathlib import Path
 from typing import Any
+
+from src.utils.files import write_text_atomic
 
 
 def content_hash(content: str | bytes) -> str:
@@ -43,16 +44,10 @@ class ReportStore:
     """Persist per-chapter translation quality reports."""
 
     def save(self, path: Path, report: dict[str, Any]) -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(
+        write_text_atomic(
+            path,
             json.dumps(report, ensure_ascii=False, indent=2),
-            encoding="utf-8",
         )
-
-    def delete(self, path: Path) -> None:
-        """Delete one report when it exists."""
-        with suppress(OSError):
-            path.unlink(missing_ok=True)
 
     def load(self, path: Path) -> dict[str, Any]:
         """Load a report defensively."""
@@ -64,12 +59,64 @@ class ReportStore:
             return {}
         return loaded if isinstance(loaded, dict) else {}
 
+    def save_output_check(
+        self,
+        path: Path,
+        *,
+        issue_codes: list[str],
+        content: str,
+    ) -> None:
+        """Record current-output warnings and clear any rejected candidate."""
+        report = self.load(path)
+        fingerprint = content_hash(content)
+        ignored = report.get("ignored_post_checks")
+        retained = (
+            [item for item in ignored if isinstance(item, dict) and item.get("content_hash") == fingerprint]
+            if isinstance(ignored, list)
+            else []
+        )
+        self.save(
+            path,
+            {
+                "manual_post_check_issues": list(dict.fromkeys(issue_codes)),
+                "ignored_post_checks": retained,
+                "issues": [],
+                "candidate_translation": None,
+                "partial": False,
+                "failed_chunk_index": None,
+                "total_chunks": None,
+            },
+        )
+
+    def save_rejection(
+        self,
+        path: Path,
+        *,
+        issues: list[dict[str, str]],
+        candidate_translation: str,
+        partial: bool,
+        failed_chunk_index: int,
+        total_chunks: int,
+    ) -> None:
+        """Record a rejected attempt without replacing current-output state."""
+        report = self.load(path)
+        self.save(
+            path,
+            {
+                "manual_post_check_issues": _string_list(report.get("manual_post_check_issues")),
+                "ignored_post_checks": _dict_list(report.get("ignored_post_checks")),
+                "issues": issues,
+                "candidate_translation": candidate_translation,
+                "partial": partial,
+                "failed_chunk_index": failed_chunk_index,
+                "total_chunks": total_chunks,
+            },
+        )
+
     def save_manual_check(
         self,
         path: Path,
         *,
-        chapter: int,
-        target_language: str,
         issue_codes: list[str],
         content: str,
     ) -> None:
@@ -83,8 +130,6 @@ class ReportStore:
             ]
         report.update(
             {
-                "chapter": chapter,
-                "target_language": target_language,
                 "manual_post_check_issues": issue_codes,
             }
         )
@@ -94,8 +139,6 @@ class ReportStore:
         self,
         path: Path,
         *,
-        chapter: int,
-        target_language: str,
         code: str,
         fragments: list[str],
         content: str,
@@ -120,8 +163,6 @@ class ReportStore:
             )
         report.update(
             {
-                "chapter": chapter,
-                "target_language": target_language,
                 "ignored_post_checks": retained,
             }
         )
@@ -131,8 +172,6 @@ class ReportStore:
         self,
         path: Path,
         *,
-        chapter: int,
-        target_language: str,
         key: str,
         code: str,
         detail: str,
@@ -159,9 +198,15 @@ class ReportStore:
             )
         report.update(
             {
-                "chapter": chapter,
-                "target_language": target_language,
                 "ignored_post_checks": retained,
             }
         )
         self.save(path, report)
+
+
+def _string_list(value: Any) -> list[str]:
+    return [item for item in value if isinstance(item, str)] if isinstance(value, list) else []
+
+
+def _dict_list(value: Any) -> list[dict[str, Any]]:
+    return [item for item in value if isinstance(item, dict)] if isinstance(value, list) else []

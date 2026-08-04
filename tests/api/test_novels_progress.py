@@ -71,7 +71,7 @@ def test_progress_reflects_on_disk_output_when_progress_file_missing(client):
     assert targets["en"]["completed"] == 0
 
 
-def test_progress_unions_progress_file_with_on_disk_output(client):
+def test_progress_uses_on_disk_output_as_completion_truth(client):
     test_client, translated = client
     novel = translated / "demo"
     input_dir = novel / "input"
@@ -80,7 +80,7 @@ def test_progress_unions_progress_file_with_on_disk_output(client):
     output_dir = novel / "output"
     for i in range(1, 3):
         _write_chapter(output_dir, i)
-    # Progress.json says chapters 3-5 are completed but only 1-2 are on disk.
+    # Legacy progress says chapters 3-5 are completed but only 1-2 are on disk.
     (novel / "progress.json").write_text(
         json.dumps({"completed": [3, 4, 5], "failed": []}),
         encoding="utf-8",
@@ -90,8 +90,7 @@ def test_progress_unions_progress_file_with_on_disk_output(client):
     assert response.status_code == 200
     body = response.json()
     targets = {t["target"]: t for t in body[0]["targets"]}
-    # Union of on-disk and progress file: {1, 2, 3, 4, 5}
-    assert targets["vi"]["completed"] == 5
+    assert targets["vi"]["completed"] == 2
 
 
 def test_failed_count_only_from_progress_file(client):
@@ -138,13 +137,12 @@ def test_source_warning_count_and_chapters_are_exposed(client):
     novel = translated / "demo"
     _write_chapter(novel / "input", 1)
     _write_chapter(novel / "output", 1)
-    reports_dir = translated.parent / "reports" / "demo"
+    reports_dir = translated.parent / "reports" / "vi" / "demo"
     reports_dir.mkdir(parents=True)
     (reports_dir / "chapter_001.json").write_text(
         json.dumps(
             {
-                "chapter": 1,
-                "chunks": [{"post_check_issues": ["contains_source_language_chars"]}],
+                "manual_post_check_issues": ["contains_source_language_chars"],
             }
         ),
         encoding="utf-8",
@@ -244,17 +242,17 @@ def test_chapter_post_check_reviews_each_fragment_individually(client):
     assert test_client.get("/api/novels/demo/translation-progress?target=vi").json()["warnings"] == []
 
 
-def test_chapter_post_check_includes_rejected_candidate_without_output(client):
+def test_chapter_post_check_includes_candidate_without_output(client):
     test_client, translated = client
     novel = translated / "demo"
     _write_chapter(novel / "input", 1)
-    rejected_path = translated.parent / "rejected" / "vi" / "demo" / "chapter_001.json"
-    rejected_path.parent.mkdir(parents=True)
-    rejected_path.write_text(
+    report_path = translated.parent / "reports" / "vi" / "demo" / "chapter_001.json"
+    report_path.parent.mkdir(parents=True)
+    report_path.write_text(
         json.dumps(
             {
-                "chapter": 1,
-                "target_language": "vi",
+                "manual_post_check_issues": [],
+                "ignored_post_checks": [],
                 "issues": [
                     {
                         "key": "rejected:0:translation_empty",
@@ -267,7 +265,6 @@ def test_chapter_post_check_includes_rejected_candidate_without_output(client):
                 "partial": True,
                 "failed_chunk_index": 0,
                 "total_chunks": 2,
-                "previous_output_exists": False,
             }
         ),
         encoding="utf-8",

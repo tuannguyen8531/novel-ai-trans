@@ -114,4 +114,4 @@ def test_translate_writes_reports_next_to_custom_jobs_directory(client):
 
         assert translate.called
         assert translate.call_args.kwargs["report_root"] == client.app.state.app_state.jobs_dir.parent / "reports"
-        assert translate.call_args.kwargs["rejected_root"] == client.app.state.app_state.jobs_dir.parent / "rejected"
+        assert "rejected_root" not in translate.call_args.kwargs

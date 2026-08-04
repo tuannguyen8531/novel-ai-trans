@@ -53,7 +53,7 @@ def load_progress(path: Path) -> dict[str, list[int]]:
 
 
 def load_source_warning_chapters(directory: Path, output_directory: Path | None = None) -> list[int]:
-    """Return chapters whose accepted quality report contains source characters."""
+    """Return chapters whose current output has unresolved runtime warnings."""
     if not directory.exists():
         return []
 
@@ -69,17 +69,8 @@ def load_source_warning_chapters(directory: Path, output_directory: Path | None 
         if not isinstance(data, dict):
             continue
         manual_issues = data.get("manual_post_check_issues")
-        if isinstance(manual_issues, list):
-            has_warning = _SOURCE_WARNING_CODE in manual_issues
-        else:
-            chunks = data.get("chunks")
-            has_warning = isinstance(chunks, list) and any(
-                isinstance(chunk, dict)
-                and isinstance(chunk.get("post_check_issues"), list)
-                and _SOURCE_WARNING_CODE in chunk["post_check_issues"]
-                for chunk in chunks
-            )
-        if not has_warning:
+        warning_codes = {code for code in manual_issues if isinstance(code, str)} if isinstance(manual_issues, list) else set()
+        if not warning_codes:
             continue
 
         chapter = int(match.group(1))
@@ -92,10 +83,25 @@ def load_source_warning_chapters(directory: Path, output_directory: Path | None 
                 fingerprint = content_hash(output_bytes)
                 translation = output_bytes.decode("utf-8")
             except OSError, UnicodeDecodeError:
-                fingerprint = ""
-                translation = ""
-            if fingerprint:
-                legacy_ignored = issue_is_ignored(data, _SOURCE_WARNING_CODE, fingerprint)
+                continue
+
+            unresolved = set(warning_codes)
+            for code in warning_codes:
+                if issue_is_ignored(data, code, fingerprint):
+                    unresolved.discard(code)
+                    continue
+                decisions = data.get("ignored_post_checks")
+                if (
+                    code != _SOURCE_WARNING_CODE
+                    and isinstance(decisions, list)
+                    and any(
+                        isinstance(item, dict) and item.get("code") == code and item.get("content_hash") == fingerprint
+                        for item in decisions
+                    )
+                ):
+                    unresolved.discard(code)
+
+            if _SOURCE_WARNING_CODE in unresolved:
                 fragments = list(dict.fromkeys(source_language_fragments(translation)))
                 granular_ignored = bool(fragments) and all(
                     review_key_is_ignored(
@@ -105,8 +111,10 @@ def load_source_warning_chapters(directory: Path, output_directory: Path | None 
                     )
                     for fragment in fragments
                 )
-                if legacy_ignored or granular_ignored:
-                    continue
+                if granular_ignored:
+                    unresolved.discard(_SOURCE_WARNING_CODE)
+            if not unresolved:
+                continue
         chapters.add(chapter)
     return sorted(chapters)
 

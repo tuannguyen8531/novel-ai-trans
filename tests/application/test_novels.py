@@ -14,7 +14,7 @@ def _write_chapter(directory: Path, number: int, content: str = "content") -> No
     (directory / f"chapter_{number:03d}.txt").write_text(content, encoding="utf-8")
 
 
-def test_summary_combines_progress_with_stored_outputs(tmp_path: Path) -> None:
+def test_summary_uses_stored_outputs_as_completion_truth(tmp_path: Path) -> None:
     root = tmp_path / "translated"
     novel_root = root / "demo"
     _write_chapter(novel_root / "input", 1)
@@ -31,11 +31,11 @@ def test_summary_combines_progress_with_stored_outputs(tmp_path: Path) -> None:
 
     vietnamese = next(progress for progress in summary.targets if progress.target == "vi")
     assert vietnamese.total == 2
-    assert vietnamese.completed == 2
+    assert vietnamese.completed == 1
     assert vietnamese.failed == 1
     assert vietnamese.warnings == 0
     assert catalog.progress(root, "demo", "vi", progress_root=progress_root) == {
-        "completed": [2],
+        "completed": [1],
         "failed": [3],
         "warnings": [],
     }
@@ -47,17 +47,12 @@ def test_summary_and_progress_include_source_warning_chapters(tmp_path: Path) ->
     _write_chapter(novel_root / "input", 1)
     _write_chapter(novel_root / "output", 1)
     report_root = tmp_path / "reports"
-    report_dir = report_root / "demo"
+    report_dir = report_root / "vi" / "demo"
     report_dir.mkdir(parents=True)
     (report_dir / "chapter_001.json").write_text(
         json.dumps(
             {
-                "chapter": 1,
-                "chunks": [
-                    {
-                        "post_check_issues": ["contains_source_language_chars"],
-                    }
-                ],
+                "manual_post_check_issues": ["contains_source_language_chars"],
             }
         ),
         encoding="utf-8",
@@ -172,13 +167,12 @@ def test_write_translation_refreshes_manual_source_warning(tmp_path: Path) -> No
     novel_root = root / "demo"
     _write_chapter(novel_root / "input", 7, "囡囡来了")
     report_root = tmp_path / "reports"
-    report_path = report_root / "demo" / "chapter_007.json"
+    report_path = report_root / "vi" / "demo" / "chapter_007.json"
     report_path.parent.mkdir(parents=True)
     report_path.write_text(
         json.dumps(
             {
-                "chapter": 7,
-                "chunks": [{"post_check_issues": ["contains_source_language_chars"]}],
+                "manual_post_check_issues": ["contains_source_language_chars"],
             }
         ),
         encoding="utf-8",
@@ -326,9 +320,23 @@ def test_post_check_review_lists_non_source_issues(tmp_path: Path) -> None:
     review = chapters.chapter_post_check(root, "demo", 7, "vi", report_root=report_root)
 
     code_fence = next(item for item in review.items if item.code == "contains_code_fence")
-    assert code_fence.severity == "error"
+    assert code_fence.severity == "warning"
     assert code_fence.reviewable is True
     assert code_fence.origin == "output"
+    assert catalog.progress(root, "demo", "vi", report_root=report_root)["warnings"] == [7]
+
+    review = chapters.review_post_check_item(
+        root,
+        "demo",
+        7,
+        "vi",
+        code_fence.key,
+        ignored=True,
+        report_root=report_root,
+    )
+
+    assert next(item for item in review.items if item.code == "contains_code_fence").ignored is True
+    assert catalog.progress(root, "demo", "vi", report_root=report_root)["warnings"] == []
 
 
 def test_write_chapter_preserves_legacy_unpadded_translation_filename(tmp_path: Path) -> None:

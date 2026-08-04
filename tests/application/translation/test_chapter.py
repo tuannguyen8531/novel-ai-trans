@@ -50,13 +50,13 @@ def test_translate_chapter_writes_output_and_quality_report(tmp_path) -> None:
     assert (output_dir / "chapter_001.txt").read_text(encoding="utf-8") == "translated"
     report = json.loads(report_path.read_text(encoding="utf-8"))
     assert report == {
-        "chapter": 1,
-        "target_language": "vi",
-        "output_chars": len("translated"),
-        "elapsed_seconds": 1.25,
-        "new_terms_count": 1,
-        "new_characters_count": 1,
-        "chunks": [{"score": 0.9}],
+        "manual_post_check_issues": [],
+        "ignored_post_checks": [],
+        "issues": [],
+        "candidate_translation": None,
+        "partial": False,
+        "failed_chunk_index": None,
+        "total_chunks": None,
     }
 
 

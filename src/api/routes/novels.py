@@ -156,8 +156,7 @@ async def insert_novel_chapter(
             cancel_event=cancel_event,
             progress_root=runtime_root / "progress",
             report_root=runtime_root / "reports",
-            rejected_root=runtime_root / "rejected",
-            backup_root=runtime_root / "insert-backups",
+            backup_root=runtime_root / "backups" / "insertions",
             lock_dir=runtime_root / "locks",
         )
         return asdict(result)
@@ -277,7 +276,6 @@ def get_chapter_post_check(
         number,
         target or config.target_language,
         report_root=runtime_root / "reports",
-        rejected_root=runtime_root / "rejected",
     )
     return ChapterPostCheckResponse(**asdict(review))
 
@@ -303,7 +301,6 @@ def review_chapter_post_check(
         payload.key,
         ignored=payload.ignored,
         report_root=runtime_root / "reports",
-        rejected_root=runtime_root / "rejected",
     )
     return ChapterPostCheckResponse(**asdict(review))
 

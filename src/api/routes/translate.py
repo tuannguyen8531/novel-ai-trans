@@ -81,7 +81,6 @@ async def post_translate(
                 progress_callback=progress_cb,
                 cancel_event=cancel_event,
                 report_root=runtime_root / "reports",
-                rejected_root=runtime_root / "rejected",
             )
         except Exception as error:
             interrupted = cancel_event.is_set()

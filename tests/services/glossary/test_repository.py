@@ -37,8 +37,7 @@ from src.services.glossary.repository import (
 class TestGlossary:
     def setup_method(self):
         self.temp_dir = tempfile.TemporaryDirectory()
-        self.patcher = patch("src.services.glossary.repository.GLOSSARY_DIR", Path(self.temp_dir.name))
-        self.patcher.start()
+        self.translated_root = Path(self.temp_dir.name) / "translated"
         self.backup_patcher = patch(
             "src.application.glossary.replacements.GLOSSARY_BACKUP_DIR",
             Path(self.temp_dir.name) / "backups",
@@ -46,11 +45,10 @@ class TestGlossary:
         self.backup_patcher.start()
         self.config_patcher = patch("src.services.glossary.repository.config")
         self.mock_config = self.config_patcher.start()
-        self.mock_config.translated_dir = ""
+        self.mock_config.translated_dir = str(self.translated_root)
         self.mock_config.target_language = "vi"
 
     def teardown_method(self):
-        self.patcher.stop()
         self.backup_patcher.stop()
         self.config_patcher.stop()
         self.temp_dir.cleanup()
@@ -448,8 +446,8 @@ class TestGlossary:
         self.mock_config.target_language = "en"
         save_glossary("test-novel", {"李白": "Li Bai"})
 
-        assert (Path(self.temp_dir.name) / "test-novel.json").exists()
-        assert (Path(self.temp_dir.name) / "test-novel.en.json").exists()
+        assert (self.translated_root / "test-novel" / "glossary.json").exists()
+        assert (self.translated_root / "test-novel" / "glossary.en.json").exists()
 
         assert load_glossary("test-novel") == {"李白": "Li Bai"}
 
@@ -457,7 +455,8 @@ class TestGlossary:
         assert load_glossary("test-novel") == {"李白": "Lý Bạch"}
 
     def test_clean_glossary_normalizes_edges_and_removes_pronoun_examples(self):
-        path = Path(self.temp_dir.name) / "test-novel.json"
+        path = self.translated_root / "test-novel" / "glossary.json"
+        path.parent.mkdir(parents=True)
         path.write_text(
             json.dumps(
                 {
@@ -494,12 +493,9 @@ class TestGlossaryTranslatedDir:
     def setup_method(self):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.base = Path(self.temp_dir.name)
-        self.project_glossary = self.base / "glossary"
         self.translated_glossary = self.base / "translated" / "my-novel"
         self.translated_glossary.mkdir(parents=True)
 
-        self.patcher_glossary_dir = patch("src.services.glossary.repository.GLOSSARY_DIR", self.project_glossary)
-        self.patcher_glossary_dir.start()
         self.patcher_lock_dir = patch("src.application.locks.LOCK_DIR", self.base / "locks")
         self.patcher_lock_dir.start()
         self.patcher_backup_dir = patch(
@@ -511,7 +507,6 @@ class TestGlossaryTranslatedDir:
     def teardown_method(self):
         self.patcher_backup_dir.stop()
         self.patcher_lock_dir.stop()
-        self.patcher_glossary_dir.stop()
         self.temp_dir.cleanup()
 
     def test_load_from_translated(self):
@@ -525,27 +520,6 @@ class TestGlossaryTranslatedDir:
             result = load_glossary("my-novel")
 
         assert result == {"李白": "Lý Bạch"}
-        assert not (self.project_glossary / "my-novel.json").exists()
-
-    def test_no_translated_dir_uses_project_only(self):
-        project_file = self.project_glossary / "my-novel.json"
-        project_file.parent.mkdir(parents=True, exist_ok=True)
-        project_file.write_text(json.dumps({"terms": {"李白": "Lý Bạch"}}), encoding="utf-8")
-
-        with patch("src.services.glossary.repository.config") as mock_config:
-            mock_config.translated_dir = ""
-            mock_config.target_language = "vi"
-            result = load_glossary("my-novel")
-
-        assert result == {"李白": "Lý Bạch"}
-
-    def test_translated_dir_not_set_returns_empty(self):
-        with patch("src.services.glossary.repository.config") as mock_config:
-            mock_config.translated_dir = ""
-            mock_config.target_language = "vi"
-            result = load_glossary("nonexistent")
-
-        assert result == {}
 
     def test_save_syncs_to_translated_dir(self):
         with patch("src.services.glossary.repository.config") as mock_config:
@@ -568,15 +542,6 @@ class TestGlossaryTranslatedDir:
         translated_file = self.translated_glossary / "glossary.json"
         data = json.loads(translated_file.read_text(encoding="utf-8"))
         assert data["terms"] == {"李白": "Lý Bạch", "杜甫": "Đỗ Phủ"}
-
-    def test_no_sync_when_translated_dir_empty(self):
-        with patch("src.services.glossary.repository.config") as mock_config:
-            mock_config.translated_dir = ""
-            mock_config.target_language = "vi"
-            save_glossary("my-novel", {"李白": "Lý Bạch"})
-
-        translated_file = self.translated_glossary / "glossary.json"
-        assert not translated_file.exists()
 
     def test_apply_pending_replacements_creates_backup_and_supports_rollback(self):
         translated_root = self.base / "translated"
@@ -688,11 +653,10 @@ class TestGlossaryTranslatedDir:
 
     def test_dismiss_pending_replacements(self):
         self.temp_dir_extra = tempfile.TemporaryDirectory()
-        patcher_glossary_dir = patch("src.services.glossary.repository.GLOSSARY_DIR", Path(self.temp_dir_extra.name))
-        patcher_glossary_dir.start()
+        translated_root = Path(self.temp_dir_extra.name) / "translated"
 
         with patch("src.services.glossary.repository.config") as mock_config:
-            mock_config.translated_dir = ""
+            mock_config.translated_dir = str(translated_root)
             mock_config.target_language = "vi"
 
             save_glossary("test-novel", {"李白": "Lý Bạch"})
@@ -702,5 +666,4 @@ class TestGlossaryTranslatedDir:
             dismiss_pending_replacements("test-novel")
             assert load_glossary_data("test-novel")[PENDING_REPLACEMENTS_KEY] == []
 
-        patcher_glossary_dir.stop()
         self.temp_dir_extra.cleanup()

@@ -41,6 +41,31 @@ resolve use-case inputs and coordinate those collaborators. Operational LLM
 request, response, and error logs live under `runtime/logs/`; their writer and
 daily retention policy remain owned by `services/logger.py`.
 
+Runtime state uses one canonical layout:
+
+```text
+runtime/
+├── backups/
+│   ├── insertions/
+│   └── replacements/
+├── cache/
+│   ├── browser/
+│   └── discovery/
+├── drafts/
+├── jobs/
+├── locks/
+├── logs/
+├── manifests/
+├── progress/
+└── reports/
+```
+
+Crawler manifests belong to `manifests/`; browser profiles and fetched pages
+are disposable cache. Translation warnings deliberately depend on `reports/`
+and may disappear when runtime state is cleaned. Glossaries and translated
+chapter output are durable novel data and therefore stay under
+`translated/<novel>/`.
+
 ## Prompt assets and translation rules
 
 All bundled text sent to an LLM lives under `src/prompts/` so it is anchored to

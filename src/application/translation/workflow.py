@@ -6,7 +6,6 @@ import time
 from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from pathlib import Path
 from threading import Event
 from typing import Protocol, cast
@@ -52,7 +51,6 @@ class TranslationWorkflow:
     profile_loader: Callable[[str], TranslationProfile]
     progress_root: Path | None = None
     report_root: Path | None = None
-    rejected_root: Path | None = None
     clock: Callable[[], float] = time.time
 
     def run(
@@ -80,11 +78,13 @@ class TranslationWorkflow:
         if not chapters:
             raise ResourceNotFoundError(f"No chapter files found in {input_dir}")
 
+        translated_numbers = self.storage.translated_numbers(output_dir)
         checkpoint = self.checkpoints.load(checkpoint_path)
+        checkpoint["completed"] = sorted(translated_numbers)
         selected = select_chapters(
             request,
             chapters,
-            self.storage.translated_numbers(output_dir),
+            translated_numbers,
             checkpoint,
         )
 
@@ -208,36 +208,28 @@ class TranslationWorkflow:
                 cancelled = True
                 break
             except TranslationQualityError as error:
-                rejected_path = paths.translation_rejected_path(
+                report_path = paths.translation_report_path(
                     self.config,
                     novel,
                     chapter_number,
                     target,
-                    rejected_root=self.rejected_root,
+                    report_root=self.report_root,
                 )
-                self.reports.save(
-                    rejected_path,
-                    {
-                        "chapter": chapter_number,
-                        "target_language": target,
-                        "created_at": datetime.fromtimestamp(self.clock(), UTC).isoformat(),
-                        "issues": [
-                            {
-                                "key": f"rejected:{index}:{code}",
-                                "code": code,
-                                "severity": "error",
-                                "message": error.feedback,
-                            }
-                            for index, code in enumerate(error.issue_codes)
-                        ],
-                        "feedback": error.feedback,
-                        "retry_count": error.retry_count,
-                        "failed_chunk_index": error.failed_chunk_index,
-                        "total_chunks": error.total_chunks,
-                        "partial": error.failed_chunk_index < error.total_chunks - 1,
-                        "candidate_translation": error.candidate_translation,
-                        "previous_output_exists": chapter_number in self.storage.translated_numbers(output_dir),
-                    },
+                self.reports.save_rejection(
+                    report_path,
+                    issues=[
+                        {
+                            "key": f"rejected:{index}:{code}",
+                            "code": code,
+                            "severity": "error",
+                            "message": error.feedback,
+                        }
+                        for index, code in enumerate(error.issue_codes)
+                    ],
+                    candidate_translation=error.candidate_translation,
+                    partial=error.failed_chunk_index < error.total_chunks - 1,
+                    failed_chunk_index=error.failed_chunk_index,
+                    total_chunks=error.total_chunks,
                 )
                 self._record_failure(
                     checkpoint,
@@ -276,15 +268,6 @@ class TranslationWorkflow:
             attempted.append(chapter_number)
             if ok:
                 success_count += 1
-                self.reports.delete(
-                    paths.translation_rejected_path(
-                        self.config,
-                        novel,
-                        chapter_number,
-                        target,
-                        rejected_root=self.rejected_root,
-                    )
-                )
                 checkpoint.setdefault("completed", []).append(chapter_number)
                 checkpoint["failed"] = [chapter for chapter in checkpoint.get("failed", []) if chapter != chapter_number]
             else:
@@ -420,7 +403,6 @@ def run_translation(
     progress_callback: Callable[[ProgressEvent], None] | None = None,
     cancel_event: Event | None = None,
     report_root: Path | None = None,
-    rejected_root: Path | None = None,
 ) -> TranslationResult:
     """Construct default collaborators and run one locked translation batch."""
     with (
@@ -437,7 +419,6 @@ def run_translation(
             graph_factory=cast(GraphFactory, build_graph),
             profile_loader=load_translation_profile,
             report_root=report_root,
-            rejected_root=rejected_root,
         )
         return workflow.run(
             request,

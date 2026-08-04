@@ -8,9 +8,6 @@ from src.domain.language import normalize_source_language
 from src.models import NovelMetadata, TranslationProfile
 from src.utils import files as file_utils
 
-METADATA_FALLBACK_DIR = _paths.GLOSSARY_DIR
-LEGACY_GLOSSARY_FALLBACK_DIR = _paths.GLOSSARY_DIR
-
 
 def localized_value(metadata: dict[str, object], target_language: str, field: str) -> str:
     """Resolve a localized metadata field, falling back to the source value."""
@@ -42,18 +39,11 @@ def metadata_to_dict(metadata: NovelMetadata) -> dict[str, object]:
 
 def metadata_path(novel_name: str) -> Path:
     """Return the metadata file used for a novel."""
-    if config.translated_dir:
-        return _paths.novel_root_dir(config, novel_name) / "metadata.json"
-    _paths.validate_novel_name(novel_name)
-    return _paths.resolve_within(METADATA_FALLBACK_DIR, f"{novel_name}.metadata.json")
+    return _paths.novel_root_dir(config, novel_name) / "metadata.json"
 
 
 def _legacy_glossary_path(novel_name: str) -> Path:
-    return _paths.novel_glossary_path(
-        config,
-        novel_name,
-        fallback_root=LEGACY_GLOSSARY_FALLBACK_DIR,
-    )
+    return _paths.novel_glossary_path(config, novel_name)
 
 
 def _profile_from_metadata(metadata: dict[str, object]) -> TranslationProfile:

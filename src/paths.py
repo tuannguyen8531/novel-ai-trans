@@ -21,17 +21,20 @@ RUNTIME_DIR = _PROJECT_ROOT / "runtime"
 LOG_DIR = RUNTIME_DIR / "logs"
 INPUT_DIR = _PROJECT_ROOT / "translated" / "input"
 OUTPUT_DIR = _PROJECT_ROOT / "translated" / "output"
-PROGRESS_DIR = _PROJECT_ROOT / "runtime" / "progress"
-REPORT_DIR = _PROJECT_ROOT / "runtime" / "reports"
-REJECTED_DIR = _PROJECT_ROOT / "runtime" / "rejected"
-RUNTIME_OUTPUT_ROOT = _PROJECT_ROOT / "runtime" / "crawler"
+PROGRESS_DIR = RUNTIME_DIR / "progress"
+REPORT_DIR = RUNTIME_DIR / "reports"
+MANIFEST_DIR = RUNTIME_DIR / "manifests"
+BACKUP_DIR = RUNTIME_DIR / "backups"
+CACHE_DIR = RUNTIME_DIR / "cache"
+BROWSER_CACHE_DIR = CACHE_DIR / "browser"
+DISCOVERY_CACHE_DIR = CACHE_DIR / "discovery"
+DRAFT_DIR = RUNTIME_DIR / "drafts"
+JOB_DIR = RUNTIME_DIR / "jobs"
 CONFIG_DIR = _PROJECT_ROOT / "configs"
 DEFAULT_TRANSLATED_ROOT = _PROJECT_ROOT / "translated"
-GLOSSARY_DIR = _PROJECT_ROOT / "runtime" / "glossary"
-CONFIG_DRAFTS_DIR = _PROJECT_ROOT / "runtime" / "config-drafts"
 LOCK_DIR = RUNTIME_DIR / "locks"
-GLOSSARY_BACKUP_DIR = RUNTIME_DIR / "glossary-backups"
-INSERT_BACKUP_DIR = RUNTIME_DIR / "insert-backups"
+GLOSSARY_BACKUP_DIR = BACKUP_DIR / "replacements"
+INSERT_BACKUP_DIR = BACKUP_DIR / "insertions"
 
 
 def is_valid_novel_name(novel_name: str) -> bool:
@@ -102,18 +105,10 @@ def novel_glossary_path(
     config: Any,
     novel_name: str,
     target_language: str | None = None,
-    *,
-    fallback_root: Path | None = None,
 ) -> Path:
     target = normalize_target_language(target_language or config.target_language)
-    if config.translated_dir:
-        novel_root = novel_root_dir(config, novel_name)
-        return novel_root / ("glossary.json" if target == "vi" else f"glossary.{target}.json")
-
-    root = fallback_root or GLOSSARY_DIR
-    validate_novel_name(novel_name)
-    filename = f"{novel_name}.json" if target == "vi" else f"{novel_name}.{target}.json"
-    return resolve_within(root, filename)
+    novel_root = novel_root_dir(config, novel_name)
+    return novel_root / ("glossary.json" if target == "vi" else f"glossary.{target}.json")
 
 
 def novel_input_dir(config: Any, novel_name: str) -> Path:
@@ -173,22 +168,6 @@ def translation_report_path(
     target = normalize_target_language(target_language or config.target_language)
     root = report_root or REPORT_DIR
     validate_novel_name(novel_name)
-    if target == "vi":
-        return resolve_within(root, novel_name, f"chapter_{chapter_number:03d}.json")
-    return resolve_within(root, target, novel_name, f"chapter_{chapter_number:03d}.json")
-
-
-def translation_rejected_path(
-    config: Any,
-    novel_name: str,
-    chapter_number: int,
-    target_language: str | None = None,
-    *,
-    rejected_root: Path | None = None,
-) -> Path:
-    target = normalize_target_language(target_language or config.target_language)
-    root = rejected_root or REJECTED_DIR
-    validate_novel_name(novel_name)
     return resolve_within(root, target, novel_name, f"chapter_{chapter_number:03d}.json")
 
 
@@ -199,12 +178,15 @@ __all__ = [
     "OUTPUT_DIR",
     "PROGRESS_DIR",
     "REPORT_DIR",
-    "REJECTED_DIR",
-    "RUNTIME_OUTPUT_ROOT",
+    "MANIFEST_DIR",
+    "BACKUP_DIR",
+    "CACHE_DIR",
+    "BROWSER_CACHE_DIR",
+    "DISCOVERY_CACHE_DIR",
+    "DRAFT_DIR",
+    "JOB_DIR",
     "CONFIG_DIR",
     "DEFAULT_TRANSLATED_ROOT",
-    "GLOSSARY_DIR",
-    "CONFIG_DRAFTS_DIR",
     "LOCK_DIR",
     "GLOSSARY_BACKUP_DIR",
     "INSERT_BACKUP_DIR",
@@ -229,5 +211,4 @@ __all__ = [
     "translation_progress_path_for_target",
     "translation_progress_path",
     "translation_report_path",
-    "translation_rejected_path",
 ]

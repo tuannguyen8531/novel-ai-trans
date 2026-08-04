@@ -14,11 +14,11 @@ from src.utils.progress import ProgressTracker
 
 
 @pytest.fixture(autouse=True)
-def _patch_cli_paths():
+def _patch_cli_paths(tmp_path: Path):
     """Each test patches the application config default rather than
     the legacy module-level ``config`` global."""
     with patch("src.services.glossary.repository.config") as mock_glossary_config:
-        mock_glossary_config.translated_dir = ""
+        mock_glossary_config.translated_dir = str(tmp_path / "translated")
         mock_glossary_config.target_language = "vi"
         yield
 
@@ -95,32 +95,31 @@ class TestGlossaryCli:
             self.base / "backups",
         )
         self.backup_patcher.start()
+        self.config_patcher = patch("src.services.glossary.repository.config")
+        self.mock_config = self.config_patcher.start()
+        self.mock_config.translated_dir = str(self.base)
+        self.mock_config.target_language = "vi"
 
     def teardown_method(self):
+        self.config_patcher.stop()
         self.backup_patcher.stop()
         self.lock_patcher.stop()
         self.temp_dir.cleanup()
 
     def test_glossary_add_and_list(self, capsys):
-        with (
-            patch("sys.argv", ["translate", "glossary", "add", "my-novel", "李白", "Lý Bạch"]),
-            patch("src.services.glossary.repository.GLOSSARY_DIR", self.base / "glossary"),
-        ):
+        with patch("sys.argv", ["translate", "glossary", "add", "my-novel", "李白", "Lý Bạch"]):
             main()
 
-        with (
-            patch("sys.argv", ["translate", "glossary", "list", "my-novel"]),
-            patch("src.services.glossary.repository.GLOSSARY_DIR", self.base / "glossary"),
-        ):
+        with patch("sys.argv", ["translate", "glossary", "list", "my-novel"]):
             main()
 
         output = capsys.readouterr().out
         assert "李白\tLý Bạch" in output
 
     def test_glossary_character_relationship_validate_and_audit(self, capsys):
-        glossary_dir = self.base / "glossary"
-        glossary_dir.mkdir()
-        glossary_file = glossary_dir / "my-novel.json"
+        novel_dir = self.base / "my-novel"
+        novel_dir.mkdir()
+        glossary_file = novel_dir / "glossary.json"
         glossary_file.write_text(
             json.dumps(
                 {
@@ -136,59 +135,48 @@ class TestGlossaryCli:
             encoding="utf-8",
         )
 
-        novel_dir = self.base / "my-novel"
         (novel_dir / "input").mkdir(parents=True)
         (novel_dir / "output").mkdir(parents=True)
         (novel_dir / "input" / "chapter_1.txt").write_text("李白 đi chơi.", encoding="utf-8")
         (novel_dir / "output" / "chapter_001.txt").write_text("李白 đi chơi.", encoding="utf-8")
 
-        with (
-            patch(
-                "sys.argv",
-                [
-                    "translate",
-                    "glossary",
-                    "character",
-                    "my-novel",
-                    "李白",
-                    "--translated-name",
-                    "Lý Thái Bạch",
-                    "--role",
-                    "supporting",
-                ],
-            ),
-            patch("src.services.glossary.repository.GLOSSARY_DIR", glossary_dir),
+        with patch(
+            "sys.argv",
+            [
+                "translate",
+                "glossary",
+                "character",
+                "my-novel",
+                "李白",
+                "--translated-name",
+                "Lý Thái Bạch",
+                "--role",
+                "supporting",
+            ],
         ):
             main()
 
-        with (
-            patch(
-                "sys.argv",
-                [
-                    "translate",
-                    "glossary",
-                    "relationship",
-                    "my-novel",
-                    "李白",
-                    "杜甫",
-                    "friend",
-                    "--since",
-                    "1",
-                ],
-            ),
-            patch("src.services.glossary.repository.GLOSSARY_DIR", glossary_dir),
+        with patch(
+            "sys.argv",
+            [
+                "translate",
+                "glossary",
+                "relationship",
+                "my-novel",
+                "李白",
+                "杜甫",
+                "friend",
+                "--since",
+                "1",
+            ],
         ):
             main()
 
-        with (
-            patch("sys.argv", ["translate", "glossary", "validate", "my-novel"]),
-            patch("src.services.glossary.repository.GLOSSARY_DIR", glossary_dir),
-        ):
+        with patch("sys.argv", ["translate", "glossary", "validate", "my-novel"]):
             main()
 
         with (
             patch("sys.argv", ["translate", "glossary", "audit", "my-novel"]),
-            patch("src.services.glossary.repository.GLOSSARY_DIR", glossary_dir),
             _patch_config(translated_dir=str(self.base), target_language="vi"),
             pytest.raises(SystemExit),
         ):
@@ -203,9 +191,6 @@ class TestGlossaryCli:
         assert "missing_translation" in output
 
     def test_glossary_apply_dismiss_and_rollback(self, capsys):
-        glossary_dir = self.base / "glossary"
-        glossary_dir.mkdir(parents=True, exist_ok=True)
-
         translated_root = self.base / "translated"
         novel_root = translated_root / "my-novel"
         (novel_root / "input").mkdir(parents=True)
@@ -221,10 +206,7 @@ class TestGlossaryCli:
         mock_config.target_language = "vi"
 
         try:
-            with (
-                patch("src.services.glossary.repository.GLOSSARY_DIR", glossary_dir),
-                _patch_config(translated_dir=str(translated_root), target_language="vi"),
-            ):
+            with _patch_config(translated_dir=str(translated_root), target_language="vi"):
                 from src.services.glossary.repository import (
                     PENDING_REPLACEMENTS_KEY,
                     load_glossary_data,

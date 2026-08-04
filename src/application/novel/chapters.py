@@ -150,7 +150,7 @@ def write_chapter(
     source_path = chapter_service.chapter_path(input_dir, number)
     if source_path.exists():
         source = chapter_service.read(input_dir, number)
-        issue_codes = [issue.code for issue in post_check_translation(source, content) if issue.code == _SOURCE_WARNING_CODE]
+        issue_codes = [issue.code for issue in post_check_translation(source, content)]
         ReportStore().save_manual_check(
             paths.translation_report_path(
                 app_config.get_config(),
@@ -159,8 +159,6 @@ def write_chapter(
                 normalized_target,
                 report_root=report_root,
             ),
-            chapter=number,
-            target_language=normalized_target,
             issue_codes=issue_codes,
             content=content,
         )
@@ -222,15 +220,24 @@ def chapter_post_check(
     target: str,
     *,
     report_root: Path | None = None,
-    rejected_root: Path | None = None,
 ) -> PostCheckReview:
-    """Build the review table for current output and a rejected candidate."""
+    """Build the review table for current output and its latest candidate."""
     novel_root = require_path(root, name)
     normalized_target = normalize_target_language(target)
     items: list[PostCheckItem] = []
     output_dir = paths.novel_output_dir_from_root(novel_root, normalized_target)
     output_path = chapter_service.chapter_path(output_dir, number)
     previous_output_exists = output_path.exists()
+    report = ReportStore().load(
+        paths.translation_report_path(
+            app_config.get_config(),
+            name,
+            number,
+            normalized_target,
+            report_root=report_root,
+        )
+    )
+    warning_codes = {code for code in report.get("manual_post_check_issues", []) if isinstance(code, str)}
 
     if previous_output_exists:
         translation = chapter_service.read(output_dir, number)
@@ -245,23 +252,15 @@ def chapter_post_check(
         )
         fragments = list(dict.fromkeys(source_language_fragments(translation)))
         fingerprint = content_hash(translation)
-        report = ReportStore().load(
-            paths.translation_report_path(
-                app_config.get_config(),
-                name,
-                number,
-                normalized_target,
-                report_root=report_root,
-            )
-        )
         legacy_ignored = issue_is_ignored(report, _SOURCE_WARNING_CODE, fingerprint)
         for issue in issues:
+            severity = "warning" if issue.code in warning_codes else issue.severity
             if issue.code == _SOURCE_WARNING_CODE:
                 items.extend(
                     PostCheckItem(
                         key=post_check_review_key(issue.code, fragment),
                         code=issue.code,
-                        severity=issue.severity,
+                        severity=severity,
                         detail=fragment[:40],
                         ignored=legacy_ignored
                         or review_key_is_ignored(
@@ -280,7 +279,7 @@ def chapter_post_check(
                 PostCheckItem(
                     key=key,
                     code=issue.code,
-                    severity=issue.severity,
+                    severity=severity,
                     detail=issue.message,
                     ignored=review_key_is_ignored(report, key, fingerprint),
                     reviewable=True,
@@ -288,16 +287,7 @@ def chapter_post_check(
                 )
             )
 
-    rejected = ReportStore().load(
-        paths.translation_rejected_path(
-            app_config.get_config(),
-            name,
-            number,
-            normalized_target,
-            rejected_root=rejected_root,
-        )
-    )
-    rejected_issues = rejected.get("issues")
+    rejected_issues = report.get("issues")
     if isinstance(rejected_issues, list):
         for issue in rejected_issues:
             if not isinstance(issue, dict):
@@ -322,15 +312,15 @@ def chapter_post_check(
                 )
             )
 
-    candidate = rejected.get("candidate_translation")
-    failed_chunk_index = rejected.get("failed_chunk_index")
-    total_chunks = rejected.get("total_chunks")
+    candidate = report.get("candidate_translation")
+    failed_chunk_index = report.get("failed_chunk_index")
+    total_chunks = report.get("total_chunks")
     return PostCheckReview(
         chapter=number,
         target=normalized_target,
         items=items,
         candidate_translation=candidate if isinstance(candidate, str) else None,
-        partial=bool(rejected.get("partial", False)),
+        partial=bool(report.get("partial", False)),
         failed_chunk_index=failed_chunk_index if isinstance(failed_chunk_index, int) else None,
         total_chunks=total_chunks if isinstance(total_chunks, int) else None,
         previous_output_exists=previous_output_exists,
@@ -346,7 +336,6 @@ def review_post_check_item(
     *,
     ignored: bool,
     report_root: Path | None = None,
-    rejected_root: Path | None = None,
 ) -> PostCheckReview:
     """Review one current-output post-check row."""
     normalized_target = normalize_target_language(target)
@@ -356,7 +345,6 @@ def review_post_check_item(
         number,
         normalized_target,
         report_root=report_root,
-        rejected_root=rejected_root,
     )
     item = next((item for item in review.items if item.key == key and item.reviewable), None)
     if item is None:
@@ -376,8 +364,6 @@ def review_post_check_item(
             normalized_target,
             report_root=report_root,
         ),
-        chapter=number,
-        target_language=normalized_target,
         key=item.key,
         code=item.code,
         detail=item.detail,
@@ -390,7 +376,6 @@ def review_post_check_item(
         number,
         normalized_target,
         report_root=report_root,
-        rejected_root=rejected_root,
     )
 
 
@@ -429,8 +414,6 @@ def review_source_warning(
             normalized_target,
             report_root=report_root,
         ),
-        chapter=number,
-        target_language=normalized_target,
         code=_SOURCE_WARNING_CODE,
         fragments=status.fragments,
         content=translation,

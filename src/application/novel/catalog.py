@@ -111,8 +111,6 @@ def _merge_progress(progress_paths: tuple[Path, ...]) -> dict[str, list[int]]:
 
 def _report_directory(name: str, target: str, report_root: Path) -> Path:
     paths.validate_novel_name(name)
-    if target == "vi":
-        return paths.resolve_within(report_root, name)
     return paths.resolve_within(report_root, target, name)
 
 
@@ -134,7 +132,7 @@ def summarize(
     for target in SUPPORTED_TARGET_LANGUAGES:
         saved = _merge_progress(_progress_paths(novel_root, name, target, progress_dir))
         on_disk = chapter_service.numbers(paths.novel_output_dir_from_root(novel_root, target))
-        completed = on_disk | set(saved.get("completed", []))
+        completed = on_disk
         failed = set(saved.get("failed", []))
         output_dir = paths.novel_output_dir_from_root(novel_root, target)
         warnings = catalog_repository.load_source_warning_chapters(
@@ -203,6 +201,7 @@ def progress(
             progress_root or PROGRESS_DIR,
         )
     )
+    saved["completed"] = sorted(chapter_service.numbers(paths.novel_output_dir_from_root(novel_root, resolved_target)))
     saved["warnings"] = catalog_repository.load_source_warning_chapters(
         _report_directory(name, resolved_target, report_root or REPORT_DIR),
         paths.novel_output_dir_from_root(novel_root, resolved_target),
