@@ -184,6 +184,14 @@ cannot publish that call's result. A force kill relies on the same atomic
 publication and metadata writers; completed atomic updates may remain, but
 partial chapter output cannot become official output.
 
+CLI translation uses the same cancellation event with a two-stage `SIGINT`
+adapter. The first signal requests cooperative cancellation. The second raises
+`SystemExit(130)` in the main thread, unwinds presentation state, restores the
+previous signal handler, and skips provider close because client cleanup may
+itself block. Normal completion and cooperative cancellation close cached
+provider clients on a best-effort basis. The next locked translation run owns
+recovery of any journal or orphan stage left by immediate exit.
+
 Callbacks normally return a public result dictionary. A callback that needs a
 non-default successful terminal state returns a typed `JobOutcome` containing
 that result and its terminal status. Translation uses this contract for

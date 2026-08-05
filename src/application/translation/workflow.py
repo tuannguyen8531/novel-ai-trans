@@ -33,6 +33,7 @@ from src.models import TranslationProfile
 from src.prompts import prompt_cache_scope
 from src.services.genres import genre_cache_scope
 from src.services.llm.cancellation import GenerationCancelledError, cancellation_scope
+from src.services.llm.factory import reset_llm
 from src.services.logger import log_error
 from src.services.metadata import load_translation_profile
 from src.services.rules import rule_snapshot_scope
@@ -44,6 +45,12 @@ from src.services.translation.storage import TranslationStorage
 
 class GraphFactory(Protocol):
     def __call__(self) -> TranslationGraph: ...
+
+
+def close_translation_provider() -> None:
+    """Best-effort cleanup for an adapter ending its translation lifecycle."""
+    with suppress(Exception):
+        reset_llm()
 
 
 @dataclass

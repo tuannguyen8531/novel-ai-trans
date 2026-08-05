@@ -148,7 +148,9 @@ Run a workflow command such as `uv run translate --help`, or see the
 Configuration starts from [.env.example](.env.example). Runtime logs, progress,
 jobs, reports, locks, and crawler state are stored under `runtime/`, separately
 from the source code and per-novel data. LLM request, response, and error logs
-are rotated by daily folder under `runtime/logs/`.
+are rotated by daily folder under `runtime/logs/`. See
+[runtime data, cleanup, and upgrades](docs/GUIDE.md#runtime-data-cleanup-and-upgrades)
+before removing operational state or rolling out the canonical layout.
 
 Bundled prompt templates and translation-rule fragments live under
 `src/prompts/`. The default language and genre rules are packaged from

@@ -22,6 +22,7 @@ For provider setup, see [PROVIDERS.md](PROVIDERS.md).
 - [4. Package](#4-package)
 - [Review and summary steps](#review-and-summary-steps)
 - [Notifications](#notifications)
+- [Runtime data, cleanup, and upgrades](#runtime-data-cleanup-and-upgrades)
 - [Troubleshooting](#troubleshooting)
 
 ## Pipeline overview
@@ -467,9 +468,13 @@ translation run finishes or safely discards the interrupted transaction before
 selecting chapters. Do not delete this directory while a translation job or
 recovery is active.
 
-Use `Ctrl+C` to stop gracefully. The chapter currently being processed finishes
-and is saved, then the run stops before starting the next chapter. Resume later
-with `--resume`.
+Press `Ctrl+C` once to request a graceful stop. The CLI waits for the active
+provider call to return or time out, does not publish that chapter after it
+observes cancellation, and does not start another chapter. Press `Ctrl+C` a
+second time if the provider remains blocked: the CLI exits immediately with
+code `130` and skips potentially blocking provider cleanup. A later translation
+run resolves any recoverable transaction journal and removes orphan stage files
+before selecting chapters. Resume with `--resume`.
 
 ## 3. Glossary
 
@@ -615,6 +620,46 @@ glossary, summary, or chapter updates completed before termination may remain;
 force stop is not a whole-job rollback. Recoverable publication prevents a
 partial chapter file from becoming official output.
 
+## Runtime data, cleanup, and upgrades
+
+`translated/<novel>/` contains durable source, glossary, metadata, translated
+chapters, and EPUB artifacts. The separate `runtime/` tree contains operational
+state with different cleanup consequences:
+
+| Path | Cleanup consequence |
+| --- | --- |
+| `cache/discovery/` | Freely reproducible; future config generation fetches pages again |
+| `cache/browser/` | Removes cookies, login sessions, and challenge state |
+| `drafts/` | Removes unaccepted generated config drafts |
+| `jobs/` | Removes persisted job history; expired jobs are already cleaned automatically |
+| `logs/` | Removes diagnostic LLM and application logs only |
+| `manifests/` | Removes crawler resume/history state, not existing source or translated chapters |
+| `progress/` | Loses failed/retry state; completed chapters are reconstructed from output files |
+| `reports/` | Loses warnings, Ignore/Restore decisions, and rejected candidates |
+| `backups/replacements/` | Removes glossary replacement rollback capability |
+| `backups/insertions/` | Required by prepared chapter-insertion recovery; do not remove it while such a transaction exists |
+| `transactions/` | Required to finish or roll back interrupted chapter publication |
+| `locks/` | Remove lock files only after confirming no process can still own them |
+
+Stop every API server, CLI command, and crawler before cleaning `runtime/`.
+Never delete transaction journals, insertion backups, or lock files while work
+or recovery is active. A hard-stopped CLI/API provider request may continue on
+the remote provider even though its local process is gone.
+
+For an upgrade that adopts this runtime layout:
+
+1. Check whether legacy runtime data still needs to be retained. If so, stop
+   and design a deployment-specific migration; this release does not migrate
+   old runtime directories automatically.
+2. Stop all API, CLI, and crawler processes, then back up the complete
+   `runtime/` tree.
+3. Run `uv run test --fix`, `uv run test`, and `uv run build`.
+4. Start the updated API and let transaction recovery run before inspecting or
+   cleaning staged files.
+5. Smoke-test normal translation, rejected-candidate acceptance, a degraded
+   batch, and cancellation of a deliberately blocking provider.
+6. Remove the old runtime backup only after those checks pass.
+
 ## Troubleshooting
 
 | Problem | Solution |
@@ -625,7 +670,7 @@ partial chapter file from becoming official output.
 | Crawler gets 0 chapters | Run `validate` to check selectors; try `--browser` for JS sites |
 | Content extracted too short | Check `chapter_content_selector` and `remove_selectors` with `validate` |
 | Gemini blocked content | Provider sets `BLOCK_NONE` for all safety categories by default |
-| Translation stops mid-run | Use `Ctrl+C` for graceful stop, then `--resume` to continue |
+| Translation stops mid-run | Press `Ctrl+C` once for graceful cancellation, twice for immediate exit `130`, then use `--resume` |
 | Names inconsistent across chapters | Check `glossary list` and `glossary audit`; add fixed terms with `glossary add` |
 | Imported novel has no summary | The EPUB has no `dc:description` or clearly labelled synopsis page; enter the source summary in the GUI Metadata dialog |
 | Old translated title is ignored | Move `translated.<language>` to `localized.<language>.title` in `metadata.json` |
