@@ -10,18 +10,6 @@ __pycache__/
 .venv
 venv
 
-# Environment config
-.env
-!.env.example
-
-# Per-novel artefacts
-translated/
-!translated/.gitkeep
-
-# Global runtime state
-runtime/
-!runtime/.gitkeep
-
 # OS
 .DS_Store
 Thumbs.db
@@ -33,6 +21,15 @@ web/node_modules/
 # Coverage artifacts
 .coverage
 htmlcov/
+
+# Environment variables
+.env
+
+# Translations
+translated/
+
+# Global runtime state
+runtime/
 
 # Outside scripts
 scripts/
