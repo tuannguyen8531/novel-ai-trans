@@ -262,7 +262,7 @@ def test_workflow_recovers_committed_output_before_chapter_selection(tmp_path) -
     assert list(transaction_dir.glob("*.json")) == []
 
 
-def test_cancel_finishes_current_chapter_then_stops_before_next(tmp_path) -> None:
+def test_cancel_during_active_chapter_does_not_publish_its_result(tmp_path) -> None:
     write_chapters(tmp_path, (1, 2))
     cancel_event = Event()
     graph = SuccessGraph(cancel_event=cancel_event)
@@ -273,9 +273,10 @@ def test_cancel_finishes_current_chapter_then_stops_before_next(tmp_path) -> Non
     )
 
     assert result.cancelled is True
-    assert result.success == 1
-    assert result.chapters_attempted == [1]
+    assert result.success == 0
+    assert result.chapters_attempted == []
     assert graph.calls == 1
+    assert not (tmp_path / "translated" / "novel" / "output" / "chapter_001.txt").exists()
 
 
 def test_failed_only_requires_force_when_failed_chapter_has_output(tmp_path) -> None:

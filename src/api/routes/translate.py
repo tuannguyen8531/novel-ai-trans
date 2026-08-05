@@ -13,7 +13,7 @@ from src.api.background.models import JobOutcome, JobStatus
 from src.api.dependencies import AuthenticatedPrincipal, JobManagerDependency, get_state
 from src.api.events import JobEvent, build_progress_emitter
 from src.api.schemas import JobStartResponse, TranslationRequestPayload
-from src.api.translation.worker import TranslationWorkerPayload, WorkerLog, run_translation_worker
+from src.api.translation.worker import TranslationWorker, TranslationWorkerPayload, WorkerLog
 from src.application import config as app_config
 from src.application.notifications import send_run_notification
 from src.application.novel import catalog, identity
@@ -70,7 +70,7 @@ async def post_translate(
             )
 
         try:
-            completed = run_translation_worker(
+            controller = TranslationWorker(
                 TranslationWorkerPayload(
                     job_id=job.id,
                     snapshot=snapshot,
@@ -78,11 +78,17 @@ async def post_translate(
                     runtime_root=runtime_root,
                     translate_metadata=payload.translate_metadata is not False,
                     force_metadata=payload.force_metadata or False,
-                ),
-                progress_callback=progress_cb,
-                log_callback=emit_log,
-                cancel_event=cancel_event,
+                )
             )
+            jobs.register_process(job.id, controller)
+            try:
+                completed = controller.run(
+                    progress_callback=progress_cb,
+                    log_callback=emit_log,
+                    cancel_event=cancel_event,
+                )
+            finally:
+                jobs.unregister_process(job.id, controller)
         except Exception as error:
             interrupted = cancel_event.is_set()
             send_run_notification(
@@ -145,6 +151,7 @@ async def post_translate(
         snapshot=snapshot,
         loop=loop,
         run=_run,
+        process_backed=True,
     )
     return JobStartResponse(job_id=job.id)
 

@@ -8,9 +8,11 @@ import threading
 import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
+from src.api.background.controllers import ForceStopConflictError
 from src.api.background.manager import JobManager
 from src.api.background.models import TERMINAL_STATUSES, JobOutcome, JobStatus
 from src.api.background.registry import JobNotFoundError
@@ -26,6 +28,17 @@ from src.config import Config
 class _ImmediateLoop:
     def call_soon_threadsafe(self, callback, *args) -> None:
         callback(*args)
+
+
+class _ProcessController:
+    def __init__(self) -> None:
+        self.stopped = threading.Event()
+        self.calls = 0
+
+    def force_stop(self, *, grace_period: float = 2.0) -> None:
+        del grace_period
+        self.calls += 1
+        self.stopped.set()
 
 
 def _wait_for_terminal(manager: JobManager, job_id: str):
@@ -291,6 +304,176 @@ def test_manager_shutdown_cancels_running_jobs_for_all_novels():
     assert manager.get(second.id).status == JobStatus.CANCELLED
     assert first.cancel_event.is_set()
     assert second.cancel_event.is_set()
+
+
+def test_manager_force_stops_queued_process_job_without_starting_worker(tmp_path: Path) -> None:
+    store = JobStore(tmp_path)
+    manager = JobManager(store=store)
+    with patch.object(manager._runner, "start") as start:  # noqa: SLF001 - hold the job in its queued state
+        submitted = manager.submit(
+            kind="translate",
+            novel="demo",
+            snapshot=Config(),
+            loop=None,
+            run=lambda job, emit, cancel_event: {"ok": True},
+            process_backed=True,
+        )
+
+    stopped = manager.force_stop(submitted.id)
+    repeated = manager.force_stop(submitted.id)
+
+    start.assert_called_once()
+    assert stopped is repeated
+    assert stopped.status == JobStatus.CANCELLED
+    assert stopped.result == {"forced": True}
+    assert stopped.cancel_event.is_set()
+    persisted = store.get(stopped.id)
+    assert persisted is not None
+    assert persisted["status"] == "cancelled"
+    assert persisted["result"] == {"forced": True}
+
+
+def test_manager_force_stop_rejects_non_process_job() -> None:
+    manager = JobManager()
+    started = threading.Event()
+    proceed = threading.Event()
+
+    def run(job, emit, cancel_event):
+        started.set()
+        proceed.wait(timeout=5)
+        return {"ok": True}
+
+    submitted = manager.submit(kind="crawl", novel="demo", snapshot=Config(), loop=None, run=run)
+    try:
+        assert started.wait(timeout=5)
+        with pytest.raises(ForceStopConflictError, match="process-backed"):
+            manager.force_stop(submitted.id)
+    finally:
+        proceed.set()
+    _wait_for_terminal(manager, submitted.id)
+
+
+def test_manager_force_stops_registered_process_and_persists_forced_result(tmp_path: Path) -> None:
+    store = JobStore(tmp_path)
+    manager = JobManager(store=store)
+    controller = _ProcessController()
+    registered = threading.Event()
+
+    def run(job, emit, cancel_event):
+        manager.register_process(job.id, controller)
+        registered.set()
+        try:
+            assert controller.stopped.wait(timeout=5)
+            raise RuntimeError("worker exited after termination")
+        finally:
+            manager.unregister_process(job.id, controller)
+
+    submitted = manager.submit(
+        kind="translate",
+        novel="demo",
+        snapshot=Config(),
+        loop=None,
+        run=run,
+        process_backed=True,
+    )
+    assert registered.wait(timeout=5)
+
+    stopping = manager.force_stop(submitted.id, grace_period=0.01)
+    finished = _wait_for_terminal(manager, submitted.id)
+    repeated = manager.force_stop(submitted.id)
+
+    assert stopping.status in {JobStatus.CANCELLING, JobStatus.CANCELLED}
+    assert controller.calls == 1
+    assert finished is repeated
+    assert finished.status == JobStatus.CANCELLED
+    assert finished.result == {"forced": True}
+    assert finished.error is None
+    persisted = store.get(finished.id)
+    assert persisted is not None
+    assert persisted["status"] == "cancelled"
+    assert persisted["result"] == {"forced": True}
+
+
+def test_manager_force_request_before_controller_registration_stops_on_registration() -> None:
+    manager = JobManager()
+    controller = _ProcessController()
+    callback_started = threading.Event()
+    register_now = threading.Event()
+
+    def run(job, emit, cancel_event):
+        callback_started.set()
+        assert register_now.wait(timeout=5)
+        manager.register_process(job.id, controller)
+        try:
+            assert controller.stopped.wait(timeout=5)
+            raise RuntimeError("stopped before process startup")
+        finally:
+            manager.unregister_process(job.id, controller)
+
+    submitted = manager.submit(
+        kind="translate",
+        novel="demo",
+        snapshot=Config(),
+        loop=None,
+        run=run,
+        process_backed=True,
+    )
+    assert callback_started.wait(timeout=5)
+    manager.force_stop(submitted.id, grace_period=0)
+    register_now.set()
+    finished = _wait_for_terminal(manager, submitted.id)
+
+    assert controller.calls == 1
+    assert finished.status == JobStatus.CANCELLED
+    assert finished.result == {"forced": True}
+
+
+def test_manager_force_stop_rejects_clean_terminal_job() -> None:
+    manager = JobManager()
+    submitted = manager.submit(
+        kind="translate",
+        novel="demo",
+        snapshot=Config(),
+        loop=None,
+        run=lambda job, emit, cancel_event: {"ok": True},
+        process_backed=True,
+    )
+    _wait_for_terminal(manager, submitted.id)
+
+    with pytest.raises(ForceStopConflictError, match="already finished"):
+        manager.force_stop(submitted.id)
+
+
+def test_manager_shutdown_escalates_process_job_after_cooperative_timeout() -> None:
+    manager = JobManager()
+    controller = _ProcessController()
+    registered = threading.Event()
+
+    def run(job, emit, cancel_event):
+        manager.register_process(job.id, controller)
+        registered.set()
+        try:
+            assert controller.stopped.wait(timeout=5)
+            raise RuntimeError("terminated during shutdown")
+        finally:
+            manager.unregister_process(job.id, controller)
+
+    submitted = manager.submit(
+        kind="translate",
+        novel="demo",
+        snapshot=Config(),
+        loop=None,
+        run=run,
+        process_backed=True,
+    )
+    assert registered.wait(timeout=5)
+
+    manager.shutdown(timeout=0.01)
+    finished = _wait_for_terminal(manager, submitted.id)
+
+    assert controller.calls == 1
+    assert finished.status == JobStatus.CANCELLED
+    assert finished.result == {"forced": True}
 
 
 def test_manager_rejects_active_deletion_then_deletes_completed_job(tmp_path: Path):

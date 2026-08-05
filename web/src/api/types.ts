@@ -161,6 +161,7 @@ export interface JobModel {
   result: Record<string, unknown> | null
   error: JobError | null
   logs: string[]
+  force_stoppable: boolean
 }
 
 export interface JobListResponse {

@@ -224,6 +224,20 @@ export const useJobsStore = defineStore('jobs', () => {
     }
   }
 
+  async function forceStop(jobId: string) {
+    error.value = null
+    try {
+      const fresh = await api.forceStopJob(jobId)
+      activeRefreshSequence += 1
+      const existing = findJob(jobId)
+      if (existing) applyJob(existing, fresh)
+      await refresh()
+    } catch (err) {
+      error.value = (err as Error).message
+      throw err
+    }
+  }
+
   async function remove(jobId: string) {
     await api.deleteJob(jobId)
     await refresh()
@@ -248,6 +262,7 @@ export const useJobsStore = defineStore('jobs', () => {
     stopPolling,
     follow,
     cancel,
+    forceStop,
     remove,
     clear,
     closeStream,

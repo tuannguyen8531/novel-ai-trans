@@ -6,16 +6,33 @@ import os
 import tempfile
 import time
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 import pytest
 from starlette.testclient import TestClient
 
 from src.api.factory import create_app
-from src.api.translation.worker import TranslationWorkerError, WorkerCompleted
+from src.api.translation.worker import TranslationWorker, TranslationWorkerError, TranslationWorkerPayload, WorkerCompleted
 from src.application import config as _config
+from src.application.locks import novel_lock
 from src.application.translation.models import TranslationResult
 from src.config import Config
+
+
+def _blocking_worker_entry(
+    payload: TranslationWorkerPayload,
+    control_queue: Any,
+    log_queue: Any,
+    cancel_event: Any,
+) -> None:
+    del control_queue, log_queue, cancel_event
+    lock_dir = payload.runtime_root / "locks"
+    with novel_lock(payload.request.novel, lock_dir=lock_dir):
+        payload.runtime_root.mkdir(parents=True, exist_ok=True)
+        (payload.runtime_root / "api-worker-ready").write_text("ready", encoding="utf-8")
+        while True:
+            time.sleep(0.1)
 
 
 @pytest.fixture()
@@ -51,7 +68,9 @@ def test_translate_accepts_empty_provider_and_target(client):
     """Empty strings from the GUI's 'use default' option must not be passed
     as unexpected kwargs to ``Config.__init__``."""
     result = _translation_result()
-    with patch("src.api.routes.translate.run_translation_worker", return_value=WorkerCompleted(result, None)) as worker:
+    with patch("src.api.routes.translate.TranslationWorker") as worker_type:
+        worker = worker_type.return_value
+        worker.run.return_value = WorkerCompleted(result, None)
         response = client.post(
             "/api/translate",
             json={
@@ -62,16 +81,18 @@ def test_translate_accepts_empty_provider_and_target(client):
         )
         assert response.status_code == 202, response.text
         assert "job_id" in response.json()
-        _wait_until_called(worker)
+        _wait_until_called(worker.run)
 
-    worker_payload = worker.call_args.args[0]
+    worker_payload = worker_type.call_args.args[0]
     assert worker_payload.snapshot.llm_provider == "ollama"
     assert worker_payload.request.target_language == "vi"
 
 
 def test_translate_accepts_explicit_provider(client):
     result = _translation_result()
-    with patch("src.api.routes.translate.run_translation_worker", return_value=WorkerCompleted(result, None)) as worker:
+    with patch("src.api.routes.translate.TranslationWorker") as worker_type:
+        worker = worker_type.return_value
+        worker.run.return_value = WorkerCompleted(result, None)
         response = client.post(
             "/api/translate",
             json={
@@ -81,16 +102,18 @@ def test_translate_accepts_explicit_provider(client):
             },
         )
         assert response.status_code == 202, response.text
-        _wait_until_called(worker)
+        _wait_until_called(worker.run)
 
 
 def test_translate_accepts_missing_fields(client):
     """Frontend may POST only the novel name; all overrides are optional."""
     result = _translation_result()
-    with patch("src.api.routes.translate.run_translation_worker", return_value=WorkerCompleted(result, None)) as worker:
+    with patch("src.api.routes.translate.TranslationWorker") as worker_type:
+        worker = worker_type.return_value
+        worker.run.return_value = WorkerCompleted(result, None)
         response = client.post("/api/translate", json={"novel": "demo"})
         assert response.status_code == 202, response.text
-        _wait_until_called(worker)
+        _wait_until_called(worker.run)
 
 
 def test_translate_writes_reports_next_to_custom_jobs_directory(client):
@@ -107,10 +130,9 @@ def test_translate_writes_reports_next_to_custom_jobs_directory(client):
         started_at=time.time(),
         finished_at=time.time(),
     )
-    with patch(
-        "src.api.routes.translate.run_translation_worker",
-        return_value=WorkerCompleted(result, None),
-    ) as translate:
+    with patch("src.api.routes.translate.TranslationWorker") as worker_type:
+        worker = worker_type.return_value
+        worker.run.return_value = WorkerCompleted(result, None)
         response = client.post(
             "/api/translate",
             json={"novel": "demo", "translate_metadata": False},
@@ -118,12 +140,12 @@ def test_translate_writes_reports_next_to_custom_jobs_directory(client):
         assert response.status_code == 202, response.text
 
         deadline = time.time() + 2
-        while time.time() < deadline and not translate.called:
+        while time.time() < deadline and not worker.run.called:
             time.sleep(0.01)
 
-        assert translate.called
+        assert worker.run.called
         runtime_root = client.app.state.app_state.jobs_dir.parent
-        worker_payload = translate.call_args.args[0]
+        worker_payload = worker_type.call_args.args[0]
         assert worker_payload.runtime_root == runtime_root
 
 
@@ -142,12 +164,10 @@ def test_translate_chapter_failures_finish_with_errors_and_notify_failed(client)
         finished_at=time.time(),
     )
     with (
-        patch(
-            "src.api.routes.translate.run_translation_worker",
-            return_value=WorkerCompleted(result, None),
-        ),
+        patch("src.api.routes.translate.TranslationWorker") as worker_type,
         patch("src.api.routes.translate.send_run_notification") as notify,
     ):
+        worker_type.return_value.run.return_value = WorkerCompleted(result, None)
         response = client.post(
             "/api/translate",
             json={"novel": "demo", "translate_metadata": False},
@@ -174,9 +194,10 @@ def test_translate_worker_failure_preserves_error_details_and_notifies(client):
         details={"exit_code": 17},
     )
     with (
-        patch("src.api.routes.translate.run_translation_worker", side_effect=error),
+        patch("src.api.routes.translate.TranslationWorker") as worker_type,
         patch("src.api.routes.translate.send_run_notification") as notify,
     ):
+        worker_type.return_value.run.side_effect = error
         response = client.post(
             "/api/translate",
             json={"novel": "demo", "translate_metadata": False},
@@ -197,6 +218,52 @@ def test_translate_worker_failure_preserves_error_details_and_notifies(client):
     }
     notify.assert_called_once()
     assert notify.call_args.kwargs["status"] == "Failed"
+
+
+def test_force_stop_endpoint_kills_real_translation_process_and_notifies_from_parent(client):
+    runtime_root = client.app.state.app_state.jobs_dir.parent
+    workers: list[TranslationWorker] = []
+
+    def worker_factory(payload: TranslationWorkerPayload) -> TranslationWorker:
+        worker = TranslationWorker(payload, entrypoint=_blocking_worker_entry)
+        workers.append(worker)
+        return worker
+
+    with (
+        patch("src.api.routes.translate.TranslationWorker", side_effect=worker_factory),
+        patch("src.api.routes.translate.send_run_notification") as notify,
+    ):
+        response = client.post(
+            "/api/translate",
+            json={"novel": "demo", "translate_metadata": False},
+        )
+        assert response.status_code == 202, response.text
+        job_id = response.json()["job_id"]
+        ready = runtime_root / "api-worker-ready"
+        deadline = time.monotonic() + 5
+        while not ready.exists() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert ready.exists()
+
+        started = time.monotonic()
+        stopped = client.post(f"/api/jobs/{job_id}/force-stop")
+        assert stopped.status_code == 200, stopped.text
+        assert time.monotonic() - started < 3
+        deadline = time.monotonic() + 5
+        job = client.get(f"/api/jobs/{job_id}").json()
+        while job["status"] in {"running", "cancelling"} and time.monotonic() < deadline:
+            time.sleep(0.01)
+            job = client.get(f"/api/jobs/{job_id}").json()
+
+    assert job["status"] == "cancelled"
+    assert job["result"] == {"forced": True}
+    assert job["error"] is None
+    assert workers and not workers[0].is_alive
+    notify.assert_called_once()
+    assert notify.call_args.kwargs["status"] == "Success"
+    assert notify.call_args.kwargs["detail"] == "Translation interrupted."
+    with novel_lock("demo", lock_dir=runtime_root / "locks"):
+        pass
 
 
 def _translation_result() -> TranslationResult:

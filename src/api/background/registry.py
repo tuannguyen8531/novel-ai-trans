@@ -97,6 +97,22 @@ class JobRegistry:
                 job.status = JobStatus.CANCELLING
             return job.status
 
+    def request_force_stop(self, job: Job) -> JobStatus | None:
+        with self._lock:
+            if job.status not in ACTIVE_STATUSES:
+                return None
+            job.force_requested = True
+            job.cancel_event.set()
+            if job.status == JobStatus.QUEUED:
+                job.status = JobStatus.CANCELLED
+                job.result = {"forced": True}
+                job.finished_at = datetime.now(UTC)
+                self._active.pop(job.id, None)
+                self._history.appendleft(job)
+            else:
+                job.status = JobStatus.CANCELLING
+            return job.status
+
     def delete(self, job_id: str) -> bool:
         with self._lock:
             active = self._active.get(job_id)

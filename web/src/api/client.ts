@@ -459,6 +459,8 @@ export const api = {
   getJob: (id: string) => request<JobModel>(`/api/jobs/${id}`),
   cancelJob: (id: string) =>
     request<JobModel>(`/api/jobs/${id}/cancel`, { method: 'POST' }),
+  forceStopJob: (id: string) =>
+    request<JobModel>(`/api/jobs/${id}/force-stop`, { method: 'POST' }),
   deleteJob: (id: string) =>
     request<void>(`/api/jobs/${id}`, { method: 'DELETE' }),
   clearJobs: () =>

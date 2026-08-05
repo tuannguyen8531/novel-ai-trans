@@ -605,7 +605,15 @@ GUI/API translation work runs in a spawned child process. Job state, live
 events, persisted history, and the final Telegram notification remain in the
 server process. A normal Cancel request is still cooperative: it is forwarded
 to the child and takes effect at translation safe points, but does not interrupt
-an HTTP/LLM call already in flight.
+an HTTP/LLM call already in flight. If the call returns after cancellation, its
+chapter result is not published.
+
+For a running GUI translation, use **Force stop** when ordinary cancellation is
+waiting on a blocked provider call. Confirming it terminates the translation
+process and finishes the job as `cancelled` with `forced: true`. Atomic metadata,
+glossary, summary, or chapter updates completed before termination may remain;
+force stop is not a whole-job rollback. Recoverable publication prevents a
+partial chapter file from becoming official output.
 
 ## Troubleshooting
 

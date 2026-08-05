@@ -2,6 +2,7 @@
 
 import logging
 from contextlib import ExitStack
+from threading import Event
 from unittest.mock import MagicMock, patch
 
 import httpx2 as httpx
@@ -9,6 +10,7 @@ import pytest
 
 from src.services.llm import get_llm, reset_llm
 from src.services.llm.base import JOB_LOGGER_NAME, BaseProvider
+from src.services.llm.cancellation import GenerationCancelledError, cancellation_scope
 from src.services.llm.fallback import FallbackProvider
 from src.services.llm.ollama import OllamaProvider
 
@@ -200,6 +202,33 @@ class TestLLMService:
 
                 assert MockClient.return_value.post.call_count == 3
                 assert sleep.call_count == 2
+
+    def test_cancellation_interrupts_retry_wait_before_another_provider_call(self):
+        cancel_event = Event()
+
+        def fail_and_cancel(*args, **kwargs):
+            del args, kwargs
+            cancel_event.set()
+            raise httpx.TimeoutException("timed out")
+
+        with (
+            patch("src.services.llm.ollama.config") as provider_config,
+            patch("src.services.llm.base.config") as base_config,
+            patch("src.services.llm.base.httpx.Client") as mock_client,
+            patch("src.services.llm.base.log_api_request_sent", return_value="test-call-id"),
+            patch("src.services.llm.base.log_error"),
+            cancellation_scope(cancel_event),
+        ):
+            provider_config.ollama_base_url = "http://localhost:11434"
+            provider_config.ollama_model = "test-model"
+            base_config.max_retries = 2
+            mock_client.return_value.post.side_effect = fail_and_cancel
+            provider = OllamaProvider()
+
+            with pytest.raises(GenerationCancelledError, match="retry cancelled"):
+                provider.generate("system", "user", "translate")
+
+            assert mock_client.return_value.post.call_count == 1
 
     def test_check_response_error(self):
         with patch("src.services.llm.factory.config") as factory_config:

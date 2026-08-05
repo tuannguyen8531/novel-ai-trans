@@ -19,6 +19,7 @@ from src.domain.language import normalize_source_language, normalize_target_lang
 from src.prompts import render_prompt
 from src.services.glossary.repository import get_active_context, load_glossary
 from src.services.llm import get_llm
+from src.services.llm.cancellation import GenerationCancelledError, cancellation_scope
 from src.services.logger import log_ai_call
 from src.utils import files as file_utils
 from src.utils.json import parse_json_object
@@ -161,8 +162,11 @@ def localize_metadata(
     user_prompt += json.dumps(user_payload, ensure_ascii=False, indent=2)
 
     try:
-        response = get_llm().generate(system_prompt, user_prompt, "localize")
-        parsed = parse_json_object(response)
+        with cancellation_scope(cancel_event):
+            response = get_llm().generate(system_prompt, user_prompt, "localize")
+            parsed = parse_json_object(response)
+    except GenerationCancelledError as error:
+        raise OperationCancelledError("Metadata translation cancelled.") from error
     except Exception as error:
         raise ExternalServiceError(f"Failed to translate novel metadata: {error}") from error
 

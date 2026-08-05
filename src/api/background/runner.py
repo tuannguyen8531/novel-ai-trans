@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from collections.abc import Callable
 from contextvars import ContextVar, copy_context
 from dataclasses import dataclass
@@ -56,12 +57,19 @@ class JobLogHandler(logging.Handler):
 class JobRunner:
     """Execute jobs in worker threads and record their lifecycle outcome."""
 
-    def __init__(self, registry: JobRegistry, bus: EventBus, persist: PersistCallback) -> None:
+    def __init__(
+        self,
+        registry: JobRegistry,
+        bus: EventBus,
+        persist: PersistCallback,
+        lifecycle_lock: threading.RLock | None = None,
+    ) -> None:
         self._registry = registry
         self._bus = bus
         self._persist = persist
         self._threads: dict[str, threading.Thread] = {}
         self._lock = threading.Lock()
+        self._lifecycle_lock = lifecycle_lock or threading.RLock()
 
     def start(self, request: JobRequest) -> None:
         def target() -> None:
@@ -122,21 +130,26 @@ class JobRunner:
                 _active_log_job_id.reset(token)
                 root_logger.removeHandler(handler)
 
-        outcome = callback_result if isinstance(callback_result, JobOutcome) else JobOutcome(callback_result)
-        job.status = JobStatus.CANCELLED if job.status == JobStatus.CANCELLING else outcome.terminal_status
-        job.result = outcome.result
-        job.finished_at = datetime.now(UTC)
-        self._bus.publish(
-            JobEvent(
-                kind=job.status.value,
-                job_id=job.id,
-                novel=job.novel,
-                payload={"result": outcome.result},
+        with self._lifecycle_lock:
+            outcome = callback_result if isinstance(callback_result, JobOutcome) else JobOutcome(callback_result)
+            if job.force_requested:
+                job.status = JobStatus.CANCELLED
+                job.result = {"forced": True}
+            else:
+                job.status = JobStatus.CANCELLED if job.status == JobStatus.CANCELLING else outcome.terminal_status
+                job.result = outcome.result
+            job.finished_at = datetime.now(UTC)
+            self._bus.publish(
+                JobEvent(
+                    kind=job.status.value,
+                    job_id=job.id,
+                    novel=job.novel,
+                    payload={"result": job.result},
+                )
             )
-        )
-        self._registry.finish(job)
-        self.discard(job.id)
-        self._persist(job)
+            self._registry.finish(job)
+            self.discard(job.id)
+            self._persist(job)
 
     def _finish_failed(
         self,
@@ -146,20 +159,28 @@ class JobRunner:
         message: str,
         details: dict[str, Any] | None = None,
     ) -> None:
-        job.status = JobStatus.CANCELLED if job.status == JobStatus.CANCELLING else JobStatus.FAILED
-        job.error = JobError(code=code, message=message, details=details)
-        job.finished_at = datetime.now(UTC)
-        self._bus.publish(
-            JobEvent(
-                kind=job.status.value,
-                job_id=job.id,
-                novel=job.novel,
-                payload={"error": {"code": code, "message": message, "details": details}},
+        with self._lifecycle_lock:
+            if job.force_requested:
+                job.status = JobStatus.CANCELLED
+                job.result = {"forced": True}
+                job.error = None
+                payload = {"result": job.result}
+            else:
+                job.status = JobStatus.CANCELLED if job.status == JobStatus.CANCELLING else JobStatus.FAILED
+                job.error = JobError(code=code, message=message, details=details)
+                payload = {"error": {"code": code, "message": message, "details": details}}
+            job.finished_at = datetime.now(UTC)
+            self._bus.publish(
+                JobEvent(
+                    kind=job.status.value,
+                    job_id=job.id,
+                    novel=job.novel,
+                    payload=payload,
+                )
             )
-        )
-        self._registry.finish(job)
-        self.discard(job.id)
-        self._persist(job)
+            self._registry.finish(job)
+            self.discard(job.id)
+            self._persist(job)
 
     def discard(self, job_id: str) -> None:
         with self._lock:
@@ -168,9 +189,13 @@ class JobRunner:
     def join_all(self, *, timeout: float) -> None:
         with self._lock:
             threads = list(self._threads.values())
+        deadline = time.monotonic() + timeout
         for thread in threads:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
             if thread.is_alive():
-                thread.join(timeout=timeout)
+                thread.join(timeout=remaining)
 
 
 __all__ = ["JobCallback", "JobRequest", "JobRunner"]

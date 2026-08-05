@@ -430,6 +430,7 @@ class JobModel(BaseModel):
     result: dict[str, Any] | None
     error: JobErrorModel | None
     logs: list[str]
+    force_stoppable: bool = False
 
 
 class JobListResponse(BaseModel):

@@ -5,8 +5,10 @@ from __future__ import annotations
 import time
 from collections.abc import Callable, Mapping
 from pathlib import Path
+from threading import Event
 from typing import Any, Protocol
 
+from src.application.errors import OperationCancelledError
 from src.domain.quality import post_check_translation
 from src.models.state import TranslationState, initial_state
 from src.services.chapters import deduplicate_leading_headings
@@ -38,6 +40,7 @@ def translate_chapter(
     publish: PublishChapter,
     genres: list[str] | None = None,
     clock: Callable[[], float] = time.time,
+    cancel_event: Event | None = None,
 ) -> tuple[bool, int, float, int]:
     """Translate a chapter and return success, output size, duration, and new terms."""
     source_text = deduplicate_leading_headings(storage.read(input_path))
@@ -65,5 +68,7 @@ def translate_chapter(
     new_terms_count = len(new_terms) if isinstance(new_terms, Mapping) else 0
     issue_codes = [issue.code for issue in post_check_translation(source_text, normalized_text, glossary)]
 
+    if cancel_event is not None and cancel_event.is_set():
+        raise OperationCancelledError("Translation cancelled before publication.")
     publish(normalized_text, issue_codes)
     return True, len(normalized_text), elapsed, new_terms_count

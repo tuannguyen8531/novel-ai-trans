@@ -32,6 +32,7 @@ from src.graph.builder import TranslationQualityError, build_graph
 from src.models import TranslationProfile
 from src.prompts import prompt_cache_scope
 from src.services.genres import genre_cache_scope
+from src.services.llm.cancellation import GenerationCancelledError, cancellation_scope
 from src.services.logger import log_error
 from src.services.metadata import load_translation_profile
 from src.services.rules import rule_snapshot_scope
@@ -262,8 +263,9 @@ class TranslationWorkflow:
                     storage=self.storage,
                     publish=publish,
                     clock=self.clock,
+                    cancel_event=cancel_event,
                 )
-            except OperationCancelledError:
+            except OperationCancelledError, GenerationCancelledError:
                 cancelled = True
                 break
             except TranslationQualityError as error:
@@ -478,6 +480,7 @@ def run_translation(
     """Construct default collaborators and run one locked translation batch."""
     with (
         novel_lock(request.novel, lock_dir=lock_dir),
+        cancellation_scope(cancel_event),
         genre_cache_scope(),
         rule_snapshot_scope(),
         prompt_cache_scope(),

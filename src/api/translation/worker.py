@@ -189,14 +189,39 @@ class TranslationWorker:
             name=f"translation-{payload.job_id}",
         )
         self._started = False
+        self._queues_closed = False
+        self._force_requested = False
+        self._lock = threading.RLock()
 
     @property
     def pid(self) -> int | None:
-        return self._process.pid
+        with self._lock:
+            return self._process.pid
 
     @property
     def exitcode(self) -> int | None:
-        return self._process.exitcode
+        with self._lock:
+            return self._process.exitcode
+
+    @property
+    def is_alive(self) -> bool:
+        with self._lock:
+            return self._started and self._process.is_alive()
+
+    def force_stop(self, *, grace_period: float = 2.0) -> None:
+        """Terminate the child now, escalating to kill after the grace period."""
+        if grace_period < 0:
+            raise ValueError("Force-stop grace period cannot be negative.")
+        with self._lock:
+            self._force_requested = True
+            self._cancel_event.set()
+            if not self._started or not self._process.is_alive():
+                return
+            self._process.terminate()
+            self._process.join(timeout=grace_period)
+            if self._process.is_alive():
+                self._process.kill()
+                self._process.join(timeout=grace_period)
 
     def run(
         self,
@@ -205,10 +230,18 @@ class TranslationWorker:
         log_callback: LogCallback,
         cancel_event: threading.Event,
     ) -> WorkerCompleted:
-        if self._started:
-            raise RuntimeError("Translation worker can only be started once.")
-        self._started = True
-        self._process.start()
+        with self._lock:
+            if self._started:
+                raise RuntimeError("Translation worker can only be started once.")
+            if self._force_requested:
+                self._close_queues()
+                raise TranslationWorkerError(
+                    "Translation worker was force-stopped before startup.",
+                    code="forced_stop",
+                    details={"forced": True},
+                )
+            self._started = True
+            self._process.start()
         completed: WorkerCompleted | None = None
         failure: WorkerFailed | None = None
         try:
@@ -218,9 +251,9 @@ class TranslationWorker:
                 try:
                     message = self._control_queue.get(timeout=_POLL_SECONDS)
                 except queue.Empty:
-                    if self._process.is_alive():
+                    if self.is_alive:
                         continue
-                    self._process.join()
+                    self._join()
                     completed, failure = self._drain_control(progress_callback, completed, failure)
                     if completed is None and failure is None:
                         raise TranslationWorkerError(
@@ -231,23 +264,28 @@ class TranslationWorker:
                     break
                 completed, failure = self._handle_message(message, progress_callback, completed, failure)
 
-            while self._process.is_alive():
+            while self.is_alive:
                 self._mirror_cancellation(cancel_event)
                 self._drain_logs(log_callback)
-                self._process.join(timeout=_POLL_SECONDS)
+                self._join(timeout=_POLL_SECONDS)
             self._drain_logs(log_callback)
             if failure is not None:
                 raise TranslationWorkerError(failure.message, code=failure.code, details=failure.details)
             assert completed is not None
             return completed
         finally:
-            if not self._process.is_alive():
-                self._process.join()
+            if not self.is_alive:
+                self._join()
                 self._close_queues()
 
     def _mirror_cancellation(self, cancel_event: threading.Event) -> None:
         if cancel_event.is_set() and not self._cancel_event.is_set():
             self._cancel_event.set()
+
+    def _join(self, timeout: float | None = None) -> None:
+        with self._lock:
+            if self._started:
+                self._process.join(timeout=timeout)
 
     def _drain_control(
         self,
@@ -293,6 +331,9 @@ class TranslationWorker:
                 log_callback(message)
 
     def _close_queues(self) -> None:
+        if self._queues_closed:
+            return
+        self._queues_closed = True
         for worker_queue in (self._control_queue, self._log_queue):
             with suppress(Exception):
                 worker_queue.close()

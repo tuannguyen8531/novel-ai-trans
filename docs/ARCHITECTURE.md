@@ -167,6 +167,23 @@ notification client across the process boundary. An abnormal child exit is
 reported as `worker_exit`, while an application exception retains its code and
 serializable details in the job snapshot.
 
+`JobManager` keeps process controllers in memory only and serializes normal
+cancel, force stop, controller registration, and runner completion under one
+lifecycle lock. `POST /api/jobs/{id}/force-stop` marks the job as forced before
+terminating the child, waits up to two seconds, and escalates to `kill()` when
+needed. That marker makes a late child result non-authoritative: the runner
+must finish as `cancelled` with `{"forced": true}`. Queued process jobs are
+cancelled without spawning, repeated force requests are idempotent, and no PID
+or process handle is persisted. Shutdown first requests cooperative cancel,
+then force-stops process workers that exceed the bounded wait.
+
+LLM cancellation is context-local. Providers check before every call and use
+cancellation-aware retry waits. The translation application checks again
+before chapter publication, so a cancel observed after an HTTP call returns
+cannot publish that call's result. A force kill relies on the same atomic
+publication and metadata writers; completed atomic updates may remain, but
+partial chapter output cannot become official output.
+
 Callbacks normally return a public result dictionary. A callback that needs a
 non-default successful terminal state returns a typed `JobOutcome` containing
 that result and its terminal status. Translation uses this contract for

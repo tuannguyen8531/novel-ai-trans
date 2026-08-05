@@ -363,9 +363,14 @@ failed chapter counts.
 `POST /api/jobs/{id}/cancel` sets a cooperative flag. The worker checks
 the flag between translation chapters and at safe points in crawl and pack
 workflows. In-flight LLM and HTTP calls are not interrupted — they finish or
-time out on their own. A translation chapter already in progress finishes
-processing before the job stops: successful output is saved, while a quality
-or provider failure is recorded in progress.
+time out on their own. If cancellation is observed when an active LLM call
+returns, that chapter result is not published.
+
+Running process-backed translation jobs also show **Force stop**. After
+confirmation, `POST /api/jobs/{id}/force-stop` terminates the child immediately
+and escalates to a kill after a short grace period. The job finishes as
+`cancelled` with `forced: true`. Completed atomic updates may remain; force stop
+is not a whole-job rollback, but partial chapter output is never published.
 
 ### Persistence
 

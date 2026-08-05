@@ -12,6 +12,7 @@ from abc import ABC, abstractmethod
 import httpx2 as httpx
 
 from src.config import config
+from src.services.llm.cancellation import check_cancelled, wait_for_retry
 from src.services.logger import log_api_request_received, log_api_request_sent, log_error
 
 STRUCTURED_JSON_CALL_TYPES = {"learn", "review", "localize"}
@@ -84,6 +85,7 @@ class BaseProvider(ABC):
         backoff_delays = [5, 10, 20]
 
         for attempt in range(max_retries + 1):
+            check_cancelled()
             try:
                 message = f"Calling {self.provider_name} ({call_type})..."
                 _job_logger.info(
@@ -136,7 +138,7 @@ class BaseProvider(ABC):
                             "max_retries": max_retries,
                         },
                     )
-                    time.sleep(delay)
+                    wait_for_retry(delay)
                     continue
                 if isinstance(e, httpx.HTTPError):
                     raise RuntimeError(f"{self.provider_name} API error ({call_type}): {error_msg}") from e

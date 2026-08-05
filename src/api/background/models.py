@@ -58,6 +58,8 @@ class Job:
     error: JobError | None = None
     logs: deque[str] = field(default_factory=lambda: deque(maxlen=500))
     cancel_event: threading.Event = field(default_factory=threading.Event)
+    process_backed: bool = False
+    force_requested: bool = False
 
     def public_dict(self) -> dict[str, Any]:
         return {
