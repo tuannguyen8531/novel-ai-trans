@@ -203,6 +203,21 @@ export const api = {
         body: JSON.stringify({ key, ignored })
       }
     ),
+  acceptChapterCandidate: (
+    name: string,
+    chapter: number,
+    target: string,
+    candidateHash: string,
+    overwrite: boolean
+  ) =>
+    request<ChapterPostCheck>(
+      `/api/novels/${encodeURIComponent(name)}/chapters/${chapter}/post-check/accept?target=${encodeURIComponent(target)}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ candidate_hash: candidateHash, overwrite })
+      }
+    ),
   insertChapter: (name: string, number: number, content: string) =>
     request<{ job_id: string }>(`/api/novels/${encodeURIComponent(name)}/chapters/insert`, {
       method: 'POST',
@@ -444,6 +459,8 @@ export const api = {
   getJob: (id: string) => request<JobModel>(`/api/jobs/${id}`),
   cancelJob: (id: string) =>
     request<JobModel>(`/api/jobs/${id}/cancel`, { method: 'POST' }),
+  forceStopJob: (id: string) =>
+    request<JobModel>(`/api/jobs/${id}/force-stop`, { method: 'POST' }),
   deleteJob: (id: string) =>
     request<void>(`/api/jobs/${id}`, { method: 'DELETE' }),
   clearJobs: () =>

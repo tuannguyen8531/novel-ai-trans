@@ -18,7 +18,7 @@ from src.application.crawl.common import check_cancel, emit
 from src.application.errors import PersistenceError
 from src.application.progress import ProgressEvent
 from src.domain.language import detect_language_heuristic
-from src.paths import CONFIG_DIR, RUNTIME_OUTPUT_ROOT, resolve_novel_root
+from src.paths import CONFIG_DIR, DISCOVERY_CACHE_DIR, resolve_novel_root
 from src.services import documents
 from src.services.generation import prompts
 from src.services.generation.analysis import ConfigAnalyzer, clean_novel_html, normalize_novel_info
@@ -71,7 +71,7 @@ def generate_config(
     else:
         llm = get_llm()
 
-    cache_dir = RUNTIME_OUTPUT_ROOT / ".gen-cache"
+    cache_dir = DISCOVERY_CACHE_DIR
     check_cancel(cancel_event)
     emit(progress_callback, ProgressEvent(kind="phase", message="Generating config", extra={"url": url}))
     translated_root = Path(app_config.get_config().translated_dir)

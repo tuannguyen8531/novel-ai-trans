@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -8,6 +9,10 @@ import pytest
 from src.application.errors import ApplicationValidationError
 from src.application.novel.insertion import InsertRequest, insert_chapter
 from src.config import Config
+from src.services.translation.checkpoints import CheckpointStore
+from src.services.translation.publisher import ChapterPublication, ChapterPublisher, PublicationError
+from src.services.translation.reports import ReportStore
+from src.services.translation.storage import TranslationStorage
 from src.utils import files
 
 
@@ -34,8 +39,8 @@ def _run_insert(
         config=Config(translated_dir=str(translated)),
         progress_root=tmp_path / "runtime" / "progress",
         report_root=tmp_path / "runtime" / "reports",
-        rejected_root=tmp_path / "runtime" / "rejected",
-        backup_root=tmp_path / "runtime" / "insert-backups",
+        transaction_root=tmp_path / "runtime" / "transactions",
+        backup_root=tmp_path / "runtime" / "backups" / "insertions",
         lock_dir=tmp_path / "runtime" / "locks",
     )
 
@@ -50,13 +55,9 @@ def test_insert_shifts_chapter_indexed_files_and_state(tmp_path: Path) -> None:
     _write(novel / "artifacts" / "demo.vi.epub", "book")
 
     runtime = tmp_path / "runtime"
-    _write_json(runtime / "reports" / "demo" / "chapter_002.json", {"chapter": 2, "target_language": "vi"})
-    _write_json(runtime / "reports" / "demo" / "chapter_003.json", {"chapter": 3, "target_language": "vi"})
-    _write_json(runtime / "reports" / "en" / "demo" / "chapter_003.json", {"chapter": 3, "target_language": "en"})
-    _write_json(
-        runtime / "rejected" / "vi" / "demo" / "chapter_003.json",
-        {"chapter": 3, "target_language": "vi"},
-    )
+    _write_json(runtime / "reports" / "vi" / "demo" / "chapter_002.json", {"issues": []})
+    _write_json(runtime / "reports" / "vi" / "demo" / "chapter_003.json", {"issues": []})
+    _write_json(runtime / "reports" / "en" / "demo" / "chapter_003.json", {"issues": []})
     _write_json(runtime / "progress" / "demo.json", {"completed": [1, 2, 3], "failed": [4]})
     _write_json(runtime / "progress" / "en" / "demo.json", {"completed": [3], "failed": []})
     _write_json(
@@ -94,12 +95,10 @@ def test_insert_shifts_chapter_indexed_files_and_state(tmp_path: Path) -> None:
     assert (novel / "output" / "chapter_004.txt").read_text(encoding="utf-8") == "vi-3"
     assert (novel / "output" / "en" / "chapter_004.txt").read_text(encoding="utf-8") == "en-3"
 
-    vi_report = json.loads((runtime / "reports" / "demo" / "chapter_003.json").read_text(encoding="utf-8"))
+    vi_report = json.loads((runtime / "reports" / "vi" / "demo" / "chapter_003.json").read_text(encoding="utf-8"))
     en_report = json.loads((runtime / "reports" / "en" / "demo" / "chapter_004.json").read_text(encoding="utf-8"))
-    assert vi_report["chapter"] == 3
-    assert en_report["chapter"] == 4
-    rejected = json.loads((runtime / "rejected" / "vi" / "demo" / "chapter_004.json").read_text(encoding="utf-8"))
-    assert rejected["chapter"] == 4
+    assert vi_report == {"issues": []}
+    assert en_report == {"issues": []}
     assert json.loads((runtime / "progress" / "demo.json").read_text(encoding="utf-8")) == {
         "completed": [1, 3, 4],
         "failed": [5],
@@ -118,10 +117,10 @@ def test_insert_shifts_chapter_indexed_files_and_state(tmp_path: Path) -> None:
     assert glossary["chapter_summaries"] == {"1": "one", "3": "two", "4": "three"}
     assert result.shifted_sources == 2
     assert result.shifted_translations == 3
-    assert result.shifted_reports == 4
+    assert result.shifted_reports == 3
     assert result.current_last_chapter == 4
     assert result.repack_required is True
-    backup_manifest = runtime / "insert-backups" / "demo" / "insert-test" / "manifest.json"
+    backup_manifest = runtime / "backups" / "insertions" / "demo" / "insert-test" / "manifest.json"
     assert json.loads(backup_manifest.read_text(encoding="utf-8"))["status"] == "completed"
 
 
@@ -135,6 +134,68 @@ def test_insert_appends_without_shifting_existing_files(tmp_path: Path) -> None:
     assert (novel / "input" / "chapter_002.txt").read_text(encoding="utf-8") == "two"
     assert result.shifted_sources == 0
     assert result.current_last_chapter == 2
+
+
+def test_insert_recovers_pending_publications_for_every_target_before_shifting(tmp_path: Path) -> None:
+    novel = tmp_path / "translated" / "demo"
+    for number in range(1, 6):
+        _write(novel / "input" / f"chapter_{number:03d}.txt", f"source-{number}")
+
+    runtime = tmp_path / "runtime"
+    for target in ("vi", "en"):
+        output_dir = novel / "output" if target == "vi" else novel / "output" / target
+        report_path = runtime / "reports" / target / "demo" / "chapter_005.json"
+        progress_path = runtime / "progress" / ("demo.json" if target == "vi" else "en/demo.json")
+        transaction_dir = runtime / "transactions" / target / "demo"
+
+        def fail_report_replace(source: Path, destination: Path, *, expected: Path = report_path) -> None:
+            if destination == expected:
+                raise OSError("fault injection")
+            os.replace(source, destination)
+
+        publisher = ChapterPublisher(
+            TranslationStorage(),
+            ReportStore(),
+            CheckpointStore(),
+            id_factory=lambda value=target: f"pending-{value}",
+            replace=fail_report_replace,
+        )
+        with pytest.raises(PublicationError):
+            publisher.publish(
+                ChapterPublication(
+                    chapter=5,
+                    output_dir=output_dir,
+                    report_path=report_path,
+                    progress_path=progress_path,
+                    transaction_dir=transaction_dir,
+                    content=f"{target}-translated-five",
+                    report={"manual_post_check_issues": [], "ignored_post_checks": []},
+                    checkpoint={"completed": [], "failed": [5]},
+                )
+            )
+
+        assert (output_dir / "chapter_005.txt").exists()
+        assert not report_path.exists()
+        assert list(transaction_dir.glob("*.json"))
+
+    result = _run_insert(tmp_path, number=3, content="inserted-three")
+
+    for target in ("vi", "en"):
+        output_dir = novel / "output" if target == "vi" else novel / "output" / target
+        report_dir = runtime / "reports" / target / "demo"
+        progress_path = runtime / "progress" / ("demo.json" if target == "vi" else "en/demo.json")
+        transaction_dir = runtime / "transactions" / target / "demo"
+        assert not (output_dir / "chapter_005.txt").exists()
+        assert (output_dir / "chapter_006.txt").read_text(encoding="utf-8") == f"{target}-translated-five"
+        assert not (report_dir / "chapter_005.json").exists()
+        assert (report_dir / "chapter_006.json").exists()
+        assert CheckpointStore().load(progress_path) == {"completed": [6], "failed": []}
+        assert list(transaction_dir.glob("*.json")) == []
+        assert list(output_dir.glob("*.stage")) == []
+        assert list(report_dir.glob("*.stage")) == []
+
+    assert result.shifted_translations == 2
+    assert result.shifted_reports == 2
 
 
 def test_insert_preserves_legacy_and_canonical_filename_styles(tmp_path: Path) -> None:
@@ -179,5 +240,5 @@ def test_insert_rolls_back_when_state_commit_fails(tmp_path: Path, monkeypatch: 
     assert (novel / "input" / "chapter_002.txt").read_text(encoding="utf-8") == "two"
     assert not (novel / "input" / "chapter_003.txt").exists()
     assert json.loads(progress_path.read_text(encoding="utf-8")) == {"completed": [1, 2], "failed": []}
-    manifest = tmp_path / "runtime" / "insert-backups" / "demo" / "insert-test" / "manifest.json"
+    manifest = tmp_path / "runtime" / "backups" / "insertions" / "demo" / "insert-test" / "manifest.json"
     assert json.loads(manifest.read_text(encoding="utf-8"))["status"] == "rolled_back"

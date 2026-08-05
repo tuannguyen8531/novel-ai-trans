@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import logging
+import threading
+import time
+from contextlib import suppress
 from datetime import UTC, datetime
 from typing import Any
 
+from src.api.background.controllers import ForceStopConflictError, ProcessController
 from src.api.background.models import ACTIVE_STATUSES, TERMINAL_STATUSES, Job, JobError, JobStatus
 from src.api.background.registry import JobNotFoundError, JobRegistry
 from src.api.background.runner import JobCallback, JobRequest, JobRunner
@@ -31,7 +35,9 @@ class JobManager:
         self._store = store
         self._registry = JobRegistry(history_limit=history_limit)
         self._bus = EventBus()
-        self._runner = JobRunner(self._registry, self._bus, self._persist)
+        self._lifecycle_lock = threading.RLock()
+        self._controllers: dict[str, ProcessController] = {}
+        self._runner = JobRunner(self._registry, self._bus, self._persist, self._lifecycle_lock)
         if store is not None:
             self._restore_from_store()
 
@@ -60,26 +66,85 @@ class JobManager:
         run: JobCallback,
         snapshot: Config,
         loop: Any,
+        process_backed: bool = False,
     ) -> Job:
         del loop  # Retained in the adapter contract; streaming owns event-loop delivery.
         job = self._registry.create(kind=kind, novel=novel)
+        job.process_backed = process_backed
         self._persist(job)
         self._bus.publish(JobEvent(kind="queued", job_id=job.id, novel=novel, payload={"kind": kind}))
         self._runner.start(JobRequest(job=job, snapshot=snapshot, run=run))
         return job
 
     def request_cancel(self, job_id: str) -> Job:
-        job = self.get(job_id)
-        status = self._registry.request_cancel(job)
-        if status is None:
+        with self._lifecycle_lock:
+            job = self.get(job_id)
+            status = self._registry.request_cancel(job)
+            if status is None:
+                return job
+            if status == JobStatus.CANCELLED:
+                self._bus.publish(JobEvent(kind="cancelled", job_id=job.id, novel=job.novel))
+                self._runner.discard(job.id)
+            else:
+                self._bus.publish(JobEvent(kind="cancelling", job_id=job.id, novel=job.novel))
+            self._persist(job)
             return job
-        if status == JobStatus.CANCELLED:
-            self._bus.publish(JobEvent(kind="cancelled", job_id=job.id, novel=job.novel))
-            self._runner.discard(job.id)
-        else:
-            self._bus.publish(JobEvent(kind="cancelling", job_id=job.id, novel=job.novel))
-        self._persist(job)
-        return job
+
+    def register_process(self, job_id: str, controller: ProcessController) -> None:
+        with self._lifecycle_lock:
+            job = self.get(job_id)
+            if not job.process_backed:
+                raise ForceStopConflictError("Job is not process-backed.")
+            self._controllers[job_id] = controller
+            if job.force_requested:
+                controller.force_stop()
+
+    def unregister_process(self, job_id: str, controller: ProcessController) -> None:
+        with self._lifecycle_lock:
+            if self._controllers.get(job_id) is controller:
+                self._controllers.pop(job_id, None)
+
+    def force_stop(self, job_id: str, *, grace_period: float = 2.0) -> Job:
+        with self._lifecycle_lock:
+            job = self.get(job_id)
+            if job.status in TERMINAL_STATUSES:
+                if isinstance(job.result, dict) and job.result.get("forced") is True:
+                    return job
+                raise ForceStopConflictError("Job is already finished and cannot be force-stopped.")
+            if not job.process_backed:
+                raise ForceStopConflictError("Only active process-backed jobs support force stop.")
+            if job.force_requested:
+                return job
+
+            status = self._registry.request_force_stop(job)
+            if status == JobStatus.CANCELLED:
+                self._bus.publish(
+                    JobEvent(
+                        kind="cancelled",
+                        job_id=job.id,
+                        novel=job.novel,
+                        payload={"result": job.result},
+                    )
+                )
+                self._runner.discard(job.id)
+            else:
+                self._bus.publish(
+                    JobEvent(
+                        kind="cancelling",
+                        job_id=job.id,
+                        novel=job.novel,
+                        payload={"forced": True},
+                    )
+                )
+                controller = self._controllers.get(job.id)
+                if controller is not None:
+                    try:
+                        controller.force_stop(grace_period=grace_period)
+                    finally:
+                        self._persist(job)
+                    return job
+            self._persist(job)
+            return job
 
     def delete(self, job_id: str) -> None:
         if self._registry.delete(job_id):
@@ -106,10 +171,16 @@ class JobManager:
                     self._store.delete(snapshot["id"])
 
     def shutdown(self, timeout: float = 5.0) -> None:
+        deadline = time.monotonic() + timeout
         for job in self.list_active():
             if job.status in {JobStatus.QUEUED, JobStatus.RUNNING}:
                 self.request_cancel(job.id)
-        self._runner.join_all(timeout=timeout)
+        self._runner.join_all(timeout=max(0.0, deadline - time.monotonic()))
+        for job in self.list_active():
+            if job.process_backed:
+                with suppress(ForceStopConflictError, JobNotFoundError):
+                    self.force_stop(job.id)
+        self._runner.join_all(timeout=2.5)
 
     def _persist(self, job: Job) -> None:
         if self._store is None:
@@ -137,4 +208,4 @@ class JobManager:
             self._store.write(job_to_snapshot(job))
 
 
-__all__ = ["JobManager"]
+__all__ = ["ForceStopConflictError", "JobManager"]

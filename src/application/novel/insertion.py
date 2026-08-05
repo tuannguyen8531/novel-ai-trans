@@ -24,6 +24,10 @@ from src.domain.candidates import ADDRESS_RULE_CANDIDATES_KEY
 from src.domain.language import SUPPORTED_TARGET_LANGUAGES
 from src.services import chapters as chapter_service
 from src.services import insertion as insertion_storage
+from src.services.translation.checkpoints import CheckpointStore
+from src.services.translation.publisher import ChapterPublisher, PublicationError
+from src.services.translation.reports import ReportStore
+from src.services.translation.storage import TranslationStorage
 
 _OPERATION_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 
@@ -203,6 +207,45 @@ def _create_backup(
         raise PersistenceError("Could not create the insert backup.") from error
 
 
+def _recover_pending_publications(
+    request: InsertRequest,
+    config: Any,
+    novel_root: Path,
+    *,
+    progress_root: Path,
+    report_root: Path,
+    transaction_root: Path,
+) -> None:
+    publisher = ChapterPublisher(TranslationStorage(), ReportStore(), CheckpointStore())
+    for target in SUPPORTED_TARGET_LANGUAGES:
+        try:
+            publisher.recover(
+                output_dir=paths.novel_output_dir_from_root(novel_root, target),
+                report_dir=paths.translation_report_path(
+                    config,
+                    request.novel,
+                    1,
+                    target,
+                    report_root=report_root,
+                ).parent,
+                progress_path=paths.translation_progress_path(
+                    config,
+                    request.novel,
+                    target,
+                    progress_root=progress_root,
+                ),
+                transaction_dir=paths.translation_transaction_dir(
+                    request.novel,
+                    target,
+                    transaction_root=transaction_root,
+                ),
+            )
+        except PublicationError as error:
+            raise PersistenceError(
+                f"Could not recover interrupted {target} publication before inserting chapter {request.number}."
+            ) from error
+
+
 def insert_chapter(
     request: InsertRequest,
     *,
@@ -211,7 +254,7 @@ def insert_chapter(
     config: Any | None = None,
     progress_root: Path | None = None,
     report_root: Path | None = None,
-    rejected_root: Path | None = None,
+    transaction_root: Path | None = None,
     backup_root: Path | None = None,
     lock_dir: Path | None = None,
 ) -> InsertResult:
@@ -226,7 +269,7 @@ def insert_chapter(
     active_config = config or app_config.get_config()
     progress_root = progress_root or paths.PROGRESS_DIR
     report_root = report_root or paths.REPORT_DIR
-    rejected_root = rejected_root or paths.REJECTED_DIR
+    transaction_root = transaction_root or paths.TRANSACTION_DIR
     backup_root = backup_root or paths.INSERT_BACKUP_DIR
     translated_root = Path(active_config.translated_dir or paths.DEFAULT_TRANSLATED_ROOT)
     novel_root = require_path(translated_root, request.novel)
@@ -260,24 +303,18 @@ def insert_chapter(
         )
         for target in SUPPORTED_TARGET_LANGUAGES
     ]
-    rejected_groups = [
-        insertion_storage.FileGroup(
-            f"rejected-{target}",
-            paths.translation_rejected_path(
-                active_config,
-                request.novel,
-                request.number,
-                target,
-                rejected_root=rejected_root,
-            ).parent,
-            "json",
-        )
-        for target in SUPPORTED_TARGET_LANGUAGES
-    ]
     source_group = insertion_storage.FileGroup("input", input_dir, "txt")
-    groups = [source_group, *output_groups, *report_groups, *rejected_groups]
+    groups = [source_group, *output_groups, *report_groups]
 
     with novel_lock(request.novel, lock_dir=lock_dir):
+        _recover_pending_publications(
+            request,
+            active_config,
+            novel_root,
+            progress_root=progress_root,
+            report_root=report_root,
+            transaction_root=transaction_root,
+        )
         _emit(
             progress_callback,
             novel=request.novel,
@@ -286,7 +323,7 @@ def insert_chapter(
             message=f"Preparing to insert chapter {request.number}...",
         )
         state_files = _prepare_state_files(request, active_config, progress_root=progress_root)
-        for group in [*report_groups, *rejected_groups]:
+        for group in report_groups:
             for _, report_path in insertion_storage.numbered_files(group, start=request.number):
                 _load_json(report_path, label="translation report")
 
@@ -331,10 +368,8 @@ def insert_chapter(
                 total=5,
                 message="Shifting translation reports...",
             )
-            for group in [*report_groups, *rejected_groups]:
-                shifted = insertion_storage.shift_group(group, request.number)
-                insertion_storage.write_shifted_reports(shifted)
-                shifted_reports += len(shifted)
+            for group in report_groups:
+                shifted_reports += len(insertion_storage.shift_group(group, request.number))
 
             _emit(
                 progress_callback,

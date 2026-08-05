@@ -14,7 +14,7 @@ from src.application.languages import SUPPORTED_TARGET_LANGUAGES, target_languag
 from src.application.progress import ProgressEvent
 from src.application.translation.inspection import scan_input, source_language
 from src.application.translation.models import TranslationRequest
-from src.application.translation.workflow import run_translation
+from src.application.translation.workflow import close_translation_provider, run_translation
 from src.cli import glossary as glossary_cli
 from src.cli.logging import enable_verbose, llm_console
 from src.cli.notifications import notify_translation_failure, notify_translation_result
@@ -22,15 +22,25 @@ from src.utils.display import DIM, GREEN, RED, RESET, YELLOW, check_provider
 from src.utils.progress import ProgressTracker
 
 _shutdown_requested = False
+_hard_stop_requested = False
 _cancel_event = threading.Event()
 _progress_tracker: ProgressTracker | None = None
 
 
 def _signal_handler(signum, frame) -> None:  # noqa: ARG001
-    global _shutdown_requested
-    _shutdown_requested = True
-    _cancel_event.set()
-    print(f"\n{YELLOW}⚠ Shutting down gracefully...{DIM}")
+    global _hard_stop_requested, _shutdown_requested
+    if not _shutdown_requested:
+        _shutdown_requested = True
+        _cancel_event.set()
+        print(
+            f"\n{YELLOW}⚠ Shutting down gracefully... Press Ctrl+C again to stop immediately.{RESET}",
+            flush=True,
+        )
+        return
+
+    _hard_stop_requested = True
+    print(f"\n{YELLOW}⚠ Force stopping now.{RESET}", flush=True)
+    raise SystemExit(130)
 
 
 def _print_progress_callback(event: ProgressEvent) -> None:
@@ -152,8 +162,9 @@ Examples:
 
 
 def main(argv: list[str] | None = None) -> None:
-    global _progress_tracker, _shutdown_requested
+    global _hard_stop_requested, _progress_tracker, _shutdown_requested
     _shutdown_requested = False
+    _hard_stop_requested = False
     _cancel_event.clear()
     resolved_argv = sys.argv[1:] if argv is None else argv
     if resolved_argv[:1] == ["glossary"]:
@@ -198,58 +209,61 @@ def main(argv: list[str] | None = None) -> None:
     print(f"{DIM}📦 Chunking: {config.chunk_size:,} {chunk_unit} · overlap {config.chunk_overlap:,} {chunk_unit}{RESET}")
     print()
 
-    signal.signal(signal.SIGINT, _signal_handler)
-    request = TranslationRequest(
-        novel=novel,
-        source_language=args.lang or "",
-        target_language=args.target,
-        provider=args.provider,
-        enable_review=args.review,
-        enable_summary=args.summary,
-        start_chapter=args.start_chapter,
-        end_chapter=args.end_chapter,
-        force=args.force,
-        resume=args.resume,
-        failed_only=args.failed_only,
-        limit=args.limit,
-        dry_run=args.dry_run,
-    )
-
-    if not args.dry_run and not check_provider(config):
-        notify_translation_failure(novel, "LLM provider check failed.", started_at=started_at)
-        raise SystemExit(1)
-
-    _progress_tracker = ProgressTracker(total, novel)
+    previous_sigint_handler = signal.signal(signal.SIGINT, _signal_handler)
     try:
-        with llm_console():
-            result = run_translation(
-                request,
-                progress_callback=_print_progress_callback,
-                cancel_event=_cancel_event,
-            )
-    except KeyboardInterrupt:
-        if _shutdown_requested:
-            print(f"\n{YELLOW}⚠ Interrupted. Progress saved.{RESET}")
-        raise
-    except SystemExit:
-        raise
-    except Exception as error:
-        notify_translation_failure(
-            novel,
-            str(error) or type(error).__name__,
-            started_at=started_at,
+        request = TranslationRequest(
+            novel=novel,
+            source_language=args.lang or "",
+            target_language=args.target,
+            provider=args.provider,
+            enable_review=args.review,
+            enable_summary=args.summary,
+            start_chapter=args.start_chapter,
+            end_chapter=args.end_chapter,
+            force=args.force,
+            resume=args.resume,
+            failed_only=args.failed_only,
+            limit=args.limit,
+            dry_run=args.dry_run,
         )
-        print(f"{RED}✗ {error}{RESET}")
-        raise SystemExit(1) from error
+
+        if not args.dry_run and not check_provider(config):
+            notify_translation_failure(novel, "LLM provider check failed.", started_at=started_at)
+            raise SystemExit(1)
+
+        _progress_tracker = ProgressTracker(total, novel)
+        try:
+            with llm_console():
+                result = run_translation(
+                    request,
+                    progress_callback=_print_progress_callback,
+                    cancel_event=_cancel_event,
+                )
+        except KeyboardInterrupt:
+            print(f"\n{YELLOW}⚠ Force stopping now.{RESET}")
+            raise SystemExit(130) from None
+        except SystemExit:
+            raise
+        except Exception as error:
+            notify_translation_failure(
+                novel,
+                str(error) or type(error).__name__,
+                started_at=started_at,
+            )
+            print(f"{RED}✗ {error}{RESET}")
+            raise SystemExit(1) from error
+
+        if result.dry_run:
+            print(f"{DIM}📕 {novel}: {len(chapters)} chapters total, {result.total} would be translated{RESET}")
+            print(f"{DIM}   Chapters: {', '.join(str(chapter) for chapter in result.chapters_attempted)}{RESET}")
+        elif result.skipped:
+            print(f"{GREEN}✓ All {len(chapters)} chapters already translated.{RESET}")
+        elif result.cancelled:
+            print(f"\n{YELLOW}⚠ Interrupted. Progress saved.{RESET}")
+
+        notify_translation_result(result, started_at=started_at)
     finally:
         _progress_tracker = None
-
-    if result.dry_run:
-        print(f"{DIM}📕 {novel}: {len(chapters)} chapters total, {result.total} would be translated{RESET}")
-        print(f"{DIM}   Chapters: {', '.join(str(chapter) for chapter in result.chapters_attempted)}{RESET}")
-    elif result.skipped:
-        print(f"{GREEN}✓ All {len(chapters)} chapters already translated.{RESET}")
-    elif result.cancelled:
-        print(f"\n{YELLOW}⚠ Interrupted. Progress saved.{RESET}")
-
-    notify_translation_result(result, started_at=started_at)
+        signal.signal(signal.SIGINT, previous_sigint_handler)
+        if not _hard_stop_requested:
+            close_translation_provider()

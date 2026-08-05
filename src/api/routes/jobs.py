@@ -8,7 +8,8 @@ import json
 from fastapi import APIRouter, HTTPException, Request
 from sse_starlette.sse import EventSourceResponse
 
-from src.api.background.models import Job, JobStatus
+from src.api.background.controllers import ForceStopConflictError
+from src.api.background.models import ACTIVE_STATUSES, TERMINAL_STATUSES, Job
 from src.api.background.registry import JobNotFoundError
 from src.api.dependencies import AuthenticatedPrincipal, JobManagerDependency
 from src.api.schemas import JobErrorModel, JobListResponse, JobModel
@@ -38,6 +39,7 @@ def _serialize_job(job: Job) -> JobModel:
         result=job.result,
         error=error,
         logs=list(job.logs),
+        force_stoppable=job.process_backed and job.status in ACTIVE_STATUSES,
     )
 
 
@@ -86,6 +88,27 @@ def cancel_job(
     return _serialize_job(job)
 
 
+@router.post("/jobs/{job_id}/force-stop", response_model=JobModel)
+def force_stop_job(
+    job_id: str,
+    _: AuthenticatedPrincipal,
+    jobs: JobManagerDependency,
+) -> JobModel:
+    try:
+        job = jobs.force_stop(job_id)
+    except JobNotFoundError as error:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "not_found", "message": f"Job not found: {job_id}"},
+        ) from error
+    except ForceStopConflictError as error:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "force_stop_conflict", "message": str(error)},
+        ) from error
+    return _serialize_job(job)
+
+
 @router.get("/jobs/{job_id}/events")
 async def stream_events(
     job_id: str,
@@ -103,7 +126,7 @@ async def stream_events(
 
     loop = asyncio.get_running_loop()
     subscriber = jobs.event_bus.subscribe(loop)
-    terminal = {JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED}
+    terminal = TERMINAL_STATUSES
 
     async def event_publisher():
         try:
@@ -119,11 +142,13 @@ async def stream_events(
                     {
                         "code": job.error.code,
                         "message": job.error.message,
+                        "details": job.error.details,
                     }
                     if job.error
                     else None
                 ),
                 "logs": list(job.logs),
+                "force_stoppable": job.process_backed and job.status in ACTIVE_STATUSES,
             }
             yield {"event": "snapshot", "data": json.dumps(payload, default=str, ensure_ascii=False)}
             if job.status in terminal:

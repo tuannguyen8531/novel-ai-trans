@@ -15,7 +15,7 @@ from src.application.errors import ApplicationValidationError, ExternalServiceEr
 from src.application.progress import ProgressEvent
 from src.config import SiteConfig
 from src.models import CrawlProgress
-from src.paths import RUNTIME_DIR, RUNTIME_OUTPUT_ROOT
+from src.paths import BROWSER_CACHE_DIR, MANIFEST_DIR
 from src.services.crawling.crawler import NovelCrawler
 from src.services.crawling.execution import ConsecutiveFailureError
 from src.services.crawling.storage import merge_metadata
@@ -179,7 +179,7 @@ def run_crawl(
                 ],
             )
         result = crawler.crawl(
-            RUNTIME_OUTPUT_ROOT,
+            MANIFEST_DIR,
             max_chapters=max_chapters,
             fail_fast=request.fail_fast,
             overwrite=request.overwrite,
@@ -233,7 +233,7 @@ def browser_profile_dir(toc_url: str) -> Path:
     if not hostname:
         raise ValueError(f"Could not determine browser profile domain from URL: {toc_url}")
     safe_hostname = "".join(character if character.isalnum() or character in ".-_" else "_" for character in hostname.lower())
-    return RUNTIME_DIR / "browser-profiles" / safe_hostname
+    return BROWSER_CACHE_DIR / safe_hostname
 
 
 __all__ = [

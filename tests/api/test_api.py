@@ -195,6 +195,81 @@ def test_job_lifecycle_with_deterministic_job(client):
         loop.close()
 
 
+def test_force_stop_endpoint_terminates_process_backed_job_and_is_idempotent(client):
+    manager = client.app.state.app_state.job_manager
+    registered = threading.Event()
+    stopped = threading.Event()
+
+    class Controller:
+        def force_stop(self, *, grace_period: float = 2.0) -> None:
+            del grace_period
+            stopped.set()
+
+    controller = Controller()
+
+    def run(job, emit, cancel_event):
+        manager.register_process(job.id, controller)
+        registered.set()
+        try:
+            assert stopped.wait(timeout=5)
+            raise RuntimeError("terminated")
+        finally:
+            manager.unregister_process(job.id, controller)
+
+    job = manager.submit(
+        kind="translate",
+        novel="force-demo",
+        snapshot=_config.get_config(),
+        loop=None,
+        run=run,
+        process_backed=True,
+    )
+    assert registered.wait(timeout=5)
+    running = client.get(f"/api/jobs/{job.id}")
+    assert running.status_code == 200
+    assert running.json()["force_stoppable"] is True
+
+    response = client.post(f"/api/jobs/{job.id}/force-stop")
+    assert response.status_code == 200, response.text
+    deadline = time.time() + 5
+    body = client.get(f"/api/jobs/{job.id}").json()
+    while body["status"] in {"running", "cancelling"} and time.time() < deadline:
+        time.sleep(0.01)
+        body = client.get(f"/api/jobs/{job.id}").json()
+
+    assert body["status"] == "cancelled"
+    assert body["result"] == {"forced": True}
+    assert body["error"] is None
+    assert body["force_stoppable"] is False
+    repeated = client.post(f"/api/jobs/{job.id}/force-stop")
+    assert repeated.status_code == 200
+    assert repeated.json()["result"] == {"forced": True}
+
+
+def test_force_stop_endpoint_rejects_missing_and_non_process_jobs(client):
+    missing = client.post("/api/jobs/missing/force-stop")
+    assert missing.status_code == 404
+    assert missing.json()["error"]["code"] == "not_found"
+
+    manager = client.app.state.app_state.job_manager
+    started = threading.Event()
+    proceed = threading.Event()
+
+    def run(job, emit, cancel_event):
+        started.set()
+        proceed.wait(timeout=5)
+        return {"ok": True}
+
+    job = manager.submit(kind="crawl", novel="force-demo", snapshot=Config(), loop=None, run=run)
+    try:
+        assert started.wait(timeout=5)
+        conflict = client.post(f"/api/jobs/{job.id}/force-stop")
+        assert conflict.status_code == 409
+        assert conflict.json()["error"]["code"] == "force_stop_conflict"
+    finally:
+        proceed.set()
+
+
 def test_concurrent_job_returns_409(client):
     app_state = client.app.state.app_state
     manager = app_state.job_manager
@@ -351,7 +426,15 @@ def test_jobs_are_persisted_to_disk(client):
     snapshot = json.loads(files[0].read_text(encoding="utf-8"))
     assert snapshot["id"] == job_id
     assert snapshot["kind"] == "translate"
-    assert snapshot["status"] in {"queued", "running", "completed", "failed", "cancelling", "cancelled"}
+    assert snapshot["status"] in {
+        "queued",
+        "running",
+        "completed",
+        "degraded",
+        "failed",
+        "cancelling",
+        "cancelled",
+    }
 
 
 def test_jobs_survive_restart(tmp_path):
@@ -459,6 +542,30 @@ def test_job_progress_log_events_are_not_duplicated():
 
     assert [event.kind for event in events] == ["log"]
     assert events[0].payload["message"] == "Validation warning: missing title"
+
+
+def test_application_terminal_progress_waits_for_runner_terminal_event():
+    from datetime import datetime
+
+    from src.api.background.models import Job, JobStatus
+    from src.api.events import JobEvent, build_progress_emitter
+    from src.application.progress import ProgressEvent
+
+    job = Job(
+        id="job-1",
+        kind="translate",
+        novel="demo",
+        status=JobStatus.RUNNING,
+        created_at=datetime.now(UTC),
+    )
+    events: list[JobEvent] = []
+    callback = build_progress_emitter(job, events.append)
+
+    callback(ProgressEvent(kind="degraded", novel="demo", current=2, total=2))
+
+    assert [event.kind for event in events] == ["progress", "log"]
+    assert events[0].payload == {"current": 2, "total": 2}
+    assert events[1].payload["message"] == "Degraded 2/2"
 
 
 def test_crawl_job_console_hides_skipped_and_started_progress():

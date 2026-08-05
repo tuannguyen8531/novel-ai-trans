@@ -10,25 +10,6 @@ __pycache__/
 .venv
 venv
 
-# Environment config
-.env
-!.env.example
-
-# Runtime data — generated during crawls / translations / packaging
-*.log
-
-# Per-novel artefacts
-translated/
-!translated/.gitkeep
-
-# Global runtime state
-runtime/
-!runtime/.gitkeep
-
-# Local-only configs
-configs/*
-!configs/*.json
-
 # OS
 .DS_Store
 Thumbs.db
@@ -37,12 +18,18 @@ Thumbs.db
 web/dist/
 web/node_modules/
 
-# Generated config drafts (created by the API server)
-runtime/config-drafts/
-
 # Coverage artifacts
 .coverage
 htmlcov/
+
+# Environment variables
+.env
+
+# Translations
+translated/
+
+# Global runtime state
+runtime/
 
 # Outside scripts
 scripts/

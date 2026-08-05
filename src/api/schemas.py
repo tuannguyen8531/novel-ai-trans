@@ -220,6 +220,7 @@ class ChapterPostCheckResponse(BaseModel):
     target: str
     items: list[ChapterPostCheckItemResponse]
     candidate_translation: str | None = None
+    candidate_hash: str | None = None
     partial: bool
     failed_chunk_index: int | None = None
     total_chunks: int | None = None
@@ -231,6 +232,13 @@ class ChapterPostCheckReviewPayload(BaseModel):
 
     key: str = Field(min_length=1)
     ignored: bool
+
+
+class ChapterCandidateAcceptancePayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    candidate_hash: str = Field(min_length=64, max_length=64, pattern=r"^[0-9a-f]{64}$")
+    overwrite: bool = False
 
 
 class InsertChapterPayload(BaseModel):
@@ -393,7 +401,15 @@ class DraftDetail(DraftSummary):
 # ---------------------------------------------------------------------------
 
 
-JobStatus = Literal["queued", "running", "completed", "failed", "cancelling", "cancelled"]
+JobStatus = Literal[
+    "queued",
+    "running",
+    "completed",
+    "degraded",
+    "failed",
+    "cancelling",
+    "cancelled",
+]
 
 
 class JobErrorModel(BaseModel):
@@ -414,6 +430,7 @@ class JobModel(BaseModel):
     result: dict[str, Any] | None
     error: JobErrorModel | None
     logs: list[str]
+    force_stoppable: bool = False
 
 
 class JobListResponse(BaseModel):

@@ -4,9 +4,17 @@ import { useJobsStore } from '@/composables/jobs'
 import JobMonitor from '@/components/JobMonitor.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import { formatDateTime } from '@/datetime'
+import type { JobModel } from '@/api/types'
 
 const jobs = useJobsStore()
 const selectedId = ref<string | null>(null)
+const statusFilter = ref<'all' | JobModel['status']>('all')
+const TERMINAL_STATUSES = new Set<JobModel['status']>([
+  'completed',
+  'degraded',
+  'failed',
+  'cancelled'
+])
 
 onMounted(() => {
   jobs.refresh()
@@ -17,8 +25,8 @@ onUnmounted(() => {
   jobs.stopPolling()
 })
 
-const rows = computed(() => {
-  const list: Array<{ id: string; kind: string; novel: string | null; status: string; created_at: string; progress: Record<string, unknown> }> = []
+const allRows = computed(() => {
+  const list: Array<{ id: string; kind: string; novel: string | null; status: JobModel['status']; created_at: string; progress: Record<string, unknown> }> = []
   for (const job of jobs.activeJobs) {
     list.push({
       id: job.id,
@@ -42,15 +50,29 @@ const rows = computed(() => {
   return list
 })
 
-function statusBadge(status: string): string {
+const rows = computed(() => (
+  statusFilter.value === 'all'
+    ? allRows.value
+    : allRows.value.filter((row) => row.status === statusFilter.value)
+))
+
+function statusBadge(status: JobModel['status']): string {
   if (status === 'completed') return 'ok'
-  if (status === 'failed') return 'danger'
+  if (status === 'degraded' || status === 'failed') return 'danger'
   if (status === 'cancelled' || status === 'cancelling') return 'warn'
   return ''
 }
 
-function progressFor(row: { progress: Record<string, unknown>; status: string }) {
-  if (row.status === 'completed' || row.status === 'failed' || row.status === 'cancelled') {
+function statusLabel(status: JobModel['status']): string {
+  return status.replaceAll('_', ' ')
+}
+
+function isTerminal(status: JobModel['status']): boolean {
+  return TERMINAL_STATUSES.has(status)
+}
+
+function progressFor(row: { progress: Record<string, unknown>; status: JobModel['status'] }) {
+  if (isTerminal(row.status)) {
     return null
   }
   const current = Number(row.progress.current ?? 0)
@@ -100,7 +122,7 @@ async function handleDelete() {
 }
 
 const hasInactiveJobs = computed(() => {
-  return rows.value.some((row) => ['completed', 'failed', 'cancelled'].includes(row.status))
+  return allRows.value.some((row) => isTerminal(row.status))
 })
 
 const showClearDialog = ref(false)
@@ -119,7 +141,7 @@ async function handleClearAll() {
   try {
     await jobs.clear()
     showClearDialog.value = false
-    if (selectedId.value && !rows.value.some((r) => r.id === selectedId.value)) {
+    if (selectedId.value && !allRows.value.some((r) => r.id === selectedId.value)) {
       selectedId.value = null
     }
   } catch (err) {
@@ -135,7 +157,20 @@ async function handleClearAll() {
     <div class="card">
       <div class="row" style="justify-content: space-between; align-items: center;">
         <h2>Jobs</h2>
-        <div class="row gap-2">
+        <div class="row gap-2 job-actions">
+          <label class="status-filter">
+            <span class="muted">Status</span>
+            <select v-model="statusFilter">
+              <option value="all">All</option>
+              <option value="queued">Queued</option>
+              <option value="running">Running</option>
+              <option value="completed">Completed</option>
+              <option value="degraded">Degraded</option>
+              <option value="failed">Failed</option>
+              <option value="cancelling">Cancelling</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </label>
           <button
             v-if="hasInactiveJobs"
             class="secondary"
@@ -163,7 +198,7 @@ async function handleClearAll() {
             <td><code>{{ row.id.slice(0, 8) }}</code></td>
             <td>{{ row.kind }}</td>
             <td>{{ row.novel ?? '—' }}</td>
-            <td><span class="badge" :class="statusBadge(row.status)">{{ row.status }}</span></td>
+            <td><span class="badge" :class="statusBadge(row.status)">{{ statusLabel(row.status) }}</span></td>
             <td class="progress-cell">
               <template v-if="progressFor(row)">
                 <div class="row" style="justify-content: space-between; font-size: 0.8rem;">
@@ -183,7 +218,7 @@ async function handleClearAll() {
               <div class="row gap-2" style="align-items: center;">
                 <button class="secondary" type="button" @click="select(row.id)">Open</button>
                 <button
-                  v-if="['completed', 'failed', 'cancelled'].includes(row.status)"
+                  v-if="isTerminal(row.status)"
                   class="secondary"
                   style="color: var(--danger);"
                   type="button"
@@ -193,7 +228,7 @@ async function handleClearAll() {
             </td>
           </tr>
           <tr v-if="!rows.length">
-            <td colspan="7" class="muted">No jobs yet.</td>
+            <td colspan="7" class="muted">{{ allRows.length ? 'No jobs match this status.' : 'No jobs yet.' }}</td>
           </tr>
         </tbody>
       </table>
@@ -217,7 +252,7 @@ async function handleClearAll() {
     <ConfirmDialog
       :show="showClearDialog"
       title="Delete All Inactive Jobs"
-      :message="`Are you sure you want to delete all completed, failed, and cancelled jobs?\n\nThis permanently removes all their logs and history. This cannot be undone.`"
+      :message="`Are you sure you want to delete all completed, degraded, failed, and cancelled jobs?\n\nThis permanently removes all their logs and history. This cannot be undone.`"
       confirm-label="Delete All"
       :danger="true"
       :loading="clearSaving"
@@ -226,3 +261,26 @@ async function handleClearAll() {
     />
   </section>
 </template>
+
+<style scoped>
+.job-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.status-filter {
+  display: inline-flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.status-filter select {
+  width: auto;
+  min-width: 8rem;
+}
+
+.job-actions button,
+.status-filter select {
+  height: 2.25rem;
+}
+</style>

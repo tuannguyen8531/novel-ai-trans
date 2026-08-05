@@ -125,11 +125,10 @@ class CrawlStorage:
             "fetched_chapters": len(results) - skipped_count,
             "skipped_chapters": skipped_count,
             "failed_chapters": len(errors),
-            "discovered_chapters": [
+            "chapters": [
                 {"index": index, "title": chapter.title, "source_url": chapter.url}
                 for index, chapter in enumerate(chapter_links, start=1)
             ],
-            "chapters": [asdict(result) for result in results],
             "errors": errors,
         }
         self._write_json(self.manifest_path, manifest)

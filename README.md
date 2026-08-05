@@ -141,7 +141,7 @@ Run a workflow command such as `uv run translate --help`, or see the
 | Guide | Contents |
 | --- | --- |
 | [Workflow guide](docs/GUIDE.md) | Crawl, generate, import, translate, glossary, and packaging |
-| [Web GUI](docs/GUI.md) | Build, serve, configure, and operate the browser interface and API |
+| [Web GUI](docs/GUI.md) | Build, serve, configure, and operate the browser interface |
 | [Providers](docs/PROVIDERS.md) | Ollama, Gemini, OpenRouter, fallback, and generation settings |
 | [Architecture](docs/ARCHITECTURE.md) | Module ownership and backend/frontend dependency direction |
 
@@ -149,11 +149,6 @@ Configuration starts from [.env.example](.env.example). Runtime logs, progress,
 jobs, reports, locks, and crawler state are stored under `runtime/`, separately
 from the source code and per-novel data. LLM request, response, and error logs
 are rotated by daily folder under `runtime/logs/`.
-
-Bundled prompt templates and translation-rule fragments live under
-`src/prompts/`. The default language and genre rules are packaged from
-`src/prompts/rules/`; editable novel-specific rules remain in
-`translated/<novel>/rules.md`.
 
 ## Development
 

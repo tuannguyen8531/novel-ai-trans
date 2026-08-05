@@ -22,9 +22,6 @@ Structure:
     }
 }
 
-When TRANSLATED_DIR is unavailable, glossary files fall back to the project
-runtime glossary directory.
-
 Character schema:
 - entities: dict of original_name -> {translated_name, role, pronoun, aliases?}
   role: protagonist | antagonist | supporting | minor
@@ -69,7 +66,6 @@ from src.utils import files as file_utils
 _read_json_locked = file_utils.read_json_locked
 _merge_json_locked = file_utils.merge_json_locked
 
-GLOSSARY_DIR = _paths.GLOSSARY_DIR
 PENDING_REPLACEMENTS_KEY = glossary_domain.PENDING_REPLACEMENTS_KEY
 
 
@@ -81,18 +77,15 @@ def current_target_language() -> str:
 
 
 def translated_novel_root(novel_name: str) -> Path:
-    if config.translated_dir:
-        return _paths.novel_root_dir(config, novel_name)
-    return _paths.resolve_novel_root(Path("translated"), novel_name)
+    return _paths.novel_root_dir(config, novel_name)
 
 
 def _glossary_path(novel_name: str) -> Path:
-    """Get path to glossary file for a novel (directly in config.translated_dir or fallback to GLOSSARY_DIR)."""
+    """Return the active target's glossary path inside the novel root."""
     return _paths.novel_glossary_path(
         config,
         novel_name,
         current_target_language(),
-        fallback_root=GLOSSARY_DIR,
     )
 
 

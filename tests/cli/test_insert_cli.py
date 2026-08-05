@@ -33,7 +33,8 @@ def test_insert_cli_creates_empty_chapter_and_shifts_later_data(tmp_path: Path, 
             paths,
             PROGRESS_DIR=runtime_root / "progress",
             REPORT_DIR=runtime_root / "reports",
-            INSERT_BACKUP_DIR=runtime_root / "insert-backups",
+            TRANSACTION_DIR=runtime_root / "transactions",
+            INSERT_BACKUP_DIR=runtime_root / "backups" / "insertions",
             LOCK_DIR=runtime_root / "locks",
         ),
     ):
@@ -45,7 +46,7 @@ def test_insert_cli_creates_empty_chapter_and_shifts_later_data(tmp_path: Path, 
     assert not (novel_root / "output" / "chapter_002.txt").exists()
     assert (novel_root / "output" / "chapter_003.txt").read_text(encoding="utf-8") == "translated two"
     assert json.loads(progress_path.read_text(encoding="utf-8")) == {"completed": [1, 3], "failed": []}
-    assert len(list((runtime_root / "insert-backups" / "demo").glob("*/manifest.json"))) == 1
+    assert len(list((runtime_root / "backups" / "insertions" / "demo").glob("*/manifest.json"))) == 1
     assert "Inserted empty chapter 2 into demo" in capsys.readouterr().out
 
 

@@ -13,6 +13,14 @@ def test_default_roots_are_anchored_at_project_root() -> None:
     assert project_root / "translated" == paths.DEFAULT_TRANSLATED_ROOT
     assert project_root / "runtime" == paths.RUNTIME_DIR
     assert project_root / "runtime" / "logs" == paths.LOG_DIR
+    assert project_root / "runtime" / "jobs" == paths.JOB_DIR
+    assert project_root / "runtime" / "manifests" == paths.MANIFEST_DIR
+    assert project_root / "runtime" / "transactions" == paths.TRANSACTION_DIR
+    assert project_root / "runtime" / "backups" / "insertions" == paths.INSERT_BACKUP_DIR
+    assert project_root / "runtime" / "backups" / "replacements" == paths.GLOSSARY_BACKUP_DIR
+    assert project_root / "runtime" / "cache" / "browser" == paths.BROWSER_CACHE_DIR
+    assert project_root / "runtime" / "cache" / "discovery" == paths.DISCOVERY_CACHE_DIR
+    assert project_root / "runtime" / "drafts" == paths.DRAFT_DIR
     assert project_root / "configs" == paths.CONFIG_DIR
 
 
@@ -41,7 +49,11 @@ def test_translation_progress_path_for_target(tmp_path: Path) -> None:
     assert paths.translation_progress_path_for_target("demo", "en", progress_root=tmp_path) == (tmp_path / "en" / "demo.json")
 
 
-def test_novel_glossary_path_uses_target_and_fallback_root(tmp_path: Path) -> None:
+def test_translation_transaction_directory_uses_target_and_novel(tmp_path: Path) -> None:
+    assert paths.translation_transaction_dir("demo", "vi", transaction_root=tmp_path) == tmp_path / "vi" / "demo"
+
+
+def test_novel_glossary_path_uses_novel_root_and_target(tmp_path: Path) -> None:
     class Config:
         translated_dir = str(tmp_path / "translated")
         target_language = "vi"
@@ -49,9 +61,6 @@ def test_novel_glossary_path_uses_target_and_fallback_root(tmp_path: Path) -> No
     config = Config()
     assert paths.novel_glossary_path(config, "demo") == tmp_path / "translated" / "demo" / "glossary.json"
     assert paths.novel_glossary_path(config, "demo", "en") == tmp_path / "translated" / "demo" / "glossary.en.json"
-
-    config.translated_dir = ""
-    assert paths.novel_glossary_path(config, "demo", fallback_root=tmp_path) == tmp_path / "demo.json"
 
 
 @pytest.mark.parametrize("novel_name", ["../secret", "..\\secret", "/absolute", "C:\\absolute", ".hidden"])

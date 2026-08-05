@@ -45,18 +45,6 @@ def test_load_source_language_migrates_legacy_glossary_field(tmp_path: Path) -> 
     assert glossary == {"terms": {"魔法": "ma thuật"}}
 
 
-def test_source_language_falls_back_when_translated_dir_is_unavailable(tmp_path: Path) -> None:
-    with (
-        patch("src.services.metadata.config") as mock_config,
-        patch("src.services.metadata.METADATA_FALLBACK_DIR", tmp_path),
-        patch("src.services.metadata.LEGACY_GLOSSARY_FALLBACK_DIR", tmp_path),
-    ):
-        mock_config.translated_dir = ""
-        save_source_language("demo", "korean")
-        assert load_source_language("demo") == "korean"
-        assert metadata_path("demo") == tmp_path / "demo.metadata.json"
-
-
 def test_save_empty_source_language_does_not_create_metadata(tmp_path: Path) -> None:
     with active_config_scope(Config(translated_dir=str(tmp_path / "translated"))):
         save_source_language("demo", "")

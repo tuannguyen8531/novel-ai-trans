@@ -5,6 +5,7 @@ an EPUB), translate chapters, manage the glossary, and package the result as
 EPUB.
 
 For provider setup, see [PROVIDERS.md](PROVIDERS.md).
+Use `uv run <command> --help` for the complete, current option list.
 
 ## Table of contents
 
@@ -53,8 +54,8 @@ import an existing EPUB.
 
 ### Crawl a configured site
 
-Each novel owns its crawl config at `translated/<name>/config.json`. Pass only
-the novel slug; paths and files outside that location are not accepted:
+Each novel owns its crawl config at `translated/<name>/config.json`. Common
+variants are:
 
 ```bash
 uv run crawl my-novel
@@ -114,7 +115,7 @@ uv run crawl my-novel --fail-fast
 
 The two browser modes are intentionally separate and cannot be combined. `-b`
 uses a temporary profile on every run. `-h` reuses state per source domain under
-`runtime/crawler/browser-profiles/`. If a site fingerprints headless and headed
+`runtime/cache/browser/`. If a site fingerprints headless and headed
 sessions differently, use `-h` for the entire crawl instead of expecting its
 profile to unblock later `-b` runs.
 
@@ -136,13 +137,8 @@ settings to `translated/<name>/config.json` and the extracted novel information
 to `translated/<name>/metadata.json`. The config keeps only `source_url` so the
 crawler can distinguish the main novel page from its `toc_url` TOC page.
 
-```bash
-uv run generate <url> --provider gemini        # override provider for generation
-uv run generate <url> --browser                # fetch with headless browser
-uv run generate <url> --no-cache               # always re-fetch pages
-uv run generate <url> --ignore-sample          # ignore bundled templates
-uv run generate <url> --translated-output ./translated  # override novel root
-```
+Use `generate --help` for provider, browser, cache, template, and output-root
+options.
 
 ### Validate a config
 
@@ -159,41 +155,18 @@ selectors before a long crawl.
 
 ### Import an EPUB
 
-Skip crawling entirely by importing an EPUB:
+Skip crawling by importing an EPUB. Use `--keep-existing` when importing into
+an existing novel:
 
 ```bash
 uv run import ./book.epub --name my-novel
-```
-
-Keep existing source chapters in the destination:
-
-```bash
 uv run import ./book.epub --name my-novel --keep-existing
-```
-
-Override the per-novel root:
-
-```bash
 uv run import ./book.epub --name my-novel --translated-output ./translated
 ```
 
-The importer splits the EPUB into `chapter_NNN.txt` files, extracts illustrations
-into `translated/<novel>/illustrations/`, and creates `metadata.json` with the
-title, author, and original summary when available. Summary extraction prefers
-the OPF `dc:description` value, including escaped HTML descriptions, then falls
-back to clearly labelled front matter such as `Synopsis`, `Summary`,
-`Description`, `简介`, `あらすじ`, or `줄거리`. A combined
-`Author / Tags / Status / Synopsis` information page is also supported. A
-summary/front-matter page is not imported as a chapter, and ordinary chapter
-text is never treated as the novel summary.
-
-Re-importing the same novel preserves existing metadata. An extracted EPUB
-summary fills `summary` only when that field is missing or blank; it never
-overwrites an existing or manually edited summary. Import results report
-retained chapters, unchanged chapters skipped without rewriting, chapters
-overwritten because their content changed, newly added chapters, and chapters
-removed when `--keep-existing` is not enabled. Changed overwritten chapters are
-listed by number and title.
+The importer creates chapter files, extracts illustrations, and reads available
+title, author, and summary metadata. Re-import preserves manually edited
+metadata and, with `--keep-existing`, existing source chapters.
 
 ### Insert a missing chapter
 
@@ -206,7 +179,7 @@ uv run insert my-novel 301
 The command moves that chapter and every later source chapter, translation,
 report, progress entry, and chapter-indexed glossary record forward by one. It
 then creates an empty `chapter_301.txt` and stores a recovery backup under
-`runtime/insert-backups/`. Fill the new source chapter in the GUI or edit the
+`runtime/backups/insertions/`. Fill the new source chapter in the GUI or edit the
 file, then translate that chapter explicitly. If a translation already exists,
 use `--force`:
 
@@ -247,90 +220,21 @@ Required: `name`, `toc_url`, `chapter_link_selector`,
 
 ## 2. Translate
 
-Translate all untranslated chapters:
-
-```bash
-uv run translate my-novel
-```
-
-Select source language and provider:
+Translate all untranslated chapters with `uv run translate my-novel`. Common
+selections are:
 
 ```bash
 uv run translate my-novel --lang chinese --provider gemini
-```
-
-Translate a chapter range:
-
-```bash
 uv run translate my-novel --start 20 --to 30
-```
-
-Re-translate existing chapters:
-
-```bash
 uv run translate my-novel --start 20 --to 20 --force
-```
-
-Resume from progress state (skip chapters marked completed):
-
-```bash
 uv run translate my-novel --resume
-```
-
-Retry only chapters marked failed:
-
-```bash
 uv run translate my-novel --failed-only
-```
-
-Translate at most N chapters:
-
-```bash
 uv run translate my-novel --limit 10
-```
-
-Translate to English:
-
-```bash
 uv run translate my-novel --target en
-```
-
-List chapters that would be translated without translating:
-
-```bash
 uv run translate my-novel --dry-run
-```
-
-Enable token-heavier review and summary steps:
-
-```bash
 uv run translate my-novel --review --summary
-```
-
-Print full AI request/response to console:
-
-```bash
 uv run translate my-novel --verbose
 ```
-
-### Translate flags
-
-| Flag | Description | Default |
-| --- | --- | --- |
-| `novel` | Novel name (directory in `translated/{novel}/input`) | required |
-| `-l, --lang` | Source language: `chinese`, `korean`, `japanese` | auto-detect |
-| `-t, --target` | Target language: `vi`, `en` | `TARGET_LANGUAGE` env |
-| `-p, --provider` | LLM provider: `ollama`, `gemini`, `openrouter` | `LLM_PROVIDER` env |
-| `-r, --review` | Enable review step | `ENABLE_REVIEW` env |
-| `-s, --summary` | Enable chapter summary generation | `ENABLE_SUMMARY` env |
-| `-v, --verbose` | Print full AI request/response | off |
-| `-n, --start` | Start from this chapter number | `0` |
-| `-e, --to` | Stop at this chapter number (`0` = all) | `0` |
-| `-f, --force` | Re-translate already translated chapters | off |
-| `-d, --dry-run` | List chapters without translating | off |
-| `-R, --resume` | Skip chapters marked completed | off |
-| `-F, --failed-only` | Translate only chapters marked failed | off |
-| `-m, --limit` | Translate at most N chapters (`0` = no limit) | `0` |
 
 ### Translation rules
 
@@ -357,63 +261,12 @@ translation job, so changes take effect on the next job.
 
 ### Localize title and novel summary
 
-Novel-level metadata localization is currently available through the GUI and
-HTTP API, not through the `translate` CLI. It translates the source `title`
-and/or `summary` stored in `translated/<novel>/metadata.json` into `vi` or `en`.
-A missing source field is skipped, so a novel with only an original summary can
-still localize that summary.
+Novel title and summary localization is available through the GUI. Open the
+novel's **Metadata** dialog and use **Save and translate**, or enable metadata
+translation when starting a chapter translation job.
 
-In the GUI, either:
-
-- Open the novel's **Metadata** dialog and click **Save and translate
-  Vietnamese** or **Save and translate English**; or
-- Start a translation job with **Translate title and novel summary** enabled.
-  This option is on by default and runs before chapter translation.
-
-The localizer filters glossary terms and character memory against only the
-title/summary fields being sent. Character aliases are considered, and a
-relationship is included only when both characters are active in the source
-metadata. This keeps the prompt concise while preserving the same terminology
-and character names used by translated chapters.
-
-Each localized field stores provenance in `localization_meta`:
-
-- `origin: "ai"` plus `source_hash` identifies an AI value. It is skipped when
-  the normalized source is unchanged and automatically refreshed when the
-  source changes.
-- `origin: "manual"` identifies a value saved through the Metadata editor. It
-  is never overwritten by AI.
-- A pre-existing localized value with no provenance is conservatively treated
-  like a manual value and skipped.
-- **Regenerate AI metadata** ignores a matching source hash for AI values, but
-  still preserves manual values. To replace a manual value with AI, clear that
-  localized field and use **Save and translate...**.
-
-The persisted schema is:
-
-```json
-{
-  "title": "Original title",
-  "summary": "Original synopsis",
-  "localized": {
-    "vi": {"title": "Tên truyện", "summary": "Tóm tắt"},
-    "en": {"title": "English title", "summary": "English synopsis"}
-  },
-  "localization_meta": {
-    "vi": {
-      "summary": {
-        "origin": "ai",
-        "source_hash": "sha256...",
-        "updated_at": "2026-07-14T00:00:00+00:00"
-      }
-    }
-  }
-}
-```
-
-The old `translated: {"vi": "...", "en": "..."}` title-only structure is
-not read and is rejected by the metadata API. Migrate it to
-`localized.<language>.title` before relying on the GUI or packager.
+AI-generated values refresh when their source changes. Manually edited values
+are preserved; clear one first if it should be regenerated by AI.
 
 ### Progress and reports
 
@@ -427,10 +280,14 @@ or `runtime/progress/en/{novel}.json` (English):
 }
 ```
 
-Per-chapter quality reports are written to
-`runtime/reports/{novel}/chapter_NNN.json` (or `runtime/reports/en/...`) with
-output char count, elapsed seconds, new terms/characters count, and chunk-level
-quality reports.
+Chapter output files are authoritative for completion. The `failed` list is
+retry and diagnostic state, so a failed retranslation can leave a chapter in
+both lists until it succeeds.
+
+Per-chapter quality state is written to
+`runtime/reports/{target}/{novel}/chapter_NNN.json`. One report contains current
+output warning codes, ignore decisions, and the latest complete rejected
+candidate when one exists.
 
 Token-free checks run on every translated chunk, even when `--review` is off.
 Blocking issues such as empty output, substantial untranslated source text,
@@ -438,22 +295,26 @@ severe truncation, code fences, or missing illustration markers are retried up
 to `MAX_RETRIES`; if they still fail, the chapter is recorded as failed instead
 of saving a known-bad translation.
 
-The final rejected post-check candidate is kept as a single JSON file under
-`runtime/rejected/{target}/{novel}/chapter_NNN.json`. It contains the candidate
-text, issue codes, feedback, retry count, and failed chunk position so the GUI
-can review the failure without exposing it as a completed translation.
+The chapter reader can accept a complete rejected candidate. Acceptance checks
+that the browser still refers to the current candidate, asks before replacing
+existing output, and clears the chapter's failed state. Partial or empty
+candidates cannot be accepted.
 
-Use `Ctrl+C` to stop gracefully. The chapter currently being processed finishes
-and is saved, then the run stops before starting the next chapter. Resume later
-with `--resume`.
+Chapter output and its report are published through a recoverable journal under
+`runtime/transactions/{target}/{novel}/`. The next translation run recovers an
+interrupted publication before selecting chapters.
+
+Press `Ctrl+C` once for graceful cancellation. If the provider remains blocked,
+press it again to exit immediately with code `130`. The cancelled chapter is not
+published; resume later with `--resume`.
 
 ## 3. Glossary
 
-Each novel has its own glossary at `runtime/glossary/{novel}.json` (copied from
-`translated/{novel}/glossary.json` if present). It stores:
+Each novel has its own target-aware glossary at
+`translated/{novel}/glossary.json` or `translated/{novel}/glossary.{target}.json`.
+It stores:
 
 - `terms` — source term → target translation
-- `source_language` — detected source language
 - `entities` — characters with translated name, role, pronoun, aliases
 - `edges` — character relationships `[from, to, type, since_chapter]`
 - `address_rules` — per-pair direct address/reference timelines
@@ -507,27 +368,12 @@ chapters, keeping names consistent across the whole book.
 
 ## 4. Package
 
-Build an EPUB:
+Build an EPUB, optionally overriding its metadata or output directory:
 
 ```bash
 uv run pack my-novel --target vi
-```
-
-Override metadata or output directory:
-
-```bash
 uv run pack my-novel --title "My Novel" --author "Author Name" --output ./dist
 ```
-
-### Pack flags
-
-| Flag | Description | Default |
-| --- | --- | --- |
-| `novel` | Novel name (directory in `translated/`) | required |
-| `-t, --title` | Custom book title | localized target title, source title, or novel name |
-| `-a, --author` | Author name in metadata | `AI Translator` or `metadata.json` |
-| `--target` | Target language to package | `TARGET_LANGUAGE` env |
-| `-o, --output` | Custom output directory | per-novel root |
 
 ### Metadata and cover
 
@@ -571,6 +417,10 @@ All three values are required. Set `TELEGRAM_ENABLED=false` to disable notificat
 `TELEGRAM_PARSE_MODE` defaults to `HTML` and messages are escaped accordingly.
 Set `TELEGRAM_SILENT=true` to send without a notification sound.
 
+A GUI/API translation with failed chapters uses terminal status `degraded`,
+but its Telegram notification remains `Status: Failed` and includes the chapter
+counts.
+
 ## Troubleshooting
 
 | Problem | Solution |
@@ -581,7 +431,7 @@ Set `TELEGRAM_SILENT=true` to send without a notification sound.
 | Crawler gets 0 chapters | Run `validate` to check selectors; try `--browser` for JS sites |
 | Content extracted too short | Check `chapter_content_selector` and `remove_selectors` with `validate` |
 | Gemini blocked content | Provider sets `BLOCK_NONE` for all safety categories by default |
-| Translation stops mid-run | Use `Ctrl+C` for graceful stop, then `--resume` to continue |
+| Translation stops mid-run | Press `Ctrl+C` once for graceful cancellation, twice for immediate exit `130`, then use `--resume` |
 | Names inconsistent across chapters | Check `glossary list` and `glossary audit`; add fixed terms with `glossary add` |
 | Imported novel has no summary | The EPUB has no `dc:description` or clearly labelled synopsis page; enter the source summary in the GUI Metadata dialog |
 | Old translated title is ignored | Move `translated.<language>` to `localized.<language>.title` in `metadata.json` |

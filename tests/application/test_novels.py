@@ -2,11 +2,20 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
-from src.application.errors import ApplicationValidationError, ResourceNotFoundError
-from src.application.novel import artifacts, catalog, chapters, metadata, rules
+from src.application.errors import (
+    ApplicationValidationError,
+    PersistenceError,
+    ResourceConflictError,
+    ResourceNotFoundError,
+)
+from src.application.novel import artifacts, candidates, catalog, chapters, metadata, rules
+from src.application.translation.chapter import normalize_translation
+from src.services.translation.publisher import ChapterPublisher, PublicationError
+from src.services.translation.reports import content_hash
 
 
 def _write_chapter(directory: Path, number: int, content: str = "content") -> None:
@@ -14,7 +23,7 @@ def _write_chapter(directory: Path, number: int, content: str = "content") -> No
     (directory / f"chapter_{number:03d}.txt").write_text(content, encoding="utf-8")
 
 
-def test_summary_combines_progress_with_stored_outputs(tmp_path: Path) -> None:
+def test_summary_uses_stored_outputs_as_completion_truth(tmp_path: Path) -> None:
     root = tmp_path / "translated"
     novel_root = root / "demo"
     _write_chapter(novel_root / "input", 1)
@@ -31,11 +40,11 @@ def test_summary_combines_progress_with_stored_outputs(tmp_path: Path) -> None:
 
     vietnamese = next(progress for progress in summary.targets if progress.target == "vi")
     assert vietnamese.total == 2
-    assert vietnamese.completed == 2
+    assert vietnamese.completed == 1
     assert vietnamese.failed == 1
     assert vietnamese.warnings == 0
     assert catalog.progress(root, "demo", "vi", progress_root=progress_root) == {
-        "completed": [2],
+        "completed": [1],
         "failed": [3],
         "warnings": [],
     }
@@ -47,17 +56,12 @@ def test_summary_and_progress_include_source_warning_chapters(tmp_path: Path) ->
     _write_chapter(novel_root / "input", 1)
     _write_chapter(novel_root / "output", 1)
     report_root = tmp_path / "reports"
-    report_dir = report_root / "demo"
+    report_dir = report_root / "vi" / "demo"
     report_dir.mkdir(parents=True)
     (report_dir / "chapter_001.json").write_text(
         json.dumps(
             {
-                "chapter": 1,
-                "chunks": [
-                    {
-                        "post_check_issues": ["contains_source_language_chars"],
-                    }
-                ],
+                "manual_post_check_issues": ["contains_source_language_chars"],
             }
         ),
         encoding="utf-8",
@@ -172,13 +176,12 @@ def test_write_translation_refreshes_manual_source_warning(tmp_path: Path) -> No
     novel_root = root / "demo"
     _write_chapter(novel_root / "input", 7, "囡囡来了")
     report_root = tmp_path / "reports"
-    report_path = report_root / "demo" / "chapter_007.json"
+    report_path = report_root / "vi" / "demo" / "chapter_007.json"
     report_path.parent.mkdir(parents=True)
     report_path.write_text(
         json.dumps(
             {
-                "chapter": 7,
-                "chunks": [{"post_check_issues": ["contains_source_language_chars"]}],
+                "manual_post_check_issues": ["contains_source_language_chars"],
             }
         ),
         encoding="utf-8",
@@ -326,9 +329,218 @@ def test_post_check_review_lists_non_source_issues(tmp_path: Path) -> None:
     review = chapters.chapter_post_check(root, "demo", 7, "vi", report_root=report_root)
 
     code_fence = next(item for item in review.items if item.code == "contains_code_fence")
-    assert code_fence.severity == "error"
+    assert code_fence.severity == "warning"
     assert code_fence.reviewable is True
     assert code_fence.origin == "output"
+    assert catalog.progress(root, "demo", "vi", report_root=report_root)["warnings"] == [7]
+
+    review = chapters.review_post_check_item(
+        root,
+        "demo",
+        7,
+        "vi",
+        code_fence.key,
+        ignored=True,
+        report_root=report_root,
+    )
+
+    assert next(item for item in review.items if item.code == "contains_code_fence").ignored is True
+    assert catalog.progress(root, "demo", "vi", report_root=report_root)["warnings"] == []
+
+
+def test_accept_candidate_publishes_normalized_output_and_clears_failure(tmp_path: Path) -> None:
+    root = tmp_path / "translated"
+    novel_root = root / "demo"
+    _write_chapter(novel_root / "input", 7, "张三走进房间。")
+    candidate = "Chapter 7\n\nChapter 7\n\nTrương Tam 张三走 bước vào căn phòng."
+    glossary_path = novel_root / "glossary.json"
+    glossary_text = json.dumps(
+        {"terms": {"房间": "căn phòng"}, "chapter_summaries": {"6": "Existing summary"}},
+        ensure_ascii=False,
+    )
+    glossary_path.write_text(glossary_text, encoding="utf-8")
+    report_root = tmp_path / "reports"
+    report_path = report_root / "vi" / "demo" / "chapter_007.json"
+    report_path.parent.mkdir(parents=True)
+    report_path.write_text(
+        json.dumps(
+            {
+                "manual_post_check_issues": [],
+                "ignored_post_checks": [{"code": "old", "content_hash": content_hash("old output")}],
+                "issues": [{"key": "rejected:0:test", "code": "test", "severity": "error", "message": "Rejected."}],
+                "candidate_translation": candidate,
+                "partial": False,
+                "failed_chunk_index": 0,
+                "total_chunks": 1,
+            }
+        ),
+        encoding="utf-8",
+    )
+    progress_root = tmp_path / "progress"
+    progress_root.mkdir()
+    (progress_root / "demo.json").write_text(
+        json.dumps({"completed": [], "failed": [7]}),
+        encoding="utf-8",
+    )
+
+    review = candidates.accept_candidate(
+        root,
+        "demo",
+        7,
+        "vi",
+        content_hash(candidate),
+        progress_root=progress_root,
+        report_root=report_root,
+        transaction_root=tmp_path / "transactions",
+        lock_dir=tmp_path / "locks",
+    )
+
+    normalized = normalize_translation(candidate)
+    assert (novel_root / "output" / "chapter_007.txt").read_text(encoding="utf-8") == normalized
+    saved_report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert "contains_source_language_chars" in saved_report["manual_post_check_issues"]
+    assert saved_report["ignored_post_checks"] == []
+    assert saved_report["candidate_translation"] is None
+    assert saved_report["issues"] == []
+    assert json.loads((progress_root / "demo.json").read_text(encoding="utf-8")) == {
+        "completed": [7],
+        "failed": [],
+    }
+    assert review.candidate_translation is None
+    assert review.candidate_hash is None
+    assert all(item.origin == "output" and item.severity == "warning" for item in review.items)
+    assert glossary_path.read_text(encoding="utf-8") == glossary_text
+
+
+def test_accept_candidate_requires_hash_and_overwrite_confirmation(tmp_path: Path) -> None:
+    root = tmp_path / "translated"
+    novel_root = root / "demo"
+    _write_chapter(novel_root / "input", 7, "Source chapter content.")
+    _write_chapter(novel_root / "output", 7, "Existing translation.")
+    candidate = "Replacement candidate translation."
+    report_root = tmp_path / "reports"
+    report_path = report_root / "vi" / "demo" / "chapter_007.json"
+    report_path.parent.mkdir(parents=True)
+    report_path.write_text(
+        json.dumps({"candidate_translation": candidate, "partial": False}),
+        encoding="utf-8",
+    )
+
+    def accept(expected_hash: str, *, overwrite: bool = False) -> chapters.PostCheckReview:
+        return candidates.accept_candidate(
+            root,
+            "demo",
+            7,
+            "vi",
+            expected_hash,
+            overwrite=overwrite,
+            progress_root=tmp_path / "progress",
+            report_root=report_root,
+            transaction_root=tmp_path / "transactions",
+            lock_dir=tmp_path / "locks",
+        )
+
+    with pytest.raises(ResourceConflictError, match="changed"):
+        accept("0" * 64, overwrite=True)
+    with pytest.raises(ResourceConflictError, match="overwrite") as conflict:
+        accept(content_hash(candidate))
+
+    assert conflict.value.details == {"requires_overwrite_confirmation": True}
+    assert (novel_root / "output" / "chapter_007.txt").read_text(encoding="utf-8") == "Existing translation."
+    accept(content_hash(candidate), overwrite=True)
+    assert (novel_root / "output" / "chapter_007.txt").read_text(encoding="utf-8") == candidate
+
+
+@pytest.mark.parametrize(
+    ("candidate", "partial", "message"),
+    [
+        ("   ", False, "empty"),
+        ("Complete-looking but partial", True, "partial"),
+    ],
+)
+def test_accept_candidate_rejects_empty_or_partial_content(
+    tmp_path: Path,
+    candidate: str,
+    partial: bool,
+    message: str,
+) -> None:
+    root = tmp_path / "translated"
+    novel_root = root / "demo"
+    _write_chapter(novel_root / "input", 7, "Source chapter content.")
+    report_root = tmp_path / "reports"
+    report_path = report_root / "vi" / "demo" / "chapter_007.json"
+    report_path.parent.mkdir(parents=True)
+    report_path.write_text(
+        json.dumps({"candidate_translation": candidate, "partial": partial}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ApplicationValidationError, match=message):
+        candidates.accept_candidate(
+            root,
+            "demo",
+            7,
+            "vi",
+            content_hash(candidate),
+            progress_root=tmp_path / "progress",
+            report_root=report_root,
+            transaction_root=tmp_path / "transactions",
+            lock_dir=tmp_path / "locks",
+        )
+
+    assert not (novel_root / "output" / "chapter_007.txt").exists()
+    assert json.loads(report_path.read_text(encoding="utf-8"))["candidate_translation"] == candidate
+
+
+def test_accept_candidate_preserves_candidate_when_publication_fails(tmp_path: Path) -> None:
+    root = tmp_path / "translated"
+    novel_root = root / "demo"
+    _write_chapter(novel_root / "input", 7, "Source chapter content.")
+    candidate = "Candidate translation content."
+    report_root = tmp_path / "reports"
+    report_path = report_root / "vi" / "demo" / "chapter_007.json"
+    report_path.parent.mkdir(parents=True)
+    report_path.write_text(
+        json.dumps({"candidate_translation": candidate, "partial": False}),
+        encoding="utf-8",
+    )
+
+    with (
+        patch.object(ChapterPublisher, "publish", side_effect=PublicationError("failed")),
+        pytest.raises(PersistenceError, match="safely publish"),
+    ):
+        candidates.accept_candidate(
+            root,
+            "demo",
+            7,
+            "vi",
+            content_hash(candidate),
+            progress_root=tmp_path / "progress",
+            report_root=report_root,
+            transaction_root=tmp_path / "transactions",
+            lock_dir=tmp_path / "locks",
+        )
+
+    assert not (novel_root / "output" / "chapter_007.txt").exists()
+    assert json.loads(report_path.read_text(encoding="utf-8"))["candidate_translation"] == candidate
+
+
+def test_accept_candidate_requires_existing_report(tmp_path: Path) -> None:
+    root = tmp_path / "translated"
+    _write_chapter(root / "demo" / "input", 7, "Source chapter content.")
+
+    with pytest.raises(ResourceNotFoundError, match="report no longer exists"):
+        candidates.accept_candidate(
+            root,
+            "demo",
+            7,
+            "vi",
+            "0" * 64,
+            progress_root=tmp_path / "progress",
+            report_root=tmp_path / "reports",
+            transaction_root=tmp_path / "transactions",
+            lock_dir=tmp_path / "locks",
+        )
 
 
 def test_write_chapter_preserves_legacy_unpadded_translation_filename(tmp_path: Path) -> None:

@@ -6,14 +6,18 @@ import time
 from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from pathlib import Path
 from threading import Event
 from typing import Protocol, cast
 
 from src import paths
 from src.application import config as app_config
-from src.application.errors import ApplicationValidationError, OperationCancelledError, ResourceNotFoundError
+from src.application.errors import (
+    ApplicationValidationError,
+    OperationCancelledError,
+    PersistenceError,
+    ResourceNotFoundError,
+)
 from src.application.genres import normalize_genres
 from src.application.locks import novel_lock
 from src.application.progress import ProgressEvent
@@ -28,16 +32,25 @@ from src.graph.builder import TranslationQualityError, build_graph
 from src.models import TranslationProfile
 from src.prompts import prompt_cache_scope
 from src.services.genres import genre_cache_scope
+from src.services.llm.cancellation import GenerationCancelledError, cancellation_scope
+from src.services.llm.factory import reset_llm
 from src.services.logger import log_error
 from src.services.metadata import load_translation_profile
 from src.services.rules import rule_snapshot_scope
 from src.services.translation.checkpoints import CheckpointStore
+from src.services.translation.publisher import ChapterPublication, ChapterPublisher, PublicationError
 from src.services.translation.reports import ReportStore
 from src.services.translation.storage import TranslationStorage
 
 
 class GraphFactory(Protocol):
     def __call__(self) -> TranslationGraph: ...
+
+
+def close_translation_provider() -> None:
+    """Best-effort cleanup for an adapter ending its translation lifecycle."""
+    with suppress(Exception):
+        reset_llm()
 
 
 @dataclass
@@ -52,7 +65,8 @@ class TranslationWorkflow:
     profile_loader: Callable[[str], TranslationProfile]
     progress_root: Path | None = None
     report_root: Path | None = None
-    rejected_root: Path | None = None
+    transaction_root: Path | None = None
+    publisher: ChapterPublisher | None = None
     clock: Callable[[], float] = time.time
 
     def run(
@@ -73,6 +87,18 @@ class TranslationWorkflow:
             target,
             progress_root=self.progress_root,
         )
+        report_dir = paths.translation_report_path(
+            self.config,
+            novel,
+            1,
+            target,
+            report_root=self.report_root,
+        ).parent
+        transaction_dir = paths.translation_transaction_dir(
+            novel,
+            target,
+            transaction_root=self.transaction_root,
+        )
 
         if not self.storage.directory_exists(input_dir):
             raise ResourceNotFoundError(f"Input directory not found: {input_dir}")
@@ -80,33 +106,16 @@ class TranslationWorkflow:
         if not chapters:
             raise ResourceNotFoundError(f"No chapter files found in {input_dir}")
 
-        checkpoint = self.checkpoints.load(checkpoint_path)
-        selected = select_chapters(
-            request,
-            chapters,
-            self.storage.translated_numbers(output_dir),
-            checkpoint,
-        )
-
-        if not selected:
-            self._emit(
-                progress_callback,
-                ProgressEvent(kind="skipped", novel=novel, total=len(chapters), current=len(chapters)),
-            )
-            return TranslationResult(
-                novel=novel,
-                total=0,
-                success=0,
-                failed=0,
-                skipped=True,
-                dry_run=False,
-                chapters_attempted=[],
-                failures=[],
-                started_at=started_at,
-                finished_at=self.clock(),
-            )
-
         if request.dry_run:
+            translated_numbers = self.storage.translated_numbers(output_dir)
+            checkpoint = self.checkpoints.load(checkpoint_path)
+            checkpoint["completed"] = sorted(translated_numbers)
+            selected = select_chapters(
+                request,
+                chapters,
+                translated_numbers,
+                checkpoint,
+            )
             self._emit(
                 progress_callback,
                 ProgressEvent(
@@ -125,6 +134,45 @@ class TranslationWorkflow:
                 skipped=True,
                 dry_run=True,
                 chapters_attempted=list(selected),
+                failures=[],
+                started_at=started_at,
+                finished_at=self.clock(),
+            )
+
+        publisher = self.publisher or ChapterPublisher(self.storage, self.reports, self.checkpoints)
+        try:
+            publisher.recover(
+                output_dir=output_dir,
+                report_dir=report_dir,
+                progress_path=checkpoint_path,
+                transaction_dir=transaction_dir,
+            )
+        except PublicationError as error:
+            raise PersistenceError(f"Could not recover interrupted publication for {novel!r}.") from error
+
+        translated_numbers = self.storage.translated_numbers(output_dir)
+        checkpoint = self.checkpoints.load(checkpoint_path)
+        checkpoint["completed"] = sorted(translated_numbers)
+        selected = select_chapters(
+            request,
+            chapters,
+            translated_numbers,
+            checkpoint,
+        )
+
+        if not selected:
+            self._emit(
+                progress_callback,
+                ProgressEvent(kind="skipped", novel=novel, total=len(chapters), current=len(chapters)),
+            )
+            return TranslationResult(
+                novel=novel,
+                total=0,
+                success=0,
+                failed=0,
+                skipped=True,
+                dry_run=False,
+                chapters_attempted=[],
                 failures=[],
                 started_at=started_at,
                 finished_at=self.clock(),
@@ -184,6 +232,42 @@ class TranslationWorkflow:
             )
 
             try:
+                report_path = paths.translation_report_path(
+                    self.config,
+                    novel,
+                    chapter_number,
+                    target,
+                    report_root=self.report_root,
+                )
+                published_checkpoint: dict[str, list[int]] | None = None
+
+                def publish(
+                    content: str,
+                    issue_codes: list[str],
+                    *,
+                    active_report_path: Path = report_path,
+                    active_chapter: int = chapter_number,
+                    active_checkpoint: dict[str, list[int]] = checkpoint,
+                ) -> None:
+                    nonlocal published_checkpoint
+                    report = self.reports.prepare_output_check(
+                        active_report_path,
+                        issue_codes=issue_codes,
+                        content=content,
+                    )
+                    published_checkpoint = publisher.publish(
+                        ChapterPublication(
+                            chapter=active_chapter,
+                            output_dir=output_dir,
+                            report_path=active_report_path,
+                            progress_path=checkpoint_path,
+                            transaction_dir=transaction_dir,
+                            content=content,
+                            report=report,
+                            checkpoint=active_checkpoint,
+                        )
+                    )
+
                 ok, output_chars, elapsed, new_terms = translate_chapter(
                     chapter_path,
                     novel=novel,
@@ -192,52 +276,37 @@ class TranslationWorkflow:
                     target_language=target,
                     genres=genres,
                     graph=graph,
-                    output_dir=output_dir,
-                    report_path=paths.translation_report_path(
-                        self.config,
-                        novel,
-                        chapter_number,
-                        target,
-                        report_root=self.report_root,
-                    ),
                     storage=self.storage,
-                    reports=self.reports,
+                    publish=publish,
                     clock=self.clock,
+                    cancel_event=cancel_event,
                 )
-            except OperationCancelledError:
+            except OperationCancelledError, GenerationCancelledError:
                 cancelled = True
                 break
             except TranslationQualityError as error:
-                rejected_path = paths.translation_rejected_path(
+                report_path = paths.translation_report_path(
                     self.config,
                     novel,
                     chapter_number,
                     target,
-                    rejected_root=self.rejected_root,
+                    report_root=self.report_root,
                 )
-                self.reports.save(
-                    rejected_path,
-                    {
-                        "chapter": chapter_number,
-                        "target_language": target,
-                        "created_at": datetime.fromtimestamp(self.clock(), UTC).isoformat(),
-                        "issues": [
-                            {
-                                "key": f"rejected:{index}:{code}",
-                                "code": code,
-                                "severity": "error",
-                                "message": error.feedback,
-                            }
-                            for index, code in enumerate(error.issue_codes)
-                        ],
-                        "feedback": error.feedback,
-                        "retry_count": error.retry_count,
-                        "failed_chunk_index": error.failed_chunk_index,
-                        "total_chunks": error.total_chunks,
-                        "partial": error.failed_chunk_index < error.total_chunks - 1,
-                        "candidate_translation": error.candidate_translation,
-                        "previous_output_exists": chapter_number in self.storage.translated_numbers(output_dir),
-                    },
+                self.reports.save_rejection(
+                    report_path,
+                    issues=[
+                        {
+                            "key": f"rejected:{index}:{code}",
+                            "code": code,
+                            "severity": "error",
+                            "message": error.feedback,
+                        }
+                        for index, code in enumerate(error.issue_codes)
+                    ],
+                    candidate_translation=error.candidate_translation,
+                    partial=error.failed_chunk_index < error.total_chunks - 1,
+                    failed_chunk_index=error.failed_chunk_index,
+                    total_chunks=error.total_chunks,
                 )
                 self._record_failure(
                     checkpoint,
@@ -255,6 +324,14 @@ class TranslationWorkflow:
                     cancelled = True
                     break
                 continue
+            except PublicationError as error:
+                log_error(
+                    f"Publication failed for chapter {chapter_number}",
+                    error,
+                    chapter=chapter_number,
+                    novel=novel,
+                )
+                raise PersistenceError(f"Could not safely publish chapter {chapter_number}; recovery is required.") from error
             except Exception as error:  # noqa: BLE001 - record and continue
                 self._record_failure(
                     checkpoint,
@@ -275,22 +352,14 @@ class TranslationWorkflow:
 
             attempted.append(chapter_number)
             if ok:
+                if published_checkpoint is None:
+                    raise PersistenceError(f"Chapter {chapter_number} completed without publication state.")
+                checkpoint = published_checkpoint
                 success_count += 1
-                self.reports.delete(
-                    paths.translation_rejected_path(
-                        self.config,
-                        novel,
-                        chapter_number,
-                        target,
-                        rejected_root=self.rejected_root,
-                    )
-                )
-                checkpoint.setdefault("completed", []).append(chapter_number)
-                checkpoint["failed"] = [chapter for chapter in checkpoint.get("failed", []) if chapter != chapter_number]
             else:
                 failures.append(chapter_number)
                 checkpoint.setdefault("failed", []).append(chapter_number)
-            self.checkpoints.save(checkpoint_path, checkpoint)
+                self.checkpoints.save(checkpoint_path, checkpoint)
 
             post_count = success_count + len(failures)
             output_size, output_unit = self._output_size(output_dir, chapter_number, output_chars, ok)
@@ -320,7 +389,7 @@ class TranslationWorkflow:
         self._emit(
             progress_callback,
             ProgressEvent(
-                kind=("completed" if not cancelled and not failures else ("cancelled" if cancelled else "completed_with_errors")),
+                kind=("completed" if not cancelled and not failures else ("cancelled" if cancelled else "degraded")),
                 novel=novel,
                 current=len(attempted),
                 total=total,
@@ -419,12 +488,15 @@ def run_translation(
     *,
     progress_callback: Callable[[ProgressEvent], None] | None = None,
     cancel_event: Event | None = None,
+    progress_root: Path | None = None,
     report_root: Path | None = None,
-    rejected_root: Path | None = None,
+    transaction_root: Path | None = None,
+    lock_dir: Path | None = None,
 ) -> TranslationResult:
     """Construct default collaborators and run one locked translation batch."""
     with (
-        novel_lock(request.novel),
+        novel_lock(request.novel, lock_dir=lock_dir),
+        cancellation_scope(cancel_event),
         genre_cache_scope(),
         rule_snapshot_scope(),
         prompt_cache_scope(),
@@ -436,8 +508,9 @@ def run_translation(
             reports=ReportStore(),
             graph_factory=cast(GraphFactory, build_graph),
             profile_loader=load_translation_profile,
+            progress_root=progress_root,
             report_root=report_root,
-            rejected_root=rejected_root,
+            transaction_root=transaction_root,
         )
         return workflow.run(
             request,

@@ -16,6 +16,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException
 
+from src import paths
 from src.api.auth import is_remote_mode, require_secret_key_configured
 from src.api.background.manager import JobManager
 from src.api.background.registry import JobConflictError
@@ -57,12 +58,12 @@ def create_app(
     from src.api.routes import register_routes
 
     base = Path(__file__).resolve().parent.parent.parent
-    _ = base / "runtime"
-    jobs_dir = jobs_dir or base / "runtime" / "jobs"
+    jobs_dir = jobs_dir or paths.JOB_DIR
+    runtime_root = jobs_dir.parent
     from src.api.services.jobs import JobStore
     from src.services.insertion import recover_prepared_backups
 
-    recovered_inserts = recover_prepared_backups(jobs_dir.parent / "insert-backups")
+    recovered_inserts = recover_prepared_backups(runtime_root / "backups" / "insertions")
     if recovered_inserts:
         _logger.warning("Recovered %d interrupted insert operation(s)", len(recovered_inserts))
 
@@ -79,8 +80,8 @@ def create_app(
         job_manager=JobManager(store=job_store),
         history_root=history_root or base / "translated",
         dist_dir=dist_dir or base / "web" / "dist",
-        drafts_dir=drafts_dir or base / "runtime" / "config-drafts",
-        config_drafts_dir=drafts_dir or base / "runtime" / "config-drafts",
+        drafts_dir=drafts_dir or runtime_root / "drafts",
+        config_drafts_dir=drafts_dir or runtime_root / "drafts",
         jobs_dir=jobs_dir,
         shutdown_event=asyncio.Event(),
         max_upload_bytes=max_upload_bytes,

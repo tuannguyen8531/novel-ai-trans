@@ -13,6 +13,7 @@ from src.api.dependencies import AuthenticatedPrincipal, JobManagerDependency, g
 from src.api.events import build_progress_emitter
 from src.api.schemas import (
     ArtifactInfoResponse,
+    ChapterCandidateAcceptancePayload,
     ChapterContentPayload,
     ChapterContentResponse,
     ChapterPostCheckResponse,
@@ -33,7 +34,7 @@ from src.api.schemas import (
 from src.application import config as app_config
 from src.application.errors import ApplicationValidationError, PersistenceError
 from src.application.genres import genre_catalog
-from src.application.novel import artifacts, catalog, chapters, covers, identity, metadata, rules
+from src.application.novel import artifacts, candidates, catalog, chapters, covers, identity, metadata, rules
 from src.application.novel.insertion import InsertRequest, insert_chapter
 from src.application.novel.localization import localize_metadata
 
@@ -156,8 +157,8 @@ async def insert_novel_chapter(
             cancel_event=cancel_event,
             progress_root=runtime_root / "progress",
             report_root=runtime_root / "reports",
-            rejected_root=runtime_root / "rejected",
-            backup_root=runtime_root / "insert-backups",
+            transaction_root=runtime_root / "transactions",
+            backup_root=runtime_root / "backups" / "insertions",
             lock_dir=runtime_root / "locks",
         )
         return asdict(result)
@@ -277,7 +278,6 @@ def get_chapter_post_check(
         number,
         target or config.target_language,
         report_root=runtime_root / "reports",
-        rejected_root=runtime_root / "rejected",
     )
     return ChapterPostCheckResponse(**asdict(review))
 
@@ -303,7 +303,34 @@ def review_chapter_post_check(
         payload.key,
         ignored=payload.ignored,
         report_root=runtime_root / "reports",
-        rejected_root=runtime_root / "rejected",
+    )
+    return ChapterPostCheckResponse(**asdict(review))
+
+
+@router.post(
+    "/novels/{name}/chapters/{number}/post-check/accept",
+    response_model=ChapterPostCheckResponse,
+)
+def accept_chapter_candidate(
+    name: str,
+    number: int,
+    payload: ChapterCandidateAcceptancePayload,
+    _: AuthenticatedPrincipal,
+    target: Annotated[Literal["vi", "en"] | None, Query()] = None,
+) -> ChapterPostCheckResponse:
+    config = app_config.get_config()
+    runtime_root = get_state().jobs_dir.parent
+    review = candidates.accept_candidate(
+        identity.resolve_root(config.translated_dir),
+        name,
+        number,
+        target or config.target_language,
+        payload.candidate_hash,
+        overwrite=payload.overwrite,
+        progress_root=runtime_root / "progress",
+        report_root=runtime_root / "reports",
+        transaction_root=runtime_root / "transactions",
+        lock_dir=runtime_root / "locks",
     )
     return ChapterPostCheckResponse(**asdict(review))
 

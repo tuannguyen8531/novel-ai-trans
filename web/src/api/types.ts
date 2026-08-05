@@ -136,6 +136,7 @@ export interface ChapterPostCheck {
   target: string
   items: ChapterPostCheckItem[]
   candidate_translation: string | null
+  candidate_hash: string | null
   partial: boolean
   failed_chunk_index: number | null
   total_chunks: number | null
@@ -152,7 +153,7 @@ export interface JobModel {
   id: string
   kind: string
   novel: string | null
-  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelling' | 'cancelled'
+  status: 'queued' | 'running' | 'completed' | 'degraded' | 'failed' | 'cancelling' | 'cancelled'
   created_at: string
   started_at: string | null
   finished_at: string | null
@@ -160,6 +161,7 @@ export interface JobModel {
   result: Record<string, unknown> | null
   error: JobError | null
   logs: string[]
+  force_stoppable: boolean
 }
 
 export interface JobListResponse {

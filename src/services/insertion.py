@@ -206,13 +206,6 @@ def shift_group(group: FileGroup, number: int) -> list[tuple[int, Path]]:
     return shifted
 
 
-def write_shifted_reports(shifted: list[tuple[int, Path]]) -> None:
-    for chapter, path in shifted:
-        data = load_json(path)
-        data["chapter"] = chapter
-        files.write_json_atomic(path, data)
-
-
 def write_state_files(state_files: list[StateFile]) -> None:
     for state_file in state_files:
         files.write_json_atomic(state_file.path, state_file.updated)
@@ -235,6 +228,5 @@ __all__ = [
     "restore",
     "shift_group",
     "update_backup_status",
-    "write_shifted_reports",
     "write_state_files",
 ]

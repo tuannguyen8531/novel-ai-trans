@@ -5,17 +5,27 @@ from __future__ import annotations
 import time
 from collections.abc import Callable, Mapping
 from pathlib import Path
+from threading import Event
 from typing import Any, Protocol
 
+from src.application.errors import OperationCancelledError
+from src.domain.quality import post_check_translation
 from src.models.state import TranslationState, initial_state
 from src.services.chapters import deduplicate_leading_headings
-from src.services.translation.reports import ReportStore
 from src.services.translation.storage import TranslationStorage
 from src.utils.text import normalize_paragraph_spacing
 
 
 class TranslationGraph(Protocol):
     def invoke(self, state: TranslationState) -> Mapping[str, Any]: ...
+
+
+PublishChapter = Callable[[str, list[str]], None]
+
+
+def normalize_translation(content: str) -> str:
+    """Normalize text exactly as chapter publication expects."""
+    return deduplicate_leading_headings(normalize_paragraph_spacing(content))
 
 
 def translate_chapter(
@@ -26,12 +36,11 @@ def translate_chapter(
     source_language: str,
     target_language: str,
     graph: TranslationGraph,
-    output_dir: Path,
-    report_path: Path,
     storage: TranslationStorage,
-    reports: ReportStore,
+    publish: PublishChapter,
     genres: list[str] | None = None,
     clock: Callable[[], float] = time.time,
+    cancel_event: Event | None = None,
 ) -> tuple[bool, int, float, int]:
     """Translate a chapter and return success, output size, duration, and new terms."""
     source_text = deduplicate_leading_headings(storage.read(input_path))
@@ -52,24 +61,14 @@ def translate_chapter(
     elapsed = clock() - started_at
 
     final_text = result.get("final_translation", "")
-    normalized_text = deduplicate_leading_headings(normalize_paragraph_spacing(str(final_text)))
+    normalized_text = normalize_translation(str(final_text))
     new_terms = result.get("new_terms", {})
-    new_characters = result.get("new_characters", {})
-    quality_reports = result.get("quality_reports", [])
+    glossary_value = result.get("glossary", {})
+    glossary = dict(glossary_value) if isinstance(glossary_value, Mapping) else {}
     new_terms_count = len(new_terms) if isinstance(new_terms, Mapping) else 0
-    entities = new_characters.get("entities", {}) if isinstance(new_characters, Mapping) else {}
+    issue_codes = [issue.code for issue in post_check_translation(source_text, normalized_text, glossary)]
 
-    storage.write(output_dir, chapter, normalized_text)
-    reports.save(
-        report_path,
-        {
-            "chapter": chapter,
-            "target_language": target_language,
-            "output_chars": len(normalized_text),
-            "elapsed_seconds": round(elapsed, 3),
-            "new_terms_count": new_terms_count,
-            "new_characters_count": len(entities) if isinstance(entities, Mapping) else 0,
-            "chunks": quality_reports,
-        },
-    )
+    if cancel_event is not None and cancel_event.is_set():
+        raise OperationCancelledError("Translation cancelled before publication.")
+    publish(normalized_text, issue_codes)
     return True, len(normalized_text), elapsed, new_terms_count

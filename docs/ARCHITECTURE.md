@@ -41,6 +41,13 @@ resolve use-case inputs and coordinate those collaborators. Operational LLM
 request, response, and error logs live under `runtime/logs/`; their writer and
 daily retention policy remain owned by `services/logger.py`.
 
+Operational state is grouped under `runtime/`; durable source, glossary,
+metadata, and translated output stay under `translated/<novel>/`. Recoverable
+chapter publication uses a journal under
+`runtime/transactions/<target>/<novel>/` and stages output and reports beside
+their destinations. Published output remains the authority for rebuilding
+translation progress.
+
 ## Prompt assets and translation rules
 
 All bundled text sent to an LLM lives under `src/prompts/` so it is anchored to
@@ -107,6 +114,35 @@ composables -> API client -> REST / SSE
 The runner owns worker threads and configuration context, streaming owns SSE
 fan-out, the filesystem `JobStore` owns persistence, and the manager only
 coordinates those collaborators.
+
+API translation runs in a spawned child process while its job thread remains in
+the parent:
+
+```text
+JobRunner thread (parent)
+  ├─ Job state, persistence, SSE, notification, terminal status
+  ├─ reliable queue <── ready / progress / result / serialized error
+  └─ bounded log queue <── presentation logs (lossy under pressure)
+                 │
+                 └─ spawned translation process
+                      └─ metadata localization + translation workflow
+```
+
+The serialized payload carries the request, per-job `Config`, and runtime roots.
+The child owns translation and the novel lock; the parent owns job state, SSE,
+notifications, and persistence. Progress and results use a reliable queue while
+presentation logs use a bounded lossy queue.
+
+`JobManager` keeps process controllers in memory and coordinates cancellation,
+force stop, and runner completion under one lifecycle lock. A forced job ends
+as `cancelled` even if the child returns late; no PID or process handle is
+persisted. Providers use context-local cooperative cancellation, and chapter
+publication checks cancellation before committing output.
+
+CLI translation maps the first `SIGINT` to cooperative cancellation and the
+second to immediate exit code `130`. Background callbacks may return a typed
+`JobOutcome` when their successful terminal state is not `completed`;
+translation uses it for `degraded` batches.
 
 ## Cohesive modules
 

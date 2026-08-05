@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import { useJobsStore } from '@/composables/jobs'
 import type { JobModel } from '@/api/types'
 
@@ -10,6 +11,8 @@ const jobs = useJobsStore()
 const error = ref<string | null>(null)
 const consoleLog = ref<HTMLElement | null>(null)
 const cancellingRequest = ref(false)
+const forceStoppingRequest = ref(false)
+const showForceStopDialog = ref(false)
 
 const jobId = computed(() => props.jobId ?? props.job?.id ?? null)
 const followId = computed(() => props.live ? jobId.value : null)
@@ -54,10 +57,16 @@ const progress = computed(() => {
 const statusBadge = computed(() => {
   const status = localJob.value?.status
   if (status === 'completed') return 'ok'
-  if (status === 'failed') return 'danger'
+  if (status === 'degraded' || status === 'failed') return 'danger'
   if (status === 'cancelled' || status === 'cancelling') return 'warn'
   return ''
 })
+
+const statusLabel = computed(() => localJob.value?.status.replaceAll('_', ' ') ?? '')
+const canForceStop = computed(() => (
+  localJob.value?.force_stoppable === true
+  && ['running', 'cancelling'].includes(localJob.value.status)
+))
 
 async function cancel() {
   if (!jobId.value || cancellingRequest.value) return
@@ -69,6 +78,20 @@ async function cancel() {
     error.value = (err as Error).message
   } finally {
     cancellingRequest.value = false
+  }
+}
+
+async function forceStop() {
+  if (!jobId.value || forceStoppingRequest.value) return
+  forceStoppingRequest.value = true
+  error.value = null
+  try {
+    await jobs.forceStop(jobId.value)
+    showForceStopDialog.value = false
+  } catch (err) {
+    error.value = (err as Error).message
+  } finally {
+    forceStoppingRequest.value = false
   }
 }
 </script>
@@ -83,7 +106,7 @@ async function cancel() {
           <strong>{{ localJob.kind }}</strong>
           <span class="muted"> · {{ localJob.novel ?? '—' }}</span>
         </div>
-        <span class="badge" :class="statusBadge">{{ localJob.status }}</span>
+        <span class="badge" :class="statusBadge">{{ statusLabel }}</span>
       </div>
       <div v-if="progress && progress.total > 0" style="margin-top: 0.5rem;">
         <div class="row" style="justify-content: space-between;">
@@ -107,6 +130,13 @@ async function cancel() {
         >
           {{ cancellingRequest || localJob.status === 'cancelling' ? 'Cancelling…' : 'Cancel' }}
         </button>
+        <button
+          v-if="canForceStop"
+          class="danger"
+          type="button"
+          :disabled="forceStoppingRequest"
+          @click="showForceStopDialog = true"
+        >{{ forceStoppingRequest ? 'Stopping…' : 'Force stop' }}</button>
       </div>
       <details v-if="localJob.result" style="margin-top: 0.5rem;">
         <summary class="muted">Result</summary>
@@ -121,6 +151,16 @@ async function cancel() {
         <pre ref="consoleLog" class="job-log-content job-console-content">{{ localJob.logs.join('\n') }}</pre>
       </details>
     </div>
+    <ConfirmDialog
+      :show="showForceStopDialog"
+      title="Force Stop Translation"
+      :message="`Stop this translation immediately?\n\nChanges already saved will be kept. Incomplete chapter output will not be saved.`"
+      confirm-label="Force stop"
+      :danger="true"
+      :loading="forceStoppingRequest"
+      @confirm="forceStop"
+      @cancel="showForceStopDialog = false"
+    />
   </div>
 </template>
 

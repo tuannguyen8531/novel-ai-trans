@@ -14,6 +14,7 @@ from starlette.testclient import TestClient
 from src.api.factory import create_app
 from src.application import config as _config
 from src.config import Config
+from src.services.translation.reports import content_hash
 
 
 @pytest.fixture()
@@ -71,7 +72,7 @@ def test_progress_reflects_on_disk_output_when_progress_file_missing(client):
     assert targets["en"]["completed"] == 0
 
 
-def test_progress_unions_progress_file_with_on_disk_output(client):
+def test_progress_uses_on_disk_output_as_completion_truth(client):
     test_client, translated = client
     novel = translated / "demo"
     input_dir = novel / "input"
@@ -80,7 +81,7 @@ def test_progress_unions_progress_file_with_on_disk_output(client):
     output_dir = novel / "output"
     for i in range(1, 3):
         _write_chapter(output_dir, i)
-    # Progress.json says chapters 3-5 are completed but only 1-2 are on disk.
+    # Legacy progress says chapters 3-5 are completed but only 1-2 are on disk.
     (novel / "progress.json").write_text(
         json.dumps({"completed": [3, 4, 5], "failed": []}),
         encoding="utf-8",
@@ -90,8 +91,7 @@ def test_progress_unions_progress_file_with_on_disk_output(client):
     assert response.status_code == 200
     body = response.json()
     targets = {t["target"]: t for t in body[0]["targets"]}
-    # Union of on-disk and progress file: {1, 2, 3, 4, 5}
-    assert targets["vi"]["completed"] == 5
+    assert targets["vi"]["completed"] == 2
 
 
 def test_failed_count_only_from_progress_file(client):
@@ -138,13 +138,12 @@ def test_source_warning_count_and_chapters_are_exposed(client):
     novel = translated / "demo"
     _write_chapter(novel / "input", 1)
     _write_chapter(novel / "output", 1)
-    reports_dir = translated.parent / "reports" / "demo"
+    reports_dir = translated.parent / "reports" / "vi" / "demo"
     reports_dir.mkdir(parents=True)
     (reports_dir / "chapter_001.json").write_text(
         json.dumps(
             {
-                "chapter": 1,
-                "chunks": [{"post_check_issues": ["contains_source_language_chars"]}],
+                "manual_post_check_issues": ["contains_source_language_chars"],
             }
         ),
         encoding="utf-8",
@@ -244,17 +243,17 @@ def test_chapter_post_check_reviews_each_fragment_individually(client):
     assert test_client.get("/api/novels/demo/translation-progress?target=vi").json()["warnings"] == []
 
 
-def test_chapter_post_check_includes_rejected_candidate_without_output(client):
+def test_chapter_post_check_includes_candidate_without_output(client):
     test_client, translated = client
     novel = translated / "demo"
     _write_chapter(novel / "input", 1)
-    rejected_path = translated.parent / "rejected" / "vi" / "demo" / "chapter_001.json"
-    rejected_path.parent.mkdir(parents=True)
-    rejected_path.write_text(
+    report_path = translated.parent / "reports" / "vi" / "demo" / "chapter_001.json"
+    report_path.parent.mkdir(parents=True)
+    report_path.write_text(
         json.dumps(
             {
-                "chapter": 1,
-                "target_language": "vi",
+                "manual_post_check_issues": [],
+                "ignored_post_checks": [],
                 "issues": [
                     {
                         "key": "rejected:0:translation_empty",
@@ -267,7 +266,6 @@ def test_chapter_post_check_includes_rejected_candidate_without_output(client):
                 "partial": True,
                 "failed_chunk_index": 0,
                 "total_chunks": 2,
-                "previous_output_exists": False,
             }
         ),
         encoding="utf-8",
@@ -281,5 +279,66 @@ def test_chapter_post_check_includes_rejected_candidate_without_output(client):
     assert body["items"][0]["severity"] == "error"
     assert body["items"][0]["reviewable"] is False
     assert body["candidate_translation"] == ""
+    assert body["candidate_hash"] == content_hash("")
     assert body["partial"] is True
     assert body["previous_output_exists"] is False
+
+
+def test_accept_complete_candidate_publishes_output_and_clears_failure(client):
+    test_client, translated = client
+    novel = translated / "demo"
+    _write_chapter(novel / "input", 1)
+    candidate = "A complete candidate translation for chapter one."
+    runtime_root = translated.parent
+    report_path = runtime_root / "reports" / "vi" / "demo" / "chapter_001.json"
+    report_path.parent.mkdir(parents=True)
+    report_path.write_text(
+        json.dumps({"candidate_translation": candidate, "partial": False}),
+        encoding="utf-8",
+    )
+    progress_path = runtime_root / "progress" / "demo.json"
+    progress_path.parent.mkdir(parents=True)
+    progress_path.write_text(json.dumps({"completed": [], "failed": [1]}), encoding="utf-8")
+
+    review_response = test_client.get("/api/novels/demo/chapters/1/post-check?target=vi")
+    candidate_fingerprint = review_response.json()["candidate_hash"]
+    response = test_client.post(
+        "/api/novels/demo/chapters/1/post-check/accept?target=vi",
+        json={"candidate_hash": candidate_fingerprint, "overwrite": False},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["candidate_translation"] is None
+    assert response.json()["candidate_hash"] is None
+    assert response.json()["previous_output_exists"] is True
+    assert (novel / "output" / "chapter_001.txt").read_text(encoding="utf-8") == candidate
+    assert json.loads(progress_path.read_text(encoding="utf-8")) == {"completed": [1], "failed": []}
+
+
+def test_accept_candidate_api_rejects_stale_hash_and_unconfirmed_overwrite(client):
+    test_client, translated = client
+    novel = translated / "demo"
+    _write_chapter(novel / "input", 1)
+    _write_chapter(novel / "output", 1)
+    candidate = "Replacement candidate translation."
+    report_path = translated.parent / "reports" / "vi" / "demo" / "chapter_001.json"
+    report_path.parent.mkdir(parents=True)
+    report_path.write_text(
+        json.dumps({"candidate_translation": candidate, "partial": False}),
+        encoding="utf-8",
+    )
+
+    stale = test_client.post(
+        "/api/novels/demo/chapters/1/post-check/accept?target=vi",
+        json={"candidate_hash": "0" * 64, "overwrite": True},
+    )
+    unconfirmed = test_client.post(
+        "/api/novels/demo/chapters/1/post-check/accept?target=vi",
+        json={"candidate_hash": content_hash(candidate), "overwrite": False},
+    )
+
+    assert stale.status_code == 409
+    assert stale.json()["error"]["code"] == "conflict"
+    assert unconfirmed.status_code == 409
+    assert unconfirmed.json()["error"]["details"] == {"requires_overwrite_confirmation": True}
+    assert (novel / "output" / "chapter_001.txt").read_text(encoding="utf-8") == "chapter 1"

@@ -22,9 +22,8 @@ class TranslationStorage:
     def read(self, path: Path) -> str:
         return path.read_text(encoding="utf-8")
 
-    def write(self, directory: Path, chapter: int, content: str) -> None:
-        directory.mkdir(parents=True, exist_ok=True)
-        chapters.chapter_path(directory, chapter).write_text(content, encoding="utf-8")
+    def path(self, directory: Path, chapter: int) -> Path:
+        return chapters.chapter_path(directory, chapter)
 
     def read_translation(self, directory: Path, chapter: int) -> str:
         return chapters.chapter_path(directory, chapter).read_text(encoding="utf-8")
