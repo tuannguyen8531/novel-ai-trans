@@ -41,40 +41,12 @@ resolve use-case inputs and coordinate those collaborators. Operational LLM
 request, response, and error logs live under `runtime/logs/`; their writer and
 daily retention policy remain owned by `services/logger.py`.
 
-Runtime state uses one canonical layout:
-
-```text
-runtime/
-├── backups/
-│   ├── insertions/
-│   └── replacements/
-├── cache/
-│   ├── browser/
-│   └── discovery/
-├── drafts/
-├── jobs/
-├── locks/
-├── logs/
-├── manifests/
-├── progress/
-├── reports/
-└── transactions/
-    ├── en/
-    └── vi/
-```
-
-Crawler manifests belong to `manifests/`; browser profiles and fetched pages
-are disposable cache. Translation warnings deliberately depend on `reports/`
-and may disappear when runtime state is cleaned. Glossaries and translated
-chapter output are durable novel data and therefore stay under
-`translated/<novel>/`.
-
-Recoverable chapter-publication journals use
-`transactions/<target>/<novel>/<transaction-id>.json`. Output and report stage
-files remain beside their destinations so each final replacement is atomic on
-its own filesystem. Each transaction writes its journal once; recovery infers
-the commit state from content hashes. Progress has no staged copy because its
-completed set is reconstructed from published output and saved atomically.
+Operational state is grouped under `runtime/`; durable source, glossary,
+metadata, and translated output stay under `translated/<novel>/`. Recoverable
+chapter publication uses a journal under
+`runtime/transactions/<target>/<novel>/` and stages output and reports beside
+their destinations. Published output remains the authority for rebuilding
+translation progress.
 
 ## Prompt assets and translation rules
 
@@ -143,10 +115,8 @@ The runner owns worker threads and configuration context, streaming owns SSE
 fan-out, the filesystem `JobStore` owns persistence, and the manager only
 coordinates those collaborators.
 
-API translation is the process-backed exception inside that thread runner. Its
-callback creates the worker defined in `src/api/translation/worker.py` with an
-explicit `multiprocessing` `spawn` context and bridges the child synchronously
-from the job thread:
+API translation runs in a spawned child process while its job thread remains in
+the parent:
 
 ```text
 JobRunner thread (parent)
@@ -158,45 +128,21 @@ JobRunner thread (parent)
                       └─ metadata localization + translation workflow
 ```
 
-The payload contains only serializable request data, the per-job `Config`
-snapshot, job identity, and runtime roots. The child enters its own config
-scope and owns the novel lock while it reads or writes translation state. The
-parent mirrors the job's cooperative cancellation event into a process-safe
-event; it never passes the FastAPI route closure, live `Job`, SSE bus, or
-notification client across the process boundary. An abnormal child exit is
-reported as `worker_exit`, while an application exception retains its code and
-serializable details in the job snapshot.
+The serialized payload carries the request, per-job `Config`, and runtime roots.
+The child owns translation and the novel lock; the parent owns job state, SSE,
+notifications, and persistence. Progress and results use a reliable queue while
+presentation logs use a bounded lossy queue.
 
-`JobManager` keeps process controllers in memory only and serializes normal
-cancel, force stop, controller registration, and runner completion under one
-lifecycle lock. `POST /api/jobs/{id}/force-stop` marks the job as forced before
-terminating the child, waits up to two seconds, and escalates to `kill()` when
-needed. That marker makes a late child result non-authoritative: the runner
-must finish as `cancelled` with `{"forced": true}`. Queued process jobs are
-cancelled without spawning, repeated force requests are idempotent, and no PID
-or process handle is persisted. Shutdown first requests cooperative cancel,
-then force-stops process workers that exceed the bounded wait.
+`JobManager` keeps process controllers in memory and coordinates cancellation,
+force stop, and runner completion under one lifecycle lock. A forced job ends
+as `cancelled` even if the child returns late; no PID or process handle is
+persisted. Providers use context-local cooperative cancellation, and chapter
+publication checks cancellation before committing output.
 
-LLM cancellation is context-local. Providers check before every call and use
-cancellation-aware retry waits. The translation application checks again
-before chapter publication, so a cancel observed after an HTTP call returns
-cannot publish that call's result. A force kill relies on the same atomic
-publication and metadata writers; completed atomic updates may remain, but
-partial chapter output cannot become official output.
-
-CLI translation uses the same cancellation event with a two-stage `SIGINT`
-adapter. The first signal requests cooperative cancellation. The second raises
-`SystemExit(130)` in the main thread, unwinds presentation state, restores the
-previous signal handler, and skips provider close because client cleanup may
-itself block. Normal completion and cooperative cancellation close cached
-provider clients on a best-effort basis. The next locked translation run owns
-recovery of any journal or orphan stage left by immediate exit.
-
-Callbacks normally return a public result dictionary. A callback that needs a
-non-default successful terminal state returns a typed `JobOutcome` containing
-that result and its terminal status. Translation uses this contract for
-`degraded`; the runner, rather than inspecting arbitrary result
-keys, owns the final status, terminal SSE event, and persisted snapshot.
+CLI translation maps the first `SIGINT` to cooperative cancellation and the
+second to immediate exit code `130`. Background callbacks may return a typed
+`JobOutcome` when their successful terminal state is not `completed`;
+translation uses it for `degraded` batches.
 
 ## Cohesive modules
 

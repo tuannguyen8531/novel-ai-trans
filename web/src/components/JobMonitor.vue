@@ -154,7 +154,7 @@ async function forceStop() {
     <ConfirmDialog
       :show="showForceStopDialog"
       title="Force Stop Translation"
-      message="Terminate the translation process immediately?\n\nCompleted atomic updates may remain, but partial chapter output will not be published. This is not a whole-job rollback."
+      :message="`Stop this translation immediately?\n\nChanges already saved will be kept. Incomplete chapter output will not be saved.`"
       confirm-label="Force stop"
       :danger="true"
       :loading="forceStoppingRequest"

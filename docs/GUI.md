@@ -1,9 +1,7 @@
 # Web GUI
 
-Browser interface and HTTP API for the `novel-ai-trans` pipeline. Crawl,
-import, translate, glossary, and pack workflows share the same application
-layer as the CLI; metadata localization is currently exposed by the GUI/API.
-The Vue 3 single-page app is served by FastAPI.
+Browser interface for the `novel-ai-trans` pipeline. The Vue app uses the same
+workflows and data as the CLI and is served by FastAPI.
 
 For what each pipeline step does, see [GUIDE.md](GUIDE.md). For provider
 setup, see [PROVIDERS.md](PROVIDERS.md).
@@ -16,49 +14,17 @@ setup, see [PROVIDERS.md](PROVIDERS.md).
 - [Local and remote mode](#local-and-remote-mode)
 - [Pages](#pages)
 - [Jobs, progress, and cancellation](#jobs-progress-and-cancellation)
-- [Metadata localization API](#metadata-localization-api)
-- [Settings in the browser](#settings-in-the-browser)
-- [File and upload safety](#file-and-upload-safety)
 - [Troubleshooting](#troubleshooting)
 
 ## What the GUI does
 
-The GUI is a thin Vue 3 frontend over a FastAPI service. Pipeline operations
-exposed by both adapters call the same application workflows, so a chapter
-translated through the GUI is identical to one translated with
-`uv run translate`. Metadata localization is the current exception: its
-application workflow is started by the GUI/API but has no CLI adapter yet.
-Development commands such as `build`, `serve`, and `test` are CLI-only.
+The GUI supports crawl, import, translation, metadata localization, glossary,
+and packaging. Development commands such as `build`, `serve`, and `test`
+remain CLI-only.
 
-```text
- Browser (Vue 3 + Vite)
-        |
-        | REST + Server-Sent Events
-        v
- FastAPI (uvicorn)               src/api/
-   /api/...  routes, auth, jobs
-        |
-        v
- Application workflows           src/application/
-   crawl, import, translate, pack, glossary, config
-        |
-        v
- Domain / services / graph        src/domain/, src/services/, src/graph/
-```
-
-At most one top-level long job may run for a given novel (crawl, import,
-translate, metadata localization, pack, glossary validate, glossary audit).
-Jobs for different novels may run concurrently. A job without a novel, such as
-config generation, is global: it conflicts with every active job, and every job
-conflicts while it is active. A conflicting submission returns HTTP 409 with
-the active job id. Read-only endpoints stay available while jobs are running.
-The GUI displays conflicts; open the Jobs page to inspect or cancel the active
-job.
-
-Background job ownership lives under `src/api/background/`: the registry owns
-active/history state and conflict rules, the runner owns worker threads and log
-capture, streaming owns SSE fan-out, and the manager coordinates those pieces
-with the filesystem-backed `JobStore`.
+Only one long-running job may target a novel at a time. Jobs for different
+novels may run concurrently; global work such as config generation conflicts
+with every active job. The GUI links conflicts to the active job.
 
 The GUI does not replace the CLI; the two share the same `.env`, the same
 `translated/` directory, and the same progress files. Stop the server, run
@@ -108,18 +74,10 @@ Environment variables only — there are no CLI flags for `serve`:
 
 ## Configuration
 
-The server reads `.env` on startup, the same way the CLI does. Settings
-exposed through `GET /api/settings` are split into three groups: general
-runtime settings, Telegram notifications, and providers. The Settings page
-reads and updates all three. Each group has an explicit save action that writes
-its supported fields back to `.env`.
-
-Provider keys, Telegram tokens, and `API_SECRET_KEY` are read from `.env` and
-are never returned by the API. The `/api/settings` response only shows
-booleans such as `gemini_api_key_configured`. New Gemini and OpenRouter keys
-can be entered in the Providers panel; leaving those inputs blank preserves the
-current values. Telegram bot credentials and `API_SECRET_KEY` must be edited
-directly in `.env`.
+The server reads `.env` on startup, the same way the CLI does. The Settings page
+can update runtime, Telegram, and provider options and persist supported fields
+back to `.env`. Secrets are never displayed; Telegram credentials and
+`API_SECRET_KEY` must be edited directly in `.env`.
 
 To start from scratch:
 
@@ -168,8 +126,6 @@ limits; the FastAPI process itself does not terminate TLS.
 | `/settings` | Settings | Runtime defaults, Telegram behavior, providers, and connection checks |
 
 The sidebar contains Dashboard, Novels, Translate, Sources, Jobs, and Settings.
-`/crawl` and `/import` are not GUI routes; both source workflows live under
-`/sources`.
 
 ### Dashboard
 
@@ -201,13 +157,9 @@ Tabs cover:
   source, translation, report, and progress record forward before saving the
   new source text. The reader can switch between source and target text, open
   the table of contents, edit the current text, and delete a source chapter.
-  In the chapter reader, the **Review** item in the `⋮` menu opens current-output
-  warnings and the latest rejected candidate; it is not a separate tab. A
-  complete, non-empty candidate can be accepted from this dialog; replacing an
-  existing translation requires a second explicit confirmation. Acceptance
-  publishes atomically, clears the chapter failure, and leaves remaining
-  post-check issues as warnings that support Ignore/Restore. Partial and empty
-  candidates remain view-only.
+  The reader's **Review** action shows output warnings and the latest rejected
+  candidate. Complete candidates can be accepted; replacing existing output
+  requires confirmation. Partial and empty candidates remain view-only.
 - **Glossary**: terms, characters, and relationships. Edits are saved through
   their respective inline editors. When glossary changes affect existing
   translations, Preview & Apply shows proposed replacements, conflicts, and a
@@ -236,25 +188,17 @@ title when needed.
 
 ### Sources
 
-Sources is one page with **From Website** and **From EPUB** tabs. The selected
-tab is local UI state, so the URL remains `/sources` and opening the page starts
-on From Website.
+Sources contains **From Website** and **From EPUB** tabs.
 
 #### From Website
-
-A compact **Crawl / Generate** switch changes the website workflow without
-changing routes.
 
 **Crawl** selects a crawl setup by short name, optionally edits and reloads its
 JSON, chooses direct/background/visible browser mode, and controls robots.txt,
 overwrite behavior, simultaneous downloads, and maximum chapters. Starting the
 operation creates a crawl job that can be monitored in place or on Jobs.
 
-**Generate** accepts the novel information URL, optional config name and
-provider, browser mode, fresh-fetch option, and from-scratch option. Generation
-produces a reviewable draft. Drafts can be reopened or deleted and show their
-expiry time in `YYYY/MM/DD HH:mm:ss` format. Saving a draft refreshes the setup
-list, selects the saved setup, and returns the switch to Crawl.
+**Generate** accepts a novel information URL and produces a reviewable crawl
+configuration draft that can be saved, reopened, or deleted.
 
 The GUI does not expose the separate live-selector validation operation. Use
 `uv run validate <name>` or `POST /api/configs/{name}/validate` when it is
@@ -262,40 +206,15 @@ needed.
 
 #### From EPUB
 
-The EPUB picker and **Keep chapters already in the novel** option share the
-first row. An existing novel can be selected by short name, or an optional new
-short name can be supplied; when blank, it is derived from the EPUB filename.
-The existing-novel selector uses the same `short-name — chapter count` display
-style as the other novel selectors.
-
-The upload streams to a temporary file (default cap 100 MB) and then runs as a
-background import job. It imports chapters and illustrations and captures an
-available source summary from OPF `dc:description` or clearly labelled synopsis
-front matter. Re-import fills only a missing source summary and preserves an
-existing one. The temporary file is deleted on success or failure.
+Select an existing novel or provide a new short name, then choose whether to
+keep its current chapters. Import runs as a background job and preserves an
+existing summary when re-importing.
 
 ### Translate
 
-The novel selector uses short names and shows the remaining chapter count.
-Source and target language share one 50/50 row, source first. The six options
-form a 3-by-2 grid on wide screens and collapse responsively.
-
-The form includes the CLI chapter flags plus a GUI/API metadata option:
-
-| Field | CLI flag | Notes |
-| --- | --- | --- |
-| Novel | `<novel>` | Required; novel name in `translated/` |
-| Source language | `--lang` | Defaults to Auto detect; detected from the glossary when blank |
-| Target | `--target` | Defaults to `TARGET_LANGUAGE` |
-| Provider | `--provider` | Optional per-run override |
-| Start / end | `--start`, `--to` | Inclusive range |
-| Force | `--force` | Re-translate even if an output chapter exists |
-| Resume | `--resume` | Skip chapters recorded as completed |
-| Failed only | `--failed-only` | Retry only chapters that previously failed |
-| Limit | `--limit` | Cap the number of chapters this run |
-| Review | `--review` | Optional second pass; off by default |
-| Summary | `--summary` | Optional per-chapter summary; off by default |
-| Translate title and summary | GUI/API only | Off by default; when enabled, force-localizes AI metadata before chapters |
+The form selects the novel, languages, provider, chapter range, retry behavior,
+review, summary, and optional title/summary localization. These correspond to
+the CLI translation options described in the workflow guide.
 
 The metadata option is separate from `--summary`: the latter
 generates short per-chapter memory, while metadata localization translates the
@@ -305,23 +224,13 @@ title/summary values but preserves manual values. Metadata localization uses
 only glossary terms and known characters that occur in the fields being
 translated.
 
-Live progress is streamed over SSE. Reloading the page does not interrupt
-the job — the GUI fetches the authoritative job state, then resumes the
-event stream from the current point. On reconnect, any missed events are
-reconciled from REST; terminal status (`completed`, `degraded`,
-`failed`, or `cancelled`) is always observable from `GET /api/jobs/{id}`.
+Live progress is streamed over SSE. Reloading reconnects to the job without
+interrupting it; REST remains the source of truth for current state.
 
 ### Jobs
 
-Lists active jobs and the most recent 50 finished jobs from on-disk history
-(`runtime/jobs/`). Rows show the short job id, kind, novel, status, progress,
-and creation time in `YYYY/MM/DD HH:mm:ss` format. The status selector filters
-the list, and `degraded` uses an error badge while remaining a
-distinct terminal state. Inactive jobs can be deleted individually or together.
-Open a job to see progress, result, error, and a bounded log tail from the
-current server process. Logs are omitted when jobs are restored from disk after
-a restart. The endpoint is the source of truth for terminal state; the SSE
-stream is the live view.
+Lists active and recent jobs with status, progress, result, error, and current
+server logs. Inactive jobs can be filtered or deleted.
 
 ### Settings
 
@@ -349,157 +258,24 @@ queued -> running -> completed
                   -> cancelling -> cancelled
 ```
 
-The status diagram is observable in both `GET /api/jobs/{id}` (the source
-of truth) and the SSE event stream (the live view).
-
-Translation batches that return normally but contain one or more failed
-chapters end as `degraded`. An uncaught workflow or worker error
-ends as `failed`. Telegram keeps the existing user-facing policy and reports a
-`degraded` translation as `Failed`, including translated and
-failed chapter counts.
+Translation batches with failed chapters end as `degraded`; uncaught workflow
+or worker errors end as `failed`.
 
 ### Cancellation
 
-`POST /api/jobs/{id}/cancel` sets a cooperative flag. The worker checks
-the flag between translation chapters and at safe points in crawl and pack
-workflows. In-flight LLM and HTTP calls are not interrupted — they finish or
-time out on their own. If cancellation is observed when an active LLM call
-returns, that chapter result is not published.
+**Cancel** requests a cooperative stop at a safe point. In-flight LLM and HTTP
+calls still finish or time out; a translation returned after cancellation is
+not published.
 
-Running process-backed translation jobs also show **Force stop**. After
-confirmation, `POST /api/jobs/{id}/force-stop` terminates the child immediately
-and escalates to a kill after a short grace period. The job finishes as
-`cancelled` with `forced: true`. Completed atomic updates may remain; force stop
-is not a whole-job rollback, but partial chapter output is never published.
+Running translations also show **Force stop**. It terminates the worker and
+finishes the job as `cancelled` with `forced: true`. Completed updates may
+remain, while incomplete chapter output is discarded.
 
 ### Persistence
 
-Job snapshots are written to `runtime/jobs/{job_id}.json`; finished jobs
-survive a server restart up to the on-disk retention window. A queued or
-running job found after a restart is marked failed because its worker cannot be
-resumed. Logs are not restored. Expired files are removed at startup. Generated
-config drafts are stored separately under `runtime/drafts/` and are kept
-for seven days.
-
-### Event contract
-
-Every stream starts with an authoritative `snapshot`. Later event names depend
-on the workflow. A translation stream commonly contains:
-
-```text
-event: snapshot          data: {"id":"...","status":"running","progress":{...}}
-event: started           data: {"job_id":"...","current":0,"total":42}
-event: chapter_started   data: {"job_id":"...","chapter":12,"current":7,"total":42}
-event: chapter_completed data: {"job_id":"...","chapter":12,"ok":true,"elapsed":3.4,"chars_out":18234}
-event: chapter_failed    data: {"job_id":"...","chapter":13,"error":"..."}
-event: log          data: {"job_id":"...","level":"info","message":"..."}
-event: completed    data: {"job_id":"...","result":{"success":40,"failed":2}}
-event: failed       data: {"job_id":"...","error":{"code":"...","message":"..."}}
-event: cancelling   data: {"job_id":"..."}
-event: cancelled    data: {"job_id":"..."}
-```
-
-Tracebacks stay in server logs. Top-level failure events carry the available
-error code and message; chapter events may carry the underlying failure text.
-
-## Metadata localization API
-
-Start a standalone metadata localization job with:
-
-```http
-POST /api/novels/{name}/metadata/localize
-Content-Type: application/json
-
-{
-  "target_language": "vi",
-  "fields": ["title", "summary"],
-  "provider": "ollama",
-  "force": false
-}
-```
-
-`target_language` is required and accepts `vi` or `en`. `fields` defaults to
-both fields and may select only `title` or `summary`; a selected field with no
-source value is skipped. `provider` is optional. `force` regenerates existing
-AI values but does not overwrite manual values. The endpoint returns HTTP 202:
-
-```json
-{"job_id": "..."}
-```
-
-Track it with `GET /api/jobs/{job_id}` or
-`GET /api/jobs/{job_id}/events`. The job result contains `localized` fields
-written in this call and a `skipped` list.
-
-`POST /api/translate` accepts two additional optional fields:
-
-```json
-{
-  "translate_metadata": true,
-  "force_metadata": false
-}
-```
-
-Metadata localization runs before chapter translation. Omitting
-`translate_metadata` enables it; explicitly send `false` to retain the old
-chapter-only API behavior. The current GUI always sends this field: the
-**Translate title and summary** option is off by default, and enabling it sends
-both `translate_metadata` and `force_metadata` as `true`. This regenerates
-existing AI-localized title and summary values while preserving manual values.
-A localization failure fails the translation job before chapter processing
-begins.
-
-Manual localized values can be written with
-`PATCH /api/novels/{name}/metadata`:
-
-```json
-{
-  "localized": {
-    "vi": {"title": "Tên truyện", "summary": "Tóm tắt"}
-  }
-}
-```
-
-These values are recorded with `origin: "manual"`. Send `null` for one nested
-field to clear its value and provenance before asking AI to recreate it. The
-legacy top-level `translated` field is rejected; migrate legacy values to
-`localized.<language>.title`.
-
-## Settings in the browser
-
-Editing a general runtime field calls `PATCH /api/settings` and updates the
-in-process config snapshot. Future jobs use the new value; a running job, if
-any, is unaffected. Clicking **Save** calls `POST /api/settings/persist` and
-writes that snapshot back to `.env`. Only general non-secret fields are written
-by this endpoint.
-
-`POST /api/settings/providers/persist` writes provider settings and any
-non-empty key entered in the GUI; a blank key preserves its existing value.
-`POST /api/settings/telegram/persist` writes non-secret Telegram behavior
-settings but does not accept the bot token or chat id.
-
-The Provider and Telegram forms apply their runtime changes and persist them in
-one save request rather than using the general `PATCH`-then-persist sequence.
-
-Removing provider keys, changing Telegram credentials, or changing
-`API_SECRET_KEY` requires editing `.env` and restarting the server.
-
-## File and upload safety
-
-- Novel names and config names used by resource endpoints are validated as
-  slugs. Absolute paths, `..`, symlink escapes, and embedded separators are
-  rejected by those endpoints.
-- Crawl and validation requests accept only a novel slug and resolve its config
-  as `translated/<slug>/config.json`.
-- Artifact downloads use a filename selected from the server-generated
-  list; the client cannot ask for an arbitrary path.
-- DELETE for a novel returns 409 while the active job's novel matches,
-  to prevent deleting a directory a running job is writing to.
-- EPUB uploads stream to a temp file with the configured size cap (default
-  100 MB) enforced while reading, not after buffering. The temp file is
-  deleted in a `finally` block on success or failure.
-- Generated config drafts live outside the job history; restarting the
-  server never discards an unsaved draft.
+Finished jobs survive server restarts. Interrupted jobs are marked failed, and
+in-memory logs are not restored. Generated config drafts expire after seven
+days.
 
 ## Troubleshooting
 
@@ -511,8 +287,8 @@ Removing provider keys, changing Telegram credentials, or changing
 | Vite dev server cannot reach the API | Confirm `uv run serve` is running on `127.0.0.1:8000`; Vite's dev proxy assumes that target |
 | `web/dist not present; API will run without the SPA bundle` | Run `uv run build`, then restart `uv run serve` |
 | Settings change does not survive a restart | Click **Save** on the Settings page after editing; the edit updates the running process, while Save writes it to `.env` |
-| Reload during translation loses live progress | The progress bar is restored from `GET /api/jobs/{id}` and the SSE stream is reopened; terminal status is always available even if the stream never reconnects |
-| Cancel button does nothing immediately | The job enters `cancelling` immediately; the running translation chapter finishes before it becomes `cancelled` |
+| Reload during translation loses live progress | Reopen the job; its persisted status remains available even if live streaming does not reconnect |
+| Cancel button does nothing immediately | An in-flight provider call must return or time out; use **Force stop** for a blocked translation |
 | Generated draft disappeared | Drafts expire after seven days and are also removed when consumed by a successful `PUT /api/configs/{name}` or by a manual `DELETE /api/config-drafts/{draft_id}` |
 | Localized title is not displayed | Migrate the legacy `translated.<language>` value to `localized.<language>.title` |
 | Imported novel has no summary | The EPUB has no `dc:description` or clearly labelled synopsis page; enter the source summary in the novel's Metadata dialog |

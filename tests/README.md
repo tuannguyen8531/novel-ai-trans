@@ -1,43 +1,30 @@
 # Test layout
 
-Tests are grouped by the application layer they protect:
+Tests mirror the source layer they protect:
 
+- `api/`: routes, background jobs, and process workers.
+- `application/`: use-case workflows.
 - `cli/`: command-line entry points and batch workflow helpers.
 - `config/`: environment and runtime configuration.
-- `domain/`: pure domain logic such as chunking, language detection, glossary rules, quality checks, and term extraction.
+- `domain/`: pure domain logic.
 - `graph/`: LangGraph routing and graph node behavior.
 - `models/`: shared state/data model behavior.
-- `services/`: external-facing services such as LLM providers, glossary persistence, and logging.
+- `services/`: providers, persistence, crawling, and packaging.
 - `utils/`: small reusable helpers.
 
-Run the full suite:
+Run the standard validation pipeline from the project root:
 
 ```bash
-uv run pytest tests/ -v
+uv run test
 ```
 
-Run one group:
+For a focused pytest run:
 
 ```bash
-uv run pytest tests/domain/ -v
-uv run pytest tests/services/ -v
-uv run pytest tests/cli/ -v
-```
-
-Run one file or one test:
-
-```bash
-uv run pytest tests/domain/test_domain_glossary.py -v
-uv run pytest tests/services/test_crawler.py::NovelCrawlerTest::test_skip_existing_chapter -v
+uv run pytest tests/domain/ -q
+uv run pytest tests/services/test_crawler.py -q
 ```
 
 When adding tests, put the file in the folder matching the `src/` layer first.
 If a test crosses several layers, prefer `cli/` for user-facing workflows or the
 highest-level layer that owns the behavior being asserted.
-
-Or, use the unified validation entry point from the project root:
-
-```bash
-uv run python main.py test          # ruff lint + ruff format + pyright + pytest
-uv run python main.py test --fix    # apply ruff fixes and formatting first
-```
