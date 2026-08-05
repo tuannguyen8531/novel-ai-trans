@@ -106,6 +106,39 @@ class TranslationWorkflow:
         if not chapters:
             raise ResourceNotFoundError(f"No chapter files found in {input_dir}")
 
+        if request.dry_run:
+            translated_numbers = self.storage.translated_numbers(output_dir)
+            checkpoint = self.checkpoints.load(checkpoint_path)
+            checkpoint["completed"] = sorted(translated_numbers)
+            selected = select_chapters(
+                request,
+                chapters,
+                translated_numbers,
+                checkpoint,
+            )
+            self._emit(
+                progress_callback,
+                ProgressEvent(
+                    kind="dry_run",
+                    novel=novel,
+                    total=len(chapters),
+                    current=len(selected),
+                    message=f"{len(selected)} of {len(chapters)} chapters would be translated",
+                ),
+            )
+            return TranslationResult(
+                novel=novel,
+                total=len(selected),
+                success=0,
+                failed=0,
+                skipped=True,
+                dry_run=True,
+                chapters_attempted=list(selected),
+                failures=[],
+                started_at=started_at,
+                finished_at=self.clock(),
+            )
+
         publisher = self.publisher or ChapterPublisher(self.storage, self.reports, self.checkpoints)
         try:
             publisher.recover(
@@ -140,30 +173,6 @@ class TranslationWorkflow:
                 skipped=True,
                 dry_run=False,
                 chapters_attempted=[],
-                failures=[],
-                started_at=started_at,
-                finished_at=self.clock(),
-            )
-
-        if request.dry_run:
-            self._emit(
-                progress_callback,
-                ProgressEvent(
-                    kind="dry_run",
-                    novel=novel,
-                    total=len(chapters),
-                    current=len(selected),
-                    message=f"{len(selected)} of {len(chapters)} chapters would be translated",
-                ),
-            )
-            return TranslationResult(
-                novel=novel,
-                total=len(selected),
-                success=0,
-                failed=0,
-                skipped=True,
-                dry_run=True,
-                chapters_attempted=list(selected),
                 failures=[],
                 started_at=started_at,
                 finished_at=self.clock(),

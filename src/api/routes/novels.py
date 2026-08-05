@@ -157,6 +157,7 @@ async def insert_novel_chapter(
             cancel_event=cancel_event,
             progress_root=runtime_root / "progress",
             report_root=runtime_root / "reports",
+            transaction_root=runtime_root / "transactions",
             backup_root=runtime_root / "backups" / "insertions",
             lock_dir=runtime_root / "locks",
         )

@@ -341,6 +341,32 @@ def test_dry_run_emits_selection_without_building_graph(tmp_path) -> None:
     assert built is False
 
 
+def test_dry_run_does_not_recover_or_modify_publication_state(tmp_path) -> None:
+    write_chapters(tmp_path, (1, 2, 3))
+    output_dir = tmp_path / "translated" / "novel" / "output"
+    output_dir.mkdir(parents=True)
+    (output_dir / "chapter_001.txt").write_text("translated one", encoding="utf-8")
+    CheckpointStore().save(tmp_path / "progress" / "novel.json", {"completed": [1], "failed": [2]})
+
+    transaction_dir = tmp_path / "transactions" / "vi" / "novel"
+    transaction_dir.mkdir(parents=True)
+    (transaction_dir / "broken.json").write_text("{}", encoding="utf-8")
+    (output_dir / ".chapter_002.txt.orphan.stage").write_text("partial output", encoding="utf-8")
+    report_dir = tmp_path / "reports" / "vi" / "novel"
+    report_dir.mkdir(parents=True)
+    (report_dir / ".chapter_002.json.orphan.stage").write_text("partial report", encoding="utf-8")
+    before = {path.relative_to(tmp_path): path.read_bytes() for path in tmp_path.rglob("*") if path.is_file()}
+
+    result = make_workflow(tmp_path, SuccessGraph()).run(
+        TranslationRequest(novel="novel", dry_run=True, failed_only=True),
+    )
+
+    after = {path.relative_to(tmp_path): path.read_bytes() for path in tmp_path.rglob("*") if path.is_file()}
+    assert result.dry_run is True
+    assert result.chapters_attempted == [2]
+    assert after == before
+
+
 def test_profile_is_loaded_once_and_snapshotted_for_every_chapter(tmp_path) -> None:
     write_chapters(tmp_path, (1, 2))
     graph = RecordingGraph()

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -8,6 +9,10 @@ import pytest
 from src.application.errors import ApplicationValidationError
 from src.application.novel.insertion import InsertRequest, insert_chapter
 from src.config import Config
+from src.services.translation.checkpoints import CheckpointStore
+from src.services.translation.publisher import ChapterPublication, ChapterPublisher, PublicationError
+from src.services.translation.reports import ReportStore
+from src.services.translation.storage import TranslationStorage
 from src.utils import files
 
 
@@ -34,6 +39,7 @@ def _run_insert(
         config=Config(translated_dir=str(translated)),
         progress_root=tmp_path / "runtime" / "progress",
         report_root=tmp_path / "runtime" / "reports",
+        transaction_root=tmp_path / "runtime" / "transactions",
         backup_root=tmp_path / "runtime" / "backups" / "insertions",
         lock_dir=tmp_path / "runtime" / "locks",
     )
@@ -128,6 +134,68 @@ def test_insert_appends_without_shifting_existing_files(tmp_path: Path) -> None:
     assert (novel / "input" / "chapter_002.txt").read_text(encoding="utf-8") == "two"
     assert result.shifted_sources == 0
     assert result.current_last_chapter == 2
+
+
+def test_insert_recovers_pending_publications_for_every_target_before_shifting(tmp_path: Path) -> None:
+    novel = tmp_path / "translated" / "demo"
+    for number in range(1, 6):
+        _write(novel / "input" / f"chapter_{number:03d}.txt", f"source-{number}")
+
+    runtime = tmp_path / "runtime"
+    for target in ("vi", "en"):
+        output_dir = novel / "output" if target == "vi" else novel / "output" / target
+        report_path = runtime / "reports" / target / "demo" / "chapter_005.json"
+        progress_path = runtime / "progress" / ("demo.json" if target == "vi" else "en/demo.json")
+        transaction_dir = runtime / "transactions" / target / "demo"
+
+        def fail_report_replace(source: Path, destination: Path, *, expected: Path = report_path) -> None:
+            if destination == expected:
+                raise OSError("fault injection")
+            os.replace(source, destination)
+
+        publisher = ChapterPublisher(
+            TranslationStorage(),
+            ReportStore(),
+            CheckpointStore(),
+            id_factory=lambda value=target: f"pending-{value}",
+            replace=fail_report_replace,
+        )
+        with pytest.raises(PublicationError):
+            publisher.publish(
+                ChapterPublication(
+                    chapter=5,
+                    output_dir=output_dir,
+                    report_path=report_path,
+                    progress_path=progress_path,
+                    transaction_dir=transaction_dir,
+                    content=f"{target}-translated-five",
+                    report={"manual_post_check_issues": [], "ignored_post_checks": []},
+                    checkpoint={"completed": [], "failed": [5]},
+                )
+            )
+
+        assert (output_dir / "chapter_005.txt").exists()
+        assert not report_path.exists()
+        assert list(transaction_dir.glob("*.json"))
+
+    result = _run_insert(tmp_path, number=3, content="inserted-three")
+
+    for target in ("vi", "en"):
+        output_dir = novel / "output" if target == "vi" else novel / "output" / target
+        report_dir = runtime / "reports" / target / "demo"
+        progress_path = runtime / "progress" / ("demo.json" if target == "vi" else "en/demo.json")
+        transaction_dir = runtime / "transactions" / target / "demo"
+        assert not (output_dir / "chapter_005.txt").exists()
+        assert (output_dir / "chapter_006.txt").read_text(encoding="utf-8") == f"{target}-translated-five"
+        assert not (report_dir / "chapter_005.json").exists()
+        assert (report_dir / "chapter_006.json").exists()
+        assert CheckpointStore().load(progress_path) == {"completed": [6], "failed": []}
+        assert list(transaction_dir.glob("*.json")) == []
+        assert list(output_dir.glob("*.stage")) == []
+        assert list(report_dir.glob("*.stage")) == []
+
+    assert result.shifted_translations == 2
+    assert result.shifted_reports == 2
 
 
 def test_insert_preserves_legacy_and_canonical_filename_styles(tmp_path: Path) -> None:
