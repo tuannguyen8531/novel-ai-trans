@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onUnmounted, ref, useId, watch } from 'vue'
+import { computed, nextTick, onUnmounted, ref, useId, watch } from 'vue'
 import type { ChapterPostCheck } from '@/api/types'
 
 const props = defineProps<{
@@ -12,11 +12,20 @@ const props = defineProps<{
 const emit = defineEmits<{
   close: []
   reviewItem: [key: string, ignored: boolean]
+  acceptCandidate: [candidateHash: string, overwrite: boolean]
 }>()
 
 const dialog = ref<HTMLElement | null>(null)
+const confirmingOverwrite = ref(false)
 const titleId = useId()
 let previousFocus: HTMLElement | null = null
+
+const candidateAcceptable = computed(() => (
+  props.review?.candidate_translation !== null &&
+  Boolean(props.review?.candidate_translation.trim()) &&
+  props.review?.partial === false &&
+  Boolean(props.review?.candidate_hash)
+))
 
 function formatCode(code: string): string {
   return code.replaceAll('_', ' ')
@@ -24,6 +33,21 @@ function formatCode(code: string): string {
 
 function close() {
   if (!props.loading) emit('close')
+}
+
+function requestCandidateAcceptance() {
+  const review = props.review
+  if (!review?.candidate_hash || !candidateAcceptable.value) return
+  if (review.previous_output_exists) {
+    confirmingOverwrite.value = true
+    return
+  }
+  emit('acceptCandidate', review.candidate_hash, false)
+}
+
+function confirmCandidateOverwrite() {
+  const candidateHash = props.review?.candidate_hash
+  if (candidateHash) emit('acceptCandidate', candidateHash, true)
 }
 
 function handleKeydown(event: KeyboardEvent) {
@@ -41,6 +65,11 @@ watch(() => props.open, (isOpen) => {
     previousFocus = null
   }
 })
+
+watch(
+  [() => props.open, () => props.review?.candidate_hash],
+  () => { confirmingOverwrite.value = false }
+)
 
 onUnmounted(() => {
   document.body.style.overflow = ''
@@ -134,6 +163,35 @@ onUnmounted(() => {
             </span>
           </summary>
           <pre>{{ review?.candidate_translation || '(empty translation)' }}</pre>
+          <div v-if="candidateAcceptable" class="candidate-actions">
+            <template v-if="confirmingOverwrite">
+              <p class="candidate-warning">
+                This replaces the current translated chapter. The existing output remains safe until publication commits.
+              </p>
+              <div class="candidate-buttons">
+                <button
+                  type="button"
+                  class="secondary"
+                  :disabled="loading"
+                  @click="confirmingOverwrite = false"
+                >Keep current output</button>
+                <button
+                  type="button"
+                  class="danger"
+                  :disabled="loading"
+                  @click="confirmCandidateOverwrite"
+                >{{ loading ? 'Publishing...' : 'Replace output' }}</button>
+              </div>
+            </template>
+            <template v-else>
+              <p class="muted">
+                Accepting publishes this candidate without running learning, summary, or glossary updates.
+              </p>
+              <button type="button" :disabled="loading" @click="requestCandidateAcceptance">
+                {{ loading ? 'Publishing...' : 'Accept candidate' }}
+              </button>
+            </template>
+          </div>
         </details>
       </div>
 
@@ -265,5 +323,24 @@ onUnmounted(() => {
   line-height: 1.65;
   white-space: pre-wrap;
   border-top: 1px solid var(--border);
+}
+
+.candidate-actions {
+  padding: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.candidate-actions p {
+  margin: 0 0 0.75rem;
+}
+
+.candidate-warning {
+  color: var(--danger);
+}
+
+.candidate-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
 }
 </style>

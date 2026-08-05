@@ -136,6 +136,7 @@ export interface ChapterPostCheck {
   target: string
   items: ChapterPostCheckItem[]
   candidate_translation: string | null
+  candidate_hash: string | null
   partial: boolean
   failed_chunk_index: number | null
   total_chunks: number | null

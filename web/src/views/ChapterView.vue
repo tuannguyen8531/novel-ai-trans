@@ -40,6 +40,7 @@ const {
   cancelEdit,
   saveEdit,
   reviewPostCheckItem,
+  acceptCandidate,
   confirmDelete,
   goTo,
   goBack,
@@ -64,7 +65,7 @@ const showPostCheckDialog = ref(false)
       :target-language="targetLanguage"
       :target-language-label="targetLanguageLabel"
       :has-target-translation="hasTargetTranslation"
-      :has-post-check-issues="Boolean(postCheck?.items.length)"
+      :has-post-check-review="Boolean(postCheck && (postCheck.items.length || postCheck.candidate_translation !== null))"
       :previous-chapter="previousChapter"
       :next-chapter="nextChapter"
       :current-index="currentIndex"
@@ -131,6 +132,7 @@ const showPostCheckDialog = ref(false)
       :loading="postCheckLoading"
       :error="postCheckError"
       @review-item="reviewPostCheckItem"
+      @accept-candidate="acceptCandidate"
       @close="showPostCheckDialog = false"
     />
 

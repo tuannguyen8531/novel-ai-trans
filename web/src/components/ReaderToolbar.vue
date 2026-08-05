@@ -15,14 +15,14 @@ withDefaults(defineProps<{
   targetLanguage: 'vi' | 'en'
   targetLanguageLabel: string
   hasTargetTranslation: boolean
-  hasPostCheckIssues?: boolean
+  hasPostCheckReview?: boolean
   previousChapter: number | null
   nextChapter: number | null
   currentIndex: number
   chapterCount: number
 }>(), {
   showControls: true,
-  hasPostCheckIssues: false
+  hasPostCheckReview: false
 })
 
 const emit = defineEmits<{
@@ -93,7 +93,7 @@ onUnmounted(() => window.removeEventListener('click', closeMenu))
           <div v-if="showMenu" class="dropdown-menu">
             <button type="button" class="menu-item" @click="selectAction('edit')">Edit</button>
             <button
-              v-if="hasPostCheckIssues"
+              v-if="hasPostCheckReview"
               type="button"
               class="menu-item"
               @click="selectAction('review-warning')"

@@ -21,6 +21,11 @@ class TranslationGraph(Protocol):
 PublishChapter = Callable[[str, list[str]], None]
 
 
+def normalize_translation(content: str) -> str:
+    """Normalize text exactly as chapter publication expects."""
+    return deduplicate_leading_headings(normalize_paragraph_spacing(content))
+
+
 def translate_chapter(
     input_path: Path,
     *,
@@ -53,7 +58,7 @@ def translate_chapter(
     elapsed = clock() - started_at
 
     final_text = result.get("final_translation", "")
-    normalized_text = deduplicate_leading_headings(normalize_paragraph_spacing(str(final_text)))
+    normalized_text = normalize_translation(str(final_text))
     new_terms = result.get("new_terms", {})
     glossary_value = result.get("glossary", {})
     glossary = dict(glossary_value) if isinstance(glossary_value, Mapping) else {}

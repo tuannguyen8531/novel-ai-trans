@@ -451,6 +451,15 @@ report at `runtime/reports/{target}/{novel}/chapter_NNN.json`. Candidate text,
 issues, and failed chunk position remain reviewable without making the candidate
 a completed translation.
 
+The chapter reader can accept a non-empty candidate only when it represents the
+complete chapter. The API requires the candidate hash returned by the review
+response, preventing a stale browser view from publishing a newer candidate.
+Replacing an existing output also requires explicit confirmation. Acceptance
+normalizes and post-checks the candidate again, publishes it through the same
+recoverable transaction as normal translation, clears the failed state, and
+turns any remaining issue codes into reviewable warnings. It does not run
+learning, summary generation, or glossary mutation.
+
 Chapter output, report, and progress are published through a recoverable journal
 under `runtime/transactions/{target}/{novel}/`. Successful publication removes
 the journal immediately. If a process stops between publication steps, the next

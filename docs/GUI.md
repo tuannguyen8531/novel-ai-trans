@@ -201,6 +201,13 @@ Tabs cover:
   source, translation, report, and progress record forward before saving the
   new source text. The reader can switch between source and target text, open
   the table of contents, edit the current text, and delete a source chapter.
+  In the chapter reader, the **Review** item in the `⋮` menu opens current-output
+  warnings and the latest rejected candidate; it is not a separate tab. A
+  complete, non-empty candidate can be accepted from this dialog; replacing an
+  existing translation requires a second explicit confirmation. Acceptance
+  publishes atomically, clears the chapter failure, and leaves remaining
+  post-check issues as warnings that support Ignore/Restore. Partial and empty
+  candidates remain view-only.
 - **Glossary**: terms, characters, and relationships. Edits are saved through
   their respective inline editors. When glossary changes affect existing
   translations, Preview & Apply shows proposed replacements, conflicts, and a

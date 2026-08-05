@@ -218,6 +218,35 @@ export function useReader(
     }
   }
 
+  async function acceptCandidate(candidateHash: string, overwrite: boolean) {
+    postCheckLoading.value = true
+    postCheckError.value = null
+    try {
+      postCheck.value = await api.acceptChapterCandidate(
+        toValue(novel),
+        toValue(chapter),
+        viewMode.value === 'source' ? targetLanguage.value : viewMode.value,
+        candidateHash,
+        overwrite
+      )
+      await loadChapters()
+      if (viewMode.value !== 'source') {
+        const response = await api.getChapterContent(
+          toValue(novel),
+          toValue(chapter),
+          'translation',
+          viewMode.value
+        )
+        content.value = response.content
+        editContent.value = response.content
+      }
+    } catch (err) {
+      postCheckError.value = (err as Error).message
+    } finally {
+      postCheckLoading.value = false
+    }
+  }
+
   async function confirmDelete() {
     deleteLoading.value = true
     try {
@@ -313,6 +342,7 @@ export function useReader(
     cancelEdit,
     saveEdit,
     reviewPostCheckItem,
+    acceptCandidate,
     confirmDelete,
     goTo,
     goBack,

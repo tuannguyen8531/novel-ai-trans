@@ -69,6 +69,7 @@ class PostCheckReview:
     target: str
     items: list[PostCheckItem]
     candidate_translation: str | None
+    candidate_hash: str | None
     partial: bool
     failed_chunk_index: int | None
     total_chunks: int | None
@@ -243,7 +244,9 @@ def chapter_post_check(
         translation = chapter_service.read(output_dir, number)
         input_dir = paths.novel_input_dir_from_root(novel_root)
         input_path = chapter_service.chapter_path(input_dir, number)
-        source = chapter_service.read(input_dir, number) if input_path.exists() else ""
+        source = (
+            chapter_service.deduplicate_leading_headings(chapter_service.read(input_dir, number)) if input_path.exists() else ""
+        )
         glossary_path = novel_root / ("glossary.json" if normalized_target == "vi" else f"glossary.{normalized_target}.json")
         issues = post_check_translation(
             source,
@@ -313,13 +316,15 @@ def chapter_post_check(
             )
 
     candidate = report.get("candidate_translation")
+    candidate_value = candidate if isinstance(candidate, str) else None
     failed_chunk_index = report.get("failed_chunk_index")
     total_chunks = report.get("total_chunks")
     return PostCheckReview(
         chapter=number,
         target=normalized_target,
         items=items,
-        candidate_translation=candidate if isinstance(candidate, str) else None,
+        candidate_translation=candidate_value,
+        candidate_hash=content_hash(candidate_value) if candidate_value is not None else None,
         partial=bool(report.get("partial", False)),
         failed_chunk_index=failed_chunk_index if isinstance(failed_chunk_index, int) else None,
         total_chunks=total_chunks if isinstance(total_chunks, int) else None,

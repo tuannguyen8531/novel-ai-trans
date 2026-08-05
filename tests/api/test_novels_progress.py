@@ -14,6 +14,7 @@ from starlette.testclient import TestClient
 from src.api.factory import create_app
 from src.application import config as _config
 from src.config import Config
+from src.services.translation.reports import content_hash
 
 
 @pytest.fixture()
@@ -278,5 +279,66 @@ def test_chapter_post_check_includes_candidate_without_output(client):
     assert body["items"][0]["severity"] == "error"
     assert body["items"][0]["reviewable"] is False
     assert body["candidate_translation"] == ""
+    assert body["candidate_hash"] == content_hash("")
     assert body["partial"] is True
     assert body["previous_output_exists"] is False
+
+
+def test_accept_complete_candidate_publishes_output_and_clears_failure(client):
+    test_client, translated = client
+    novel = translated / "demo"
+    _write_chapter(novel / "input", 1)
+    candidate = "A complete candidate translation for chapter one."
+    runtime_root = translated.parent
+    report_path = runtime_root / "reports" / "vi" / "demo" / "chapter_001.json"
+    report_path.parent.mkdir(parents=True)
+    report_path.write_text(
+        json.dumps({"candidate_translation": candidate, "partial": False}),
+        encoding="utf-8",
+    )
+    progress_path = runtime_root / "progress" / "demo.json"
+    progress_path.parent.mkdir(parents=True)
+    progress_path.write_text(json.dumps({"completed": [], "failed": [1]}), encoding="utf-8")
+
+    review_response = test_client.get("/api/novels/demo/chapters/1/post-check?target=vi")
+    candidate_fingerprint = review_response.json()["candidate_hash"]
+    response = test_client.post(
+        "/api/novels/demo/chapters/1/post-check/accept?target=vi",
+        json={"candidate_hash": candidate_fingerprint, "overwrite": False},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["candidate_translation"] is None
+    assert response.json()["candidate_hash"] is None
+    assert response.json()["previous_output_exists"] is True
+    assert (novel / "output" / "chapter_001.txt").read_text(encoding="utf-8") == candidate
+    assert json.loads(progress_path.read_text(encoding="utf-8")) == {"completed": [1], "failed": []}
+
+
+def test_accept_candidate_api_rejects_stale_hash_and_unconfirmed_overwrite(client):
+    test_client, translated = client
+    novel = translated / "demo"
+    _write_chapter(novel / "input", 1)
+    _write_chapter(novel / "output", 1)
+    candidate = "Replacement candidate translation."
+    report_path = translated.parent / "reports" / "vi" / "demo" / "chapter_001.json"
+    report_path.parent.mkdir(parents=True)
+    report_path.write_text(
+        json.dumps({"candidate_translation": candidate, "partial": False}),
+        encoding="utf-8",
+    )
+
+    stale = test_client.post(
+        "/api/novels/demo/chapters/1/post-check/accept?target=vi",
+        json={"candidate_hash": "0" * 64, "overwrite": True},
+    )
+    unconfirmed = test_client.post(
+        "/api/novels/demo/chapters/1/post-check/accept?target=vi",
+        json={"candidate_hash": content_hash(candidate), "overwrite": False},
+    )
+
+    assert stale.status_code == 409
+    assert stale.json()["error"]["code"] == "conflict"
+    assert unconfirmed.status_code == 409
+    assert unconfirmed.json()["error"]["details"] == {"requires_overwrite_confirmation": True}
+    assert (novel / "output" / "chapter_001.txt").read_text(encoding="utf-8") == "chapter 1"
