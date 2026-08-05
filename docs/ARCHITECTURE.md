@@ -143,6 +143,12 @@ The runner owns worker threads and configuration context, streaming owns SSE
 fan-out, the filesystem `JobStore` owns persistence, and the manager only
 coordinates those collaborators.
 
+Callbacks normally return a public result dictionary. A callback that needs a
+non-default successful terminal state returns a typed `JobOutcome` containing
+that result and its terminal status. Translation uses this contract for
+`degraded`; the runner, rather than inspecting arbitrary result
+keys, owns the final status, terminal SSE event, and persisted snapshot.
+
 ## Cohesive modules
 
 Character policies are separated by independently changing domain concern:

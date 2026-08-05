@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from src.api.background.manager import JobManager
-from src.api.background.models import JobStatus
+from src.api.background.models import TERMINAL_STATUSES, JobOutcome, JobStatus
 from src.api.background.registry import JobNotFoundError
 from src.api.events import JobEvent
 from src.api.services.jobs import (
@@ -32,7 +32,7 @@ def _wait_for_terminal(manager: JobManager, job_id: str):
     deadline = time.monotonic() + 5
     while time.monotonic() < deadline:
         job = manager.get(job_id)
-        if job.status in {JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED}:
+        if job.status in TERMINAL_STATUSES:
             return job
         time.sleep(0.01)
     raise AssertionError(f"Job {job_id} did not finish")
@@ -196,6 +196,7 @@ def test_manager_records_lifecycle_progress_logs_events_and_history(tmp_path: Pa
 def test_manager_restores_terminal_jobs_and_marks_interrupted_jobs_failed(tmp_path: Path):
     store = JobStore(tmp_path)
     store.write(_make_snapshot(job_id="completed", status="completed"))
+    store.write(_make_snapshot(job_id="partial", status="degraded"))
     interrupted = _make_snapshot(job_id="interrupted", status="running")
     interrupted["finished_at"] = None
     store.write(interrupted)
@@ -203,15 +204,54 @@ def test_manager_restores_terminal_jobs_and_marks_interrupted_jobs_failed(tmp_pa
     manager = JobManager(store=store)
 
     completed = manager.get("completed")
+    partial = manager.get("partial")
     failed = manager.get("interrupted")
     assert completed.status == JobStatus.COMPLETED
+    assert partial.status == JobStatus.DEGRADED
     assert failed.status == JobStatus.FAILED
     assert failed.error is not None
     assert failed.error.code == "interrupted"
-    assert {job.id for job in manager.list_history()} == {"completed", "interrupted"}
+    assert {job.id for job in manager.list_history()} == {"completed", "partial", "interrupted"}
     persisted = store.get("interrupted")
     assert persisted is not None
     assert persisted["status"] == "failed"
+
+
+def test_manager_persists_and_streams_degraded(tmp_path: Path):
+    store = JobStore(tmp_path)
+    manager = JobManager(store=store)
+    subscriber = manager.event_bus.subscribe(_ImmediateLoop())
+
+    def run(job, emit, cancel_event):
+        return JobOutcome(
+            result={"success": 2, "failed": 1},
+            terminal_status=JobStatus.DEGRADED,
+        )
+
+    submitted = manager.submit(kind="translate", novel="demo", snapshot=Config(), loop=None, run=run)
+    finished = _wait_for_terminal(manager, submitted.id)
+    events = []
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        while not subscriber.queue.empty():
+            event = subscriber.queue.get_nowait()
+            if event is not None:
+                events.append(event)
+        if any(event.kind == "degraded" for event in events):
+            break
+        time.sleep(0.01)
+    while not subscriber.queue.empty():
+        event = subscriber.queue.get_nowait()
+        if event is not None:
+            events.append(event)
+    manager.event_bus.unsubscribe(subscriber)
+
+    assert finished.status == JobStatus.DEGRADED
+    assert events[-1].kind == "degraded"
+    assert events[-1].payload == {"result": {"success": 2, "failed": 1}}
+    persisted = store.get(submitted.id)
+    assert persisted is not None
+    assert persisted["status"] == "degraded"
 
 
 def test_manager_records_worker_failure():

@@ -5,12 +5,13 @@ import { openSse, type SseClient } from '@/api/sse'
 import type { JobModel } from '@/api/types'
 
 const ACTIVE_STATUSES = new Set<JobModel['status']>(['queued', 'running', 'cancelling'])
-const TERMINAL_STATUSES = new Set<JobModel['status']>(['completed', 'failed', 'cancelled'])
+const TERMINAL_STATUSES = new Set<JobModel['status']>(['completed', 'degraded', 'failed', 'cancelled'])
 const EVENT_STATUSES: Partial<Record<string, JobModel['status']>> = {
   queued: 'queued',
   started: 'running',
   cancelling: 'cancelling',
   completed: 'completed',
+  degraded: 'degraded',
   failed: 'failed',
   cancelled: 'cancelled'
 }

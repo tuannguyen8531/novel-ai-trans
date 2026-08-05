@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from src.api.background.models import Job, JobError, JobStatus
+from src.api.background.models import Job, JobError, JobOutcome, JobStatus
 from src.api.background.registry import JobRegistry
 from src.api.background.streaming import EventBus
 from src.api.events import JobEvent
@@ -20,7 +20,7 @@ from src.config import Config
 _logger = logging.getLogger(__name__)
 _active_log_job_id: ContextVar[str | None] = ContextVar("active_log_job_id", default=None)
 
-JobCallback = Callable[[Job, Callable[[JobEvent], None], threading.Event], dict[str, Any]]
+JobCallback = Callable[[Job, Callable[[JobEvent], None], threading.Event], dict[str, Any] | JobOutcome]
 PersistCallback = Callable[[Job], None]
 
 
@@ -108,7 +108,7 @@ class JobRunner:
         token = _active_log_job_id.set(job.id)
         with config_scope(request.snapshot):
             try:
-                result = request.run(job, emit, job.cancel_event)
+                callback_result = request.run(job, emit, job.cancel_event)
             except Exception as error:  # noqa: BLE001 - callback errors become job failures
                 self._finish_failed(
                     job,
@@ -120,15 +120,16 @@ class JobRunner:
                 _active_log_job_id.reset(token)
                 root_logger.removeHandler(handler)
 
-        job.status = JobStatus.CANCELLED if job.status == JobStatus.CANCELLING else JobStatus.COMPLETED
-        job.result = result
+        outcome = callback_result if isinstance(callback_result, JobOutcome) else JobOutcome(callback_result)
+        job.status = JobStatus.CANCELLED if job.status == JobStatus.CANCELLING else outcome.terminal_status
+        job.result = outcome.result
         job.finished_at = datetime.now(UTC)
         self._bus.publish(
             JobEvent(
                 kind=job.status.value,
                 job_id=job.id,
                 novel=job.novel,
-                payload={"result": result},
+                payload={"result": outcome.result},
             )
         )
         self._registry.finish(job)

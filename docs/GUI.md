@@ -308,18 +308,20 @@ translated.
 Live progress is streamed over SSE. Reloading the page does not interrupt
 the job — the GUI fetches the authoritative job state, then resumes the
 event stream from the current point. On reconnect, any missed events are
-reconciled from REST; terminal status (`completed`, `failed`, `cancelled`)
-is always observable from `GET /api/jobs/{id}`.
+reconciled from REST; terminal status (`completed`, `degraded`,
+`failed`, or `cancelled`) is always observable from `GET /api/jobs/{id}`.
 
 ### Jobs
 
 Lists active jobs and the most recent 50 finished jobs from on-disk history
 (`runtime/jobs/`). Rows show the short job id, kind, novel, status, progress,
-and creation time in `YYYY/MM/DD HH:mm:ss` format. Inactive jobs can be deleted
-individually or together. Open a job to see progress, result, error, and a
-bounded log tail from the current server process. Logs are omitted when jobs
-are restored from disk after a restart. The endpoint is the source of truth for
-terminal state; the SSE stream is the live view.
+and creation time in `YYYY/MM/DD HH:mm:ss` format. The status selector filters
+the list, and `degraded` uses an error badge while remaining a
+distinct terminal state. Inactive jobs can be deleted individually or together.
+Open a job to see progress, result, error, and a bounded log tail from the
+current server process. Logs are omitted when jobs are restored from disk after
+a restart. The endpoint is the source of truth for terminal state; the SSE
+stream is the live view.
 
 ### Settings
 
@@ -342,12 +344,19 @@ Three panels:
 
 ```text
 queued -> running -> completed
+                  -> degraded
                   -> failed
                   -> cancelling -> cancelled
 ```
 
 The status diagram is observable in both `GET /api/jobs/{id}` (the source
 of truth) and the SSE event stream (the live view).
+
+Translation batches that return normally but contain one or more failed
+chapters end as `degraded`. An uncaught workflow or worker error
+ends as `failed`. Telegram keeps the existing user-facing policy and reports a
+`degraded` translation as `Failed`, including translated and
+failed chapter counts.
 
 ### Cancellation
 

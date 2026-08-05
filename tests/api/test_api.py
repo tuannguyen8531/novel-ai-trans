@@ -351,7 +351,15 @@ def test_jobs_are_persisted_to_disk(client):
     snapshot = json.loads(files[0].read_text(encoding="utf-8"))
     assert snapshot["id"] == job_id
     assert snapshot["kind"] == "translate"
-    assert snapshot["status"] in {"queued", "running", "completed", "failed", "cancelling", "cancelled"}
+    assert snapshot["status"] in {
+        "queued",
+        "running",
+        "completed",
+        "degraded",
+        "failed",
+        "cancelling",
+        "cancelled",
+    }
 
 
 def test_jobs_survive_restart(tmp_path):
@@ -459,6 +467,30 @@ def test_job_progress_log_events_are_not_duplicated():
 
     assert [event.kind for event in events] == ["log"]
     assert events[0].payload["message"] == "Validation warning: missing title"
+
+
+def test_application_terminal_progress_waits_for_runner_terminal_event():
+    from datetime import datetime
+
+    from src.api.background.models import Job, JobStatus
+    from src.api.events import JobEvent, build_progress_emitter
+    from src.application.progress import ProgressEvent
+
+    job = Job(
+        id="job-1",
+        kind="translate",
+        novel="demo",
+        status=JobStatus.RUNNING,
+        created_at=datetime.now(UTC),
+    )
+    events: list[JobEvent] = []
+    callback = build_progress_emitter(job, events.append)
+
+    callback(ProgressEvent(kind="degraded", novel="demo", current=2, total=2))
+
+    assert [event.kind for event in events] == ["progress", "log"]
+    assert events[0].payload == {"current": 2, "total": 2}
+    assert events[1].payload["message"] == "Degraded 2/2"
 
 
 def test_crawl_job_console_hides_skipped_and_started_progress():

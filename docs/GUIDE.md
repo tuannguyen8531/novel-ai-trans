@@ -595,6 +595,12 @@ All three values are required. Set `TELEGRAM_ENABLED=false` to disable notificat
 `TELEGRAM_PARSE_MODE` defaults to `HTML` and messages are escaped accordingly.
 Set `TELEGRAM_SILENT=true` to send without a notification sound.
 
+A GUI/API translation job that finishes its batch with failed chapters uses
+terminal status `degraded`, distinguishing it from an uncaught job
+failure. Its Telegram notification intentionally remains `Status: Failed` and
+includes translated/total/failed counts. CLI notification and exit behavior are
+unchanged.
+
 ## Troubleshooting
 
 | Problem | Solution |

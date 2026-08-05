@@ -8,7 +8,7 @@ import json
 from fastapi import APIRouter, HTTPException, Request
 from sse_starlette.sse import EventSourceResponse
 
-from src.api.background.models import Job, JobStatus
+from src.api.background.models import TERMINAL_STATUSES, Job
 from src.api.background.registry import JobNotFoundError
 from src.api.dependencies import AuthenticatedPrincipal, JobManagerDependency
 from src.api.schemas import JobErrorModel, JobListResponse, JobModel
@@ -103,7 +103,7 @@ async def stream_events(
 
     loop = asyncio.get_running_loop()
     subscriber = jobs.event_bus.subscribe(loop)
-    terminal = {JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED}
+    terminal = TERMINAL_STATUSES
 
     async def event_publisher():
         try:

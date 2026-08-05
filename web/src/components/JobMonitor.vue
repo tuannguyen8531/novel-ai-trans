@@ -54,10 +54,12 @@ const progress = computed(() => {
 const statusBadge = computed(() => {
   const status = localJob.value?.status
   if (status === 'completed') return 'ok'
-  if (status === 'failed') return 'danger'
+  if (status === 'degraded' || status === 'failed') return 'danger'
   if (status === 'cancelled' || status === 'cancelling') return 'warn'
   return ''
 })
+
+const statusLabel = computed(() => localJob.value?.status.replaceAll('_', ' ') ?? '')
 
 async function cancel() {
   if (!jobId.value || cancellingRequest.value) return
@@ -83,7 +85,7 @@ async function cancel() {
           <strong>{{ localJob.kind }}</strong>
           <span class="muted"> · {{ localJob.novel ?? '—' }}</span>
         </div>
-        <span class="badge" :class="statusBadge">{{ localJob.status }}</span>
+        <span class="badge" :class="statusBadge">{{ statusLabel }}</span>
       </div>
       <div v-if="progress && progress.total > 0" style="margin-top: 0.5rem;">
         <div class="row" style="justify-content: space-between;">

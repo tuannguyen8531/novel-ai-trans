@@ -371,7 +371,7 @@ class TranslationWorkflow:
         self._emit(
             progress_callback,
             ProgressEvent(
-                kind=("completed" if not cancelled and not failures else ("cancelled" if cancelled else "completed_with_errors")),
+                kind=("completed" if not cancelled and not failures else ("cancelled" if cancelled else "degraded")),
                 novel=novel,
                 current=len(attempted),
                 total=total,

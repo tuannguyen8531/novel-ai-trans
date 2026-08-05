@@ -117,3 +117,38 @@ def test_translate_writes_reports_next_to_custom_jobs_directory(client):
         assert translate.call_args.kwargs["report_root"] == runtime_root / "reports"
         assert translate.call_args.kwargs["transaction_root"] == runtime_root / "transactions"
         assert "rejected_root" not in translate.call_args.kwargs
+
+
+def test_translate_chapter_failures_finish_with_errors_and_notify_failed(client):
+    result = SimpleNamespace(
+        novel="demo",
+        total=2,
+        success=1,
+        failed=1,
+        skipped=False,
+        cancelled=False,
+        chapters_attempted=[1, 2],
+        failures=[2],
+        started_at=time.time(),
+    )
+    with (
+        patch("src.api.routes.translate.run_translation", return_value=result),
+        patch("src.api.routes.translate.send_run_notification") as notify,
+    ):
+        response = client.post(
+            "/api/translate",
+            json={"novel": "demo", "translate_metadata": False},
+        )
+        assert response.status_code == 202, response.text
+        job_id = response.json()["job_id"]
+        deadline = time.time() + 5
+        job = client.get(f"/api/jobs/{job_id}").json()
+        while job["status"] in {"queued", "running", "cancelling"} and time.time() < deadline:
+            time.sleep(0.01)
+            job = client.get(f"/api/jobs/{job_id}").json()
+
+    assert job["status"] == "degraded"
+    assert job["result"]["failed"] == 1
+    notify.assert_called_once()
+    assert notify.call_args.kwargs["status"] == "Failed"
+    assert notify.call_args.kwargs["stats"] == "Translated: 1/2 · Failed: 1"

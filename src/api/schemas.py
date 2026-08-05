@@ -401,7 +401,15 @@ class DraftDetail(DraftSummary):
 # ---------------------------------------------------------------------------
 
 
-JobStatus = Literal["queued", "running", "completed", "failed", "cancelling", "cancelled"]
+JobStatus = Literal[
+    "queued",
+    "running",
+    "completed",
+    "degraded",
+    "failed",
+    "cancelling",
+    "cancelled",
+]
 
 
 class JobErrorModel(BaseModel):

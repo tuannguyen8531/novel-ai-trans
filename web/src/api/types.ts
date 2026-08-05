@@ -153,7 +153,7 @@ export interface JobModel {
   id: string
   kind: string
   novel: string | null
-  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelling' | 'cancelled'
+  status: 'queued' | 'running' | 'completed' | 'degraded' | 'failed' | 'cancelling' | 'cancelled'
   created_at: string
   started_at: string | null
   finished_at: string | null

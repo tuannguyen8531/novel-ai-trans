@@ -9,6 +9,7 @@ from typing import Literal
 
 from fastapi import APIRouter
 
+from src.api.background.models import JobOutcome, JobStatus
 from src.api.dependencies import AuthenticatedPrincipal, JobManagerDependency, get_state
 from src.api.events import build_progress_emitter
 from src.api.schemas import JobStartResponse, TranslationRequestPayload
@@ -117,16 +118,25 @@ async def post_translate(
             stats=stats,
             started_at=result.started_at,
         )
-        return {
-            "novel": result.novel,
-            "total": result.total,
-            "success": result.success,
-            "failed": result.failed,
-            "chapters_attempted": result.chapters_attempted,
-            "failures": result.failures,
-            "cancelled": result.cancelled,
-            "metadata": asdict(metadata_result) if metadata_result is not None else None,
-        }
+        if result.cancelled:
+            terminal_status = JobStatus.CANCELLED
+        elif result.failed > 0:
+            terminal_status = JobStatus.DEGRADED
+        else:
+            terminal_status = JobStatus.COMPLETED
+        return JobOutcome(
+            result={
+                "novel": result.novel,
+                "total": result.total,
+                "success": result.success,
+                "failed": result.failed,
+                "chapters_attempted": result.chapters_attempted,
+                "failures": result.failures,
+                "cancelled": result.cancelled,
+                "metadata": asdict(metadata_result) if metadata_result is not None else None,
+            },
+            terminal_status=terminal_status,
+        )
 
     job = jobs.submit(
         kind="translate",

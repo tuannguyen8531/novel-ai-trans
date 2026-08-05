@@ -8,6 +8,8 @@ from typing import Any
 
 from src.api.background.models import Job
 
+_APPLICATION_TERMINAL_KINDS = frozenset({"completed", "degraded", "cancelled"})
+
 
 @dataclass
 class JobEvent:
@@ -102,8 +104,8 @@ def _format_console_progress(application_event: Any) -> str | None:
         return str(message) if message else f"Reading chapter {chapter}"
     if kind == "completed":
         return str(message) if message else f"Completed {current}/{total}" if total else "Completed"
-    if kind == "completed_with_errors":
-        return f"Completed with errors {current}/{total}" if total else "Completed with errors"
+    if kind == "degraded":
+        return f"Degraded {current}/{total}" if total else "Degraded"
     if kind == "cancelled":
         return str(message) if message else f"Cancelled {current}/{total}" if total else "Cancelled"
     return str(message) if message else None
@@ -116,7 +118,10 @@ def build_progress_emitter(
     """Build a callback that updates job state and publishes progress."""
 
     def callback(application_event: Any) -> None:
-        emit(event_from_application(job.id, application_event))
+        event = event_from_application(job.id, application_event)
+        if event.kind in _APPLICATION_TERMINAL_KINDS:
+            event.kind = "progress"
+        emit(event)
         console_line = _format_console_progress(application_event)
         if console_line:
             emit(
