@@ -68,6 +68,25 @@ def test_runner_records_callback_failure_without_subscriber() -> None:
     assert finished.error.message == "provider failed"
 
 
+def test_runner_preserves_serialized_callback_error_details() -> None:
+    registry = JobRegistry()
+    runner = JobRunner(registry, EventBus(), lambda job: None)
+    job = registry.create(kind="translate", novel="demo")
+
+    def fail(job, emit, cancel_event):
+        error = RuntimeError("worker exited")
+        error.code = "worker_exit"  # type: ignore[attr-defined]
+        error.details = {"exit_code": 17}  # type: ignore[attr-defined]
+        raise error
+
+    runner.start(JobRequest(job=job, snapshot=Config(), run=fail))
+    finished = wait_for_terminal(registry, job.id)
+
+    assert finished.error is not None
+    assert finished.error.code == "worker_exit"
+    assert finished.error.details == {"exit_code": 17}
+
+
 def test_runner_honors_typed_degraded_outcome() -> None:
     registry = JobRegistry()
     persisted: list[JobStatus] = []

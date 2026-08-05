@@ -143,6 +143,30 @@ The runner owns worker threads and configuration context, streaming owns SSE
 fan-out, the filesystem `JobStore` owns persistence, and the manager only
 coordinates those collaborators.
 
+API translation is the process-backed exception inside that thread runner. Its
+callback creates the worker defined in `src/api/translation/worker.py` with an
+explicit `multiprocessing` `spawn` context and bridges the child synchronously
+from the job thread:
+
+```text
+JobRunner thread (parent)
+  ├─ Job state, persistence, SSE, notification, terminal status
+  ├─ reliable queue <── ready / progress / result / serialized error
+  └─ bounded log queue <── presentation logs (lossy under pressure)
+                 │
+                 └─ spawned translation process
+                      └─ metadata localization + translation workflow
+```
+
+The payload contains only serializable request data, the per-job `Config`
+snapshot, job identity, and runtime roots. The child enters its own config
+scope and owns the novel lock while it reads or writes translation state. The
+parent mirrors the job's cooperative cancellation event into a process-safe
+event; it never passes the FastAPI route closure, live `Job`, SSE bus, or
+notification client across the process boundary. An abnormal child exit is
+reported as `worker_exit`, while an application exception retains its code and
+serializable details in the job snapshot.
+
 Callbacks normally return a public result dictionary. A callback that needs a
 non-default successful terminal state returns a typed `JobOutcome` containing
 that result and its terminal status. Translation uses this contract for

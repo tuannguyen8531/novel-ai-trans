@@ -601,6 +601,12 @@ failure. Its Telegram notification intentionally remains `Status: Failed` and
 includes translated/total/failed counts. CLI notification and exit behavior are
 unchanged.
 
+GUI/API translation work runs in a spawned child process. Job state, live
+events, persisted history, and the final Telegram notification remain in the
+server process. A normal Cancel request is still cooperative: it is forwarded
+to the child and takes effect at translation safe points, but does not interrupt
+an HTTP/LLM call already in flight.
+
 ## Troubleshooting
 
 | Problem | Solution |

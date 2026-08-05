@@ -470,12 +470,14 @@ def run_translation(
     *,
     progress_callback: Callable[[ProgressEvent], None] | None = None,
     cancel_event: Event | None = None,
+    progress_root: Path | None = None,
     report_root: Path | None = None,
     transaction_root: Path | None = None,
+    lock_dir: Path | None = None,
 ) -> TranslationResult:
     """Construct default collaborators and run one locked translation batch."""
     with (
-        novel_lock(request.novel),
+        novel_lock(request.novel, lock_dir=lock_dir),
         genre_cache_scope(),
         rule_snapshot_scope(),
         prompt_cache_scope(),
@@ -487,6 +489,7 @@ def run_translation(
             reports=ReportStore(),
             graph_factory=cast(GraphFactory, build_graph),
             profile_loader=load_translation_profile,
+            progress_root=progress_root,
             report_root=report_root,
             transaction_root=transaction_root,
         )

@@ -6,14 +6,15 @@ import os
 import tempfile
 import time
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
 from starlette.testclient import TestClient
 
 from src.api.factory import create_app
+from src.api.translation.worker import TranslationWorkerError, WorkerCompleted
 from src.application import config as _config
+from src.application.translation.models import TranslationResult
 from src.config import Config
 
 
@@ -49,59 +50,67 @@ def client():
 def test_translate_accepts_empty_provider_and_target(client):
     """Empty strings from the GUI's 'use default' option must not be passed
     as unexpected kwargs to ``Config.__init__``."""
-    response = client.post(
-        "/api/translate",
-        json={
-            "novel": "demo",
-            "provider": "",
-            "target_language": "",
-        },
-    )
-    assert response.status_code == 202, response.text
-    body = response.json()
-    assert "job_id" in body
-    # Wait briefly for the queued job to start, then cancel it so the
-    # test fixture tears down cleanly.
-    deadline = time.time() + 1.0
-    while time.time() < deadline:
-        current = client.app.state.app_state.job_manager.current
-        if current and current.id == body["job_id"]:
-            client.post(f"/api/jobs/{body['job_id']}/cancel")
-            break
-        time.sleep(0.05)
+    result = _translation_result()
+    with patch("src.api.routes.translate.run_translation_worker", return_value=WorkerCompleted(result, None)) as worker:
+        response = client.post(
+            "/api/translate",
+            json={
+                "novel": "demo",
+                "provider": "",
+                "target_language": "",
+            },
+        )
+        assert response.status_code == 202, response.text
+        assert "job_id" in response.json()
+        _wait_until_called(worker)
+
+    worker_payload = worker.call_args.args[0]
+    assert worker_payload.snapshot.llm_provider == "ollama"
+    assert worker_payload.request.target_language == "vi"
 
 
 def test_translate_accepts_explicit_provider(client):
-    response = client.post(
-        "/api/translate",
-        json={
-            "novel": "demo",
-            "provider": "ollama",
-            "target_language": "vi",
-        },
-    )
-    assert response.status_code == 202, response.text
+    result = _translation_result()
+    with patch("src.api.routes.translate.run_translation_worker", return_value=WorkerCompleted(result, None)) as worker:
+        response = client.post(
+            "/api/translate",
+            json={
+                "novel": "demo",
+                "provider": "ollama",
+                "target_language": "vi",
+            },
+        )
+        assert response.status_code == 202, response.text
+        _wait_until_called(worker)
 
 
 def test_translate_accepts_missing_fields(client):
     """Frontend may POST only the novel name; all overrides are optional."""
-    response = client.post("/api/translate", json={"novel": "demo"})
-    assert response.status_code == 202, response.text
+    result = _translation_result()
+    with patch("src.api.routes.translate.run_translation_worker", return_value=WorkerCompleted(result, None)) as worker:
+        response = client.post("/api/translate", json={"novel": "demo"})
+        assert response.status_code == 202, response.text
+        _wait_until_called(worker)
 
 
 def test_translate_writes_reports_next_to_custom_jobs_directory(client):
-    result = SimpleNamespace(
+    result = TranslationResult(
         novel="demo",
         total=1,
         success=1,
         failed=0,
         skipped=False,
+        dry_run=False,
         cancelled=False,
         chapters_attempted=[1],
         failures=[],
         started_at=time.time(),
+        finished_at=time.time(),
     )
-    with patch("src.api.routes.translate.run_translation", return_value=result) as translate:
+    with patch(
+        "src.api.routes.translate.run_translation_worker",
+        return_value=WorkerCompleted(result, None),
+    ) as translate:
         response = client.post(
             "/api/translate",
             json={"novel": "demo", "translate_metadata": False},
@@ -114,25 +123,29 @@ def test_translate_writes_reports_next_to_custom_jobs_directory(client):
 
         assert translate.called
         runtime_root = client.app.state.app_state.jobs_dir.parent
-        assert translate.call_args.kwargs["report_root"] == runtime_root / "reports"
-        assert translate.call_args.kwargs["transaction_root"] == runtime_root / "transactions"
-        assert "rejected_root" not in translate.call_args.kwargs
+        worker_payload = translate.call_args.args[0]
+        assert worker_payload.runtime_root == runtime_root
 
 
 def test_translate_chapter_failures_finish_with_errors_and_notify_failed(client):
-    result = SimpleNamespace(
+    result = TranslationResult(
         novel="demo",
         total=2,
         success=1,
         failed=1,
         skipped=False,
+        dry_run=False,
         cancelled=False,
         chapters_attempted=[1, 2],
         failures=[2],
         started_at=time.time(),
+        finished_at=time.time(),
     )
     with (
-        patch("src.api.routes.translate.run_translation", return_value=result),
+        patch(
+            "src.api.routes.translate.run_translation_worker",
+            return_value=WorkerCompleted(result, None),
+        ),
         patch("src.api.routes.translate.send_run_notification") as notify,
     ):
         response = client.post(
@@ -152,3 +165,58 @@ def test_translate_chapter_failures_finish_with_errors_and_notify_failed(client)
     notify.assert_called_once()
     assert notify.call_args.kwargs["status"] == "Failed"
     assert notify.call_args.kwargs["stats"] == "Translated: 1/2 · Failed: 1"
+
+
+def test_translate_worker_failure_preserves_error_details_and_notifies(client):
+    error = TranslationWorkerError(
+        "Translation worker exited without a result.",
+        code="worker_exit",
+        details={"exit_code": 17},
+    )
+    with (
+        patch("src.api.routes.translate.run_translation_worker", side_effect=error),
+        patch("src.api.routes.translate.send_run_notification") as notify,
+    ):
+        response = client.post(
+            "/api/translate",
+            json={"novel": "demo", "translate_metadata": False},
+        )
+        assert response.status_code == 202, response.text
+        job_id = response.json()["job_id"]
+        deadline = time.time() + 5
+        job = client.get(f"/api/jobs/{job_id}").json()
+        while job["status"] in {"queued", "running", "cancelling"} and time.time() < deadline:
+            time.sleep(0.01)
+            job = client.get(f"/api/jobs/{job_id}").json()
+
+    assert job["status"] == "failed"
+    assert job["error"] == {
+        "code": "worker_exit",
+        "message": "Translation worker exited without a result.",
+        "details": {"exit_code": 17},
+    }
+    notify.assert_called_once()
+    assert notify.call_args.kwargs["status"] == "Failed"
+
+
+def _translation_result() -> TranslationResult:
+    return TranslationResult(
+        novel="demo",
+        total=1,
+        success=1,
+        failed=0,
+        skipped=False,
+        dry_run=False,
+        cancelled=False,
+        chapters_attempted=[1],
+        failures=[],
+        started_at=time.time(),
+        finished_at=time.time(),
+    )
+
+
+def _wait_until_called(mock, timeout: float = 2.0) -> None:
+    deadline = time.time() + timeout
+    while time.time() < deadline and not mock.called:
+        time.sleep(0.01)
+    assert mock.called

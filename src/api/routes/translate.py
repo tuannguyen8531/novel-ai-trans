@@ -11,15 +11,13 @@ from fastapi import APIRouter
 
 from src.api.background.models import JobOutcome, JobStatus
 from src.api.dependencies import AuthenticatedPrincipal, JobManagerDependency, get_state
-from src.api.events import build_progress_emitter
+from src.api.events import JobEvent, build_progress_emitter
 from src.api.schemas import JobStartResponse, TranslationRequestPayload
+from src.api.translation.worker import TranslationWorkerPayload, WorkerLog, run_translation_worker
 from src.application import config as app_config
 from src.application.notifications import send_run_notification
 from src.application.novel import catalog, identity
-from src.application.novel.localization import localize_metadata
-from src.application.progress import ProgressEvent
 from src.application.translation.models import TranslationRequest
-from src.application.translation.workflow import run_translation
 
 router = APIRouter(tags=["translate"])
 
@@ -41,48 +39,49 @@ async def post_translate(
 
     loop = asyncio.get_running_loop()
     runtime_root = get_state().jobs_dir.parent
+    request = TranslationRequest(
+        novel=payload.novel,
+        source_language=payload.source_language or "",
+        target_language=payload.target_language or snapshot.target_language,
+        provider=payload.provider,
+        enable_review=payload.enable_review or False,
+        enable_summary=payload.enable_summary or False,
+        start_chapter=payload.start_chapter or 0,
+        end_chapter=payload.end_chapter or 0,
+        force=payload.force or False,
+        resume=payload.resume or False,
+        failed_only=payload.failed_only or False,
+        limit=payload.limit or 0,
+        dry_run=False,
+    )
 
     def _run(job, emit, cancel_event):
         started_at = time.time()
         progress_cb = build_progress_emitter(job, emit)
-        metadata_result = None
-        if payload.translate_metadata is not False:
-            progress_cb(
-                ProgressEvent(
-                    kind="phase",
-                    novel=payload.novel,
-                    message=f"Translating title and summary to {payload.target_language or snapshot.target_language}...",
+
+        def emit_log(worker_log: WorkerLog) -> None:
+            emit(
+                JobEvent(
+                    kind="log",
+                    job_id=job.id,
+                    novel=job.novel,
+                    payload={"message": worker_log.message, "level": worker_log.level},
                 )
             )
-            metadata_result = localize_metadata(
-                identity.resolve_root(snapshot.translated_dir),
-                payload.novel,
-                payload.target_language or snapshot.target_language,
-                force=payload.force_metadata or False,
-                cancel_event=cancel_event,
-            )
-        request = TranslationRequest(
-            novel=payload.novel,
-            source_language=payload.source_language or "",
-            target_language=payload.target_language or snapshot.target_language,
-            provider=payload.provider,
-            enable_review=payload.enable_review or False,
-            enable_summary=payload.enable_summary or False,
-            start_chapter=payload.start_chapter or 0,
-            end_chapter=payload.end_chapter or 0,
-            force=payload.force or False,
-            resume=payload.resume or False,
-            failed_only=payload.failed_only or False,
-            limit=payload.limit or 0,
-            dry_run=False,
-        )
+
         try:
-            result = run_translation(
-                request,
+            completed = run_translation_worker(
+                TranslationWorkerPayload(
+                    job_id=job.id,
+                    snapshot=snapshot,
+                    request=request,
+                    runtime_root=runtime_root,
+                    translate_metadata=payload.translate_metadata is not False,
+                    force_metadata=payload.force_metadata or False,
+                ),
                 progress_callback=progress_cb,
+                log_callback=emit_log,
                 cancel_event=cancel_event,
-                report_root=runtime_root / "reports",
-                transaction_root=runtime_root / "transactions",
             )
         except Exception as error:
             interrupted = cancel_event.is_set()
@@ -95,6 +94,8 @@ async def post_translate(
             )
             raise
 
+        result = completed.result
+        metadata_result = completed.metadata
         if result.cancelled:
             status = "Success"
             detail = "Translation interrupted."

@@ -110,10 +110,12 @@ class JobRunner:
             try:
                 callback_result = request.run(job, emit, job.cancel_event)
             except Exception as error:  # noqa: BLE001 - callback errors become job failures
+                raw_details = getattr(error, "details", None)
                 self._finish_failed(
                     job,
                     code=getattr(error, "code", "internal_error") or "internal_error",
                     message=str(error) or type(error).__name__,
+                    details=raw_details if isinstance(raw_details, dict) else None,
                 )
                 return
             finally:
@@ -136,16 +138,23 @@ class JobRunner:
         self.discard(job.id)
         self._persist(job)
 
-    def _finish_failed(self, job: Job, *, code: str, message: str) -> None:
+    def _finish_failed(
+        self,
+        job: Job,
+        *,
+        code: str,
+        message: str,
+        details: dict[str, Any] | None = None,
+    ) -> None:
         job.status = JobStatus.CANCELLED if job.status == JobStatus.CANCELLING else JobStatus.FAILED
-        job.error = JobError(code=code, message=message)
+        job.error = JobError(code=code, message=message, details=details)
         job.finished_at = datetime.now(UTC)
         self._bus.publish(
             JobEvent(
                 kind=job.status.value,
                 job_id=job.id,
                 novel=job.novel,
-                payload={"error": {"code": code, "message": message}},
+                payload={"error": {"code": code, "message": message, "details": details}},
             )
         )
         self._registry.finish(job)
