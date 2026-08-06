@@ -232,7 +232,7 @@ class CliTest(unittest.TestCase):
             unittest.mock.patch("src.cli.notifications.get_notifier", return_value=_StubNotifier()),
             unittest.mock.patch(
                 "src.cli.notifications.format_run_footer",
-                return_value="Time: 2026-01-01 00:00\nRuntime: 0s",
+                return_value="Start: 2026-01-01 00:00\nFinish: 2026-01-01 00:00\nRuntime: 0s",
             ),
             unittest.mock.patch("src.cli.crawl.crawler.run_crawl", return_value=crawl_result),
         ):
@@ -244,12 +244,13 @@ class CliTest(unittest.TestCase):
             sent[0],
             "\n".join(
                 [
-                    "Status: Failed",
+                    "Status: ❌",
                     "Task: Crawl",
                     "Novel: demo-slug",
                     "Detail: Crawl finished with chapter errors.",
-                    "Stats: New: 1/3 · Skipped: 1/3 · Failed: 1/3",
-                    "Time: 2026-01-01 00:00",
+                    "Stats: New 1/3 · Failed 1/3",
+                    "Start: 2026-01-01 00:00",
+                    "Finish: 2026-01-01 00:00",
                     "Runtime: 0s",
                 ]
             ),

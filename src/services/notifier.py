@@ -25,15 +25,35 @@ _SEND_MESSAGE_PATH = "/bot{token}/sendMessage"
 _DEFAULT_TIMEOUT_SECONDS = 10.0
 
 
+def format_status(status: str) -> str:
+    """Render run status as a compact Telegram-friendly icon."""
+    return {"Success": "✔️", "Failed": "❌"}.get(status, status)
+
+
 def format_run_footer(started_at: float) -> str:
     """Build the trailing timestamp + runtime block for run notifications.
 
-    Format: ``Time: YYYY-MM-DD HH:MM\\nRuntime: <seconds>s``.
+    Format: ``Start: YYYY-MM-DD HH:MM\\nFinish: YYYY-MM-DD HH:MM\\nRuntime: <duration>``.
     """
     now = time.time()
-    timestamp = datetime.fromtimestamp(now).strftime("%Y-%m-%d %H:%M")
+    start_timestamp = datetime.fromtimestamp(started_at).strftime("%Y-%m-%d %H:%M")
+    finish_timestamp = datetime.fromtimestamp(now).strftime("%Y-%m-%d %H:%M")
     runtime = max(0, int(now - started_at))
-    return f"Time: {timestamp}\nRuntime: {runtime}s"
+    return f"Start: {start_timestamp}\nFinish: {finish_timestamp}\nRuntime: {_format_runtime(runtime)}"
+
+
+def _format_runtime(seconds: int) -> str:
+    """Format a duration using only non-zero units, down to seconds."""
+    days, remainder = divmod(seconds, 24 * 60 * 60)
+    hours, remainder = divmod(remainder, 60 * 60)
+    minutes, seconds = divmod(remainder, 60)
+    parts = [
+        f"{days}d" if days else "",
+        f"{hours}h" if hours else "",
+        f"{minutes}m" if minutes else "",
+        f"{seconds}s" if seconds or not (days or hours or minutes) else "",
+    ]
+    return " ".join(part for part in parts if part)
 
 
 def send_run_notification(
@@ -48,7 +68,7 @@ def send_run_notification(
     """Send the shared plain-text completion message used by background jobs."""
     notifier = get_notifier()
     lines = [
-        f"Status: {status}",
+        f"Status: {format_status(status)}",
         f"Task: {task}",
         f"Novel: {notifier.escape(novel or 'novel')}",
         f"Detail: {notifier.escape(detail)}",

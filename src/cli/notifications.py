@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from src.application.translation.models import TranslationResult
-from src.services.notifier import format_run_footer, get_notifier
+from src.services.notifier import format_run_footer, format_status, get_notifier
 
 
 def escape_notification(value: str) -> str:
@@ -13,7 +13,7 @@ def escape_notification(value: str) -> str:
 def notify_crawl_failure(novel: str, detail: str, *, started_at: float) -> None:
     notifier = get_notifier()
     notifier.send(
-        "Status: Failed\n"
+        f"Status: {format_status('Failed')}\n"
         "Task: Crawl\n"
         f"Novel: {notifier.escape(novel)}\n"
         f"Detail: {notifier.escape(detail)}\n"
@@ -26,7 +26,6 @@ def notify_crawl_result(
     *,
     failed: int,
     fetched: int,
-    skipped: int,
     total: int,
     started_at: float,
 ) -> None:
@@ -34,11 +33,11 @@ def notify_crawl_result(
     status = "Success" if failed == 0 else "Failed"
     detail = "Crawl finished." if failed == 0 else "Crawl finished with chapter errors."
     notifier.send(
-        f"Status: {status}\n"
+        f"Status: {format_status(status)}\n"
         "Task: Crawl\n"
         f"Novel: {notifier.escape(novel)}\n"
         f"Detail: {detail}\n"
-        f"Stats: New: {fetched}/{total} · Skipped: {skipped}/{total} · Failed: {failed}/{total}\n"
+        f"Stats: New {fetched}/{total} · Failed {failed}/{total}\n"
         f"{format_run_footer(started_at)}"
     )
 
@@ -53,27 +52,27 @@ def notify_translation_result(result: TranslationResult, *, started_at: float | 
     started = started_at if started_at is not None else result.started_at
     if result.cancelled:
         message = (
-            "Status: Success\n"
-            "Task: Translation\n"
+            f"Status: {format_status('Success')}\n"
+            "Task: Translate\n"
             f"Novel: {title}\n"
             "Detail: Translation interrupted.\n"
-            f"Stats: Translated: {result.success}/{result.total}"
+            f"Stats: Translated {result.success}/{result.total} · Failed {result.failed}/{result.total}"
         )
     elif result.failed > 0:
         message = (
-            "Status: Failed\n"
-            "Task: Translation\n"
+            f"Status: {format_status('Failed')}\n"
+            "Task: Translate\n"
             f"Novel: {title}\n"
             "Detail: Translation finished with errors.\n"
-            f"Stats: Translated: {result.success}/{result.total} · Failed: {result.failed}"
+            f"Stats: Translated {result.success}/{result.total} · Failed {result.failed}/{result.total}"
         )
     else:
         message = (
-            "Status: Success\n"
-            "Task: Translation\n"
+            f"Status: {format_status('Success')}\n"
+            "Task: Translate\n"
             f"Novel: {title}\n"
             "Detail: Translation finished.\n"
-            f"Stats: Translated: {result.success}/{result.total}"
+            f"Stats: Translated {result.success}/{result.total} · Failed {result.failed}/{result.total}"
         )
     notifier.send(message + "\n" + format_run_footer(started))
 
@@ -83,8 +82,8 @@ def notify_translation_failure(novel: str, detail: str, *, started_at: float) ->
     notifier = get_notifier()
     title = notifier.escape(novel) if novel else "novel"
     message = (
-        "Status: Failed\n"
-        "Task: Translation\n"
+        f"Status: {format_status('Failed')}\n"
+        "Task: Translate\n"
         f"Novel: {title}\n"
         f"Detail: {notifier.escape(detail) if detail else 'Translation failed.'}"
     )

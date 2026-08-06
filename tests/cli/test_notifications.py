@@ -44,7 +44,7 @@ def notify(value: TranslationResult) -> list[str]:
         patch.object(
             notifications,
             "format_run_footer",
-            return_value="Time: 2026-01-01 00:00\nRuntime: 0s",
+            return_value="Start: 2026-01-01 00:00\nFinish: 2026-01-01 00:00\nRuntime: 0s",
         ),
     ):
         notifications.notify_translation_result(value)
@@ -55,12 +55,13 @@ def test_notifies_success() -> None:
     assert notify(result()) == [
         "\n".join(
             [
-                "Status: Success",
-                "Task: Translation",
+                "Status: ✔️",
+                "Task: Translate",
                 "Novel: demo-novel",
                 "Detail: Translation finished.",
-                "Stats: Translated: 3/3",
-                "Time: 2026-01-01 00:00",
+                "Stats: Translated 3/3 · Failed 0/3",
+                "Start: 2026-01-01 00:00",
+                "Finish: 2026-01-01 00:00",
                 "Runtime: 0s",
             ]
         )
@@ -70,17 +71,17 @@ def test_notifies_success() -> None:
 def test_notifies_partial_failure() -> None:
     messages = notify(result(total=5, success=3, failed=2, failures=[4, 5]))
 
-    assert "Status: Failed" in messages[0]
+    assert "Status: ❌" in messages[0]
     assert "Detail: Translation finished with errors." in messages[0]
-    assert "Stats: Translated: 3/5 · Failed: 2" in messages[0]
+    assert "Stats: Translated 3/5 · Failed 2/5" in messages[0]
 
 
 def test_notifies_interruption_as_success() -> None:
     messages = notify(result(total=5, success=2, cancelled=True))
 
-    assert "Status: Success" in messages[0]
+    assert "Status: ✔️" in messages[0]
     assert "Detail: Translation interrupted." in messages[0]
-    assert "Stats: Translated: 2/5" in messages[0]
+    assert "Stats: Translated 2/5 · Failed 0/5" in messages[0]
 
 
 def test_skipped_result_does_not_notify() -> None:
@@ -94,7 +95,7 @@ def test_notifies_failure_detail() -> None:
         patch.object(
             notifications,
             "format_run_footer",
-            return_value="Time: 2026-01-01 00:00\nRuntime: 0s",
+            return_value="Start: 2026-01-01 00:00\nFinish: 2026-01-01 00:00\nRuntime: 0s",
         ),
     ):
         notifications.notify_translation_failure(
@@ -106,11 +107,12 @@ def test_notifies_failure_detail() -> None:
     assert notifier.messages == [
         "\n".join(
             [
-                "Status: Failed",
-                "Task: Translation",
+                "Status: ❌",
+                "Task: Translate",
                 "Novel: demo-novel",
                 "Detail: no input chapters",
-                "Time: 2026-01-01 00:00",
+                "Start: 2026-01-01 00:00",
+                "Finish: 2026-01-01 00:00",
                 "Runtime: 0s",
             ]
         )

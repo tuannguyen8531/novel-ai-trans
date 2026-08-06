@@ -184,7 +184,7 @@ def test_translate_chapter_failures_finish_with_errors_and_notify_failed(client)
     assert job["result"]["failed"] == 1
     notify.assert_called_once()
     assert notify.call_args.kwargs["status"] == "Failed"
-    assert notify.call_args.kwargs["stats"] == "Translated: 1/2 · Failed: 1"
+    assert notify.call_args.kwargs["stats"] == "Translated 1/2 · Failed 1/2"
 
 
 def test_translate_worker_failure_preserves_error_details_and_notifies(client):

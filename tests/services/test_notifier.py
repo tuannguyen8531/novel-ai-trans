@@ -136,25 +136,30 @@ class TelegramNotifierTest(unittest.TestCase):
         notifier.send.return_value = True
         with (
             patch.object(notifier_module, "get_notifier", return_value=notifier),
-            patch.object(notifier_module, "format_run_footer", return_value="Time: now\nRuntime: 1s"),
+            patch.object(
+                notifier_module,
+                "format_run_footer",
+                return_value="Start: now\nFinish: now\nRuntime: 1s",
+            ),
         ):
             sent = send_run_notification(
                 status="Success",
                 task="Crawl",
                 novel="demo",
                 detail="Crawl finished.",
-                stats="New: 2/2 · Skipped: 0/2 · Failed: 0/2",
+                stats="New 2/2 · Failed 0/2",
                 started_at=0,
             )
 
         self.assertTrue(sent)
         notifier.send.assert_called_once_with(
-            "Status: Success\n"
+            "Status: ✔️\n"
             "Task: Crawl\n"
             "Novel: demo\n"
             "Detail: Crawl finished.\n"
-            "Stats: New: 2/2 · Skipped: 0/2 · Failed: 0/2\n"
-            "Time: now\n"
+            "Stats: New 2/2 · Failed 0/2\n"
+            "Start: now\n"
+            "Finish: now\n"
             "Runtime: 1s"
         )
 
@@ -281,7 +286,10 @@ class CliNotificationWiringTest(unittest.TestCase):
 
         with (
             patch("src.cli.notifications.get_notifier", return_value=_Stub()),
-            patch("src.cli.notifications.format_run_footer", return_value="Time: 2026-01-01 00:00\nRuntime: 0s"),
+            patch(
+                "src.cli.notifications.format_run_footer",
+                return_value="Start: 2026-01-01 00:00\nFinish: 2026-01-01 00:00\nRuntime: 0s",
+            ),
             patch.object(
                 crawl_module,
                 "run_crawl",
@@ -309,34 +317,42 @@ class CliNotificationWiringTest(unittest.TestCase):
 
         self.assertEqual(rc, 1)
         self.assertEqual(len(sent), 1)
-        self.assertIn("Status: Failed", sent[0])
+        self.assertIn("Status: ❌", sent[0])
         self.assertIn("Task: Crawl", sent[0])
         self.assertIn("Detail:", sent[0])
         self.assertIn("5 consecutive chapter failures", sent[0])
 
 
 class FormatRunFooterTest(unittest.TestCase):
-    def test_footer_has_timestamp_and_runtime(self) -> None:
+    def test_footer_has_start_finish_and_runtime(self) -> None:
         import re
         import time as _time
 
         started = _time.time() - 30.0
         footer = format_run_footer(started)
         lines = footer.split("\n")
-        self.assertEqual(len(lines), 2)
-        self.assertRegex(lines[0], r"^Time: \d{4}-\d{2}-\d{2} \d{2}:\d{2}$")
-        self.assertRegex(lines[1], r"^Runtime: (\d+)s$")
-        match = re.search(r"Runtime: (\d+)s", lines[1])
+        self.assertEqual(len(lines), 3)
+        self.assertRegex(lines[0], r"^Start: \d{4}-\d{2}-\d{2} \d{2}:\d{2}$")
+        self.assertRegex(lines[1], r"^Finish: \d{4}-\d{2}-\d{2} \d{2}:\d{2}$")
+        self.assertRegex(lines[2], r"^Runtime: .+$")
+        match = re.search(r"Runtime: (.+)$", lines[2])
         assert match is not None
-        runtime = int(match.group(1))
-        self.assertGreaterEqual(runtime, 29)
+        self.assertIn(match.group(1), {"30s", "31s"})
 
     def test_footer_clamps_negative_runtime_to_zero(self) -> None:
         footer = format_run_footer(2_000_000_000.0)
         # started_at far in the future → now - started_at negative → clamped to 0
-        self.assertRegex(footer.split("\n")[1], r"^Runtime: \d+s$")
-        runtime = int(footer.split("\n")[1].removeprefix("Runtime: ").removesuffix("s"))
-        self.assertGreaterEqual(runtime, 0)
+        self.assertEqual(footer.split("\n")[2], "Runtime: 0s")
+
+    def test_footer_formats_non_zero_duration_units(self) -> None:
+        with patch.object(notifier_module.time, "time", return_value=0.0):
+            self.assertEqual(format_run_footer(-90_605).split("\n")[2], "Runtime: 1d 1h 10m 5s")
+
+        with patch.object(notifier_module.time, "time", return_value=0.0):
+            self.assertEqual(format_run_footer(-3_605).split("\n")[2], "Runtime: 1h 5s")
+
+        with patch.object(notifier_module.time, "time", return_value=0.0):
+            self.assertEqual(format_run_footer(-310).split("\n")[2], "Runtime: 5m 10s")
 
 
 class ModuleReloadTest(unittest.TestCase):

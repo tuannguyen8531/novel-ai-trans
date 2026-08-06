@@ -93,7 +93,7 @@ async def post_translate(
             interrupted = cancel_event.is_set()
             send_run_notification(
                 status="Success" if interrupted else "Failed",
-                task="Translation",
+                task="Translate",
                 novel=payload.novel,
                 detail="Translation interrupted." if interrupted else (str(error) or type(error).__name__),
                 started_at=started_at,
@@ -114,12 +114,10 @@ async def post_translate(
         else:
             status = "Success"
             detail = "Translation finished."
-        stats = f"Translated: {result.success}/{result.total}"
-        if result.failed > 0:
-            stats += f" · Failed: {result.failed}"
+        stats = f"Translated {result.success}/{result.total} · Failed {result.failed}/{result.total}"
         send_run_notification(
             status=status,
-            task="Translation",
+            task="Translate",
             novel=result.novel,
             detail=detail,
             stats=stats,

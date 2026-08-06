@@ -145,7 +145,6 @@ def run(args: argparse.Namespace) -> int:
         result.novel,
         failed=result.failed,
         fetched=result.fetched,
-        skipped=result.skipped,
         total=result.total,
         started_at=started_at,
     )

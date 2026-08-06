@@ -70,11 +70,7 @@ async def post_crawl(
             task="Crawl",
             novel=result.novel,
             detail=detail,
-            stats=(
-                f"New: {result.fetched}/{result.total} · "
-                f"Skipped: {result.skipped}/{result.total} · "
-                f"Failed: {result.failed}/{result.total}"
-            ),
+            stats=(f"New {result.fetched}/{result.total} · Failed {result.failed}/{result.total}"),
             started_at=result.started_at,
         )
         return {

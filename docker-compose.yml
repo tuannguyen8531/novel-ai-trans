@@ -14,7 +14,6 @@ services:
     volumes:
       - ./translated:/app/translated
       - ./runtime:/app/runtime
-      - ./configs:/app/configs
       - ./.env:/app/.env
     depends_on:
       - ollama
