@@ -3,7 +3,6 @@ export interface Settings {
   target_language: string
   llm_provider: string
   fallback_provider: string
-  max_chapters: number
   chunk_mode: 'chars' | 'tokens'
   chunk_size: number
   chunk_overlap: number
@@ -29,7 +28,6 @@ export interface Settings {
 
 export type SettingsPatch = Partial<Pick<Settings,
   | 'target_language'
-  | 'max_chapters'
   | 'chunk_mode'
   | 'chunk_size'
   | 'chunk_overlap'

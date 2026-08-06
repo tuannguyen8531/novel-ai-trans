@@ -26,9 +26,10 @@ Only one long-running job may target a novel at a time. Jobs for different
 novels may run concurrently; global work such as config generation conflicts
 with every active job. The GUI links conflicts to the active job.
 
-The GUI does not replace the CLI; the two share the same `.env`, the same
-`translated/` directory, and the same progress files. Stop the server, run
-CLI commands, and the GUI sees the same state on next refresh.
+The GUI does not replace the CLI; the two share the same `runtime/settings.json`, the
+same secret values from `.env`, the same `translated/` directory, and the same
+progress files. Stop the server, run CLI commands, and the GUI sees the same
+state on next refresh.
 
 ## Build and start
 
@@ -74,16 +75,18 @@ Environment variables only — there are no CLI flags for `serve`:
 
 ## Configuration
 
-The server reads `.env` on startup, the same way the CLI does. The Settings page
-can update runtime, Telegram, and provider options and persist supported fields
-back to `.env`. Secrets are never displayed; Telegram credentials and
+The server reads `runtime/settings.json` for normal application settings, with
+environment variables taking precedence. The Settings page can update runtime,
+Telegram, and provider options and persist non-secret fields to
+`runtime/settings.json`.
+Secrets are never displayed; API keys, Telegram credentials, and
 `API_SECRET_KEY` must be edited directly in `.env`.
 
 To start from scratch:
 
 ```bash
 cp .env.example .env
-# Edit .env, then:
+# runtime/settings.json is created automatically; edit it if needed, then:
 uv run serve
 ```
 
@@ -286,7 +289,7 @@ days.
 | `Another long-running job is already active` (409) | Open the Jobs page to inspect or cancel the active job, or wait for it to finish |
 | Vite dev server cannot reach the API | Confirm `uv run serve` is running on `127.0.0.1:8000`; Vite's dev proxy assumes that target |
 | `web/dist not present; API will run without the SPA bundle` | Run `uv run build`, then restart `uv run serve` |
-| Settings change does not survive a restart | Click **Save** on the Settings page after editing; the edit updates the running process, while Save writes it to `.env` |
+| Settings change does not survive a restart | Click **Save** on the Settings page after editing; the edit updates the running process, while Save writes non-secret values to `runtime/settings.json` |
 | Reload during translation loses live progress | Reopen the job; its persisted status remains available even if live streaming does not reconnect |
 | Cancel button does nothing immediately | An in-flight provider call must return or time out; use **Force stop** for a blocked translation |
 | Generated draft disappeared | Drafts expire after seven days and are also removed when consumed by a successful `PUT /api/configs/{name}` or by a manual `DELETE /api/config-drafts/{draft_id}` |

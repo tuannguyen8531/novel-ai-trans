@@ -35,7 +35,7 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
         type=int,
         default=None,
         dest="max_chapters",
-        help="Stop after fetching this many new chapters. Default: MAX_CHAPTERS env or unlimited.",
+        help="Stop after fetching this many new chapters. Default: unlimited.",
     )
     parser.add_argument(
         "--fail-fast",

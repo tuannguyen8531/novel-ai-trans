@@ -8,6 +8,7 @@ from pathlib import Path
 
 from fastapi import APIRouter
 
+from src import paths
 from src.api.dependencies import AuthenticatedPrincipal, get_state
 from src.api.errors import ExternalServiceError
 from src.api.schemas import (
@@ -31,7 +32,7 @@ from src.api.services.providers import (
     list_provider_models,
     list_providers,
 )
-from src.api.services.settings import apply_settings_patch, build_settings_response
+from src.api.services.settings import apply_settings_patch, build_settings_response, persist_config_to_settings
 from src.application import config as app_config
 
 router = APIRouter(tags=["settings"])
@@ -41,6 +42,7 @@ _logger = logging.getLogger(__name__)
 #   src/api/routes/system.py -> src/api/routes/ -> src/api/ -> src/ -> project/
 _PROJECT_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_ENV_PATH = _PROJECT_ROOT / ".env"
+DEFAULT_SETTINGS_PATH = paths.SETTINGS_PATH
 
 
 @router.get("/settings", response_model=SettingsResponse)
@@ -61,17 +63,11 @@ def patch_settings(
 def persist_settings(
     _: AuthenticatedPrincipal,
 ) -> SettingsPersistResponse:
-    """Write the current in-process settings back to ``.env``.
-
-    Non-secret fields are always written. Secret fields (provider API keys,
-    Telegram tokens) are only written when the in-memory value is non-empty,
-    so a freshly-cleared field is not written as an empty line.
-    """
+    """Write the current non-secret settings to ``settings.json``."""
     config = app_config.get_config()
-    env_path = DEFAULT_ENV_PATH
-    written = persist_config_to_env(
+    written = persist_config_to_settings(
         config,
-        env_path,
+        DEFAULT_SETTINGS_PATH,
         field_names={
             field_name
             for field_name in config.__dataclass_fields__
@@ -92,11 +88,11 @@ def persist_settings(
     _logger.info(
         "Persisted %d setting(s) to %s: %s",
         len(written),
-        env_path,
+        DEFAULT_SETTINGS_PATH,
         ", ".join(written) or "(none)",
     )
     return SettingsPersistResponse(
-        path=str(env_path),
+        path=str(DEFAULT_SETTINGS_PATH),
         changed_keys=sorted(written),
     )
 
@@ -106,13 +102,12 @@ def persist_telegram_settings(
     payload: TelegramSettingsPatch,
     _: AuthenticatedPrincipal,
 ) -> SettingsPersistResponse:
-    """Update Telegram runtime settings and persist only Telegram env fields."""
+    """Update Telegram runtime settings and persist only Telegram fields."""
     apply_settings_patch(payload.model_dump())
     config = app_config.get_config()
-    env_path = DEFAULT_ENV_PATH
-    written = persist_config_to_env(
+    written = persist_config_to_settings(
         config,
-        env_path,
+        DEFAULT_SETTINGS_PATH,
         field_names={
             "telegram_enabled",
             "telegram_api_base",
@@ -121,8 +116,8 @@ def persist_telegram_settings(
             "telegram_timeout_seconds",
         },
     )
-    _logger.info("Persisted Telegram settings to %s: %s", env_path, ", ".join(written) or "(none)")
-    return SettingsPersistResponse(path=str(env_path), changed_keys=sorted(written))
+    _logger.info("Persisted Telegram settings to %s: %s", DEFAULT_SETTINGS_PATH, ", ".join(written) or "(none)")
+    return SettingsPersistResponse(path=str(DEFAULT_SETTINGS_PATH), changed_keys=sorted(written))
 
 
 @router.post("/settings/providers/persist", response_model=SettingsPersistResponse)
@@ -130,7 +125,7 @@ def persist_provider_settings(
     payload: ProviderSettingsPatch,
     _: AuthenticatedPrincipal,
 ) -> SettingsPersistResponse:
-    """Update provider runtime settings and persist only provider env fields."""
+    """Update provider settings; keep API keys in ``.env``."""
     patch = payload.model_dump()
     if not patch.get("gemini_api_key"):
         patch.pop("gemini_api_key", None)
@@ -138,23 +133,28 @@ def persist_provider_settings(
         patch.pop("openrouter_api_key", None)
     apply_settings_patch(patch)
     config = app_config.get_config()
-    env_path = DEFAULT_ENV_PATH
-    written = persist_config_to_env(
+    written = persist_config_to_settings(
         config,
-        env_path,
+        DEFAULT_SETTINGS_PATH,
         field_names={
             "llm_provider",
             "fallback_provider",
             "ollama_base_url",
             "ollama_model",
-            "gemini_api_key",
             "gemini_model",
-            "openrouter_api_key",
             "openrouter_model",
         },
     )
-    _logger.info("Persisted provider settings to %s: %s", env_path, ", ".join(written) or "(none)")
-    return SettingsPersistResponse(path=str(env_path), changed_keys=sorted(written))
+    secret_written = persist_config_to_env(
+        config,
+        DEFAULT_ENV_PATH,
+        field_names={"gemini_api_key", "openrouter_api_key"},
+    )
+    _logger.info("Persisted provider settings to %s and keys to %s", DEFAULT_SETTINGS_PATH, DEFAULT_ENV_PATH)
+    return SettingsPersistResponse(
+        path=str(DEFAULT_SETTINGS_PATH),
+        changed_keys=sorted(set(written).union(secret_written)),
+    )
 
 
 @router.get("/providers", response_model=ProvidersResponse)

@@ -1,10 +1,21 @@
-"""Settings read/write for the API layer."""
+"""Settings response, patch, and settings.json persistence helpers."""
 
 from __future__ import annotations
+
+import json
+import os
+import tempfile
+from contextlib import suppress
+from dataclasses import fields
+from pathlib import Path
+from typing import Any
 
 from src.api.schemas import SettingsResponse
 from src.application import config as app_config
 from src.application.errors import ApplicationValidationError
+from src.config import SECRET_FIELDS, Config
+
+SECRET_SETTING_KEYS = SECRET_FIELDS | {field_name.upper() for field_name in SECRET_FIELDS}
 
 
 def build_settings_response() -> SettingsResponse:
@@ -14,7 +25,6 @@ def build_settings_response() -> SettingsResponse:
         target_language=config.target_language,
         llm_provider=config.llm_provider,
         fallback_provider=config.fallback_provider,
-        max_chapters=config.max_chapters,
         chunk_mode=config.chunk_mode,
         chunk_size=config.chunk_size,
         chunk_overlap=config.chunk_overlap,
@@ -45,3 +55,52 @@ def apply_settings_patch(patch: dict) -> SettingsResponse:
     except ValueError as error:
         raise ApplicationValidationError(str(error)) from error
     return build_settings_response()
+
+
+def config_to_settings_dict(
+    config: Config,
+    *,
+    field_names: set[str] | frozenset[str] | None = None,
+) -> dict[str, Any]:
+    """Return JSON-safe, non-secret values from *config*."""
+    allowed = field_names if field_names is not None else {field.name for field in fields(Config)} - SECRET_FIELDS
+    return {
+        field.name: getattr(config, field.name)
+        for field in fields(Config)
+        if field.name in allowed and field.name not in SECRET_FIELDS
+    }
+
+
+def persist_config_to_settings(
+    config: Config,
+    path: Path,
+    *,
+    field_names: set[str] | frozenset[str] | None = None,
+) -> list[str]:
+    """Persist selected non-secret values and return changed field names."""
+    existing: dict[str, Any] = {}
+    if path.exists():
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            raise ValueError(f"Unable to read settings file {path}: {error}") from error
+        if not isinstance(raw, dict):
+            raise ValueError(f"Settings file {path} must contain a JSON object.")
+        existing = {key: value for key, value in raw.items() if key not in SECRET_SETTING_KEYS}
+
+    new_values = config_to_settings_dict(config, field_names=field_names)
+    changed = [key for key, value in new_values.items() if existing.get(key) != value]
+    existing.update(new_values)
+    content = json.dumps(existing, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(content)
+        os.replace(tmp_name, path)
+    except Exception:
+        with suppress(FileNotFoundError):
+            os.unlink(tmp_name)
+        raise
+    return changed
