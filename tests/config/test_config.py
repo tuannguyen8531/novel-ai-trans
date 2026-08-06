@@ -1,5 +1,6 @@
 """Tests for configuration: unified Config + per-site SiteConfig."""
 
+import json
 import os
 from typing import Any, cast
 from unittest.mock import patch
@@ -28,9 +29,60 @@ class TestConfig:
         with patch.dict(os.environ, {}, clear=True), patch("src.config.load_dotenv"):
             cfg = Config.from_env()
             assert cfg.translated_dir == "translated"
-            assert cfg.max_chapters == 0
 
-    def test_from_env_reads_env_vars(self):
+    def test_from_env_creates_default_settings_file(self, tmp_path):
+        settings_path = tmp_path / "runtime" / "settings.json"
+        with patch.dict(os.environ, {}, clear=True), patch("src.config.load_dotenv"):
+            cfg = Config.from_env(settings_path)
+
+        assert settings_path.exists()
+        assert json.loads(settings_path.read_text(encoding="utf-8"))["target_language"] == "vi"
+        assert cfg.target_language == "vi"
+
+    def test_ensure_settings_file_does_not_overwrite_existing_file(self, tmp_path):
+        settings_path = tmp_path / "runtime" / "settings.json"
+        settings_path.parent.mkdir()
+        settings_path.write_text('{"target_language": "en"}\n', encoding="utf-8")
+
+        result = Config.ensure_settings_file(settings_path)
+
+        assert result == settings_path
+        assert json.loads(settings_path.read_text(encoding="utf-8")) == {"target_language": "en"}
+
+    def test_from_settings_file(self, tmp_path):
+        settings_path = tmp_path / "settings.json"
+        settings_path.write_text(
+            json.dumps(
+                {
+                    "llm_provider": "gemini",
+                    "target_language": "en",
+                    "chunk_size": 2200,
+                    "enable_review": True,
+                    "gemini_api_key": "must-not-come-from-json",
+                }
+            ),
+            encoding="utf-8",
+        )
+        with patch.dict(os.environ, {}, clear=True), patch("src.config.load_dotenv"):
+            config = Config.from_env(settings_path)
+        assert config.llm_provider == "gemini"
+        assert config.target_language == "en"
+        assert config.chunk_size == 2200
+        assert config.enable_review is True
+        assert config.gemini_api_key == ""
+
+    def test_environment_overrides_settings_file(self, tmp_path):
+        settings_path = tmp_path / "settings.json"
+        settings_path.write_text('{"target_language": "vi", "chunk_size": 2200}', encoding="utf-8")
+        with (
+            patch.dict(os.environ, {"TARGET_LANGUAGE": "en", "CHUNK_SIZE": "1800"}, clear=True),
+            patch("src.config.load_dotenv"),
+        ):
+            config = Config.from_env(settings_path)
+        assert config.target_language == "en"
+        assert config.chunk_size == 1800
+
+    def test_from_env_reads_env_vars(self, tmp_path):
         env = {
             "LLM_PROVIDER": "gemini",
             "GEMINI_API_KEY": "test-key",
@@ -43,7 +95,7 @@ class TestConfig:
             "LOG_RETENTION_DAYS": "14",
         }
         with patch.dict(os.environ, env, clear=True), patch("src.config.load_dotenv"):
-            config = Config.from_env()
+            config = Config.from_env(tmp_path / "settings.json")
             assert config.llm_provider == "gemini"
             assert config.gemini_api_key == "test-key"
             assert config.target_language == "en"
@@ -64,7 +116,6 @@ class TestConfig:
                 os.environ,
                 {
                     "TRANSLATED_DIR": "/custom/translated",
-                    "MAX_CHAPTERS": "50",
                 },
                 clear=True,
             ),
@@ -72,7 +123,6 @@ class TestConfig:
         ):
             cfg = Config.from_env()
             assert cfg.translated_dir == "/custom/translated"
-            assert cfg.max_chapters == 50
 
     def test_translated_path_expands_user(self):
         env = {

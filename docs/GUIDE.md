@@ -103,7 +103,7 @@ uv run crawl my-novel --fail-fast
 | --- | --- | --- |
 | `novel` | Novel slug from `translated/{novel}/config.json` | required |
 | `--translated-output` | Per-novel translated root | `TRANSLATED_DIR` |
-| `-m, --max` | Stop after this many new chapters | `MAX_CHAPTERS` env or unlimited |
+| `-m, --max` | Stop after this many new chapters | unlimited |
 | `--fail-fast` | Stop on first chapter error | off |
 | `--ignore-robots` | Skip `robots.txt` check | off |
 | `--dry-run` | Only discover and print chapter links | off |

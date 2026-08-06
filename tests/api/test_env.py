@@ -82,9 +82,9 @@ def test_persist_updates_existing_keys_preserves_comments(tmp_path: Path):
     env_path = tmp_path / ".env"
     _write_env(
         env_path,
-        "# Top-level config\nTRANSLATED_DIR=translated\nTARGET_LANGUAGE=vi\n\n# Crawler section\nMAX_CHAPTERS=0\n",
+        "# Top-level config\nTRANSLATED_DIR=translated\nTARGET_LANGUAGE=vi\n\n# Crawler section\n",
     )
-    config = Config(translated_dir="books", target_language="en", max_chapters=5)
+    config = Config(translated_dir="books", target_language="en")
     persist_config_to_env(config, env_path)
 
     content = _read(env_path)
@@ -92,7 +92,6 @@ def test_persist_updates_existing_keys_preserves_comments(tmp_path: Path):
     assert "# Crawler section" in content
     assert "TRANSLATED_DIR=books" in content
     assert "TARGET_LANGUAGE=en" in content
-    assert "MAX_CHAPTERS=5" in content
 
 
 def test_persist_preserves_secrets_in_existing_file(tmp_path: Path):

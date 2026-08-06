@@ -24,7 +24,6 @@ class SettingsResponse(BaseModel):
     target_language: str
     llm_provider: str
     fallback_provider: str
-    max_chapters: int
     chunk_mode: Literal["chars", "tokens"]
     chunk_size: int
     chunk_overlap: int
@@ -52,7 +51,6 @@ class SettingsPatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     target_language: Literal["vi", "en"] | None = None
-    max_chapters: int | None = Field(None, ge=0)
     chunk_mode: Literal["chars", "tokens"] | None = None
     chunk_size: int | None = Field(None, ge=1)
     chunk_overlap: int | None = Field(None, ge=0)

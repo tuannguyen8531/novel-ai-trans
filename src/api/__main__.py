@@ -6,8 +6,11 @@ import os
 
 import uvicorn
 
+from src.config import Config
+
 
 def main() -> int:
+    Config.ensure_settings_file()
     host = os.getenv("API_HOST", "127.0.0.1")
     port = int(os.getenv("API_PORT", "8000"))
     log_level = os.getenv("API_LOG_LEVEL", "info")

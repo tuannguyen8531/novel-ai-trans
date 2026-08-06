@@ -1,8 +1,9 @@
 # Providers
 
-`novel-ai-trans` supports three LLM providers. Pick one in `.env` via
-`LLM_PROVIDER`, and optionally pair it with a different `FALLBACK_PROVIDER` for
-automatic failover.
+`novel-ai-trans` supports three LLM providers. Pick one in `runtime/settings.json` via
+`llm_provider`, and optionally pair it with a different `fallback_provider` for
+automatic failover. Environment variables with the old names remain supported
+and override the JSON file.
 
 | Provider    | Type   | Get started                                         |
 | ----------- | ------ | --------------------------------------------------- |
@@ -33,12 +34,14 @@ Local, free, nothing leaves your machine. Best for privacy and for testing.
    ollama pull qwen3:8b
    ```
 
-3. Configure `.env`:
+3. Configure `runtime/settings.json`:
 
-   ```env
-   LLM_PROVIDER=ollama
-   OLLAMA_BASE_URL=http://localhost:11434
-   OLLAMA_MODEL=qwen3:8b
+   ```json
+   {
+     "llm_provider": "ollama",
+     "ollama_base_url": "http://localhost:11434",
+     "ollama_model": "qwen3:8b"
+   }
    ```
 
 4. Verify it is running:
@@ -49,12 +52,14 @@ Local, free, nothing leaves your machine. Best for privacy and for testing.
 
 ### Remote Ollama
 
-Point `OLLAMA_BASE_URL` at any reachable Ollama instance (e.g. a GPU server on
+Point `ollama_base_url` at any reachable Ollama instance (e.g. a GPU server on
 your LAN):
 
-```env
-OLLAMA_BASE_URL=http://192.168.1.10:11434
-OLLAMA_MODEL=qwen3:14b
+```json
+{
+  "ollama_base_url": "http://192.168.1.10:11434",
+  "ollama_model": "qwen3:14b"
+}
 ```
 
 ### Recommended models
@@ -75,12 +80,16 @@ generators for those calls.
 Google's cloud API. Generous free tier, fast, good multilingual quality.
 
 1. Create a key at [Google AI Studio](https://aistudio.google.com/apikey).
-2. Configure `.env`:
+2. Put the provider and model in `runtime/settings.json`, and the API key in `.env`:
 
+   ```json
+   {
+     "llm_provider": "gemini",
+     "gemini_model": "gemini-2.5-flash"
+   }
+   ```
    ```env
-   LLM_PROVIDER=gemini
    GEMINI_API_KEY=your-key-here
-   GEMINI_MODEL=gemini-2.5-flash
    ```
 
 ### Recommended models
@@ -110,12 +119,16 @@ Access 200+ models (Anthropic, OpenAI, Qwen, DeepSeek, Mistral, etc.) through
 one API key.
 
 1. Create a key at [openrouter.ai/keys](https://openrouter.ai/keys).
-2. Configure `.env`:
+2. Put the provider and model in `runtime/settings.json`, and the API key in `.env`:
 
+   ```json
+   {
+     "llm_provider": "openrouter",
+     "openrouter_model": "qwen/qwen3-8b"
+   }
+   ```
    ```env
-   LLM_PROVIDER=openrouter
    OPENROUTER_API_KEY=sk-or-v1-...
-   OPENROUTER_MODEL=qwen/qwen3-8b
    ```
 
 ### Recommended models
@@ -142,22 +155,26 @@ override is supported.
 Pair a primary provider with a different fallback. If the primary raises an
 error, the fallback provider handles that call automatically.
 
+```json
+{
+  "llm_provider": "ollama",
+  "fallback_provider": "gemini"
+}
+```
 ```env
-LLM_PROVIDER=ollama
-FALLBACK_PROVIDER=gemini
 
 GEMINI_API_KEY=your-key-here
 ```
 
 Typical setups:
 
-- **Local-first with cloud backup**: `LLM_PROVIDER=ollama`,
-  `FALLBACK_PROVIDER=gemini`. Runs free on local hardware, falls back to Gemini
+- **Local-first with cloud backup**: `llm_provider=ollama`,
+  `fallback_provider=gemini`. Runs free on local hardware, falls back to Gemini
   if Ollama is down or a model errors.
-- **Cloud-first with local backup**: `LLM_PROVIDER=gemini`,
-  `FALLBACK_PROVIDER=ollama`. Useful if you want to keep going offline.
+- **Cloud-first with local backup**: `llm_provider=gemini`,
+  `fallback_provider=ollama`. Useful if you want to keep going offline.
 
-`FALLBACK_PROVIDER` must differ from `LLM_PROVIDER`; setting them equal is
+`fallback_provider` must differ from `llm_provider`; setting them equal is
 ignored. Make sure the fallback provider's credentials are set in `.env`.
 
 ## Choosing a model

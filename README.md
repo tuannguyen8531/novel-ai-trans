@@ -53,13 +53,32 @@ uv sync
 cp .env.example .env
 ```
 
-Configure a provider in `.env`. For example, with a local Ollama server:
+The first `uv run serve` or CLI command creates `runtime/settings.json` from
+the defaults defined in code. Configure normal application settings there and
+keep secrets in `.env`.
+For example, with a local Ollama server:
+
+```json
+{
+  "llm_provider": "ollama",
+  "ollama_base_url": "http://localhost:11434",
+  "ollama_model": "qwen3:8b"
+}
+```
+
+Environment variables, when present, override `runtime/settings.json`, which keeps
+Docker and CI deployments convenient. API keys and Telegram tokens are read
+from `.env` only.
 
 ```env
-LLM_PROVIDER=ollama
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=qwen3:8b
+GEMINI_API_KEY=
+OPENROUTER_API_KEY=
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_CHAT_ID=
 ```
+
+The web GUI's **Save** actions persist non-secret settings to
+`runtime/settings.json`.
 
 See the [provider guide](docs/PROVIDERS.md) for Gemini, OpenRouter, fallback,
 and model settings.

@@ -93,8 +93,6 @@ def run_crawl(
     max_chapters = request.max_chapters
     if max_chapters == 0:
         max_chapters = None
-    elif max_chapters is None and config.max_chapters > 0:
-        max_chapters = config.max_chapters
     emit(
         progress_callback,
         ProgressEvent(

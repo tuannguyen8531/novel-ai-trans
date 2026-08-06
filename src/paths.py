@@ -32,6 +32,7 @@ DISCOVERY_CACHE_DIR = CACHE_DIR / "discovery"
 DRAFT_DIR = RUNTIME_DIR / "drafts"
 JOB_DIR = RUNTIME_DIR / "jobs"
 CONFIG_DIR = _PROJECT_ROOT / "configs"
+SETTINGS_PATH = RUNTIME_DIR / "settings.json"
 DEFAULT_TRANSLATED_ROOT = _PROJECT_ROOT / "translated"
 LOCK_DIR = RUNTIME_DIR / "locks"
 GLOSSARY_BACKUP_DIR = BACKUP_DIR / "replacements"
@@ -201,6 +202,7 @@ __all__ = [
     "DRAFT_DIR",
     "JOB_DIR",
     "CONFIG_DIR",
+    "SETTINGS_PATH",
     "DEFAULT_TRANSLATED_ROOT",
     "LOCK_DIR",
     "GLOSSARY_BACKUP_DIR",
