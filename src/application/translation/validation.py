@@ -23,10 +23,6 @@ def apply_request_overrides(config: Config, request: TranslationRequest) -> str:
         config.target_language = request.target_language
     if request.provider:
         config.llm_provider = request.provider
-    if request.enable_review:
-        config.enable_review = True
-    if request.enable_summary:
-        config.enable_summary = True
     return target
 
 

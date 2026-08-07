@@ -8,8 +8,6 @@ export interface Settings {
   chunk_overlap: number
   review_threshold: number
   max_retries: number
-  enable_review: boolean
-  enable_summary: boolean
   translation_temperature: number
   translation_max_tokens: number
   gemini_api_key_configured: boolean
@@ -33,8 +31,6 @@ export type SettingsPatch = Partial<Pick<Settings,
   | 'chunk_overlap'
   | 'review_threshold'
   | 'max_retries'
-  | 'enable_review'
-  | 'enable_summary'
   | 'translation_temperature'
   | 'translation_max_tokens'
 >>

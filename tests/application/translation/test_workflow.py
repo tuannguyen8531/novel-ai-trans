@@ -79,7 +79,7 @@ def make_workflow(
         storage=TranslationStorage(),
         checkpoints=CheckpointStore(),
         reports=ReportStore(),
-        graph_factory=lambda: graph,
+        graph_factory=lambda review, summary: graph,
         profile_loader=lambda _novel: TranslationProfile("chinese"),
         progress_root=tmp_path / "progress",
         report_root=tmp_path / "reports",
@@ -326,7 +326,7 @@ def test_dry_run_emits_selection_without_building_graph(tmp_path) -> None:
     write_chapters(tmp_path, (1, 2))
     built = False
 
-    def graph_factory():
+    def graph_factory(review: bool, summary: bool):
         nonlocal built
         built = True
         return SuccessGraph()

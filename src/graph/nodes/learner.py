@@ -10,7 +10,6 @@ Runs after all chunks are translated. Responsible for:
 import logging
 import re
 
-from src.config import config
 from src.domain.candidates import ADDRESS_RULE_CANDIDATE_VERDICTS
 from src.domain.entities import (
     get_character_translated_name,
@@ -586,7 +585,7 @@ def _build_existing_chars_str(
     return "\n".join(parts)
 
 
-def learner_node(state: TranslationState) -> dict:
+def learner_node(state: TranslationState, *, summary: bool = False) -> dict:
     """Extract terms and create summary from the translated chapter."""
     novel_name = state["novel_name"]
     chapter_number = state["chapter_number"]
@@ -766,7 +765,7 @@ def learner_node(state: TranslationState) -> dict:
     )
 
     # --- 2. Create chapter summary ---
-    if not config.enable_summary:
+    if not summary:
         summary_response = ""
     else:
         summary_system_prompt = render_prompt("summarize", target_language=target_language, target_name=target_name)

@@ -140,7 +140,10 @@ def _has_more_chunks(state: TranslationState) -> str:
     return "learn"
 
 
-def build_graph() -> CompiledStateGraph[
+def build_graph(
+    review: bool = False,
+    summary: bool = False,
+) -> CompiledStateGraph[
     TranslationState,
     None,
     TranslationState,
@@ -149,10 +152,9 @@ def build_graph() -> CompiledStateGraph[
     """
     Build and compile the translation pipeline graph.
 
-    If config.enable_review is False, the review node is skipped entirely.
+    Review and summary are selected per translation job, not application-wide.
     """
     graph = StateGraph(TranslationState)
-    enable_review = config.enable_review
 
     # Add nodes
     graph.add_node("detect", detector_node)
@@ -163,7 +165,11 @@ def build_graph() -> CompiledStateGraph[
     graph.add_node("accept_chunk", _accept_chunk)
     graph.add_node("increment_retry", _increment_retry)
     graph.add_node("reject_chunk", _reject_chunk)
-    graph.add_node("learn", learner_node)
+
+    def configured_learner(state: TranslationState) -> dict:
+        return learner_node(state, summary=summary)
+
+    graph.add_node("learn", configured_learner)
 
     # Wire edges: linear start
     graph.add_edge(START, "detect")
@@ -172,7 +178,7 @@ def build_graph() -> CompiledStateGraph[
     graph.add_edge("chunk", "translate")
     graph.add_edge("translate", "quality")
 
-    quality_next = "review" if enable_review else "accept_chunk"
+    quality_next = "review" if review else "accept_chunk"
     graph.add_conditional_edges(
         "quality",
         _after_quality,
@@ -180,7 +186,7 @@ def build_graph() -> CompiledStateGraph[
     )
     graph.add_edge("increment_retry", "translate")
 
-    if enable_review:
+    if review:
         # With review: mechanically clean translations receive the optional LLM review.
         graph.add_node("review", reviewer_node)
 

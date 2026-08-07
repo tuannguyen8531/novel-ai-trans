@@ -49,8 +49,8 @@ export function useTranslation() {
       force: force.value,
       resume: resume.value,
       failed_only: failedOnly.value,
-      enable_review: review.value,
-      enable_summary: summary.value,
+      review: review.value,
+      summary: summary.value,
       translate_metadata: translateMetadata.value,
       force_metadata: translateMetadata.value
     }

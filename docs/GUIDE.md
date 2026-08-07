@@ -390,10 +390,10 @@ in the translated text are pulled from
 The deterministic checks described above are always enabled. Two additional,
 token-heavier steps are optional:
 
-- **Review** (`--review` or `ENABLE_REVIEW=true`): a second pass scores each
+- **Review** (`--review`): a second pass scores each
   chunk against the source. Chunks below `REVIEW_THRESHOLD` (default `0.7`) are
   retried up to `MAX_RETRIES` times.
-- **Summary** (`--summary` or `ENABLE_SUMMARY=true`): generates a short chapter
+- **Summary** (`--summary`): generates a short chapter
   summary stored in the glossary's `chapter_summaries`, used as extra context
   for later chapters.
 

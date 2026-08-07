@@ -30,8 +30,6 @@ def build_settings_response() -> SettingsResponse:
         chunk_overlap=config.chunk_overlap,
         review_threshold=config.review_threshold,
         max_retries=config.max_retries,
-        enable_review=config.enable_review,
-        enable_summary=config.enable_summary,
         translation_temperature=config.translation_temperature,
         translation_max_tokens=config.translation_max_tokens,
         gemini_api_key_configured=bool(config.gemini_api_key),

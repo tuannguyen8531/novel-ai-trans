@@ -32,11 +32,6 @@ async def post_translate(
         llm_provider=payload.provider or None,
         target_language=payload.target_language or None,
     )
-    if payload.enable_review is not None:
-        snapshot.enable_review = payload.enable_review
-    if payload.enable_summary is not None:
-        snapshot.enable_summary = payload.enable_summary
-
     loop = asyncio.get_running_loop()
     runtime_root = get_state().jobs_dir.parent
     request = TranslationRequest(
@@ -44,8 +39,8 @@ async def post_translate(
         source_language=payload.source_language or "",
         target_language=payload.target_language or snapshot.target_language,
         provider=payload.provider,
-        enable_review=payload.enable_review or False,
-        enable_summary=payload.enable_summary or False,
+        review=payload.review or False,
+        summary=payload.summary or False,
         start_chapter=payload.start_chapter or 0,
         end_chapter=payload.end_chapter or 0,
         force=payload.force or False,

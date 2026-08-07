@@ -11,8 +11,8 @@ class TranslationRequest:
     source_language: str = ""
     target_language: str | None = None
     provider: str | None = None
-    enable_review: bool = False
-    enable_summary: bool = False
+    review: bool = False
+    summary: bool = False
     start_chapter: int = 0
     end_chapter: int = 0
     force: bool = False

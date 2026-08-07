@@ -44,7 +44,7 @@ from src.services.translation.storage import TranslationStorage
 
 
 class GraphFactory(Protocol):
-    def __call__(self) -> TranslationGraph: ...
+    def __call__(self, review: bool, summary: bool) -> TranslationGraph: ...
 
 
 def close_translation_provider() -> None:
@@ -204,7 +204,7 @@ class TranslationWorkflow:
         if stored_genres and requested_source_language and requested_source_language != metadata_source_language:
             raise ApplicationValidationError("Translation source-language override does not match the novel metadata genres.")
         genres = normalize_genres(source_language, stored_genres)
-        graph = self.graph_factory()
+        graph = self.graph_factory(request.review, request.summary)
         success_count = 0
         failures: list[int] = []
         attempted: list[int] = []

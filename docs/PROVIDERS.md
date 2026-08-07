@@ -224,5 +224,5 @@ Quality-control knobs:
 - `REVIEW_THRESHOLD` (default `0.7`) — minimum review score before a chunk is
   retried. Lower = more retries, higher cost, tighter quality.
 - `MAX_RETRIES` (default `2`) — retry count per chunk when review is on.
-- `ENABLE_REVIEW` / `ENABLE_SUMMARY` (default `false`) — turn on the optional
-  review and summary steps globally, or use `--review` / `--summary` per run.
+- Review and summary steps are disabled by default and can be enabled per run
+  with `--review` / `--summary`.

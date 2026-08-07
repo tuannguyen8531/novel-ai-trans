@@ -21,8 +21,6 @@ class TestConfig:
             assert config.target_language == "vi"
             assert config.chunk_mode == "chars"
             assert config.chunk_size == 1500
-            assert config.enable_review is False
-            assert config.enable_summary is False
             assert config.telegram_enabled is False
 
     def test_from_env_defaults(self):
@@ -57,7 +55,6 @@ class TestConfig:
                     "llm_provider": "gemini",
                     "target_language": "en",
                     "chunk_size": 2200,
-                    "enable_review": True,
                     "gemini_api_key": "must-not-come-from-json",
                 }
             ),
@@ -68,7 +65,6 @@ class TestConfig:
         assert config.llm_provider == "gemini"
         assert config.target_language == "en"
         assert config.chunk_size == 2200
-        assert config.enable_review is True
         assert config.gemini_api_key == ""
 
     def test_environment_overrides_settings_file(self, tmp_path):
@@ -89,8 +85,6 @@ class TestConfig:
             "CHUNK_MODE": "tokens",
             "CHUNK_SIZE": "2000",
             "TARGET_LANGUAGE": "en",
-            "ENABLE_REVIEW": "true",
-            "ENABLE_SUMMARY": "true",
             "TELEGRAM_ENABLED": "true",
             "LOG_RETENTION_DAYS": "14",
         }
@@ -101,8 +95,6 @@ class TestConfig:
             assert config.target_language == "en"
             assert config.chunk_mode == "tokens"
             assert config.chunk_size == 2000
-            assert config.enable_review is True
-            assert config.enable_summary is True
             assert config.telegram_enabled is True
             assert config.log_retention_days == 14
 
@@ -142,31 +134,6 @@ class TestConfig:
         ):
             cfg = Config.from_env()
             assert cfg.translated_path.is_absolute()
-
-    def test_enable_review_variants(self):
-        variants_true = ["true", "True", "TRUE", "1", "yes", "YES"]
-        variants_false = ["false", "False", "0", "no", "NO", ""]
-
-        with patch("src.config.load_dotenv"):
-            for val in variants_true:
-                with patch.dict(os.environ, {"ENABLE_REVIEW": val}, clear=True):
-                    assert Config.from_env().enable_review is True, f"Failed for {val}"
-
-            for val in variants_false:
-                with patch.dict(os.environ, {"ENABLE_REVIEW": val}, clear=True):
-                    assert Config.from_env().enable_review is False, f"Failed for {val}"
-
-    def test_enable_summary_default(self):
-        with patch.dict(os.environ, {}, clear=True), patch("src.config.load_dotenv"):
-            config = Config()
-            assert config.enable_summary is False
-
-    def test_enable_summary_from_env(self):
-        with (
-            patch.dict(os.environ, {"ENABLE_SUMMARY": "true"}, clear=True),
-            patch("src.config.load_dotenv"),
-        ):
-            assert Config.from_env().enable_summary is True
 
     def test_rejects_unknown_chunk_mode(self):
         with pytest.raises(ValueError, match="chunk_mode"):

@@ -29,8 +29,6 @@ class SettingsResponse(BaseModel):
     chunk_overlap: int
     review_threshold: float
     max_retries: int
-    enable_review: bool
-    enable_summary: bool
     translation_temperature: float
     translation_max_tokens: int
     gemini_api_key_configured: bool
@@ -56,8 +54,6 @@ class SettingsPatch(BaseModel):
     chunk_overlap: int | None = Field(None, ge=0)
     review_threshold: float | None = Field(None, ge=0, le=1)
     max_retries: int | None = Field(None, ge=0)
-    enable_review: bool | None = None
-    enable_summary: bool | None = None
     translation_temperature: float | None = Field(None, ge=0, le=1)
     translation_max_tokens: int | None = Field(None, ge=1)
 
@@ -295,8 +291,8 @@ class TranslationRequestPayload(BaseModel):
     source_language: str | None = None
     target_language: Literal["", "vi", "en"] | None = None
     provider: Literal["", "ollama", "gemini", "openrouter"] | None = None
-    enable_review: bool | None = None
-    enable_summary: bool | None = None
+    review: bool | None = None
+    summary: bool | None = None
     translate_metadata: bool | None = None
     force_metadata: bool | None = None
     start_chapter: int | None = Field(None, ge=0)

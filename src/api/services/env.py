@@ -51,8 +51,6 @@ _FIELD_TO_ENV: dict[str, str] = {
     "chunk_overlap": "CHUNK_OVERLAP",
     "review_threshold": "REVIEW_THRESHOLD",
     "max_retries": "MAX_RETRIES",
-    "enable_review": "ENABLE_REVIEW",
-    "enable_summary": "ENABLE_SUMMARY",
     "telegram_enabled": "TELEGRAM_ENABLED",
     "telegram_bot_token": "TELEGRAM_BOT_TOKEN",
     "telegram_chat_id": "TELEGRAM_CHAT_ID",

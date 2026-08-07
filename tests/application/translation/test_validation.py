@@ -14,15 +14,15 @@ def test_request_overrides_update_active_workflow_config() -> None:
         novel="novel",
         target_language="en",
         provider="gemini",
-        enable_review=True,
-        enable_summary=True,
+        review=True,
+        summary=True,
     )
 
     assert apply_request_overrides(config, request) == "en"
     assert config.target_language == "en"
     assert config.llm_provider == "gemini"
-    assert config.enable_review is True
-    assert config.enable_summary is True
+    assert request.review is True
+    assert request.summary is True
 
 
 def test_invalid_target_raises_application_validation_error() -> None:

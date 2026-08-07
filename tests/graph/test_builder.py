@@ -23,7 +23,6 @@ class TestAfterReview:
         with patch("src.graph.builder.config") as mock_config:
             mock_config.review_threshold = 0.7
             mock_config.max_retries = 2
-            mock_config.enable_review = True
 
             state = initial_state("text", "chinese", "novel", 1)
             state["review_score"] = 0.9
@@ -35,7 +34,6 @@ class TestAfterReview:
         with patch("src.graph.builder.config") as mock_config:
             mock_config.review_threshold = 0.7
             mock_config.max_retries = 2
-            mock_config.enable_review = True
 
             state = initial_state("text", "chinese", "novel", 1)
             state["review_score"] = 0.5
@@ -47,7 +45,6 @@ class TestAfterReview:
         with patch("src.graph.builder.config") as mock_config:
             mock_config.review_threshold = 0.7
             mock_config.max_retries = 2
-            mock_config.enable_review = True
 
             state = initial_state("text", "chinese", "novel", 1)
             state["review_score"] = 0.5
@@ -180,7 +177,7 @@ class TestQualityFlow:
         def chunk(_state):
             return {"chunks": ["source"], "current_chunk_index": 0, "translated_chunks": [], "retry_count": 0}
 
-        def learn(state):
+        def learn(state, *, summary=False):
             return {
                 "new_terms": {},
                 "new_characters": {},
@@ -205,9 +202,8 @@ class TestQualityFlow:
             graph_config = stack.enter_context(patch("src.graph.builder.config"))
             for context_manager in self._patch_graph(llm):
                 stack.enter_context(context_manager)
-            graph_config.enable_review = False
             graph_config.max_retries = 2
-            result = build_graph().invoke(initial_state("source", "chinese", "novel", 1))
+            result = build_graph(review=False).invoke(initial_state("source", "chinese", "novel", 1))
 
         assert result["final_translation"] == "translated"
         assert result["quality_reports"][0]["retry_count"] == 1
@@ -221,9 +217,8 @@ class TestQualityFlow:
             graph_config = stack.enter_context(patch("src.graph.builder.config"))
             for context_manager in self._patch_graph(llm):
                 stack.enter_context(context_manager)
-            graph_config.enable_review = False
             graph_config.max_retries = 2
-            graph = build_graph()
+            graph = build_graph(review=False)
 
             with pytest.raises(TranslationQualityError, match="translation_empty"):
                 graph.invoke(initial_state("source", "chinese", "novel", 1))
@@ -240,10 +235,9 @@ class TestQualityFlow:
             for context_manager in self._patch_graph(translator_llm):
                 stack.enter_context(context_manager)
             stack.enter_context(patch("src.graph.builder.reviewer_node", reviewer))
-            graph_config.enable_review = True
             graph_config.max_retries = 2
             graph_config.review_threshold = 0.7
-            result = build_graph().invoke(initial_state("source", "chinese", "novel", 1))
+            result = build_graph(review=True).invoke(initial_state("source", "chinese", "novel", 1))
 
         assert result["final_translation"] == "translated"
         reviewer.assert_called_once()
@@ -258,9 +252,8 @@ class TestQualityFlow:
             for context_manager in self._patch_graph(translator_llm):
                 stack.enter_context(context_manager)
             stack.enter_context(patch("src.graph.builder.reviewer_node", reviewer))
-            graph_config.enable_review = True
             graph_config.max_retries = 0
-            graph = build_graph()
+            graph = build_graph(review=True)
 
             with pytest.raises(TranslationQualityError, match="Translation is empty.*translation_empty"):
                 graph.invoke(initial_state("source", "chinese", "novel", 1))

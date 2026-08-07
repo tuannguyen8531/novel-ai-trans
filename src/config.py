@@ -62,8 +62,6 @@ ENV_FIELDS: dict[str, str] = {
     "chunk_overlap": "CHUNK_OVERLAP",
     "review_threshold": "REVIEW_THRESHOLD",
     "max_retries": "MAX_RETRIES",
-    "enable_review": "ENABLE_REVIEW",
-    "enable_summary": "ENABLE_SUMMARY",
     "telegram_enabled": "TELEGRAM_ENABLED",
     "telegram_bot_token": "TELEGRAM_BOT_TOKEN",
     "telegram_chat_id": "TELEGRAM_CHAT_ID",
@@ -131,9 +129,6 @@ class Config:
     chunk_overlap: int = 100
     review_threshold: float = 0.7
     max_retries: int = 2
-    enable_review: bool = False
-    enable_summary: bool = False
-
     # --- Telegram notifications ---
     telegram_enabled: bool = False
     telegram_bot_token: str = ""

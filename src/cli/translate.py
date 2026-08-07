@@ -176,10 +176,6 @@ def main(argv: list[str] | None = None) -> None:
     if args.provider:
         config.llm_provider = args.provider
     config.target_language = args.target
-    if args.review:
-        config.enable_review = True
-    if args.summary:
-        config.enable_summary = True
     if args.verbose:
         enable_verbose()
 
@@ -216,8 +212,8 @@ def main(argv: list[str] | None = None) -> None:
             source_language=args.lang or "",
             target_language=args.target,
             provider=args.provider,
-            enable_review=args.review,
-            enable_summary=args.summary,
+            review=args.review,
+            summary=args.summary,
             start_chapter=args.start_chapter,
             end_chapter=args.end_chapter,
             force=args.force,
