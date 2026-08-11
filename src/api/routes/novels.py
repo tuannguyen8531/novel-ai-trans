@@ -127,6 +127,27 @@ def novel_chapters(
     return [NovelChapterStatus(**asdict(chapter)) for chapter in chapters.list_chapters(root, name)]
 
 
+@router.put("/novels/{name}/warnings/ignore")
+def ignore_novel_warnings(
+    name: str,
+    _: AuthenticatedPrincipal,
+    target: Annotated[Literal["vi", "en"] | None, Query()] = None,
+) -> dict[str, str | int]:
+    config = app_config.get_config()
+    resolved_target = target or config.target_language
+    ignored_chapters = catalog.ignore_warnings(
+        identity.resolve_root(config.translated_dir),
+        name,
+        resolved_target,
+        report_root=get_state().jobs_dir.parent / "reports",
+    )
+    return {
+        "novel": name,
+        "target": resolved_target,
+        "ignored_chapters": ignored_chapters,
+    }
+
+
 @router.post(
     "/novels/{name}/chapters/insert",
     response_model=JobStartResponse,

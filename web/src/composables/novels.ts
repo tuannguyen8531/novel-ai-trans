@@ -54,10 +54,14 @@ export const useNovelsStore = defineStore('novels', () => {
     return api.getTranslationProgress(name, target)
   }
 
+  async function ignoreWarnings(name: string, target: string) {
+    return api.ignoreNovelWarnings(name, target)
+  }
+
   async function uploadCover(name: string, file: File) {
     await api.uploadNovelCover(name, file)
     await refresh()
   }
 
-  return { novels, detail, error, loading, refresh, load, remove, create, progress, uploadCover }
+  return { novels, detail, error, loading, refresh, load, remove, create, progress, ignoreWarnings, uploadCover }
 })

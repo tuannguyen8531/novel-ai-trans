@@ -266,6 +266,14 @@ export const api = {
       }`
     )
   },
+  ignoreNovelWarnings: (name: string, target?: string) => {
+    const params = new URLSearchParams()
+    if (target) params.set('target', target)
+    return request<{ novel: string; target: string; ignored_chapters: number }>(
+      `/api/novels/${encodeURIComponent(name)}/warnings/ignore${params.toString() ? `?${params.toString()}` : ''}`,
+      { method: 'PUT' }
+    )
+  },
   getNovelMetadata: (name: string) =>
     request<NovelMetadataResponse>(`/api/novels/${encodeURIComponent(name)}/metadata`),
   getGenres: () => request<GenreCatalog>('/api/genres'),

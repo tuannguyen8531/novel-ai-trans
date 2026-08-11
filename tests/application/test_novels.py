@@ -77,6 +77,32 @@ def test_summary_and_progress_include_source_warning_chapters(tmp_path: Path) ->
     assert progress["source_warnings"] == [1]
 
 
+def test_ignore_all_current_warnings_for_novel(tmp_path: Path) -> None:
+    root = tmp_path / "translated"
+    novel_root = root / "demo"
+    for chapter in (1, 2):
+        _write_chapter(novel_root / "input", chapter)
+        _write_chapter(novel_root / "output", chapter)
+    report_root = tmp_path / "reports"
+    report_dir = report_root / "vi" / "demo"
+    report_dir.mkdir(parents=True)
+    (report_dir / "chapter_001.json").write_text(
+        json.dumps({"manual_post_check_issues": ["contains_source_language_chars"]}),
+        encoding="utf-8",
+    )
+    (report_dir / "chapter_002.json").write_text(
+        json.dumps({"manual_post_check_issues": ["contains_code_fence"]}),
+        encoding="utf-8",
+    )
+    _write_chapter(novel_root / "output", 1, "Cô bé 囡 đến rồi.")
+    _write_chapter(novel_root / "output", 2, "```text\nwarning\n```")
+
+    assert catalog.ignore_warnings(root, "demo", "vi", report_root=report_root) == 2
+    assert catalog.progress(root, "demo", "vi", report_root=report_root)["warnings"] == []
+    assert catalog.progress(root, "demo", "vi", report_root=report_root)["source_warnings"] == []
+    assert catalog.ignore_warnings(root, "demo", "vi", report_root=report_root) == 0
+
+
 def test_summary_resolves_title_for_requested_target_language(tmp_path: Path) -> None:
     root = tmp_path / "translated"
     novel_root = root / "demo"

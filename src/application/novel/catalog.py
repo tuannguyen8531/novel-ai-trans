@@ -16,6 +16,7 @@ from src.paths import PROGRESS_DIR, REPORT_DIR
 from src.services import catalog as catalog_repository
 from src.services import chapters as chapter_service
 from src.services.metadata import localized_value
+from src.services.translation.reports import ReportStore
 
 
 @dataclass(frozen=True)
@@ -215,6 +216,42 @@ def progress(
     return saved
 
 
+def ignore_warnings(
+    root: Path,
+    name: str,
+    target: str,
+    *,
+    report_root: Path | None = None,
+) -> int:
+    """Ignore all currently unresolved warnings for one novel target."""
+    novel_root = require_path(root, name)
+    resolved_target = normalize_target_language(target)
+    report_directory = _report_directory(name, resolved_target, report_root or REPORT_DIR)
+    output_directory = paths.novel_output_dir_from_root(novel_root, resolved_target)
+    report_store = ReportStore()
+    ignored_chapters = 0
+
+    for chapter in catalog_repository.load_warning_chapters(report_directory, output_directory):
+        report_path = report_directory / f"chapter_{chapter:03d}.json"
+        if not report_path.exists():
+            report_path = report_directory / f"chapter_{chapter}.json"
+        report = report_store.load(report_path)
+        issue_codes = [code for code in report.get("manual_post_check_issues", []) if isinstance(code, str)]
+        if not issue_codes:
+            continue
+        try:
+            content = chapter_service.read(output_directory, chapter)
+        except OSError:
+            continue
+        report_store.set_issues_ignored(
+            report_path,
+            issue_codes=issue_codes,
+            content=content,
+        )
+        ignored_chapters += 1
+    return ignored_chapters
+
+
 def detail(
     root: Path,
     name: str,
@@ -252,6 +289,7 @@ __all__ = [
     "create",
     "delete",
     "detail",
+    "ignore_warnings",
     "list_names",
     "list_summaries",
     "progress",

@@ -178,6 +178,32 @@ class ReportStore:
         )
         self.save(path, report)
 
+    def set_issues_ignored(
+        self,
+        path: Path,
+        *,
+        issue_codes: list[str],
+        content: str,
+    ) -> None:
+        """Set code-level review decisions for all current issues."""
+        codes = list(dict.fromkeys(code for code in issue_codes if isinstance(code, str)))
+        if not codes:
+            return
+        report = self.load(path)
+        decisions = _dict_list(report.get("ignored_post_checks"))
+        retained = [item for item in decisions if item.get("code") not in codes]
+        fingerprint = content_hash(content)
+        retained.extend(
+            {
+                "code": code,
+                "content_hash": fingerprint,
+                "reason": "manual_review",
+            }
+            for code in codes
+        )
+        report["ignored_post_checks"] = retained
+        self.save(path, report)
+
     def set_review_ignored(
         self,
         path: Path,

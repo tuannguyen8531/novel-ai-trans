@@ -63,8 +63,13 @@ export function useTranslation() {
     }
   }
 
+  function queryFlag(value: unknown): boolean {
+    return value === '1' || value === 'true'
+  }
+
   onMounted(async () => {
     if (typeof route.query.novel === 'string') novel.value = route.query.novel
+    failedOnly.value = queryFlag(route.query.failed_only ?? route.query.failedOnly)
     await novels.refresh()
     syncSourceLanguage(novel.value)
   })

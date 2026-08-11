@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, computed, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { useNovelsStore } from '@/composables/novels'
 import { useSettingsStore } from '@/composables/settings'
 import type { NovelSummary, NovelTargetProgress } from '@/api/types'
@@ -7,6 +8,7 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue'
 
 const novels = useNovelsStore()
 const settings = useSettingsStore()
+const router = useRouter()
 const deletingNovel = ref<string | null>(null)
 const deleteError = ref<string | null>(null)
 const showDeleteDialog = ref(false)
@@ -22,6 +24,9 @@ const warningChapters = ref<number[]>([])
 const sourceWarningChapters = ref<Set<number>>(new Set())
 const warningChaptersLoading = ref(false)
 const warningChaptersError = ref<string | null>(null)
+const showIgnoreWarningsDialog = ref(false)
+const ignoringWarnings = ref(false)
+const ignoreWarningsError = ref<string | null>(null)
 
 // Add novel modal state
 const showAddModal = ref(false)
@@ -153,11 +158,19 @@ function closeFailedDialog() {
   failedChaptersError.value = null
 }
 
+function retranslateFailed() {
+  const name = failedNovel.value?.name
+  if (!name) return
+  closeFailedDialog()
+  void router.push({ name: 'translate', query: { novel: name, failed_only: 'true' } })
+}
+
 async function showWarningChapters(novel: NovelSummary) {
   warningNovel.value = novel
   warningChapters.value = []
   sourceWarningChapters.value = new Set()
   warningChaptersError.value = null
+  ignoreWarningsError.value = null
   warningChaptersLoading.value = true
   showWarningDialog.value = true
   try {
@@ -177,7 +190,40 @@ function closeWarningDialog() {
   warningChapters.value = []
   sourceWarningChapters.value = new Set()
   warningChaptersError.value = null
+  ignoreWarningsError.value = null
 }
+
+function requestIgnoreWarnings() {
+  ignoreWarningsError.value = null
+  showIgnoreWarningsDialog.value = true
+}
+
+function cancelIgnoreWarnings() {
+  showIgnoreWarningsDialog.value = false
+}
+
+async function confirmIgnoreWarnings() {
+  const novel = warningNovel.value
+  if (!novel) return
+  ignoringWarnings.value = true
+  ignoreWarningsError.value = null
+  try {
+    await novels.ignoreWarnings(novel.name, defaultTarget.value)
+    showIgnoreWarningsDialog.value = false
+    closeWarningDialog()
+    await novels.refresh()
+  } catch (err) {
+    showIgnoreWarningsDialog.value = false
+    ignoreWarningsError.value = (err as Error).message
+  } finally {
+    ignoringWarnings.value = false
+  }
+}
+
+const ignoreWarningsMessage = computed(() => {
+  const name = warningNovel.value?.name ?? 'this novel'
+  return `Ignore all current warning chapters for "${name}"? The warning decisions will apply to the current translation content.`
+})
 
 const deleteMessage = computed(() => {
   if (!novelToDelete.value) return ''
@@ -319,6 +365,16 @@ const deleteMessage = computed(() => {
             </RouterLink>
           </div>
         </div>
+        <div class="modal-footer">
+          <button
+            type="button"
+            class="secondary"
+            :disabled="failedChaptersLoading || !failedNovel"
+            @click="retranslateFailed"
+          >
+            Retranslate
+          </button>
+        </div>
       </div>
     </div>
 
@@ -333,6 +389,7 @@ const deleteMessage = computed(() => {
           </button>
         </div>
         <div class="modal-body">
+          <p v-if="ignoreWarningsError" class="error">{{ ignoreWarningsError }}</p>
           <p v-if="warningChaptersLoading" class="muted">Loading warning chapters...</p>
           <p v-else-if="warningChaptersError" class="error">{{ warningChaptersError }}</p>
           <p v-else-if="!warningChapters.length" class="muted">No warning chapters.</p>
@@ -349,8 +406,29 @@ const deleteMessage = computed(() => {
             </RouterLink>
           </div>
         </div>
+        <div class="modal-footer">
+          <button
+            type="button"
+            class="secondary"
+            :disabled="warningChaptersLoading || !warningChapters.length || Boolean(warningChaptersError)"
+            @click="requestIgnoreWarnings"
+          >
+            Ignore
+          </button>
+        </div>
       </div>
     </div>
+
+    <ConfirmDialog
+      :show="showIgnoreWarningsDialog"
+      title="Ignore Warnings"
+      :message="ignoreWarningsMessage"
+      confirm-label="Ignore"
+      :danger="true"
+      :loading="ignoringWarnings"
+      @confirm="confirmIgnoreWarnings"
+      @cancel="cancelIgnoreWarnings"
+    />
 
     <!-- Add Novel Modal -->
     <div v-if="showAddModal" class="modal-overlay" @click.self="closeAddModal">
@@ -494,7 +572,7 @@ button.status-badge:hover:not(:disabled) {
 }
 
 .failed-chapter-link.source-warning-chapter {
-  border-color: var(--warn);
+  border-color: var(--danger);
 }
 
 .novel-actions {
