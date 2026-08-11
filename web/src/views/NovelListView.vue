@@ -5,6 +5,7 @@ import { useNovelsStore } from '@/composables/novels'
 import { useSettingsStore } from '@/composables/settings'
 import type { NovelSummary, NovelTargetProgress } from '@/api/types'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import { useBodyScrollLock } from '@/composables/scrolllock'
 
 const novels = useNovelsStore()
 const settings = useSettingsStore()
@@ -40,6 +41,14 @@ const newCoverPreview = ref<string | null>(null)
 const createdSlug = ref<string | null>(null)
 const addError = ref<string | null>(null)
 const adding = ref(false)
+
+useBodyScrollLock(() => (
+  showFailedDialog.value ||
+  showWarningDialog.value ||
+  showAddModal.value ||
+  showDeleteDialog.value ||
+  showIgnoreWarningsDialog.value
+))
 
 function closeAddModal() {
   showAddModal.value = false
@@ -615,6 +624,7 @@ button.action-link:hover:not(:disabled) {
   align-items: center;
   justify-content: center;
   padding: 1rem;
+  overscroll-behavior: contain;
 }
 
 .modal-card {

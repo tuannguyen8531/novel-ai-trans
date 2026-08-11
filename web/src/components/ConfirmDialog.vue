@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, watch, nextTick, onUnmounted, useId } from 'vue'
+import { ref, watch, nextTick, useId } from 'vue'
+import { useBodyScrollLock } from '@/composables/scrolllock'
 
 const props = withDefaults(defineProps<{
   show: boolean
@@ -22,6 +23,8 @@ const emit = defineEmits<{
 const modalCard = ref<HTMLElement | null>(null)
 let previousFocus: HTMLElement | null = null
 const titleId = useId()
+
+useBodyScrollLock(() => props.show)
 
 function handleKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape') {
@@ -53,17 +56,11 @@ function handleKeydown(event: KeyboardEvent) {
 watch(() => props.show, (isOpen) => {
   if (isOpen) {
     previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    document.body.style.overflow = 'hidden'
     void nextTick(() => modalCard.value?.focus())
   } else {
-    document.body.style.overflow = ''
     previousFocus?.focus()
     previousFocus = null
   }
-})
-
-onUnmounted(() => {
-  document.body.style.overflow = ''
 })
 </script>
 

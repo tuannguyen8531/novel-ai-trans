@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, nextTick, onUnmounted, ref, useId, watch } from 'vue'
+import { computed, nextTick, ref, useId, watch } from 'vue'
 import type { ChapterPostCheck } from '@/api/types'
+import { useBodyScrollLock } from '@/composables/scrolllock'
 
 const props = defineProps<{
   open: boolean
@@ -19,6 +20,8 @@ const dialog = ref<HTMLElement | null>(null)
 const confirmingOverwrite = ref(false)
 const titleId = useId()
 let previousFocus: HTMLElement | null = null
+
+useBodyScrollLock(() => props.open)
 
 const candidateAcceptable = computed(() => (
   props.review?.candidate_translation !== null &&
@@ -57,10 +60,8 @@ function handleKeydown(event: KeyboardEvent) {
 watch(() => props.open, (isOpen) => {
   if (isOpen) {
     previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    document.body.style.overflow = 'hidden'
     void nextTick(() => dialog.value?.focus())
   } else {
-    document.body.style.overflow = ''
     previousFocus?.focus()
     previousFocus = null
   }
@@ -71,9 +72,6 @@ watch(
   () => { confirmingOverwrite.value = false }
 )
 
-onUnmounted(() => {
-  document.body.style.overflow = ''
-})
 </script>
 
 <template>

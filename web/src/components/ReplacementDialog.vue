@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import type { GlossaryApplyResponse, GlossaryReplacementReport } from '@/api/types'
+import { useBodyScrollLock } from '@/composables/scrolllock'
 
 const props = defineProps<{
   open: boolean
@@ -18,6 +19,8 @@ const emit = defineEmits<{ 'update:open': [value: boolean] }>()
 
 const modalCard = ref<HTMLElement | null>(null)
 let previousFocus: HTMLElement | null = null
+
+useBodyScrollLock(() => props.open)
 
 const busy = computed(() => props.applyLoading || props.rollbackLoading)
 
@@ -72,10 +75,8 @@ function statusLabel(replacement: GlossaryReplacementReport) {
 watch(() => props.open, (isOpen) => {
   if (isOpen) {
     previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    document.body.style.overflow = 'hidden'
     void nextTick(() => modalCard.value?.focus())
   } else {
-    document.body.style.overflow = ''
     previousFocus?.focus()
     previousFocus = null
   }
@@ -85,9 +86,6 @@ watch(busy, (isBusy) => {
   if (isBusy) void nextTick(() => modalCard.value?.focus())
 })
 
-onUnmounted(() => {
-  document.body.style.overflow = ''
-})
 </script>
 
 <template>

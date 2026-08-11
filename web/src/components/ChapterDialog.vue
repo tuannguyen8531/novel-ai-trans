@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { nextTick, onUnmounted, ref, watch } from 'vue'
+import { nextTick, ref, watch } from 'vue'
+import { useBodyScrollLock } from '@/composables/scrolllock'
 
 const props = defineProps<{
   show: boolean
@@ -17,6 +18,8 @@ const chapterNumber = ref<number | null>(null)
 const content = ref('')
 const modalCard = ref<HTMLElement | null>(null)
 let previousFocus: HTMLElement | null = null
+
+useBodyScrollLock(() => props.show)
 
 function requestCancel() {
   if (!props.saving) emit('cancel')
@@ -54,17 +57,11 @@ watch(() => props.show, (isOpen) => {
     chapterNumber.value = props.suggestedNumber
     content.value = ''
     previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    document.body.style.overflow = 'hidden'
     void nextTick(() => modalCard.value?.focus())
   } else {
-    document.body.style.overflow = ''
     previousFocus?.focus()
     previousFocus = null
   }
-})
-
-onUnmounted(() => {
-  document.body.style.overflow = ''
 })
 </script>
 

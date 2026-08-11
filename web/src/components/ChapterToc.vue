@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import type { NovelChapterStatus } from '@/api/types'
 import type { ReaderLanguage } from '@/composables/reader'
+import { useBodyScrollLock } from '@/composables/scrolllock'
 
 const props = defineProps<{
   open: boolean
@@ -21,6 +22,8 @@ const language = ref<ReaderLanguage>('source')
 const modal = ref<HTMLElement | null>(null)
 const tocList = ref<HTMLElement | null>(null)
 let previousFocus: HTMLElement | null = null
+
+useBodyScrollLock(() => props.open)
 
 const filteredChapters = computed(() => {
   if (language.value === 'source') {
@@ -68,12 +71,10 @@ watch(() => props.open, async (isOpen) => {
   if (isOpen) {
     language.value = props.viewMode
     previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    document.body.style.overflow = 'hidden'
     await nextTick()
     modal.value?.focus()
     scrollToCurrentChapter()
   } else {
-    document.body.style.overflow = ''
     previousFocus?.focus()
     previousFocus = null
   }
@@ -85,9 +86,6 @@ watch([language, filteredChapters], async () => {
   scrollToCurrentChapter()
 })
 
-onUnmounted(() => {
-  document.body.style.overflow = ''
-})
 </script>
 
 <template>

@@ -8,6 +8,7 @@
   padding: 1rem;
   background: rgba(0, 0, 0, 0.75);
   backdrop-filter: blur(4px);
+  overscroll-behavior: contain;
 }
 
 .modal-card {

@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { onUnmounted, ref, toRef, watch } from 'vue'
+import { ref, toRef, watch } from 'vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import DetailPanelHeader from '@/components/DetailPanelHeader.vue'
 import { useArtifacts } from '@/composables/artifacts'
 import type { TargetLanguage } from '@/composables/metadata'
 import { formatDateTime } from '@/datetime'
+import { useBodyScrollLock } from '@/composables/scrolllock'
 
 const props = defineProps<{
   novel: string
@@ -34,17 +35,11 @@ const packAuthor = ref('')
 const showDeleteDialog = ref(false)
 const deleteName = ref<string | null>(null)
 
+useBodyScrollLock(() => props.packOpen)
+
 watch(() => props.active, (active) => {
   if (active) void load()
 }, { immediate: true })
-
-watch(() => props.packOpen, (isOpen) => {
-  document.body.style.overflow = isOpen ? 'hidden' : ''
-})
-
-onUnmounted(() => {
-  document.body.style.overflow = ''
-})
 
 function closePack() {
   emit('update:packOpen', false)

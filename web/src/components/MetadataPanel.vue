@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, toRef, watch } from 'vue'
+import { onMounted, toRef, watch } from 'vue'
 import { useMetadata, type MetadataDisplay, type TargetLanguage } from '@/composables/metadata'
+import { useBodyScrollLock } from '@/composables/scrolllock'
 
 const props = defineProps<{
   novel: string
@@ -46,14 +47,9 @@ const {
 )
 
 watch(display, (value) => emit('display', value), { immediate: true })
-watch(() => props.open, (isOpen) => {
-  document.body.style.overflow = isOpen ? 'hidden' : ''
-})
+useBodyScrollLock(() => props.open)
 
 onMounted(load)
-onUnmounted(() => {
-  document.body.style.overflow = ''
-})
 
 function close() {
   setCoverFile(null)
