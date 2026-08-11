@@ -52,8 +52,13 @@ def load_progress(path: Path) -> dict[str, list[int]]:
     }
 
 
-def load_source_warning_chapters(directory: Path, output_directory: Path | None = None) -> list[int]:
-    """Return chapters whose current output has unresolved runtime warnings."""
+def load_warning_chapters(
+    directory: Path,
+    output_directory: Path | None = None,
+    *,
+    warning_code: str | None = None,
+) -> list[int]:
+    """Return chapters with unresolved warnings, optionally filtered by code."""
     if not directory.exists():
         return []
 
@@ -70,6 +75,8 @@ def load_source_warning_chapters(directory: Path, output_directory: Path | None 
             continue
         manual_issues = data.get("manual_post_check_issues")
         warning_codes = {code for code in manual_issues if isinstance(code, str)} if isinstance(manual_issues, list) else set()
+        if warning_code is not None:
+            warning_codes.intersection_update({warning_code})
         if not warning_codes:
             continue
 
@@ -119,6 +126,11 @@ def load_source_warning_chapters(directory: Path, output_directory: Path | None 
     return sorted(chapters)
 
 
+def load_source_warning_chapters(directory: Path, output_directory: Path | None = None) -> list[int]:
+    """Return chapters whose current output still contains source-language characters."""
+    return load_warning_chapters(directory, output_directory, warning_code=_SOURCE_WARNING_CODE)
+
+
 def glossary_counts(path: Path) -> tuple[int, int, int]:
     if not path.exists():
         return 0, 0, 0
@@ -163,5 +175,6 @@ __all__ = [
     "list_directories",
     "load_glossary_terms",
     "load_progress",
+    "load_warning_chapters",
     "load_source_warning_chapters",
 ]

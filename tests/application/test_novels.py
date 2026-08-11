@@ -47,6 +47,7 @@ def test_summary_uses_stored_outputs_as_completion_truth(tmp_path: Path) -> None
         "completed": [1],
         "failed": [3],
         "warnings": [],
+        "source_warnings": [],
     }
 
 
@@ -71,7 +72,9 @@ def test_summary_and_progress_include_source_warning_chapters(tmp_path: Path) ->
     vietnamese = next(progress for progress in summary.targets if progress.target == "vi")
 
     assert vietnamese.warnings == 1
-    assert catalog.progress(root, "demo", "vi", report_root=report_root)["warnings"] == [1]
+    progress = catalog.progress(root, "demo", "vi", report_root=report_root)
+    assert progress["warnings"] == [1]
+    assert progress["source_warnings"] == [1]
 
 
 def test_summary_resolves_title_for_requested_target_language(tmp_path: Path) -> None:
@@ -196,7 +199,9 @@ def test_write_translation_refreshes_manual_source_warning(tmp_path: Path) -> No
         target="vi",
         report_root=report_root,
     )
-    assert catalog.progress(root, "demo", "vi", report_root=report_root)["warnings"] == [7]
+    progress = catalog.progress(root, "demo", "vi", report_root=report_root)
+    assert progress["warnings"] == [7]
+    assert progress["source_warnings"] == [7]
 
     chapters.write_chapter(
         root,
@@ -332,7 +337,9 @@ def test_post_check_review_lists_non_source_issues(tmp_path: Path) -> None:
     assert code_fence.severity == "warning"
     assert code_fence.reviewable is True
     assert code_fence.origin == "output"
-    assert catalog.progress(root, "demo", "vi", report_root=report_root)["warnings"] == [7]
+    progress = catalog.progress(root, "demo", "vi", report_root=report_root)
+    assert progress["warnings"] == [7]
+    assert progress["source_warnings"] == []
 
     review = chapters.review_post_check_item(
         root,

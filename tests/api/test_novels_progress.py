@@ -155,6 +155,34 @@ def test_source_warning_count_and_chapters_are_exposed(client):
     targets = {item["target"]: item for item in list_response.json()[0]["targets"]}
     assert targets["vi"]["warnings"] == 1
     assert progress_response.json()["warnings"] == [1]
+    assert progress_response.json()["source_warnings"] == [1]
+
+
+def test_warning_progress_separates_source_warning_chapters(client):
+    test_client, translated = client
+    novel = translated / "demo"
+    for chapter in (1, 2):
+        _write_chapter(novel / "input", chapter)
+        _write_chapter(novel / "output", chapter)
+
+    reports_dir = translated.parent / "reports" / "vi" / "demo"
+    reports_dir.mkdir(parents=True)
+    (reports_dir / "chapter_001.json").write_text(
+        json.dumps({"manual_post_check_issues": ["contains_code_fence"]}),
+        encoding="utf-8",
+    )
+    (reports_dir / "chapter_002.json").write_text(
+        json.dumps({"manual_post_check_issues": ["contains_source_language_chars"]}),
+        encoding="utf-8",
+    )
+    (novel / "output" / "chapter_001.txt").write_text("```text\nwarning\n```", encoding="utf-8")
+    (novel / "output" / "chapter_002.txt").write_text("Cô bé 囡 đến rồi.", encoding="utf-8")
+
+    response = test_client.get("/api/novels/demo/translation-progress?target=vi")
+
+    assert response.status_code == 200
+    assert response.json()["warnings"] == [1, 2]
+    assert response.json()["source_warnings"] == [2]
 
 
 def test_manual_translation_edit_refreshes_source_warning(client):

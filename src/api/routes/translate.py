@@ -174,4 +174,5 @@ def translation_progress(
         "completed": saved["completed"],
         "failed": saved["failed"],
         "warnings": saved["warnings"],
+        "source_warnings": saved["source_warnings"],
     }

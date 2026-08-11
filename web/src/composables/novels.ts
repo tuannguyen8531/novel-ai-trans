@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { api } from '@/api/client'
-import type { NovelDetail, NovelSummary } from '@/api/types'
+import type { NovelDetail, NovelSummary, NovelTranslationProgress } from '@/api/types'
 
 export const useNovelsStore = defineStore('novels', () => {
   const novels = ref<NovelSummary[]>([])
@@ -50,7 +50,7 @@ export const useNovelsStore = defineStore('novels', () => {
   async function progress(
     name: string,
     target: string
-  ): Promise<{ completed: number[]; failed: number[]; warnings: number[] }> {
+  ): Promise<NovelTranslationProgress> {
     return api.getTranslationProgress(name, target)
   }
 

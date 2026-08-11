@@ -84,6 +84,13 @@ export interface NovelTargetProgress {
   total: number
 }
 
+export interface NovelTranslationProgress {
+  completed: number[]
+  failed: number[]
+  warnings: number[]
+  source_warnings: number[]
+}
+
 export interface NovelDetail extends NovelSummary {
   glossary_terms: number
   glossary_entities: number

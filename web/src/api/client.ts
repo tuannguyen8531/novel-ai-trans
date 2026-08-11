@@ -16,6 +16,7 @@ import type {
   NovelDetail,
   NovelMetadataResponse,
   NovelSummary,
+  NovelTranslationProgress,
   OllamaAccount,
   ProvidersResponse,
   ProviderCheckSettings,
@@ -259,7 +260,7 @@ export const api = {
   getTranslationProgress: (name: string, target?: string) => {
     const params = new URLSearchParams()
     if (target) params.set('target', target)
-    return request<{ completed: number[]; failed: number[]; warnings: number[] }>(
+    return request<NovelTranslationProgress>(
       `/api/novels/${encodeURIComponent(name)}/translation-progress${
         params.toString() ? `?${params.toString()}` : ''
       }`

@@ -19,6 +19,7 @@ const failedChaptersError = ref<string | null>(null)
 const showWarningDialog = ref(false)
 const warningNovel = ref<NovelSummary | null>(null)
 const warningChapters = ref<number[]>([])
+const sourceWarningChapters = ref<Set<number>>(new Set())
 const warningChaptersLoading = ref(false)
 const warningChaptersError = ref<string | null>(null)
 
@@ -155,12 +156,14 @@ function closeFailedDialog() {
 async function showWarningChapters(novel: NovelSummary) {
   warningNovel.value = novel
   warningChapters.value = []
+  sourceWarningChapters.value = new Set()
   warningChaptersError.value = null
   warningChaptersLoading.value = true
   showWarningDialog.value = true
   try {
     const progress = await novels.progress(novel.name, defaultTarget.value)
     warningChapters.value = [...progress.warnings].sort((a, b) => a - b)
+    sourceWarningChapters.value = new Set(progress.source_warnings ?? [])
   } catch (err) {
     warningChaptersError.value = (err as Error).message
   } finally {
@@ -172,6 +175,7 @@ function closeWarningDialog() {
   showWarningDialog.value = false
   warningNovel.value = null
   warningChapters.value = []
+  sourceWarningChapters.value = new Set()
   warningChaptersError.value = null
 }
 
@@ -337,6 +341,7 @@ const deleteMessage = computed(() => {
               v-for="chapter in warningChapters"
               :key="chapter"
               class="failed-chapter-link"
+              :class="{ 'source-warning-chapter': sourceWarningChapters.has(chapter) }"
               :to="`/novels/${warningNovel?.name}/chapters/${chapter}`"
               @click="closeWarningDialog"
             >
@@ -486,6 +491,10 @@ button.status-badge:hover:not(:disabled) {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   text-align: center;
+}
+
+.failed-chapter-link.source-warning-chapter {
+  border-color: var(--warn);
 }
 
 .novel-actions {
