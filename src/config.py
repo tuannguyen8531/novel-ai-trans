@@ -1,11 +1,6 @@
 """
-Unified configuration for Novel AI Trans (crawler + translator).
-
-Loads settings from settings.json and .env file. Merges:
-- Crawler settings: translated_dir
-- Translator settings: target_language, chunk_size, review_threshold, etc.
-- LLM provider settings: ollama, gemini, openrouter (+ optional fallback)
-- SiteConfig dataclass for per-site crawler configuration
+Loads settings from settings.json and .env file. A missing settings file is
+seeded from environment values before falling back to code defaults.
 """
 
 from __future__ import annotations
@@ -71,14 +66,44 @@ ENV_FIELDS: dict[str, str] = {
     "telegram_timeout_seconds": "TELEGRAM_TIMEOUT_SECONDS",
 }
 
-# Application settings now live in runtime/settings.json. Keep dotenv loading
-# for secrets and deployment variables, but remove legacy non-secret settings
-# that python-dotenv injected into the process environment.
+
 for _field_name, _env_name in ENV_FIELDS.items():
     if _field_name in SECRET_FIELDS or _env_name in _ENVIRONMENT_BEFORE_DOTENV:
         continue
     if _DOTENV_VALUES.get(_env_name) == os.environ.get(_env_name):
         os.environ.pop(_env_name, None)
+
+
+def _dotenv_or_environment_value(env_name: str) -> str | None:
+    """Return an explicit environment value, falling back to ``.env``."""
+    value = os.environ.get(env_name)
+    if value is not None:
+        return value
+    dotenv_value = _DOTENV_VALUES.get(env_name)
+    return str(dotenv_value) if dotenv_value is not None else None
+
+
+def _coerce_environment_value(field_name: str, raw: str, default: Any) -> Any:
+    """Convert one environment string using the type of its config default."""
+    if isinstance(default, bool):
+        return raw.lower() in ("true", "1", "yes")
+    if isinstance(default, int) and not isinstance(default, bool):
+        return int(raw or str(default))
+    if isinstance(default, float):
+        return float(raw or str(default))
+    if field_name in {"target_language", "chunk_mode"}:
+        return raw.lower()
+    return raw
+
+
+def _seed_values_from_environment(defaults: Config) -> dict[str, Any]:
+    """Return config values with environment and dotenv values over defaults."""
+    values = {field.name: getattr(defaults, field.name) for field in fields(Config)}
+    for field_name, env_name in ENV_FIELDS.items():
+        raw = _dotenv_or_environment_value(env_name)
+        if raw is not None:
+            values[field_name] = _coerce_environment_value(field_name, raw, values[field_name])
+    return values
 
 
 def _read_settings(path: Path, allowed_fields: set[str]) -> dict[str, Any]:
@@ -96,7 +121,7 @@ def _read_settings(path: Path, allowed_fields: set[str]) -> dict[str, Any]:
 
 @dataclass
 class Config:
-    """Application-level configuration from environment."""
+    """Application-level configuration loaded from JSON and environment."""
 
     # --- Paths ---
     # Translator: directory holding per-novel {input,output,glossary,...}.
@@ -112,7 +137,7 @@ class Config:
     llm_temperature: float = 0.0
     llm_max_tokens: int = 4096
     translation_temperature: float = 0.3
-    translation_max_tokens: int = 4096
+    translation_max_tokens: int = 8192
 
     # --- Provider settings ---
     ollama_base_url: str = "http://localhost:11434"
@@ -125,7 +150,7 @@ class Config:
     # --- Translator settings ---
     target_language: str = "vi"
     chunk_mode: Literal["chars", "tokens"] = "chars"
-    chunk_size: int = 1500
+    chunk_size: int = 5000
     chunk_overlap: int = 100
     review_threshold: float = 0.7
     max_retries: int = 2
@@ -173,13 +198,14 @@ class Config:
 
     @classmethod
     def ensure_settings_file(cls, settings_path: Path | None = None) -> Path:
-        """Create the runtime settings file from code defaults when missing."""
+        """Create runtime settings from dotenv/environment values when missing."""
         path = settings_path or paths.SETTINGS_PATH
         if not path.exists():
-            defaults = cls()
+            values = _seed_values_from_environment(cls())
+            seeded = cls(**values)
             write_json_atomic(
                 path,
-                {field.name: getattr(defaults, field.name) for field in fields(cls) if field.name not in SECRET_FIELDS},
+                {field.name: getattr(seeded, field.name) for field in fields(cls) if field.name not in SECRET_FIELDS},
             )
         return path
 
@@ -200,17 +226,7 @@ class Config:
             raw = os.getenv(env_name)
             if raw is None:
                 continue
-            default = values[field_name]
-            if isinstance(default, bool):
-                values[field_name] = raw.lower() in ("true", "1", "yes")
-            elif isinstance(default, int) and not isinstance(default, bool):
-                values[field_name] = int(raw or str(default))
-            elif isinstance(default, float):
-                values[field_name] = float(raw or str(default))
-            elif field_name in {"target_language", "chunk_mode"}:
-                values[field_name] = raw.lower()
-            else:
-                values[field_name] = raw
+            values[field_name] = _coerce_environment_value(field_name, raw, values[field_name])
         return cls(**values)
 
     def clone(self, **overrides: Any) -> Config:

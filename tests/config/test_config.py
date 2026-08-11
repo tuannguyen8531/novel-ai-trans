@@ -7,10 +7,14 @@ from unittest.mock import patch
 
 import pytest
 
-from src.config import Config, SiteConfig
+from src.config import SECRET_FIELDS, Config, SiteConfig
 
 
 class TestConfig:
+    @pytest.fixture(autouse=True)
+    def isolate_dotenv(self, monkeypatch):
+        monkeypatch.setattr("src.config._DOTENV_VALUES", {})
+
     def test_defaults(self):
         with patch.dict(os.environ, {}, clear=True), patch("src.config.load_dotenv"):
             config = Config()
@@ -20,7 +24,7 @@ class TestConfig:
             assert config.translation_temperature == 0.3
             assert config.target_language == "vi"
             assert config.chunk_mode == "chars"
-            assert config.chunk_size == 1500
+            assert config.chunk_size == 5000
             assert config.telegram_enabled is False
 
     def test_from_env_defaults(self):
@@ -37,15 +41,57 @@ class TestConfig:
         assert json.loads(settings_path.read_text(encoding="utf-8"))["target_language"] == "vi"
         assert cfg.target_language == "vi"
 
+    def test_first_settings_file_is_seeded_from_environment_without_secrets(self, tmp_path):
+        settings_path = tmp_path / "runtime" / "settings.json"
+        env = {
+            "TARGET_LANGUAGE": "en",
+            "CHUNK_SIZE": "2200",
+            "GEMINI_API_KEY": "secret-must-stay-out-of-json",
+        }
+        with patch.dict(os.environ, env, clear=True):
+            Config.ensure_settings_file(settings_path)
+
+        data = json.loads(settings_path.read_text(encoding="utf-8"))
+        expected_fields = {field.name for field in Config.__dataclass_fields__.values()} - SECRET_FIELDS
+        assert set(data) == expected_fields
+        assert data["target_language"] == "en"
+        assert data["chunk_size"] == 2200
+        assert "gemini_api_key" not in data
+
+    def test_first_settings_file_uses_dotenv_when_process_environment_is_missing(self, tmp_path):
+        settings_path = tmp_path / "settings.json"
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch("src.config._DOTENV_VALUES", {"TARGET_LANGUAGE": "en", "CHUNK_SIZE": "2200"}),
+        ):
+            Config.ensure_settings_file(settings_path)
+
+        data = json.loads(settings_path.read_text(encoding="utf-8"))
+        assert data["target_language"] == "en"
+        assert data["chunk_size"] == 2200
+
+    def test_first_settings_file_uses_defaults_for_missing_environment_values(self, tmp_path):
+        settings_path = tmp_path / "settings.json"
+        with (
+            patch.dict(os.environ, {"TARGET_LANGUAGE": "en"}, clear=True),
+            patch("src.config._DOTENV_VALUES", {}),
+        ):
+            Config.ensure_settings_file(settings_path)
+
+        data = json.loads(settings_path.read_text(encoding="utf-8"))
+        assert data["target_language"] == "en"
+        assert data["chunk_size"] == 5000
+
     def test_ensure_settings_file_does_not_overwrite_existing_file(self, tmp_path):
         settings_path = tmp_path / "runtime" / "settings.json"
         settings_path.parent.mkdir()
-        settings_path.write_text('{"target_language": "en"}\n', encoding="utf-8")
+        settings_path.write_text('{"target_language": "vi"}\n', encoding="utf-8")
 
-        result = Config.ensure_settings_file(settings_path)
+        with patch.dict(os.environ, {"TARGET_LANGUAGE": "en"}, clear=True):
+            result = Config.ensure_settings_file(settings_path)
 
         assert result == settings_path
-        assert json.loads(settings_path.read_text(encoding="utf-8")) == {"target_language": "en"}
+        assert json.loads(settings_path.read_text(encoding="utf-8")) == {"target_language": "vi"}
 
     def test_from_settings_file(self, tmp_path):
         settings_path = tmp_path / "settings.json"

@@ -54,8 +54,7 @@ cp .env.example .env
 ```
 
 The first `uv run serve` or CLI command creates `runtime/settings.json` from
-the defaults defined in code. Configure normal application settings there and
-keep secrets in `.env`.
+the defaults.
 For example, with a local Ollama server:
 
 ```json
@@ -66,8 +65,8 @@ For example, with a local Ollama server:
 }
 ```
 
-Environment variables, when present, override `runtime/settings.json`, which keeps
-Docker and CI deployments convenient. API keys and Telegram tokens are read
+Normal application settings are read from `runtime/settings.json` after it has
+been created. API keys and Telegram tokens are read
 from `.env` only.
 
 ```env

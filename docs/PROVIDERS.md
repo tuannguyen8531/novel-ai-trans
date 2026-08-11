@@ -203,7 +203,7 @@ Two temperature/max-token pairs are used:
 - **Translation / summarization / metadata localization calls** — `translate`,
   `summarize`, and `localize` use
   `TRANSLATION_TEMPERATURE` (default `0.3`) and
-  `TRANSLATION_MAX_TOKENS` (default `4096`). Slightly higher temperature gives
+  `TRANSLATION_MAX_TOKENS` (default `8192`). Slightly higher temperature gives
   more natural prose; lower is more literal.
 
 Metadata localization translates only an existing novel title or synopsis; it
@@ -211,7 +211,7 @@ does not generate a synopsis from chapters. Its prompt contains only glossary
 terms and known characters that occur in the metadata fields being sent.
 
 Chunking is controlled by `CHUNK_MODE` (`chars` by default), `CHUNK_SIZE`
-(default `1500`), and `CHUNK_OVERLAP` (default `100`). In `chars` mode, size
+(default `5000`), and `CHUNK_OVERLAP` (default `100`). In `chars` mode, size
 and overlap use characters and preserve the legacy behaviour. In `tokens` mode,
 they use a deterministic local estimate: CJK and other non-whitespace
 characters count individually, while ASCII letters and digits are grouped in
