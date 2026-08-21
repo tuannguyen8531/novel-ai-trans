@@ -118,6 +118,21 @@ def test_resolve_chinese_numeral_title_series_keeps_terminal_punctuation() -> No
     ]
 
 
+def test_resolve_title_series_uses_catalog_punctuation_normalization() -> None:
+    catalog = {
+        1: "第1章 风—云",
+        2: "第2章 风—云（二）",
+    }
+
+    parsed = chapters.parse_chapter_heading(catalog[2])
+    assert parsed is not None
+    resolved = chapters.resolve_chapter_title_series(parsed, catalog)
+
+    assert resolved.base == "风-云"
+    assert resolved.part == 2
+    assert resolved.is_series is True
+
+
 def test_numeric_parenthetical_is_not_series_without_adjacent_sequence() -> None:
     parsed = chapters.parse_chapter_heading("第204章 暴雨夜的苏雨晴！（二）")
 

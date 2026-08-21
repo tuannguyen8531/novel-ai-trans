@@ -13,6 +13,16 @@ EXPLAINED_TERM_RE = re.compile(
     r"(?:\)|）|\]|】|」|』|”|'|\")"
 )
 CODE_FENCE_RE = re.compile(r"```")
+SOURCE_HEADING_RE = re.compile(
+    r"^\s*(?:(?:第\s*\d+\s*[章节話回])|(?:chapter|chap\.?|ch\.?)\s*#?\s*\d+|"
+    r"(?:chương|chuong)\s*\d+|(?:제\s*)?\d+\s*[章节話回화])\s*[:：.\-]?\s*(?P<title>.*?)\s*$",
+    re.IGNORECASE,
+)
+TRANSLATED_HEADING_RE = re.compile(
+    r"^\s*(?:chương|chuong|chapter)\s*#?\s*\d+\s*[:：.\-]?\s*(?P<title>.*?)\s*$",
+    re.IGNORECASE,
+)
+NUMERIC_TITLE_PART_RE = re.compile(r"^\(\s*(?:\d+|[零〇○一二两兩三四五六七八九十百千万萬亿億]+)\s*\)$")
 QUOTE_MARKS = ('"', "'", "“", "”", "‘", "’", "「", "」", "『", "』")
 
 
@@ -36,6 +46,19 @@ def source_language_fragments(text: str) -> list[str]:
     return SOURCE_RUN_RE.findall(cleaned)
 
 
+def _has_missing_translated_title(source: str, translation: str) -> bool:
+    """Return whether a titled source heading became a marker-only target heading."""
+    source_line = next((line.strip().lstrip("\ufeff") for line in source.splitlines() if line.strip()), "")
+    source_match = SOURCE_HEADING_RE.match(source_line)
+    if source_match is None or not source_match.group("title").strip():
+        return False
+
+    translation_line = next((line.strip() for line in translation.splitlines() if line.strip()), "")
+    translation_match = TRANSLATED_HEADING_RE.match(translation_line)
+    translated_title = translation_match.group("title").strip() if translation_match is not None else ""
+    return not translated_title or NUMERIC_TITLE_PART_RE.fullmatch(translated_title) is not None
+
+
 def post_check_translation(
     source: str,
     translation: str,
@@ -49,6 +72,15 @@ def post_check_translation(
     if not stripped_translation:
         issues.append(TranslationIssue("translation_empty", "error", "Translation is empty."))
         return issues
+
+    if _has_missing_translated_title(source, translation):
+        issues.append(
+            TranslationIssue(
+                "missing_translated_title",
+                "error",
+                "The source chapter has a title, but the translated heading has no translated title.",
+            )
+        )
 
     if CODE_FENCE_RE.search(translation):
         issues.append(TranslationIssue("contains_code_fence", "error", "Translation contains markdown code fences."))

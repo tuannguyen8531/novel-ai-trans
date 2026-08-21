@@ -83,3 +83,27 @@ def test_learner_keeps_marker_when_source_heading_has_no_title() -> None:
         result = learner_node(state)
 
     assert result["final_translation"] == "Chương 7\n\nNội dung."
+
+
+def test_learner_uses_marker_fallback_when_title_translation_is_missing() -> None:
+    state = initial_state("正文。", "chinese", "novel", 7)
+    state.update(
+        {
+            "source_heading_present": True,
+            "source_title": "新年",
+            "source_title_base": "新年",
+            "chunks": ["正文。"],
+            "translated_chunks": ["Nội dung."],
+        }
+    )
+    llm = MagicMock()
+    llm.generate.return_value = '{"terms":{},"characters":{"entities":{}}}'
+
+    with (
+        patch("src.graph.nodes.learner.get_llm", return_value=llm),
+        patch("src.graph.nodes.learner.save_source_language"),
+        patch("src.graph.nodes.learner.log_ai_call"),
+    ):
+        result = learner_node(state)
+
+    assert result["final_translation"] == "Chương 7\n\nNội dung."

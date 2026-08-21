@@ -99,7 +99,8 @@ class ResolvedChapterTitle:
 
 def _normalize_title_text(value: str) -> str:
     """Normalize spacing and full-width punctuation for title comparisons."""
-    return re.sub(r"\s+", " ", unicodedata.normalize("NFKC", value)).strip()
+    normalized = unicodedata.normalize("NFKC", value).translate(_TITLE_REPLACEMENTS)
+    return re.sub(r"\s+", " ", normalized).strip()
 
 
 def title_key(value: str) -> str:

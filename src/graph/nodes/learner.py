@@ -713,6 +713,16 @@ def learner_node(state: TranslationState, *, summary: bool = False) -> dict:
 
     if source_title and not translated_title_base:
         translated_title_base = title_hint
+    if state.get("source_heading_present", False) and source_title and not translated_title_base:
+        _logger.warning(
+            "Chapter title translation unavailable; using marker-only fallback heading",
+            extra={
+                "presentation_event": "cli_message",
+                "presentation_message": (
+                    f"  ⚠ Chapter {chapter_number} title translation unavailable; using marker-only fallback heading"
+                ),
+            },
+        )
     if state.get("source_title_series", False) and source_title_key and translated_title_base:
         save_chapter_title(novel_name, source_title_key, translated_title_base)
 
