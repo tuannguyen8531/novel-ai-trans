@@ -14,12 +14,13 @@ EXPLAINED_TERM_RE = re.compile(
 )
 CODE_FENCE_RE = re.compile(r"```")
 SOURCE_HEADING_RE = re.compile(
-    r"^\s*(?:(?:第\s*\d+\s*[章节話回])|(?:chapter|chap\.?|ch\.?)\s*#?\s*\d+|"
-    r"(?:chương|chuong)\s*\d+|(?:제\s*)?\d+\s*[章节話回화])\s*[:：.\-]?\s*(?P<title>.*?)\s*$",
+    r"(?:(?:第[ \t]*+\d+[章节話回])|(?:chapter|chap\.?|ch\.?)[ \t]*+#?[ \t]*+\d+|"
+    r"(?:chương|chuong)[ \t]*+\d+|(?:제[ \t]*+)?\d+[章节話回화])[ \t]*+"
+    r"(?:[:：.\-][ \t]*+)?(?P<title>.*)",
     re.IGNORECASE,
 )
 TRANSLATED_HEADING_RE = re.compile(
-    r"^\s*(?:chương|chuong|chapter)\s*#?\s*\d+\s*[:：.\-]?\s*(?P<title>.*?)\s*$",
+    r"(?:chương|chuong|chapter)[ \t]*+#?[ \t]*+\d+[ \t]*+(?:[:：.\-][ \t]*+)?(?P<title>.*)",
     re.IGNORECASE,
 )
 NUMERIC_TITLE_PART_RE = re.compile(r"^\(\s*(?:\d+|[零〇○一二两兩三四五六七八九十百千万萬亿億]+)\s*\)$")
@@ -49,12 +50,12 @@ def source_language_fragments(text: str) -> list[str]:
 def _has_missing_translated_title(source: str, translation: str) -> bool:
     """Return whether a titled source heading became a marker-only target heading."""
     source_line = next((line.strip().lstrip("\ufeff") for line in source.splitlines() if line.strip()), "")
-    source_match = SOURCE_HEADING_RE.match(source_line)
+    source_match = SOURCE_HEADING_RE.fullmatch(source_line)
     if source_match is None or not source_match.group("title").strip():
         return False
 
     translation_line = next((line.strip() for line in translation.splitlines() if line.strip()), "")
-    translation_match = TRANSLATED_HEADING_RE.match(translation_line)
+    translation_match = TRANSLATED_HEADING_RE.fullmatch(translation_line)
     translated_title = translation_match.group("title").strip() if translation_match is not None else ""
     return not translated_title or NUMERIC_TITLE_PART_RE.fullmatch(translated_title) is not None
 
