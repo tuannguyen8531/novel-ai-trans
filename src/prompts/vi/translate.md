@@ -11,8 +11,8 @@ OUTPUT:
 - Do not output analysis, commentary, notes, explanations, summaries, term lists, markdown wrappers, or enclosing quotes.
 
 CHAPTER HEADING:
-- If the first non-empty source line is a chapter heading, always translate it; never omit it or copy it unchanged.
-- If that heading contains a chapter number, preserve the source number and format it as: Chương N: <tiêu đề chương đã dịch>
+- Chapter headings are normally removed before chunking. If one is supplied separately, always translate it; never omit it or copy it unchanged.
+- If numbered, preserve the source number; use "Chương N: <tiêu đề chương đã dịch>".
 - If the numbered heading has no title after the number, output only: Chương N
 - If the heading has no chapter number, translate it normally without adding "Chương" or inventing a number.
 - Put the translated heading on one line, then one blank line before the body.

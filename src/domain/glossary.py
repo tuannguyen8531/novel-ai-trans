@@ -272,6 +272,16 @@ def validate_glossary_data(data: dict) -> list[str]:
             if not isinstance(summary, str):
                 issues.append(f"chapter summary {chapter!r} must be a string")
 
+    chapter_titles = data.get("chapter_titles", {})
+    if chapter_titles is not None and not isinstance(chapter_titles, dict):
+        issues.append("chapter_titles must be an object")
+    elif isinstance(chapter_titles, dict):
+        for source_key, translated in chapter_titles.items():
+            if not isinstance(source_key, str) or not source_key.strip():
+                issues.append("chapter_titles contains an empty or non-string source key")
+            if not isinstance(translated, str) or not translated.strip():
+                issues.append(f"chapter title {source_key!r} must be a non-empty string")
+
     pronoun_examples = data.get("pronoun_examples", {})
     if pronoun_examples is not None and not isinstance(pronoun_examples, dict):
         issues.append("pronoun_examples must be an object")

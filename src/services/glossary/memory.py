@@ -38,3 +38,30 @@ def save_chapter_summary(novel_name: str, chapter_number: int, summary: str) -> 
             "chapter_summaries": {**data.get("chapter_summaries", {}), str(chapter_number): summary},
         },
     )
+
+
+def load_chapter_title(novel_name: str, source_key: str) -> str:
+    """Load a persisted target-language translation for a normalized title base."""
+    if not source_key:
+        return ""
+    titles = load_glossary_data(novel_name).get("chapter_titles", {})
+    if not isinstance(titles, dict):
+        return ""
+    value = titles.get(source_key, "")
+    return value if isinstance(value, str) else ""
+
+
+def save_chapter_title(novel_name: str, source_key: str, translated_base: str) -> None:
+    """Persist a finalized title base for reuse by later chapters and retries."""
+    if not source_key or not translated_base.strip():
+        return
+    update_glossary_data(
+        novel_name,
+        lambda data: {
+            **data,
+            "chapter_titles": {
+                **(data.get("chapter_titles", {}) if isinstance(data.get("chapter_titles", {}), dict) else {}),
+                source_key: translated_base.strip(),
+            },
+        },
+    )

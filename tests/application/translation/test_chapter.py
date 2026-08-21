@@ -22,6 +22,11 @@ class DuplicateHeadingGraph:
         return {"final_translation": f"{heading}\n\n{heading}\n\nThẩm Nguyên căng mặt."}
 
 
+class MissingTitleGraph:
+    def invoke(self, state):
+        return {"final_translation": "Chương 1\n\nNội dung."}
+
+
 def test_translate_chapter_prepares_output_and_quality_report(tmp_path) -> None:
     input_path = tmp_path / "chapter_1.txt"
     input_path.write_text("source", encoding="utf-8")
@@ -85,3 +90,23 @@ def test_translate_chapter_deduplicates_source_and_output_headings(tmp_path) -> 
     assert result[0]
     assert published[0][0] == expected
     assert input_path.read_text(encoding="utf-8") == source
+
+
+def test_translate_chapter_reports_missing_translated_title(tmp_path) -> None:
+    input_path = tmp_path / "chapter_1.txt"
+    input_path.write_text("第1章 新年\n\n正文", encoding="utf-8")
+    published: list[tuple[str, list[str]]] = []
+
+    result = translate_chapter(
+        input_path,
+        novel="novel",
+        chapter=1,
+        source_language="chinese",
+        target_language="vi",
+        graph=MissingTitleGraph(),
+        storage=TranslationStorage(),
+        publish=lambda content, issues: published.append((content, issues)),
+    )
+
+    assert result[0]
+    assert published == [("Chương 1\n\nNội dung.", ["missing_translated_title"])]

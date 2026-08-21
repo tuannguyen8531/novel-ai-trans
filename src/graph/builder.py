@@ -2,7 +2,7 @@
 Graph Builder — Assembles the LangGraph translation pipeline.
 
 Flow (with review):
-    START → detect → context → chunk → translate → quality → review
+    START → detect → title → context → chunk → translate → quality → review
     quality →|blocking issue| retry or fail
     review →|score OK or max retries| accept_chunk
     review →|score low| retry → translate
@@ -10,7 +10,7 @@ Flow (with review):
     accept_chunk →|done| learn → END
 
 Flow (skip review):
-    START → detect → context → chunk → translate → quality
+    START → detect → title → context → chunk → translate → quality
     quality →|clean| accept_chunk
     quality →|blocking issue| retry or fail
     accept_chunk →|more chunks| translate
@@ -27,6 +27,7 @@ from src.graph.nodes.detector import detector_node
 from src.graph.nodes.learner import learner_node
 from src.graph.nodes.quality import quality_node
 from src.graph.nodes.reviewer import reviewer_node
+from src.graph.nodes.title import title_node
 from src.graph.nodes.translator import translator_node
 from src.models.state import TranslationState
 
@@ -140,6 +141,11 @@ def _has_more_chunks(state: TranslationState) -> str:
     return "learn"
 
 
+def _has_translatable_chunks(state: TranslationState) -> str:
+    """Skip chunk translation for a title-only or otherwise empty chapter."""
+    return "translate" if state.get("chunks") else "learn"
+
+
 def build_graph(
     review: bool = False,
     summary: bool = False,
@@ -158,6 +164,7 @@ def build_graph(
 
     # Add nodes
     graph.add_node("detect", detector_node)
+    graph.add_node("title", title_node)
     graph.add_node("context", context_node)
     graph.add_node("chunk", chunker_node)
     graph.add_node("translate", translator_node)
@@ -173,9 +180,10 @@ def build_graph(
 
     # Wire edges: linear start
     graph.add_edge(START, "detect")
-    graph.add_edge("detect", "context")
+    graph.add_edge("detect", "title")
+    graph.add_edge("title", "context")
     graph.add_edge("context", "chunk")
-    graph.add_edge("chunk", "translate")
+    graph.add_conditional_edges("chunk", _has_translatable_chunks, {"translate": "translate", "learn": "learn"})
     graph.add_edge("translate", "quality")
 
     quality_next = "review" if review else "accept_chunk"

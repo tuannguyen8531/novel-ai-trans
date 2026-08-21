@@ -24,6 +24,23 @@ def test_post_check_flags_leftover_source_chars_as_blocking():
     assert has_blocking_issues(issues)
 
 
+def test_post_check_flags_missing_translated_title_as_red_warning():
+    issues = post_check_translation("第12章 风—云（二）\n\n正文", "Chương 12 (2)\n\nNội dung.", {})
+
+    issue = next(issue for issue in issues if issue.code == "missing_translated_title")
+    assert issue.severity == "error"
+    assert has_blocking_issues(issues)
+
+
+def test_post_check_accepts_translated_title_and_titleless_source_heading():
+    assert "missing_translated_title" not in [
+        issue.code for issue in post_check_translation("第12章 风—云（二）\n\n正文", "Chương 12: Gió-mây (2)\n\nNội dung.", {})
+    ]
+    assert "missing_translated_title" not in [
+        issue.code for issue in post_check_translation("第12章\n\n正文", "Chương 12\n\nNội dung.", {})
+    ]
+
+
 def test_post_check_warns_for_one_or_two_leftover_source_chars():
     for untranslated in ("囡", "囡囡"):
         issues = post_check_translation("囡囡来了", f"Cô bé {untranslated} đến rồi.", {})
