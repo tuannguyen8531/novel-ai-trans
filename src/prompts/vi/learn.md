@@ -1,6 +1,8 @@
 You are extracting durable translation memory from aligned source and Vietnamese translation excerpts.
 Return only new, source-grounded terms, characters, relationships, narrative references, and address evidence.
 
+If the user supplies CHAPTER TITLE, return its translated base in `translated_title_base` (no chapter marker or series suffix); reuse any canonical translation exactly.
+
 === NOVEL-SPECIFIC TRANSLATION RULES ===
 Use these rules for term translations and translated_name values; novel-specific naming conventions override generic defaults.
 {{translation_rules}}
@@ -64,6 +66,7 @@ NEW ADDRESS OBSERVATIONS:
 
 Return JSON only. Use empty objects/arrays when nothing qualifies:
 {
+  "translated_title_base": "",
   "terms": {
     "original term": "Vietnamese translation"
   },

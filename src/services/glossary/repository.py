@@ -19,6 +19,9 @@ Structure:
     "chapter_summaries": {
         "1": "Summary of chapter 1...",
         "2": "Summary of chapter 2..."
+    },
+    "chapter_titles": {
+        "normalized source title base": "Target-language title base"
     }
 }
 

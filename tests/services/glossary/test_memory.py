@@ -3,8 +3,10 @@ from pathlib import Path
 from src.config import Config, active_config_scope
 from src.services.glossary.memory import (
     load_chapter_summary,
+    load_chapter_title,
     load_recent_chapter_summaries,
     save_chapter_summary,
+    save_chapter_title,
 )
 
 
@@ -17,6 +19,12 @@ def test_save_and_load_chapter_summary(tmp_path: Path) -> None:
 def test_load_nonexistent_summary(tmp_path: Path) -> None:
     with active_config_scope(Config(translated_dir=str(tmp_path))):
         assert load_chapter_summary("missing", 1) == ""
+
+
+def test_save_and_load_chapter_title(tmp_path: Path) -> None:
+    with active_config_scope(Config(translated_dir=str(tmp_path))):
+        save_chapter_title("demo", "暴雨夜的苏雨晴!", "Tô Vũ Tình trong đêm mưa bão!")
+        assert load_chapter_title("demo", "暴雨夜的苏雨晴!") == "Tô Vũ Tình trong đêm mưa bão!"
 
 
 def test_load_recent_chapter_summaries(tmp_path: Path) -> None:

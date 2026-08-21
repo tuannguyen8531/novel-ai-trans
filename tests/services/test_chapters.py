@@ -93,6 +93,57 @@ def test_detect_chapter_number_ignores_unmarked_numbers() -> None:
     assert all(chapters.detect_chapter_number(title) is None for title in titles)
 
 
+def test_parse_heading_removes_separator_after_chinese_chapter_marker() -> None:
+    parsed = chapters.parse_chapter_heading("第203章：暴雨夜的苏雨晴！")
+
+    assert parsed is not None
+    assert parsed.title == "暴雨夜的苏雨晴!"
+
+
+def test_resolve_chinese_numeral_title_series_keeps_terminal_punctuation() -> None:
+    catalog = {
+        203: "第203章 暴雨夜的苏雨晴！",
+        204: "第204章 暴雨夜的苏雨晴！（二）",
+        205: "第205章 暴雨夜的苏雨晴！（三）",
+    }
+
+    parsed = [chapters.parse_chapter_heading(catalog[number]) for number in catalog]
+    assert all(item is not None for item in parsed)
+    resolved = [chapters.resolve_chapter_title_series(item, catalog) for item in parsed if item is not None]
+
+    assert [(item.base, item.part, item.is_series) for item in resolved] == [
+        ("暴雨夜的苏雨晴!", None, True),
+        ("暴雨夜的苏雨晴!", 2, True),
+        ("暴雨夜的苏雨晴!", 3, True),
+    ]
+
+
+def test_numeric_parenthetical_is_not_series_without_adjacent_sequence() -> None:
+    parsed = chapters.parse_chapter_heading("第204章 暴雨夜的苏雨晴！（二）")
+
+    assert parsed is not None
+    resolved = chapters.resolve_chapter_title_series(parsed, {204: parsed.heading})
+
+    assert resolved.is_series is False
+    assert resolved.base == "暴雨夜的苏雨晴!(二)"
+    assert resolved.part is None
+
+
+def test_split_leading_heading_removes_heading_and_following_blank_lines() -> None:
+    catalog = {1: "第1章 新年", 2: "第2章 新年（2）"}
+
+    resolved, body = chapters.split_leading_chapter_heading(
+        "第1章 新年\n\n正文第一段。\n\n正文第二段。",
+        1,
+        catalog,
+    )
+
+    assert resolved is not None
+    assert resolved.base == "新年"
+    assert resolved.part is None
+    assert body == "正文第一段。\n\n正文第二段。"
+
+
 def test_deduplicate_leading_headings_removes_exact_duplicate_and_preserves_spacing() -> None:
     source = "第213章 黎知决定主动出击（1W）\n\n第213章 黎知决定主动出击（1W）\n沈元绷着脸。\n"
 

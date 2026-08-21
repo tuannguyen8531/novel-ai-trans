@@ -31,6 +31,7 @@ from src.domain.language import normalize_source_language
 from src.graph.builder import TranslationQualityError, build_graph
 from src.models import TranslationProfile
 from src.prompts import prompt_cache_scope
+from src.services import chapters as chapter_utils
 from src.services.genres import genre_cache_scope
 from src.services.llm.cancellation import GenerationCancelledError, cancellation_scope
 from src.services.llm.factory import reset_llm
@@ -204,6 +205,7 @@ class TranslationWorkflow:
         if stored_genres and requested_source_language and requested_source_language != metadata_source_language:
             raise ApplicationValidationError("Translation source-language override does not match the novel metadata genres.")
         genres = normalize_genres(source_language, stored_genres)
+        title_catalog = {number: chapter_utils.read_title(path, f"Chapter {number}") for number, path in chapters.items()}
         graph = self.graph_factory(request.review, request.summary)
         success_count = 0
         failures: list[int] = []
@@ -275,6 +277,7 @@ class TranslationWorkflow:
                     source_language=source_language,
                     target_language=target,
                     genres=genres,
+                    title_catalog=title_catalog,
                     graph=graph,
                     storage=self.storage,
                     publish=publish,

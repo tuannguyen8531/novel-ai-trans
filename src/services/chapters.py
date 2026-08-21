@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from pathlib import Path
 
 FILE_PATTERN = re.compile(r"^chapter_(\d+)\.txt$")
@@ -52,6 +53,212 @@ _TITLE_REPLACEMENTS = str.maketrans(
         "﹏": "~",
     }
 )
+
+_HEADING_PREFIX_PATTERNS = (
+    re.compile(
+        r"^\s*第\s*(?P<number>\d+)\s*[章节話话回]\s*[:：.\-]?\s*(?P<title>.*?)\s*$",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"^\s*(?:chapter|chap\.?|ch\.?)\s*#?\s*(?P<number>\d+)\s*[:：.\-]?\s*(?P<title>.*?)\s*$",
+        re.IGNORECASE,
+    ),
+    re.compile(r"^\s*(?:chương|chuong)\s*(?P<number>\d+)\s*[:：.\-]?\s*(?P<title>.*?)\s*$", re.IGNORECASE),
+    re.compile(
+        r"^\s*(?:제\s*)?(?P<number>\d+)\s*[章节話话回화]\s*[:：.\-]?\s*(?P<title>.*?)\s*$",
+        re.IGNORECASE,
+    ),
+)
+_TRAILING_PART_RE = re.compile(r"\((?P<part>[^()]*)\)\s*$")
+_CHINESE_NUMERAL_DIGITS = frozenset("零〇○一二两兩三四五六七八九")
+_CHINESE_NUMERAL_UNITS = {"十": 10, "百": 100, "千": 1000, "万": 10_000, "萬": 10_000, "亿": 100_000_000, "億": 100_000_000}
+_CHINESE_NUMERAL_RE = re.compile(r"[零〇○一二两兩三四五六七八九十百千万萬亿億]+")
+
+
+@dataclass(frozen=True)
+class ParsedChapterTitle:
+    """A numbered heading and a possible trailing series-part candidate."""
+
+    heading: str
+    number: int
+    title: str
+    candidate_base: str
+    candidate_part: int | None
+    candidate_key: str
+
+
+@dataclass(frozen=True)
+class ResolvedChapterTitle:
+    """A heading after neighboring chapters confirm (or reject) its suffix."""
+
+    parsed: ParsedChapterTitle
+    base: str
+    part: int | None
+    is_series: bool
+
+
+def _normalize_title_text(value: str) -> str:
+    """Normalize spacing and full-width punctuation for title comparisons."""
+    return re.sub(r"\s+", " ", unicodedata.normalize("NFKC", value)).strip()
+
+
+def title_key(value: str) -> str:
+    """Return a stable comparison key without discarding meaningful punctuation."""
+    return _normalize_title_text(value).casefold()
+
+
+def parse_chinese_numeral(value: str) -> int | None:
+    """Parse a standalone Arabic or Chinese numeral, conservatively."""
+    token = unicodedata.normalize("NFKC", value).strip()
+    if token.isdigit():
+        number = int(token)
+        return number if number > 0 else None
+    if not token or not _CHINESE_NUMERAL_RE.fullmatch(token):
+        return None
+
+    digit_map = {
+        "零": 0,
+        "〇": 0,
+        "○": 0,
+        "一": 1,
+        "二": 2,
+        "两": 2,
+        "兩": 2,
+        "三": 3,
+        "四": 4,
+        "五": 5,
+        "六": 6,
+        "七": 7,
+        "八": 8,
+        "九": 9,
+    }
+    # Positional strings such as 二〇三 are common in titles.
+    if all(character in _CHINESE_NUMERAL_DIGITS for character in token):
+        number = int("".join(str(digit_map[character]) for character in token))
+        return number if number > 0 else None
+
+    total = 0
+    section = 0
+    current = 0
+    for character in token:
+        if character in digit_map:
+            current = digit_map[character]
+            continue
+        unit = _CHINESE_NUMERAL_UNITS[character]
+        if unit < 10_000:
+            section += (current or 1) * unit
+            current = 0
+        else:
+            section = (section + current) * unit
+            total += section
+            section = 0
+            current = 0
+    number = total + section + current
+    return number if number > 0 else None
+
+
+def _split_trailing_part(title: str) -> tuple[str, int | None]:
+    """Return a title base and a numeric trailing-parenthesis candidate."""
+    normalized = _normalize_title_text(title)
+    match = _TRAILING_PART_RE.search(normalized)
+    if not match:
+        return normalized, None
+    part = parse_chinese_numeral(match.group("part"))
+    if part is None:
+        return normalized, None
+    base = normalized[: match.start()].rstrip()
+    return base, part
+
+
+def strip_numeric_title_suffix(title: str) -> str:
+    """Remove a numeric parenthesized suffix returned accidentally by an LLM."""
+    base, part = _split_trailing_part(title)
+    return base if part is not None else _normalize_title_text(title)
+
+
+def parse_chapter_heading(line: str) -> ParsedChapterTitle | None:
+    """Parse a numbered source heading and its possible trailing part marker."""
+    heading = _normalize_title_text(line.lstrip("\ufeff"))
+    for pattern in _HEADING_PREFIX_PATTERNS:
+        match = pattern.match(heading)
+        if not match:
+            continue
+        number = int(match.group("number"))
+        title = _normalize_title_text(match.group("title"))
+        candidate_base, candidate_part = _split_trailing_part(title)
+        return ParsedChapterTitle(
+            heading=heading,
+            number=number,
+            title=title,
+            candidate_base=candidate_base,
+            candidate_part=candidate_part,
+            candidate_key=title_key(candidate_base),
+        )
+    return None
+
+
+def resolve_chapter_title_series(
+    parsed: ParsedChapterTitle,
+    catalog: Mapping[int, str] | None = None,
+) -> ResolvedChapterTitle:
+    """Confirm a trailing part only when an adjacent title supports a sequence."""
+    if not parsed.candidate_key or not catalog:
+        return ResolvedChapterTitle(parsed, parsed.title, None, False)
+
+    for neighbor_number in (parsed.number - 1, parsed.number + 1):
+        neighbor_line = catalog.get(neighbor_number)
+        if not neighbor_line:
+            continue
+        neighbor = parse_chapter_heading(neighbor_line)
+        if neighbor is None or neighbor.candidate_key != parsed.candidate_key:
+            continue
+
+        current_part = parsed.candidate_part
+        neighbor_part = neighbor.candidate_part
+        if current_part is None and neighbor_part == 2:
+            # The first chapter is an implicit part one; do not invent ``(1)``.
+            return ResolvedChapterTitle(parsed, parsed.candidate_base, None, True)
+        if neighbor_part is None and current_part == 2:
+            return ResolvedChapterTitle(parsed, parsed.candidate_base, current_part, True)
+        if current_part is not None and neighbor_part is not None and abs(current_part - neighbor_part) == 1:
+            return ResolvedChapterTitle(parsed, parsed.candidate_base, current_part, True)
+
+    return ResolvedChapterTitle(parsed, parsed.title, None, False)
+
+
+def split_leading_chapter_heading(
+    text: str,
+    chapter_number: int,
+    catalog: Mapping[int, str] | None = None,
+) -> tuple[ResolvedChapterTitle | None, str]:
+    """Remove one numbered heading from the source text before chunking."""
+    lines = text.splitlines(keepends=True)
+    first_index = next((index for index, line in enumerate(lines) if line.strip()), None)
+    if first_index is None:
+        return None, text
+
+    parsed = parse_chapter_heading(lines[first_index].strip())
+    if parsed is None or parsed.number != chapter_number:
+        return None, text
+
+    resolved = resolve_chapter_title_series(parsed, catalog)
+    remaining = [*lines[:first_index], *lines[first_index + 1 :]]
+    while len(remaining) > first_index and not remaining[first_index].strip():
+        remaining.pop(first_index)
+    return resolved, "".join(remaining)
+
+
+def format_translated_chapter_heading(
+    chapter_number: int,
+    translated_base: str,
+    part: int | None,
+    target_language: str,
+) -> str:
+    """Format a finalized target-language heading deterministically."""
+    marker = "Chapter" if target_language == "en" else "Chương"
+    base = _normalize_title_text(translated_base)
+    heading = f"{marker} {chapter_number}: {base}" if base else f"{marker} {chapter_number}"
+    return f"{heading} ({part})" if part is not None else heading
 
 
 def scan(directory: Path) -> dict[int, Path]:

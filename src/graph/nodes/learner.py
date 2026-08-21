@@ -20,7 +20,8 @@ from src.domain.relationships import normalize_character_edges
 from src.domain.terms import filter_extracted_terms
 from src.models.state import TranslationState
 from src.prompts import render_prompt
-from src.services.glossary.memory import save_chapter_summary
+from src.services.chapters import format_translated_chapter_heading, strip_numeric_title_suffix
+from src.services.glossary.memory import save_chapter_summary, save_chapter_title
 from src.services.glossary.repository import (
     save_characters_batch,
     save_glossary,
@@ -585,6 +586,53 @@ def _build_existing_chars_str(
     return "\n".join(parts)
 
 
+def _title_learning_context(state: TranslationState, target_name: str) -> str:
+    """Describe the extracted title to the existing learner call."""
+    if not state.get("source_heading_present", False):
+        return ""
+    source_title = state.get("source_title", "").strip()
+    if not source_title:
+        return ""
+
+    source_base = state.get("source_title_base", "").strip() or source_title
+    part = state.get("source_title_part")
+    hint = state.get("title_translation_hint", "").strip()
+    lines = [
+        "=== CHAPTER TITLE (translate after reading the aligned excerpts) ===",
+        f"SOURCE TITLE: {source_title}",
+        f"SOURCE TITLE BASE: {source_base}",
+    ]
+    if state.get("source_title_series"):
+        lines.append(
+            "This title belongs to a confirmed adjacent series. Translate only SOURCE TITLE BASE; "
+            "do not translate or repeat the series number."
+        )
+        if part is not None:
+            lines.append(f"SERIES PART NUMBER (preserve mechanically): {part}")
+    else:
+        lines.append("Translate SOURCE TITLE BASE as a natural title. Do not add a chapter number.")
+    if hint:
+        lines.append(f"CANONICAL STORED TITLE TRANSLATION (reuse exactly): {hint}")
+    lines.extend(
+        [
+            f"Return the target-language title base in the JSON field translated_title_base ({target_name}).",
+            "Return only the title base in that field, without 'Chapter', 'Chương', or a series suffix.",
+            "=== END CHAPTER TITLE ===",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _clean_title_translation(value: object, *, hint: str = "", strip_series_suffix: bool = False) -> str:
+    """Keep a learner title response to one line and prefer stored canonical memory."""
+    if hint:
+        return strip_numeric_title_suffix(hint) if strip_series_suffix else hint
+    if not isinstance(value, str):
+        return ""
+    cleaned = " ".join(value.strip().splitlines()).strip()
+    return strip_numeric_title_suffix(cleaned) if strip_series_suffix else cleaned
+
+
 def learner_node(state: TranslationState, *, summary: bool = False) -> dict:
     """Extract terms and create summary from the translated chapter."""
     novel_name = state["novel_name"]
@@ -593,8 +641,11 @@ def learner_node(state: TranslationState, *, summary: bool = False) -> dict:
     target_language = state.get("target_language", "vi")
     target_name = target_language_name(target_language)
 
-    full_translation = "\n\n".join(state["translated_chunks"])
+    body_translation = "\n\n".join(state["translated_chunks"])
     source_text = state["source_text"]
+    source_title = state.get("source_title", "").strip()
+    source_title_key = state.get("source_title_key", "").strip()
+    title_hint = state.get("title_translation_hint", "").strip()
 
     # --- 1. Extract terms + character relationships (single call) ---
     existing_glossary = state.get("glossary", {})
@@ -623,15 +674,18 @@ def learner_node(state: TranslationState, *, summary: bool = False) -> dict:
         chapter_number=str(chapter_number),
     )
 
-    learn_user_prompt = _sample_aligned_chunks(
+    title_context = _title_learning_context(state, target_name)
+    aligned_context = _sample_aligned_chunks(
         state["chunks"],
         state["translated_chunks"],
         language,
         target_name,
     )
+    learn_user_prompt = "\n\n".join(part for part in (title_context, aligned_context) if part)
 
     new_terms = {}
     new_characters = {}
+    translated_title_base = ""
     learn_response = ""
     learn_succeeded = False
     try:
@@ -640,6 +694,11 @@ def learner_node(state: TranslationState, *, summary: bool = False) -> dict:
         learn_data = parse_json_object(learn_response)
         new_terms = learn_data.get("terms", {})
         new_characters = learn_data.get("characters", {})
+        translated_title_base = _clean_title_translation(
+            learn_data.get("translated_title_base", ""),
+            hint=title_hint,
+            strip_series_suffix=state.get("source_title_series", False),
+        )
         learn_succeeded = True
     except Exception as e:
         log_error("Failed to extract terms and characters", e, chapter=chapter_number)
@@ -651,6 +710,23 @@ def learner_node(state: TranslationState, *, summary: bool = False) -> dict:
                 "presentation_message": f"\n  [Warning] Failed to extract terms and characters: {e}",
             },
         )
+
+    if source_title and not translated_title_base:
+        translated_title_base = title_hint
+    if state.get("source_title_series", False) and source_title_key and translated_title_base:
+        save_chapter_title(novel_name, source_title_key, translated_title_base)
+
+    full_translation = body_translation
+    if state.get("source_heading_present", False):
+        heading = format_translated_chapter_heading(
+            chapter_number,
+            translated_title_base,
+            state.get("source_title_part"),
+            target_language,
+        )
+        full_translation = f"{heading}\n\n{body_translation}" if body_translation else heading
+
+    learning_source_text = "\n\n".join(part for part in (source_title, source_text) if part)
 
     # Sanitize entity keys: strip parenthetical annotations from keys/edges/rules
     new_characters = _sanitize_entity_keys(new_characters)
@@ -698,7 +774,7 @@ def learner_node(state: TranslationState, *, summary: bool = False) -> dict:
     # Keep learner-selected terms only when they are grounded in this chapter.
     if new_terms:
         new_terms = filter_extracted_terms(
-            source_text,
+            learning_source_text,
             new_terms,
             translated_text=full_translation,
             existing_terms=existing_glossary,
@@ -799,5 +875,6 @@ def learner_node(state: TranslationState, *, summary: bool = False) -> dict:
         "new_terms": new_terms,
         "new_characters": new_characters,
         "chapter_summary": summary_response,
+        "translated_title_base": translated_title_base,
         "final_translation": full_translation,
     }

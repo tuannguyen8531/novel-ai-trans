@@ -17,7 +17,7 @@ from src.config import config
 from src.domain.glossary import select_active_glossary_terms
 from src.domain.rules import select_relevant_rules
 from src.models.state import TranslationState
-from src.services.glossary.memory import load_recent_chapter_summaries
+from src.services.glossary.memory import load_chapter_title, load_recent_chapter_summaries
 from src.services.glossary.repository import (
     get_active_context_with_candidates,
     load_glossary,
@@ -36,6 +36,8 @@ def context_node(state: TranslationState) -> dict:
     novel_name = state["novel_name"]
     chapter_number = state["chapter_number"]
     source_text = state.get("source_text", "")
+    source_title = state.get("source_title", "")
+    context_source_text = "\n\n".join(part for part in (source_title, source_text) if part)
 
     # 0. Load source language from metadata if not specified by user
     if not language:
@@ -64,12 +66,12 @@ def context_node(state: TranslationState) -> dict:
     if snapshot.common:
         rules_parts.append(snapshot.common)
 
-    language_rules = select_relevant_rules(snapshot.language, source_text)
+    language_rules = select_relevant_rules(snapshot.language, context_source_text)
     if language_rules:
         rules_parts.append(language_rules)
 
     for _, raw_genre_rules in snapshot.genres:
-        genre_rules = select_relevant_rules(raw_genre_rules, source_text)
+        genre_rules = select_relevant_rules(raw_genre_rules, context_source_text)
         if genre_rules:
             rules_parts.append(genre_rules)
 
@@ -79,7 +81,12 @@ def context_node(state: TranslationState) -> dict:
     rules = "\n\n".join(rules_parts)
 
     # 2. Load glossary terms used in this chapter.
-    glossary = select_active_glossary_terms(load_glossary(novel_name), source_text)
+    glossary = select_active_glossary_terms(load_glossary(novel_name), context_source_text)
+
+    title_translation_hint = ""
+    source_title_key = state.get("source_title_key", "")
+    if source_title_key and state.get("source_title_series", False):
+        title_translation_hint = load_chapter_title(novel_name, source_title_key)
 
     # 3. Load recent chapter summaries (last 3 chapters)
     previous_summary = ""
@@ -91,7 +98,7 @@ def context_node(state: TranslationState) -> dict:
     # 4. Load character context — only characters directly active in this chapter.
     entities, edges, address_rules, address_rule_candidates = get_active_context_with_candidates(
         novel_name,
-        source_text,
+        context_source_text,
         chapter_number,
     )
     if entities:
@@ -115,6 +122,7 @@ def context_node(state: TranslationState) -> dict:
         "source_language": language,
         "translation_rules": rules,
         "glossary": glossary,
+        "title_translation_hint": title_translation_hint,
         "previous_summary": previous_summary,
         "characters": {
             "entities": entities,

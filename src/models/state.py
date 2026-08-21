@@ -2,9 +2,10 @@
 LangGraph State definition for the Novel Translation Pipeline.
 
 The State flows through every node in the graph:
-  detect → chunk → context → [translate → review]* → learn → save
+  detect → title → context → chunk → [translate → review]* → learn → save
 """
 
+from collections.abc import Mapping
 from typing import TypedDict
 
 
@@ -12,12 +13,20 @@ class TranslationState(TypedDict):
     """Central state object for the translation pipeline."""
 
     # --- Input (set at invocation) ---
-    source_text: str  # Full raw text to translate
+    source_text: str  # Raw text initially; title node replaces it with the body to translate
     source_language: str  # "chinese" | "korean" | "japanese" | "" (auto-detect)
     target_language: str  # "vi" | "en"
     novel_name: str  # For glossary lookup
     chapter_number: int  # Current chapter number
     genres: list[str]  # Selected source-specific genre rule profiles
+    title_catalog: dict[int, str]  # Source headings used to confirm numbered title series
+    source_heading_present: bool  # Whether a numbered source heading was extracted
+    source_title: str  # Extracted source heading, if the chapter has one
+    source_title_base: str  # Heading text without a confirmed series suffix
+    source_title_key: str  # Normalized key used by title translation memory
+    source_title_part: int | None  # Confirmed series part number, if any
+    source_title_series: bool  # Whether neighboring chapters confirmed a title series
+    title_translation_hint: str  # Previously persisted translation for the title base
 
     # --- Context (loaded by context node) ---
     translation_rules: str  # Bundled and per-novel translation rules
@@ -43,6 +52,7 @@ class TranslationState(TypedDict):
     new_terms: dict[str, str]  # New glossary terms extracted
     new_characters: dict  # New entities/edges discovered this chapter
     chapter_summary: str  # Summary for next chapter context
+    translated_title_base: str  # Finalized title base returned by the learner
 
     # --- Final Output ---
     final_translation: str  # Complete translated text
@@ -55,6 +65,7 @@ def initial_state(
     chapter_number: int,
     target_language: str = "vi",
     genres: list[str] | None = None,
+    title_catalog: Mapping[int, str] | None = None,
 ) -> TranslationState:
     """Create a properly initialized TranslationState."""
     return TranslationState(
@@ -64,6 +75,14 @@ def initial_state(
         novel_name=novel_name,
         chapter_number=chapter_number,
         genres=list(genres or []),
+        title_catalog=dict(title_catalog or {}),
+        source_heading_present=False,
+        source_title="",
+        source_title_base="",
+        source_title_key="",
+        source_title_part=None,
+        source_title_series=False,
+        title_translation_hint="",
         translation_rules="",
         glossary={},
         previous_summary="",
@@ -81,5 +100,6 @@ def initial_state(
         new_terms={},
         new_characters={},
         chapter_summary="",
+        translated_title_base="",
         final_translation="",
     )

@@ -39,6 +39,7 @@ def translate_chapter(
     storage: TranslationStorage,
     publish: PublishChapter,
     genres: list[str] | None = None,
+    title_catalog: Mapping[int, str] | None = None,
     clock: Callable[[], float] = time.time,
     cancel_event: Event | None = None,
 ) -> tuple[bool, int, float, int]:
@@ -56,6 +57,7 @@ def translate_chapter(
             novel_name=novel,
             chapter_number=chapter,
             genres=genres,
+            title_catalog=title_catalog,
         )
     )
     elapsed = clock() - started_at

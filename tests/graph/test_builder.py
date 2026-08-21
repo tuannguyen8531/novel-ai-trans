@@ -259,3 +259,39 @@ class TestQualityFlow:
                 graph.invoke(initial_state("source", "chinese", "novel", 1))
 
         reviewer.assert_not_called()
+
+
+def test_title_only_chapter_skips_translation_chunks() -> None:
+    def detect(_state):
+        return {"source_language": "chinese"}
+
+    def context(_state):
+        return {"translation_rules": "", "glossary": {}, "previous_summary": "", "characters": {}}
+
+    def learn(state, *, summary=False):
+        assert state["source_text"] == ""
+        assert state["source_title"] == "新年"
+        return {
+            "new_terms": {},
+            "new_characters": {},
+            "chapter_summary": "",
+            "translated_title_base": "Năm mới",
+            "final_translation": "Chương 1: Năm mới",
+        }
+
+    with (
+        patch("src.graph.builder.detector_node", detect),
+        patch("src.graph.builder.context_node", context),
+        patch("src.graph.builder.learner_node", learn),
+    ):
+        result = build_graph(review=False).invoke(
+            initial_state(
+                "第1章 新年\n\n",
+                "chinese",
+                "novel",
+                1,
+                title_catalog={1: "第1章 新年"},
+            )
+        )
+
+    assert result["final_translation"] == "Chương 1: Năm mới"
