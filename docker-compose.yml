@@ -1,31 +1,36 @@
 services:
   api:
-    build: .
+    build:
+      context: .
     image: novel-ai-trans:local
+    init: true
     env_file:
       - .env
     environment:
       API_HOST: 0.0.0.0
       API_PORT: "${API_PORT:-8000}"
       API_SECRET_KEY: "${API_SECRET_KEY:?Set API_SECRET_KEY in .env before running Docker Compose}"
-      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_BASE_URL: "${OLLAMA_BASE_URL:-http://ollama:11434}"
     ports:
       - "${API_PORT:-8000}:${API_PORT:-8000}"
     volumes:
       - ./translated:/app/translated
       - ./runtime:/app/runtime
       - ./.env:/app/.env
-    depends_on:
-      - ollama
     restart: unless-stopped
+    stop_grace_period: 1m
 
   ollama:
-    image: ollama/ollama:latest
-    ports:
-      - "${OLLAMA_PORT:-11434}:11434"
+    image: ollama/ollama:0.32.6
     volumes:
       - ollama:/root/.ollama
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
     # Uncomment on hosts with NVIDIA Container Toolkit installed.
     # deploy:
     #   resources:

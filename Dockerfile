@@ -17,11 +17,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     UV_LINK_MODE=copy \
     UV_COMPILE_BYTECODE=1 \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
     PATH="/app/.venv/bin:${PATH}"
 
 WORKDIR /app
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
+COPY --from=ghcr.io/astral-sh/uv:0.12.0 /uv /uvx /usr/local/bin/
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates \
@@ -39,6 +40,12 @@ COPY --from=web-builder /app/web/dist ./web/dist
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev
+
+RUN groupadd --gid 1000 app \
+    && useradd --uid 1000 --gid 1000 --create-home --shell /usr/sbin/nologin app \
+    && chown -R app:app /app /ms-playwright
+
+USER app
 
 EXPOSE 8000
 

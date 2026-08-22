@@ -53,34 +53,27 @@ uv sync
 cp .env.example .env
 ```
 
-The first `uv run serve` or CLI command creates `runtime/settings.json` from
-the defaults.
-For example, with a local Ollama server:
-
-```json
-{
-  "llm_provider": "ollama",
-  "ollama_base_url": "http://localhost:11434",
-  "ollama_model": "qwen3:8b"
-}
-```
-
-Normal application settings are read from `runtime/settings.json` after it has
-been created. API keys and Telegram tokens are read
-from `.env` only.
-
-```env
-GEMINI_API_KEY=
-OPENROUTER_API_KEY=
-TELEGRAM_BOT_TOKEN=
-TELEGRAM_CHAT_ID=
-```
-
-The web GUI's **Save** actions persist non-secret settings to
-`runtime/settings.json`.
-
 See the [provider guide](docs/PROVIDERS.md) for Gemini, OpenRouter, fallback,
 and model settings.
+
+### Run with Docker Compose
+
+Build the frontend and start the API with the included Ollama container:
+
+```bash
+cp .env.example .env
+mkdir -p runtime translated
+docker compose up --build
+```
+
+Open <http://127.0.0.1:8000>.
+
+For an external Ollama server, set its URL in `.env` and comment out the
+`ollama` service in `docker-compose.yml`:
+
+```env
+OLLAMA_BASE_URL=http://172.17.0.1:11434
+```
 
 ### Use the web GUI
 
@@ -120,23 +113,6 @@ Install Chromium before using browser-based crawling:
 uv run playwright install chromium
 ```
 
-Runtime novel data and generated books are kept together:
-
-```text
-translated/<novel>/
-├── config.json
-├── metadata.json
-├── glossary.json
-├── rules.md                optional per-novel translation rules
-├── input/                  source chapters
-├── output/                 Vietnamese chapters
-├── output/en/              English chapters
-├── illustrations/
-└── artifacts/
-    ├── <novel>.vi.epub
-    └── <novel>.en.epub
-```
-
 ## Commands
 
 | Command | Purpose |
@@ -162,11 +138,6 @@ Run a workflow command such as `uv run translate --help`, or see the
 | [Web GUI](docs/GUI.md) | Build, serve, configure, and operate the browser interface |
 | [Providers](docs/PROVIDERS.md) | Ollama, Gemini, OpenRouter, fallback, and generation settings |
 | [Architecture](docs/ARCHITECTURE.md) | Module ownership and backend/frontend dependency direction |
-
-Configuration starts from [.env.example](.env.example). Runtime logs, progress,
-jobs, reports, locks, and crawler state are stored under `runtime/`, separately
-from the source code and per-novel data. LLM request, response, and error logs
-are rotated by daily folder under `runtime/logs/`.
 
 ## Development
 
