@@ -209,7 +209,7 @@ def progress(
         report_directory,
         output_directory,
     )
-    saved["source_warnings"] = catalog_repository.load_source_warning_chapters(
+    saved["important_warnings"] = catalog_repository.load_important_warning_chapters(
         report_directory,
         output_directory,
     )

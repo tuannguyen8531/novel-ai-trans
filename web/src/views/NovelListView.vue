@@ -22,7 +22,7 @@ const failedChaptersError = ref<string | null>(null)
 const showWarningDialog = ref(false)
 const warningNovel = ref<NovelSummary | null>(null)
 const warningChapters = ref<number[]>([])
-const sourceWarningChapters = ref<Set<number>>(new Set())
+const importantWarningChapters = ref<Set<number>>(new Set())
 const warningChaptersLoading = ref(false)
 const warningChaptersError = ref<string | null>(null)
 const showIgnoreWarningsDialog = ref(false)
@@ -177,7 +177,7 @@ function retranslateFailed() {
 async function showWarningChapters(novel: NovelSummary) {
   warningNovel.value = novel
   warningChapters.value = []
-  sourceWarningChapters.value = new Set()
+  importantWarningChapters.value = new Set()
   warningChaptersError.value = null
   ignoreWarningsError.value = null
   warningChaptersLoading.value = true
@@ -185,7 +185,7 @@ async function showWarningChapters(novel: NovelSummary) {
   try {
     const progress = await novels.progress(novel.name, defaultTarget.value)
     warningChapters.value = [...progress.warnings].sort((a, b) => a - b)
-    sourceWarningChapters.value = new Set(progress.source_warnings ?? [])
+    importantWarningChapters.value = new Set(progress.important_warnings ?? [])
   } catch (err) {
     warningChaptersError.value = (err as Error).message
   } finally {
@@ -197,9 +197,16 @@ function closeWarningDialog() {
   showWarningDialog.value = false
   warningNovel.value = null
   warningChapters.value = []
-  sourceWarningChapters.value = new Set()
+  importantWarningChapters.value = new Set()
   warningChaptersError.value = null
   ignoreWarningsError.value = null
+}
+
+function warningChapterTooltip(chapter: number): string {
+  if (importantWarningChapters.value.has(chapter)) {
+    return 'Contains source-language characters or is missing a translated title'
+  }
+  return 'Contains unresolved translation quality warnings'
 }
 
 function requestIgnoreWarnings() {
@@ -303,7 +310,7 @@ const deleteMessage = computed(() => {
                   v-if="(translatedProgress(novel)?.warnings ?? 0) > 0"
                   type="button"
                   class="badge warn status-badge"
-                  title="Chapters that still contain source-language characters"
+                  title="Chapters with unresolved translation quality warnings"
                   @click="showWarningChapters(novel)"
                 >
                   warning: {{ translatedProgress(novel)?.warnings }}
@@ -407,7 +414,10 @@ const deleteMessage = computed(() => {
               v-for="chapter in warningChapters"
               :key="chapter"
               class="failed-chapter-link"
-              :class="{ 'source-warning-chapter': sourceWarningChapters.has(chapter) }"
+              :class="{
+                'important-warning-chapter': importantWarningChapters.has(chapter),
+              }"
+              :title="warningChapterTooltip(chapter)"
               :to="`/novels/${warningNovel?.name}/chapters/${chapter}`"
               @click="closeWarningDialog"
             >
@@ -580,7 +590,7 @@ button.status-badge:hover:not(:disabled) {
   text-align: center;
 }
 
-.failed-chapter-link.source-warning-chapter {
+.failed-chapter-link.important-warning-chapter {
   border-color: var(--danger);
 }
 

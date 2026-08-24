@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import shutil
+from collections.abc import Collection
 from pathlib import Path
 
 from src import paths
@@ -18,6 +19,7 @@ from src.services.translation.reports import (
 
 _REPORT_FILE_RE = re.compile(r"^chapter_(\d+)\.json$")
 _SOURCE_WARNING_CODE = "contains_source_language_chars"
+_IMPORTANT_WARNING_CODES = frozenset({_SOURCE_WARNING_CODE, "missing_translated_title"})
 
 
 def list_directories(root: Path) -> list[Path]:
@@ -56,9 +58,9 @@ def load_warning_chapters(
     directory: Path,
     output_directory: Path | None = None,
     *,
-    warning_code: str | None = None,
+    warning_codes: Collection[str] | None = None,
 ) -> list[int]:
-    """Return chapters with unresolved warnings, optionally filtered by code."""
+    """Return chapters with unresolved warnings, optionally filtered by codes."""
     if not directory.exists():
         return []
 
@@ -74,10 +76,10 @@ def load_warning_chapters(
         if not isinstance(data, dict):
             continue
         manual_issues = data.get("manual_post_check_issues")
-        warning_codes = {code for code in manual_issues if isinstance(code, str)} if isinstance(manual_issues, list) else set()
-        if warning_code is not None:
-            warning_codes.intersection_update({warning_code})
-        if not warning_codes:
+        issue_codes = {code for code in manual_issues if isinstance(code, str)} if isinstance(manual_issues, list) else set()
+        if warning_codes is not None:
+            issue_codes.intersection_update(warning_codes)
+        if not issue_codes:
             continue
 
         chapter = int(match.group(1))
@@ -92,8 +94,8 @@ def load_warning_chapters(
             except OSError, UnicodeDecodeError:
                 continue
 
-            unresolved = set(warning_codes)
-            for code in warning_codes:
+            unresolved = set(issue_codes)
+            for code in issue_codes:
                 if issue_is_ignored(data, code, fingerprint):
                     unresolved.discard(code)
                     continue
@@ -126,9 +128,9 @@ def load_warning_chapters(
     return sorted(chapters)
 
 
-def load_source_warning_chapters(directory: Path, output_directory: Path | None = None) -> list[int]:
-    """Return chapters whose current output still contains source-language characters."""
-    return load_warning_chapters(directory, output_directory, warning_code=_SOURCE_WARNING_CODE)
+def load_important_warning_chapters(directory: Path, output_directory: Path | None = None) -> list[int]:
+    """Return chapters with source characters or a missing translated title."""
+    return load_warning_chapters(directory, output_directory, warning_codes=_IMPORTANT_WARNING_CODES)
 
 
 def glossary_counts(path: Path) -> tuple[int, int, int]:
@@ -176,5 +178,5 @@ __all__ = [
     "load_glossary_terms",
     "load_progress",
     "load_warning_chapters",
-    "load_source_warning_chapters",
+    "load_important_warning_chapters",
 ]

@@ -155,13 +155,13 @@ def test_source_warning_count_and_chapters_are_exposed(client):
     targets = {item["target"]: item for item in list_response.json()[0]["targets"]}
     assert targets["vi"]["warnings"] == 1
     assert progress_response.json()["warnings"] == [1]
-    assert progress_response.json()["source_warnings"] == [1]
+    assert progress_response.json()["important_warnings"] == [1]
 
 
-def test_warning_progress_separates_source_warning_chapters(client):
+def test_warning_progress_combines_important_warning_chapters(client):
     test_client, translated = client
     novel = translated / "demo"
-    for chapter in (1, 2):
+    for chapter in (1, 2, 3):
         _write_chapter(novel / "input", chapter)
         _write_chapter(novel / "output", chapter)
 
@@ -175,14 +175,20 @@ def test_warning_progress_separates_source_warning_chapters(client):
         json.dumps({"manual_post_check_issues": ["contains_source_language_chars"]}),
         encoding="utf-8",
     )
+    (reports_dir / "chapter_003.json").write_text(
+        json.dumps({"manual_post_check_issues": ["missing_translated_title"]}),
+        encoding="utf-8",
+    )
     (novel / "output" / "chapter_001.txt").write_text("```text\nwarning\n```", encoding="utf-8")
     (novel / "output" / "chapter_002.txt").write_text("Cô bé 囡 đến rồi.", encoding="utf-8")
+    (novel / "input" / "chapter_003.txt").write_text("第3章 新年\n\n正文", encoding="utf-8")
+    (novel / "output" / "chapter_003.txt").write_text("Chương 3\n\nNội dung.", encoding="utf-8")
 
     response = test_client.get("/api/novels/demo/translation-progress?target=vi")
 
     assert response.status_code == 200
-    assert response.json()["warnings"] == [1, 2]
-    assert response.json()["source_warnings"] == [2]
+    assert response.json()["warnings"] == [1, 2, 3]
+    assert response.json()["important_warnings"] == [2, 3]
 
 
 def test_ignore_all_warning_chapters(client):

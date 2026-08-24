@@ -47,7 +47,7 @@ def test_summary_uses_stored_outputs_as_completion_truth(tmp_path: Path) -> None
         "completed": [1],
         "failed": [3],
         "warnings": [],
-        "source_warnings": [],
+        "important_warnings": [],
     }
 
 
@@ -74,7 +74,26 @@ def test_summary_and_progress_include_source_warning_chapters(tmp_path: Path) ->
     assert vietnamese.warnings == 1
     progress = catalog.progress(root, "demo", "vi", report_root=report_root)
     assert progress["warnings"] == [1]
-    assert progress["source_warnings"] == [1]
+    assert progress["important_warnings"] == [1]
+
+
+def test_progress_includes_missing_title_warning_chapters(tmp_path: Path) -> None:
+    root = tmp_path / "translated"
+    novel_root = root / "demo"
+    _write_chapter(novel_root / "input", 1, "\u7b2c1\u7ae0 \u65b0\u5e74\n\n\u6b63\u6587")
+    _write_chapter(novel_root / "output", 1, "Chương 1\n\nNội dung.")
+    report_root = tmp_path / "reports"
+    report_dir = report_root / "vi" / "demo"
+    report_dir.mkdir(parents=True)
+    (report_dir / "chapter_001.json").write_text(
+        json.dumps({"manual_post_check_issues": ["missing_translated_title"]}),
+        encoding="utf-8",
+    )
+
+    progress = catalog.progress(root, "demo", "vi", report_root=report_root)
+
+    assert progress["warnings"] == [1]
+    assert progress["important_warnings"] == [1]
 
 
 def test_ignore_all_current_warnings_for_novel(tmp_path: Path) -> None:
@@ -99,7 +118,7 @@ def test_ignore_all_current_warnings_for_novel(tmp_path: Path) -> None:
 
     assert catalog.ignore_warnings(root, "demo", "vi", report_root=report_root) == 2
     assert catalog.progress(root, "demo", "vi", report_root=report_root)["warnings"] == []
-    assert catalog.progress(root, "demo", "vi", report_root=report_root)["source_warnings"] == []
+    assert catalog.progress(root, "demo", "vi", report_root=report_root)["important_warnings"] == []
     assert catalog.ignore_warnings(root, "demo", "vi", report_root=report_root) == 0
 
 
@@ -227,7 +246,7 @@ def test_write_translation_refreshes_manual_source_warning(tmp_path: Path) -> No
     )
     progress = catalog.progress(root, "demo", "vi", report_root=report_root)
     assert progress["warnings"] == [7]
-    assert progress["source_warnings"] == [7]
+    assert progress["important_warnings"] == [7]
 
     chapters.write_chapter(
         root,
@@ -365,7 +384,7 @@ def test_post_check_review_lists_non_source_issues(tmp_path: Path) -> None:
     assert code_fence.origin == "output"
     progress = catalog.progress(root, "demo", "vi", report_root=report_root)
     assert progress["warnings"] == [7]
-    assert progress["source_warnings"] == []
+    assert progress["important_warnings"] == []
 
     review = chapters.review_post_check_item(
         root,
