@@ -202,22 +202,24 @@ Two temperature/max-token pairs are used:
   structured JSON response.
 - **Translation / summarization / metadata localization calls** — `translate`,
   `summarize`, and `localize` use
-  `TRANSLATION_TEMPERATURE` (default `0.3`) and
-  `TRANSLATION_MAX_TOKENS` (default `8192`). Slightly higher temperature gives
+  `translation_temperature` (default `0.3`) and
+  `translation_max_tokens` (default `8192`) from `runtime/settings.json`.
+  Slightly higher temperature gives
   more natural prose; lower is more literal.
 
 Metadata localization translates only an existing novel title or synopsis; it
 does not generate a synopsis from chapters. Its prompt contains only glossary
 terms and known characters that occur in the metadata fields being sent.
 
-Chunking is controlled by `CHUNK_MODE` (`chars` by default), `CHUNK_SIZE`
-(default `5000`), and `CHUNK_OVERLAP` (default `100`). In `chars` mode, size
+Chunking is controlled by `chunk_mode` (`chars` by default), `chunk_size`
+(default `5000`), and `chunk_overlap` (default `100`) in
+`runtime/settings.json`. In `chars` mode, size
 and overlap use characters and preserve the legacy behaviour. In `tokens` mode,
 they use a deterministic local estimate: CJK and other non-whitespace
 characters count individually, while ASCII letters and digits are grouped in
 runs of up to four. This estimate is consistent and offline, but is not an
-exact model-specific token count. `CHUNK_OVERLAP` must be less than
-`CHUNK_SIZE` in either mode.
+exact model-specific token count. `chunk_overlap` must be less than
+`chunk_size` in either mode.
 
 Quality-control knobs:
 

@@ -1,6 +1,8 @@
-"""
-Loads settings from settings.json and .env file. A missing settings file is
-seeded from environment values before falling back to code defaults.
+"""Load runtime settings from JSON and secrets from the environment.
+
+A missing settings file is seeded from environment values before falling back
+to code defaults. Once created, the JSON file is authoritative for non-secret
+application settings.
 """
 
 from __future__ import annotations
@@ -20,7 +22,6 @@ from dotenv import dotenv_values, load_dotenv
 from src import paths
 from src.utils.files import write_json_atomic
 
-_ENVIRONMENT_BEFORE_DOTENV = frozenset(os.environ)
 load_dotenv(interpolate=True)
 _DOTENV_VALUES = dotenv_values()
 
@@ -65,13 +66,6 @@ ENV_FIELDS: dict[str, str] = {
     "telegram_silent": "TELEGRAM_SILENT",
     "telegram_timeout_seconds": "TELEGRAM_TIMEOUT_SECONDS",
 }
-
-
-for _field_name, _env_name in ENV_FIELDS.items():
-    if _field_name in SECRET_FIELDS or _env_name in _ENVIRONMENT_BEFORE_DOTENV:
-        continue
-    if _DOTENV_VALUES.get(_env_name) == os.environ.get(_env_name):
-        os.environ.pop(_env_name, None)
 
 
 def _dotenv_or_environment_value(env_name: str) -> str | None:
@@ -211,18 +205,20 @@ class Config:
 
     @classmethod
     def from_env(cls, settings_path: Path | None = None) -> Config:
-        """Load JSON settings and apply environment overrides.
+        """Load application settings from JSON and secrets from the environment.
 
-        JSON is the normal home for application settings. Environment values
-        take precedence so Docker, CI, and existing installations continue to
-        work. Secrets are deliberately excluded from the JSON layer.
+        Environment and dotenv values seed a missing settings file, but never
+        override non-secret values after that file exists. Secrets are
+        deliberately excluded from the JSON layer and always come from the
+        process environment or ``.env``.
         """
         settings_path = cls.ensure_settings_file(settings_path)
         defaults = cls()
         values = {field.name: getattr(defaults, field.name) for field in fields(cls)}
         values.update(_read_settings(settings_path, set(values) - SECRET_FIELDS))
 
-        for field_name, env_name in ENV_FIELDS.items():
+        for field_name in SECRET_FIELDS:
+            env_name = ENV_FIELDS[field_name]
             raw = os.getenv(env_name)
             if raw is None:
                 continue

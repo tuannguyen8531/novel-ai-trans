@@ -113,16 +113,37 @@ class TestConfig:
         assert config.chunk_size == 2200
         assert config.gemini_api_key == ""
 
-    def test_environment_overrides_settings_file(self, tmp_path):
+    def test_existing_settings_file_ignores_non_secret_environment_values(self, tmp_path):
         settings_path = tmp_path / "settings.json"
-        settings_path.write_text('{"target_language": "vi", "chunk_size": 2200}', encoding="utf-8")
+        settings_path.write_text(
+            '{"target_language": "vi", "chunk_size": 2200, "translation_temperature": 0.5}',
+            encoding="utf-8",
+        )
         with (
-            patch.dict(os.environ, {"TARGET_LANGUAGE": "en", "CHUNK_SIZE": "1800"}, clear=True),
+            patch.dict(
+                os.environ,
+                {
+                    "TARGET_LANGUAGE": "en",
+                    "CHUNK_SIZE": "1800",
+                    "TRANSLATION_TEMPERATURE": "0.9",
+                },
+                clear=True,
+            ),
             patch("src.config.load_dotenv"),
         ):
             config = Config.from_env(settings_path)
-        assert config.target_language == "en"
-        assert config.chunk_size == 1800
+        assert config.target_language == "vi"
+        assert config.chunk_size == 2200
+        assert config.translation_temperature == 0.5
+
+    def test_existing_settings_file_still_reads_secrets_from_environment(self, tmp_path):
+        settings_path = tmp_path / "settings.json"
+        settings_path.write_text('{"gemini_api_key": "must-not-come-from-json"}', encoding="utf-8")
+
+        with patch.dict(os.environ, {"GEMINI_API_KEY": "secret-from-environment"}, clear=True):
+            config = Config.from_env(settings_path)
+
+        assert config.gemini_api_key == "secret-from-environment"
 
     def test_from_env_reads_env_vars(self, tmp_path):
         env = {
@@ -148,7 +169,7 @@ class TestConfig:
         with pytest.raises(ValueError, match="log_retention_days"):
             Config(log_retention_days=0)
 
-    def test_from_env_reads_crawler_settings(self):
+    def test_missing_settings_file_reads_crawler_settings_from_env(self, tmp_path):
         with (
             patch.dict(
                 os.environ,
@@ -159,10 +180,10 @@ class TestConfig:
             ),
             patch("src.config.load_dotenv"),
         ):
-            cfg = Config.from_env()
+            cfg = Config.from_env(tmp_path / "settings.json")
             assert cfg.translated_dir == "/custom/translated"
 
-    def test_translated_path_expands_user(self):
+    def test_translated_path_expands_user(self, tmp_path):
         env = {
             "TRANSLATED_DIR": "~/translated",
         }
@@ -178,7 +199,7 @@ class TestConfig:
             ),
             patch("src.config.load_dotenv"),
         ):
-            cfg = Config.from_env()
+            cfg = Config.from_env(tmp_path / "settings.json")
             assert cfg.translated_path.is_absolute()
 
     def test_rejects_unknown_chunk_mode(self):
@@ -190,12 +211,12 @@ class TestConfig:
             config = Config()
             assert config.fallback_provider == ""
 
-    def test_fallback_provider_from_env(self):
+    def test_missing_settings_file_reads_fallback_provider_from_env(self, tmp_path):
         with (
             patch.dict(os.environ, {"FALLBACK_PROVIDER": "gemini"}, clear=True),
             patch("src.config.load_dotenv"),
         ):
-            assert Config.from_env().fallback_provider == "gemini"
+            assert Config.from_env(tmp_path / "settings.json").fallback_provider == "gemini"
 
 
 class TestSiteConfig:

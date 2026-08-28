@@ -131,6 +131,7 @@ def test_second_sigint_stops_blocking_provider_promptly_without_output(tmp_path:
         from pathlib import Path
         from unittest.mock import patch
 
+        from src.application import config as app_config
         from src.cli.translate import main
         from src.services.llm.base import BaseProvider
 
@@ -152,6 +153,13 @@ def test_second_sigint_stops_blocking_provider_promptly_without_output(tmp_path:
             output_path.parent.mkdir(parents=True, exist_ok=True)
             output_path.write_text(content, encoding="utf-8")
 
+        app_config.set_default(
+            app_config.get_config().clone(
+                translated_dir={str(translated_root)!r},
+                telegram_enabled=False,
+            )
+        )
+
         with (
             patch("src.cli.translate.check_provider", return_value=True),
             patch("src.cli.translate.run_translation", blocking_translation),
@@ -160,8 +168,6 @@ def test_second_sigint_stops_blocking_provider_promptly_without_output(tmp_path:
         """
     )
     environment = os.environ.copy()
-    environment["TRANSLATED_DIR"] = str(translated_root)
-    environment["TELEGRAM_ENABLED"] = "false"
     process = subprocess.Popen(
         [sys.executable, "-c", script],
         cwd=project_root,

@@ -77,10 +77,10 @@ Environment variables only — there are no CLI flags for `serve`:
 
 When `runtime/settings.json` does not exist, the server seeds it from values in
 `.env` and falls back to code defaults for missing values. Afterwards it reads
-normal application settings from the JSON file. Explicit process environment
-variables may still override the JSON for deployment and CI. The Settings page
-can update runtime, Telegram, and provider options and persist non-secret
-fields to `runtime/settings.json`.
+normal application settings exclusively from the JSON file; non-secret values
+exported by a shell or container do not override it. The Settings page can
+update runtime, Telegram, and provider options and persist non-secret fields to
+`runtime/settings.json`.
 Secrets are never displayed; API keys, Telegram credentials, and
 `API_SECRET_KEY` must be edited directly in `.env`.
 
