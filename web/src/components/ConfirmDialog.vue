@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, nextTick, useId } from 'vue'
+import { X } from '@lucide/vue'
 import { useBodyScrollLock } from '@/composables/scrolllock'
 
 const props = withDefaults(defineProps<{
@@ -83,7 +84,9 @@ watch(() => props.show, (isOpen) => {
           aria-label="Close"
           :disabled="loading"
           @click="emit('cancel')"
-        >&times;</button>
+        >
+          <X :size="18" />
+        </button>
       </header>
       <div class="modal-body">
         <p class="modal-message">{{ message }}</p>

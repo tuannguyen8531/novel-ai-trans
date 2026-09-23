@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { AlertTriangle } from '@lucide/vue'
+
 defineProps<{
   pendingCount: number
   loading: boolean
@@ -13,8 +15,9 @@ const emit = defineEmits<{
 <template>
   <div v-if="pendingCount" class="pending-banner">
     <div class="pending-banner-text">
+      <AlertTriangle :size="18" class="text-amber-400 shrink-0" />
       <span>
-        ⚠️ You have <strong>{{ pendingCount }}</strong> pending glossary changes waiting to be
+        You have <strong>{{ pendingCount }}</strong> pending glossary changes waiting to be
         applied to translated chapters.
       </span>
     </div>

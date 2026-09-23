@@ -57,4 +57,18 @@ def cover(root: Path, name: str) -> Path:
     raise ResourceNotFoundError(f"Local cover not found for novel: {name}")
 
 
-__all__ = ["cover", "save"]
+def resolve_cover(root: Path, name: str) -> Path | str:
+    """Return canonical local cover path or remote illustration URL from metadata."""
+    try:
+        return cover(root, name)
+    except ResourceNotFoundError:
+        meta = metadata.metadata(root, name)
+        illustration_url = meta.get("illustration_url")
+        if illustration_url and isinstance(illustration_url, str):
+            cleaned = illustration_url.strip()
+            if cleaned.startswith(("http://", "https://")):
+                return cleaned
+        raise
+
+
+__all__ = ["cover", "resolve_cover", "save"]

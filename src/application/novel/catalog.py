@@ -28,7 +28,7 @@ class Progress:
     total: int
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class Summary:
     name: str
     title: str | None
@@ -37,9 +37,10 @@ class Summary:
     total_input_chapters: int
     targets: list[Progress]
     has_illustrations: bool
+    illustration_url: str | None = None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class Detail(Summary):
     glossary_terms: int
     glossary_entities: int
@@ -162,6 +163,7 @@ def summarize(
         total_input_chapters=total,
         targets=targets,
         has_illustrations=catalog_repository.has_files(illustrations_dir),
+        illustration_url=metadata.get("illustration_url"),
     )
 
 

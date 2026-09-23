@@ -70,6 +70,7 @@ export function useTranslation() {
   onMounted(async () => {
     if (typeof route.query.novel === 'string') novel.value = route.query.novel
     failedOnly.value = queryFlag(route.query.failed_only ?? route.query.failedOnly)
+    if (queryFlag(route.query.force)) force.value = true
     await novels.refresh()
     syncSourceLanguage(novel.value)
   })

@@ -74,6 +74,7 @@ export interface NovelSummary {
   total_input_chapters: number
   targets: NovelTargetProgress[]
   has_illustrations: boolean
+  illustration_url?: string | null
 }
 
 export interface NovelTargetProgress {

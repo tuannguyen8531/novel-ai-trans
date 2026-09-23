@@ -1,14 +1,36 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, computed, ref } from 'vue'
+import {
+  Activity,
+  RotateCw,
+  Trash2,
+  CheckCircle2,
+  AlertTriangle,
+  Clock,
+  ChevronRight,
+  X
+} from '@lucide/vue'
 import { useJobsStore } from '@/composables/jobs'
 import JobMonitor from '@/components/JobMonitor.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import StatusBadge from '@/components/common/StatusBadge.vue'
+import CustomSelect from '@/components/common/CustomSelect.vue'
 import { formatDateTime } from '@/datetime'
 import type { JobModel } from '@/api/types'
 
 const jobs = useJobsStore()
 const selectedId = ref<string | null>(null)
 const statusFilter = ref<'all' | JobModel['status']>('all')
+const statusOptions: Array<{ value: 'all' | JobModel['status']; label: string }> = [
+  { value: 'all', label: 'All Statuses' },
+  { value: 'queued', label: 'Queued' },
+  { value: 'running', label: 'Running' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'degraded', label: 'Degraded' },
+  { value: 'failed', label: 'Failed' },
+  { value: 'cancelling', label: 'Cancelling' },
+  { value: 'cancelled', label: 'Cancelled' }
+]
 const TERMINAL_STATUSES = new Set<JobModel['status']>([
   'completed',
   'degraded',
@@ -17,7 +39,7 @@ const TERMINAL_STATUSES = new Set<JobModel['status']>([
 ])
 
 onMounted(() => {
-  jobs.refresh()
+  void jobs.refresh()
   jobs.startPolling()
 })
 
@@ -56,16 +78,10 @@ const rows = computed(() => (
     : allRows.value.filter((row) => row.status === statusFilter.value)
 ))
 
-function statusBadge(status: JobModel['status']): string {
-  if (status === 'completed') return 'ok'
-  if (status === 'degraded' || status === 'failed') return 'danger'
-  if (status === 'cancelled' || status === 'cancelling') return 'warn'
-  return ''
-}
-
-function statusLabel(status: JobModel['status']): string {
-  return status.replaceAll('_', ' ')
-}
+// Operational Summary Counts
+const runningCount = computed(() => allRows.value.filter((r) => ['running', 'queued', 'cancelling'].includes(r.status)).length)
+const completedCount = computed(() => allRows.value.filter((r) => r.status === 'completed').length)
+const failedCount = computed(() => allRows.value.filter((r) => ['failed', 'degraded'].includes(r.status)).length)
 
 function isTerminal(status: JobModel['status']): boolean {
   return TERMINAL_STATUSES.has(status)
@@ -153,96 +169,198 @@ async function handleClearAll() {
 </script>
 
 <template>
-  <section class="flex-col gap-3">
-    <div class="card">
-      <div class="row" style="justify-content: space-between; align-items: center;">
-        <h2>Jobs</h2>
-        <div class="row gap-2 job-actions">
-          <label class="status-filter">
-            <span class="muted">Status</span>
-            <select v-model="statusFilter">
-              <option value="all">All</option>
-              <option value="queued">Queued</option>
-              <option value="running">Running</option>
-              <option value="completed">Completed</option>
-              <option value="degraded">Degraded</option>
-              <option value="failed">Failed</option>
-              <option value="cancelling">Cancelling</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
-          </label>
-          <button
-            v-if="hasInactiveJobs"
-            class="secondary"
-            style="color: var(--danger);"
-            type="button"
-            @click="confirmClearAll"
-          >Delete All</button>
-          <button class="secondary" type="button" @click="jobs.refresh()">Refresh</button>
+  <div class="jobs-view-root">
+    <!-- Header Controls -->
+    <header class="jobs-header card-panel">
+      <div class="header-left">
+        <div class="header-icon-box">
+          <Activity :size="22" />
+        </div>
+        <div>
+          <h2 class="jobs-title">Operations & Jobs</h2>
+          <p class="jobs-subtitle">
+            Monitor real-time translation pipelines, crawler execution, and packaging tasks.
+          </p>
         </div>
       </div>
-      <table>
+
+      <div class="header-right">
+        <div class="status-filter-wrap">
+          <span class="filter-label">Filter:</span>
+          <CustomSelect
+            v-model="statusFilter"
+            :options="statusOptions"
+            class="status-custom-select"
+          />
+        </div>
+
+        <button
+          class="secondary btn-refresh"
+          type="button"
+          title="Refresh job lists"
+          @click="jobs.refresh()"
+        >
+          <RotateCw :size="15" />
+          <span>Refresh</span>
+        </button>
+
+        <button
+          v-if="hasInactiveJobs"
+          class="secondary btn-clear-all"
+          type="button"
+          title="Remove all inactive history jobs"
+          @click="confirmClearAll"
+        >
+          <Trash2 :size="15" />
+          <span>Clear History</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Operational Stat Cards -->
+    <div class="metrics-row">
+      <div class="stat-pill-card" :class="{ 'has-running': runningCount > 0 }">
+        <div class="stat-icon-wrap" :class="{ pulse: runningCount > 0 }">
+          <Activity :size="18" />
+        </div>
+        <div class="stat-text">
+          <span class="stat-num">{{ runningCount }}</span>
+          <span class="stat-lbl">Active Operations</span>
+        </div>
+      </div>
+
+      <div class="stat-pill-card">
+        <div class="stat-icon-wrap success">
+          <CheckCircle2 :size="18" />
+        </div>
+        <div class="stat-text">
+          <span class="stat-num">{{ completedCount }}</span>
+          <span class="stat-lbl">Completed</span>
+        </div>
+      </div>
+
+      <div class="stat-pill-card">
+        <div class="stat-icon-wrap" :class="{ danger: failedCount > 0 }">
+          <AlertTriangle :size="18" />
+        </div>
+        <div class="stat-text">
+          <span class="stat-num">{{ failedCount }}</span>
+          <span class="stat-lbl">Failed / Degraded</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Table Card -->
+    <div class="card-panel table-shell">
+      <table class="jobs-table">
         <thead>
           <tr>
-            <th>ID</th>
-            <th>Kind</th>
+            <th style="width: 100px;">Job ID</th>
+            <th>Type</th>
             <th>Novel</th>
             <th>Status</th>
             <th>Progress</th>
-            <th>Created</th>
-            <th></th>
+            <th>Timestamp</th>
+            <th style="text-align: right;">Action</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="row in rows" :key="row.id">
-            <td><code>{{ row.id.slice(0, 8) }}</code></td>
-            <td>{{ row.kind }}</td>
-            <td>{{ row.novel ?? '—' }}</td>
-            <td><span class="badge" :class="statusBadge(row.status)">{{ statusLabel(row.status) }}</span></td>
-            <td class="progress-cell">
+          <tr
+            v-for="row in rows"
+            :key="row.id"
+            :class="{ 'row-selected': selectedId === row.id }"
+            @click="select(row.id)"
+          >
+            <td>
+              <code class="job-id-cell">{{ row.id.slice(0, 8) }}</code>
+            </td>
+            <td>
+              <span class="kind-tag">{{ row.kind }}</span>
+            </td>
+            <td>
+              <span class="novel-cell" :title="row.novel ?? 'None'">
+                {{ row.novel ?? '—' }}
+              </span>
+            </td>
+            <td>
+              <StatusBadge :status="row.status" size="sm" />
+            </td>
+            <td class="progress-col">
               <template v-if="progressFor(row)">
-                <div class="row" style="justify-content: space-between; font-size: 0.8rem;">
-                  <span class="muted">
-                    <template v-if="progressFor(row)?.chapter !== null">Ch. {{ progressFor(row)?.chapter }} · </template>
-                    {{ progressFor(row)?.current }} / {{ progressFor(row)?.total }} ({{ progressFor(row)?.pct.toFixed(0) }}%)
+                <div class="progress-details-row">
+                  <span class="progress-ch">
+                    <template v-if="progressFor(row)?.chapter !== null">Ch. {{ progressFor(row)?.chapter }} &middot; </template>
+                    {{ progressFor(row)?.current }} / {{ progressFor(row)?.total }}
                   </span>
+                  <span class="progress-pct">{{ progressFor(row)?.pct.toFixed(0) }}%</span>
                 </div>
-                <div class="progress" style="margin-top: 0.2rem;">
-                  <div class="fill" :style="{ width: (progressFor(row)?.pct ?? 0) + '%' }"></div>
+                <div class="progress">
+                  <div class="fill" :style="{ width: `${progressFor(row)?.pct ?? 0}%` }" />
                 </div>
               </template>
               <span v-else class="muted">—</span>
             </td>
-            <td class="muted">{{ formatDateTime(row.created_at) }}</td>
-            <td>
-              <div class="row gap-2" style="align-items: center;">
-                <button class="secondary" type="button" @click="select(row.id)">Open</button>
+            <td class="timestamp-cell">
+              {{ formatDateTime(row.created_at) }}
+            </td>
+            <td style="text-align: right;">
+              <div class="table-actions-row" @click.stop>
+                <button
+                  type="button"
+                  class="secondary btn-inspect"
+                  :class="{ active: selectedId === row.id }"
+                  @click="select(row.id)"
+                >
+                  <span>Inspect</span>
+                  <ChevronRight :size="13" />
+                </button>
                 <button
                   v-if="isTerminal(row.status)"
-                  class="secondary"
-                  style="color: var(--danger);"
                   type="button"
+                  class="btn-icon-subtle danger"
+                  title="Delete job"
                   @click="confirmDelete(row.id)"
-                >Delete</button>
+                >
+                  <Trash2 :size="14" />
+                </button>
               </div>
             </td>
           </tr>
           <tr v-if="!rows.length">
-            <td colspan="7" class="muted">{{ allRows.length ? 'No jobs match this status.' : 'No jobs yet.' }}</td>
+            <td colspan="7" class="empty-table-msg">
+              {{ allRows.length ? 'No jobs match this status filter.' : 'No recorded jobs yet.' }}
+            </td>
           </tr>
         </tbody>
       </table>
     </div>
-    <div v-if="selectedId" class="card">
-      <h3>Job {{ selectedId.slice(0, 8) }}</h3>
+
+    <!-- Selected Job Inspector -->
+    <div v-if="selectedId" class="card-panel inspector-card">
+      <div class="inspector-header">
+        <div class="inspector-title">
+          <Activity :size="18" class="inspect-icon" />
+          <h3>Inspector: <code>{{ selectedId }}</code></h3>
+        </div>
+        <button
+          type="button"
+          class="btn-close-inspect"
+          aria-label="Close inspector"
+          @click="selectedId = null"
+        >
+          <X :size="16" />
+        </button>
+      </div>
+
       <JobMonitor :job-id="selectedId" />
     </div>
 
+    <!-- Confirm Dialogs -->
     <ConfirmDialog
       :show="showDeleteDialog"
-      title="Delete Job"
-      :message="`Delete job '${deleteJobId?.slice(0, 8)}'?\n\nThis permanently removes the job logs and history. This cannot be undone.`"
-      confirm-label="Delete"
+      title="Delete Job History"
+      :message="`Delete job '${deleteJobId?.slice(0, 8)}'?\n\nThis permanently removes the job logs and execution history. This cannot be undone.`"
+      confirm-label="Delete Job"
       :danger="true"
       :loading="deleteJobSaving"
       @confirm="handleDelete"
@@ -252,35 +370,311 @@ async function handleClearAll() {
     <ConfirmDialog
       :show="showClearDialog"
       title="Delete All Inactive Jobs"
-      :message="`Are you sure you want to delete all completed, degraded, failed, and cancelled jobs?\n\nThis permanently removes all their logs and history. This cannot be undone.`"
-      confirm-label="Delete All"
+      :message="`Are you sure you want to delete all completed, degraded, failed, and cancelled jobs?\n\nThis permanently clears all archived job history.`"
+      confirm-label="Clear All History"
       :danger="true"
       :loading="clearSaving"
       @confirm="handleClearAll"
       @cancel="cancelClearAll"
     />
-  </section>
+  </div>
 </template>
 
 <style scoped>
-.job-actions {
-  flex-wrap: wrap;
-  justify-content: flex-end;
+.jobs-view-root {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
 }
 
-.status-filter {
-  display: inline-flex;
-  gap: 0.5rem;
+.jobs-header {
+  display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  padding: 1.25rem 1.5rem;
+  flex-wrap: wrap;
 }
 
-.status-filter select {
-  width: auto;
-  min-width: 8rem;
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
 }
 
-.job-actions button,
-.status-filter select {
-  height: 2.25rem;
+.header-icon-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: var(--radius-lg);
+  background: var(--accent-subtle);
+  border: 1px solid rgba(79, 125, 249, 0.25);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.jobs-title {
+  margin: 0;
+  font-size: 1.45rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--fg-primary);
+  line-height: 1.2;
+}
+
+.jobs-subtitle {
+  margin: 0.2rem 0 0;
+  font-size: 0.875rem;
+  color: var(--fg-secondary);
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.status-filter-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0;
+}
+
+.filter-label {
+  font-size: 0.825rem;
+  color: var(--fg-muted);
+}
+
+.status-custom-select {
+  min-width: 9.5rem;
+}
+
+.btn-refresh,
+.btn-clear-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.825rem;
+  padding: 0.45rem 0.85rem;
+}
+
+.btn-clear-all {
+  color: var(--danger);
+  border-color: rgba(244, 63, 94, 0.3);
+}
+
+.btn-clear-all:hover:not(:disabled) {
+  background: var(--danger-subtle);
+  border-color: var(--danger);
+}
+
+/* Metrics Row */
+.metrics-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 1rem;
+}
+
+.stat-pill-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-subtle);
+  transition: border-color var(--transition-fast);
+}
+
+.stat-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--radius-md);
+  background: var(--bg-surface-elevated);
+  color: var(--fg-secondary);
+}
+
+.stat-icon-wrap.success {
+  background: var(--ok-subtle);
+  color: var(--ok);
+}
+
+.stat-icon-wrap.danger {
+  background: var(--danger-subtle);
+  color: var(--danger);
+}
+
+.stat-pill-card.has-running .stat-icon-wrap {
+  background: var(--accent-subtle);
+  color: var(--accent);
+}
+
+.stat-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.stat-num {
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--fg-primary);
+}
+
+.stat-lbl {
+  font-size: 0.75rem;
+  color: var(--fg-secondary);
+}
+
+/* Table Shell */
+.table-shell {
+  padding: 0;
+  overflow-x: auto;
+}
+
+.jobs-table {
+  width: 100%;
+}
+
+.jobs-table tbody tr {
+  cursor: pointer;
+}
+
+.jobs-table tbody tr.row-selected {
+  background: var(--bg-surface-elevated);
+}
+
+.job-id-cell {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.kind-tag {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--radius-xs);
+  background: var(--bg-surface-elevated);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.novel-cell {
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+}
+
+.progress-col {
+  min-width: 130px;
+}
+
+.progress-details-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.progress-ch {
+  color: var(--fg-muted);
+}
+
+.progress-pct {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.timestamp-cell {
+  font-size: 0.8rem;
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+.table-actions-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.btn-inspect {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.775rem;
+  padding: 0.25rem 0.6rem;
+}
+
+.btn-inspect.active {
+  background: var(--accent);
+  color: #ffffff;
+  border-color: transparent;
+}
+
+.empty-table-msg {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--fg-muted);
+}
+
+/* Inspector Card */
+.inspector-card {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  border: 1px solid var(--border-hover);
+  animation: modal-fade-in 0.2s ease;
+}
+
+.inspector-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border-base);
+}
+
+.inspector-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.inspect-icon {
+  color: var(--accent);
+}
+
+.inspector-title h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--fg-primary);
+}
+
+.btn-close-inspect {
+  background: transparent;
+  border: none;
+  color: var(--fg-muted);
+  cursor: pointer;
+  padding: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-close-inspect:hover {
+  color: var(--fg-primary);
+  background: transparent;
 }
 </style>

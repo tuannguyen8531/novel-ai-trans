@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import asdict
+from pathlib import Path
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse, Response
 
 from src.api.dependencies import AuthenticatedPrincipal, JobManagerDependency, get_state
 from src.api.events import build_progress_emitter
@@ -415,9 +416,12 @@ async def put_novel_cover(
 def get_novel_cover(
     name: str,
     _: AuthenticatedPrincipal,
-) -> FileResponse:
+) -> Response:
     root = identity.resolve_root(app_config.get_config().translated_dir)
-    return FileResponse(covers.cover(root, name))
+    target = covers.resolve_cover(root, name)
+    if isinstance(target, Path):
+        return FileResponse(target)
+    return RedirectResponse(target, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
 
 @router.post(

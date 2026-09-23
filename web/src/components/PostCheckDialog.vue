@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, useId, watch } from 'vue'
+import { X } from '@lucide/vue'
 import type { ChapterPostCheck } from '@/api/types'
+import { formatLanguage } from '@/language'
 import { useBodyScrollLock } from '@/composables/scrolllock'
 
 const props = defineProps<{
@@ -89,7 +91,7 @@ watch(
         <div>
           <h3 :id="titleId">Post-check Review</h3>
           <p v-if="review" class="muted dialog-subtitle">
-            Chapter {{ review.chapter }} · {{ review.target.toUpperCase() }}
+            Chapter {{ review.chapter }} · {{ formatLanguage(review.target) }}
           </p>
         </div>
         <button
@@ -98,7 +100,9 @@ watch(
           aria-label="Close"
           :disabled="loading"
           @click="close"
-        >&times;</button>
+        >
+          <X :size="18" />
+        </button>
       </header>
 
       <div class="modal-body">

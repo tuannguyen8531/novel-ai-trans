@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { Plus, Search, Edit2, Trash2, Save, X, Users, User } from '@lucide/vue'
 import type { GlossaryCharacter } from '@/composables/glossary'
 
 const props = defineProps<{
@@ -58,26 +59,56 @@ async function saveEdit() {
   )) return
   editing.value = null
 }
+
+function roleBadgeClass(role?: string) {
+  switch (role) {
+    case 'protagonist':
+      return 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+    case 'antagonist':
+      return 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+    case 'supporting':
+      return 'bg-sky-500/15 text-sky-300 border-sky-500/30'
+    case 'minor':
+      return 'bg-zinc-700/30 text-zinc-400 border-zinc-700/50'
+    default:
+      return 'text-zinc-500'
+  }
+}
 </script>
 
 <template>
   <section class="gloss-section card">
     <header class="gloss-header">
-      <div>
-        <h3>Characters</h3>
-        <p class="muted">{{ Object.keys(characters).length }} character entities</p>
+      <div class="flex items-center gap-2">
+        <Users :size="18" class="text-indigo-400 shrink-0" />
+        <div>
+          <h3>Characters</h3>
+          <p class="muted">{{ Object.keys(characters).length }} character entities</p>
+        </div>
       </div>
       <div class="gloss-controls">
-        <input v-model="filter" placeholder="Filter characters…" class="gloss-filter" />
-        <button type="button" class="secondary" @click="showAdd = !showAdd">
-          {{ showAdd ? 'Cancel' : 'Add / update' }}
+        <div class="relative flex items-center">
+          <Search :size="14" class="absolute left-2.5 text-zinc-500 pointer-events-none" />
+          <input
+            v-model="filter"
+            placeholder="Filter characters…"
+            class="gloss-filter !pl-8"
+          />
+        </div>
+        <button
+          type="button"
+          class="secondary flex items-center gap-1.5"
+          @click="showAdd = !showAdd"
+        >
+          <component :is="showAdd ? X : Plus" :size="14" />
+          {{ showAdd ? 'Cancel' : 'Add character' }}
         </button>
       </div>
     </header>
 
-    <div v-if="showAdd" class="gloss-add">
-      <input v-model="newCharacter.original" placeholder="Original name" />
-      <input v-model="newCharacter.translatedName" placeholder="Translated name" />
+    <div v-if="showAdd" class="gloss-add p-3 bg-zinc-900/60 dark:bg-zinc-900/80 rounded-lg border border-indigo-500/30">
+      <input v-model="newCharacter.original" placeholder="Original name" class="flex-1" />
+      <input v-model="newCharacter.translatedName" placeholder="Translated name" class="flex-1" />
       <select v-model="newCharacter.role">
         <option value="">(role unchanged)</option>
         <option value="protagonist">protagonist</option>
@@ -85,8 +116,16 @@ async function saveEdit() {
         <option value="supporting">supporting</option>
         <option value="minor">minor</option>
       </select>
-      <input v-model="newCharacter.pronoun" placeholder="Pronoun / reference style" />
-      <button type="button" :disabled="!newCharacter.original" @click="add">Save</button>
+      <input v-model="newCharacter.pronoun" placeholder="Pronoun / reference style" class="flex-1" />
+      <button
+        type="button"
+        class="flex items-center gap-1.5"
+        :disabled="!newCharacter.original"
+        @click="add"
+      >
+        <Save :size="14" />
+        Save
+      </button>
     </div>
 
     <div class="gloss-table-wrap">
@@ -123,20 +162,49 @@ async function saveEdit() {
               </td>
               <td class="actions">
                 <div class="row gap-1">
-                  <button type="button" @click="saveEdit">Save</button>
-                  <button class="secondary" type="button" @click="editing = null">Cancel</button>
+                  <button type="button" class="flex items-center gap-1" @click="saveEdit">
+                    <Save :size="13" />
+                    Save
+                  </button>
+                  <button class="secondary flex items-center gap-1" type="button" @click="editing = null">
+                    <X :size="13" />
+                    Cancel
+                  </button>
                 </div>
               </td>
             </template>
             <template v-else>
-              <td class="gloss-original">{{ original }}</td>
-              <td>{{ info.translated_name ?? '—' }}</td>
-              <td>{{ info.role ?? '—' }}</td>
-              <td>{{ info.pronoun || '—' }}</td>
+              <td class="gloss-original font-medium text-zinc-100">{{ original }}</td>
+              <td class="text-zinc-300">{{ info.translated_name ?? '—' }}</td>
+              <td>
+                <span
+                  v-if="info.role"
+                  class="inline-block px-2 py-0.5 text-xs rounded border capitalize font-medium"
+                  :class="roleBadgeClass(info.role)"
+                >
+                  {{ info.role }}
+                </span>
+                <span v-else class="text-zinc-600">—</span>
+              </td>
+              <td class="text-zinc-400 text-sm">{{ info.pronoun || '—' }}</td>
               <td class="actions">
                 <div class="row gap-1 row-actions">
-                  <button class="secondary" type="button" @click="startEdit(original, info)">Edit</button>
-                  <button class="secondary" type="button" @click="removeCharacter(original)">Remove</button>
+                  <button
+                    class="secondary flex items-center gap-1 text-xs py-1 px-2"
+                    type="button"
+                    @click="startEdit(original, info)"
+                  >
+                    <Edit2 :size="12" />
+                    Edit
+                  </button>
+                  <button
+                    class="secondary flex items-center gap-1 text-xs py-1 px-2 text-rose-400 hover:text-rose-300"
+                    type="button"
+                    @click="removeCharacter(original)"
+                  >
+                    <Trash2 :size="12" />
+                    Remove
+                  </button>
                 </div>
               </td>
             </template>

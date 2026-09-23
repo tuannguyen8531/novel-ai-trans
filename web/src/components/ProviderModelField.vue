@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { RefreshCw } from '@lucide/vue'
 import { useProviderModels } from '@/composables/models'
 
 const props = defineProps<{
@@ -54,10 +55,13 @@ const refreshLabel = computed(() => (loading.value ? 'Refreshing…' : 'Refresh'
       />
       <button
         type="button"
-        class="secondary"
+        class="secondary flex items-center gap-1.5"
         :disabled="loading"
         @click="refresh"
-      >{{ refreshLabel }}</button>
+      >
+        <RefreshCw :size="13" :class="{ 'animate-spin': loading }" />
+        {{ refreshLabel }}
+      </button>
     </div>
     <p v-if="loadError" class="error" style="margin-top: 0.25rem; font-size: 0.85rem;">
       {{ loadError }}

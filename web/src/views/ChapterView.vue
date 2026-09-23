@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, toRef } from 'vue'
+import { ArrowUp, AlertCircle } from '@lucide/vue'
 import ChapterEditor from '@/components/ChapterEditor.vue'
 import ChapterToc from '@/components/ChapterToc.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
@@ -52,7 +53,8 @@ const showPostCheckDialog = ref(false)
 </script>
 
 <template>
-  <section class="chapter-view">
+  <section class="chapter-view-root">
+    <!-- Top Reader Toolbar -->
     <ReaderToolbar
       :display-title="displayTitle"
       :chapter-label="chapterLabel"
@@ -81,20 +83,30 @@ const showPostCheckDialog = ref(false)
       @open-toc="showToc = true"
     />
 
-    <p v-if="error" class="error card">{{ error }}</p>
-    <p v-if="postCheckError" class="error card">{{ postCheckError }}</p>
+    <!-- Errors -->
+    <div v-if="error" class="card-panel alert-error">
+      <AlertCircle :size="18" />
+      <span>{{ error }}</span>
+    </div>
+    <div v-if="postCheckError" class="card-panel alert-error">
+      <AlertCircle :size="18" />
+      <span>{{ postCheckError }}</span>
+    </div>
 
-    <div class="chapter-body card">
+    <!-- Reading Canvas Card -->
+    <div class="chapter-body-frame card-panel">
       <ReaderContent
         v-if="loading || viewLoading || !editing"
         :novel="name"
         :content="content"
         :loading="loading"
         :view-loading="viewLoading"
+        :view-mode="viewMode"
       />
       <ChapterEditor v-else v-model="editContent" />
     </div>
 
+    <!-- Bottom Navigation Bar -->
     <ReaderToolbar
       :show-controls="false"
       :display-title="displayTitle"
@@ -116,6 +128,7 @@ const showPostCheckDialog = ref(false)
       @open-toc="showToc = true"
     />
 
+    <!-- Table of Contents Modal -->
     <ChapterToc
       v-model:open="showToc"
       :chapters="chapters"
@@ -126,6 +139,7 @@ const showPostCheckDialog = ref(false)
       @select="goTo"
     />
 
+    <!-- Post Check Warning Review Dialog -->
     <PostCheckDialog
       :open="showPostCheckDialog"
       :review="postCheck"
@@ -136,45 +150,86 @@ const showPostCheckDialog = ref(false)
       @close="showPostCheckDialog = false"
     />
 
+    <!-- Delete Chapter Confirmation Dialog -->
     <ConfirmDialog
       :show="showDeleteDialog"
       title="Delete Chapter"
       :message="`Delete Chapter ${chapter}?\n\nThis permanently deletes the source chapter. Existing translations are kept. This cannot be undone.`"
-      confirm-label="Delete"
+      confirm-label="Delete Chapter"
       :danger="true"
       :loading="deleteLoading"
       @confirm="confirmDelete"
       @cancel="showDeleteDialog = false"
     />
 
+    <!-- Floating Scroll To Top Button -->
     <button
       v-show="showScrollToTop"
       type="button"
-      class="secondary scroll-to-top"
+      class="scroll-to-top-btn"
       aria-label="Scroll to top"
       title="Scroll to top"
       @click="scrollToTop"
-    >↑ Top</button>
+    >
+      <ArrowUp :size="18" />
+    </button>
   </section>
 </template>
 
 <style scoped>
-.chapter-view {
+.chapter-view-root {
   display: flex;
   flex-direction: column;
+  gap: 1.25rem;
+  max-width: 64rem;
+  margin: 0 auto;
+}
+
+.chapter-body-frame {
+  position: relative;
+  overflow: hidden;
+  min-height: 65vh;
+  padding: 2.5rem 2rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
+}
+
+.alert-error {
+  display: flex;
+  align-items: center;
   gap: 0.75rem;
+  background: var(--danger-subtle);
+  border: 1px solid rgba(244, 63, 94, 0.3);
+  color: var(--danger);
+  padding: 0.875rem 1.25rem;
 }
 
-.chapter-body {
-  min-height: 60vh;
-}
-
-.scroll-to-top {
+.scroll-to-top-btn {
   position: fixed;
-  right: 1.5rem;
-  bottom: 1.5rem;
+  right: 2rem;
+  bottom: 2rem;
   z-index: 120;
-  min-width: 4rem;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-base);
+  color: var(--fg-primary);
+  box-shadow: var(--shadow-floating);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.scroll-to-top-btn:hover {
+  background: var(--accent);
+  color: #ffffff;
+  border-color: transparent;
+  transform: translateY(-2px);
 }
 </style>

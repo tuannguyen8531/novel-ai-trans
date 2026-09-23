@@ -14,8 +14,8 @@ export function useChapters(novel: MaybeRefOrGetter<string>) {
   let resizeObserver: ResizeObserver | null = null
 
   const columns = computed(() => {
-    const minWidth = 128
-    const gap = 6.4
+    const minWidth = 140
+    const gap = 7.2
     return Math.max(1, Math.floor((containerWidth.value + gap) / (minWidth + gap)))
   })
   const perPage = computed(() => columns.value * 5)
@@ -85,6 +85,8 @@ export function useChapters(novel: MaybeRefOrGetter<string>) {
     ascending,
     containerRef,
     numbers,
+    columns,
+    perPage,
     totalPages,
     pagedNumbers,
     nextNumber,

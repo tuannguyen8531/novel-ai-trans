@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, toRef, watch } from 'vue'
+import { X } from '@lucide/vue'
 import { useMetadata, type MetadataDisplay, type TargetLanguage } from '@/composables/metadata'
 import { useBodyScrollLock } from '@/composables/scrolllock'
 
@@ -93,7 +94,14 @@ defineExpose({ load })
     >
       <header class="modal-header">
         <h3 id="metadata-title">Edit Metadata</h3>
-        <button type="button" class="modal-close" aria-label="Close" @click="close">&times;</button>
+        <button
+          type="button"
+          class="modal-close"
+          aria-label="Close"
+          @click="close"
+        >
+          <X :size="18" />
+        </button>
       </header>
       <div class="modal-body">
         <p v-if="loading" class="muted">Loading metadata…</p>

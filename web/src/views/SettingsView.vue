@@ -1,10 +1,24 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import {
+  SlidersHorizontal,
+  Cpu,
+  Send,
+  Save,
+  CheckCircle,
+  AlertTriangle,
+  RotateCw,
+  Check,
+  Server
+} from '@lucide/vue'
 import { useSettingsStore } from '@/composables/settings'
 import type { OllamaAccount, ProviderInfo, SettingsPatch } from '@/api/types'
 import ProviderModelField from '@/components/ProviderModelField.vue'
+import StatusBadge from '@/components/common/StatusBadge.vue'
 
 const settings = useSettingsStore()
+const activeTab = ref<'general' | 'providers' | 'telegram'>('providers')
+
 const providers = ref<ProviderInfo[]>([])
 const persistResult = ref<{ path: string; changed_keys: string[] } | null>(null)
 const persisting = ref(false)
@@ -15,6 +29,7 @@ const providerPersisting = ref(false)
 const providerRefreshKey = ref(0)
 const ollamaAccount = ref<OllamaAccount | null>(null)
 const ollamaAccountLoading = ref(false)
+
 const telegramForm = reactive({
   telegram_enabled: false,
   telegram_api_base: 'https://api.telegram.org',
@@ -22,6 +37,7 @@ const telegramForm = reactive({
   telegram_silent: false,
   telegram_timeout_seconds: 10
 })
+
 const geminiKeyInput = ref('')
 const openrouterKeyInput = ref('')
 const providerForm = reactive({
@@ -241,256 +257,635 @@ async function saveTelegramSettings() {
 </script>
 
 <template>
-  <section class="flex-col gap-3">
-    <div v-if="settings.settings" class="card">
-      <h2>Runtime settings</h2>
-      <p class="muted">
-        These defaults apply to new jobs.
-      </p>
-      <div class="grid">
-        <div>
-          <label>Target language</label>
-          <select :value="settings.settings.target_language" @change="patchSetting('target_language', ($event.target as HTMLSelectElement).value)">
-            <option value="vi">Vietnamese</option>
-            <option value="en">English</option>
-          </select>
+  <div class="settings-view-root">
+    <!-- Header -->
+    <header class="settings-header card-panel">
+      <div class="header-icon-box">
+        <SlidersHorizontal :size="22" />
+      </div>
+      <div>
+        <h2 class="settings-title">System Settings</h2>
+        <p class="settings-subtitle">
+          Configure translation parameters, AI provider credentials, models, and notifications.
+        </p>
+      </div>
+    </header>
+
+    <!-- Nav Tabs -->
+    <nav class="settings-nav-tabs" aria-label="Settings Category">
+      <button
+        type="button"
+        class="tab-btn"
+        :class="{ active: activeTab === 'providers' }"
+        @click="activeTab = 'providers'"
+      >
+        <Cpu :size="16" />
+        <span>LLM Providers</span>
+      </button>
+
+      <button
+        type="button"
+        class="tab-btn"
+        :class="{ active: activeTab === 'general' }"
+        @click="activeTab = 'general'"
+      >
+        <SlidersHorizontal :size="16" />
+        <span>Translation Pipeline</span>
+      </button>
+
+      <button
+        type="button"
+        class="tab-btn"
+        :class="{ active: activeTab === 'telegram' }"
+        @click="activeTab = 'telegram'"
+      >
+        <Send :size="16" />
+        <span>Telegram Notifications</span>
+      </button>
+    </nav>
+
+    <!-- Global Error -->
+    <p v-if="settings.error" class="card-panel error">{{ settings.error }}</p>
+
+    <!-- Tab 1: Providers -->
+    <section v-if="activeTab === 'providers'" class="settings-section">
+      <div class="card-panel config-card">
+        <div class="card-title-row">
+          <div>
+            <h3 class="card-title">Default & Fallback Providers</h3>
+            <p class="card-desc">Set which AI backend novel-ai-trans prioritizes for translation tasks.</p>
+          </div>
         </div>
-        <div>
-          <label>Chunk mode</label>
-          <select :value="settings.settings.chunk_mode" @change="patchSetting('chunk_mode', ($event.target as HTMLSelectElement).value)">
-            <option value="chars">Characters</option>
-            <option value="tokens">Tokens (estimated)</option>
-          </select>
-        </div>
-        <div>
-          <label>Chunk size ({{ settings.settings.chunk_mode === 'tokens' ? 'tokens' : 'characters' }})</label>
-          <input type="number" :value="settings.settings.chunk_size" @change="patchSetting('chunk_size', Number(($event.target as HTMLInputElement).value))" />
-        </div>
-        <div>
-          <label>Review threshold</label>
-          <input type="number" step="0.05" :value="settings.settings.review_threshold" @change="patchSetting('review_threshold', Number(($event.target as HTMLInputElement).value))" />
-        </div>
-        <div>
-          <label>Translation temperature (0.0 – 1.0)</label>
-          <input
-            type="number"
-            step="0.05"
-            min="0"
-            max="1"
-            :value="settings.settings.translation_temperature"
-            @change="patchSetting('translation_temperature', Number(($event.target as HTMLInputElement).value))"
-          />
-        </div>
-        <div class="row gap-2" style="margin-top: 0.5rem; align-items: center;">
-          <button type="button" :disabled="persisting" @click="saveSettings">
-            {{ persisting ? 'Saving…' : 'Save' }}
-          </button>
-          <span v-if="persistResult" class="muted">
-            Settings saved.
-          </span>
+
+        <div class="grid-2-cols">
+          <div>
+            <label>Primary Provider</label>
+            <select v-model="providerForm.llm_provider" class="select-field">
+              <option v-for="name in ALL_PROVIDER_NAMES" :key="name" :value="name">{{ name }}</option>
+            </select>
+          </div>
+          <div>
+            <label>Fallback Provider</label>
+            <select v-model="providerForm.fallback_provider" class="select-field">
+              <option v-for="option in fallbackOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+            </select>
+          </div>
         </div>
       </div>
-    </div>
 
-    <div class="card">
-      <h2>Telegram notifications</h2>
-      <p class="muted">
-        Notification credentials are configured outside this app and are
-        <span class="badge" :class="settings.settings?.telegram_configured ? 'ok' : 'danger'">
-          {{ settings.settings?.telegram_configured ? 'configured' : 'not configured' }}
-        </span>.
-      </p>
-      <div class="grid">
-        <div class="check-row">
-          <label class="check">
-            <input v-model="telegramForm.telegram_enabled" type="checkbox" />
-            <span>Enable notifications</span>
-          </label>
-          <label class="check">
-            <input v-model="telegramForm.telegram_silent" type="checkbox" />
-            <span>Send silently</span>
-          </label>
-        </div>
-        <div>
-          <label>API base</label>
-          <input v-model="telegramForm.telegram_api_base" />
-        </div>
-        <div>
-          <label>Parse mode</label>
-          <select v-model="telegramForm.telegram_parse_mode">
-            <option value="HTML">HTML</option>
-            <option value="">Plain text</option>
-          </select>
-        </div>
-        <div>
-          <label>Timeout seconds</label>
-          <input v-model.number="telegramForm.telegram_timeout_seconds" type="number" min="0.1" step="0.5" />
-        </div>
-        <div class="row gap-2" style="margin-top: 0.5rem; align-items: center;">
-          <button type="button" :disabled="telegramPersisting" @click="saveTelegramSettings">
-            {{ telegramPersisting ? 'Saving…' : 'Save Telegram' }}
-          </button>
-          <span v-if="telegramPersistResult" class="muted">
-            Telegram settings saved.
-          </span>
-        </div>
-      </div>
-    </div>
-
-    <div class="card">
-      <h2>Providers</h2>
-      <p class="muted">
-        Leave a key blank to keep its current value. Use Check to test the connection.
-      </p>
-      <div class="grid">
-        <div>
-          <label>Default provider</label>
-          <select v-model="providerForm.llm_provider">
-            <option v-for="name in ALL_PROVIDER_NAMES" :key="name" :value="name">{{ name }}</option>
-          </select>
-        </div>
-        <div>
-          <label>Fallback provider</label>
-          <select v-model="providerForm.fallback_provider">
-            <option v-for="option in fallbackOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
-          </select>
-        </div>
-
-        <div>
-          <div class="row" style="justify-content: space-between; align-items: center;">
-            <h3>Ollama</h3>
-            <div class="row gap-1" style="align-items: center;">
-              <span class="badge" :class="getOllamaStatusClass()">
-                {{ getOllamaStatusText() }}
-              </span>
-              <button class="secondary" type="button" :disabled="checkingProviders['ollama']" @click="runProviderCheck('ollama')">
-                {{ checkingProviders['ollama'] ? 'Checking…' : 'Check' }}
-              </button>
+      <!-- Ollama Provider Card -->
+      <div class="card-panel provider-item-card">
+        <div class="provider-card-header">
+          <div class="provider-title-group">
+            <Server :size="20" class="provider-icon" />
+            <div>
+              <h3 class="provider-title">Ollama (Local / Cloud)</h3>
+              <p class="provider-desc">Connect to local Ollama instance or signed-in Ollama account.</p>
             </div>
           </div>
-          <p v-if="checkResults['ollama']?.detail" class="error" style="margin-top: 0.25rem; font-size: 0.85rem;">
-            {{ checkResults['ollama'].detail }}
-          </p>
-          <div class="provider-fields">
-            <div class="ollama-account-row">
-              <div>
-                <label>API base</label>
-                <input v-model="providerForm.ollama_base_url" />
-              </div>
-              <div>
-                <label>Cloud account</label>
-                <input disabled :value="getOllamaAccountText()" />
-                <p v-if="!ollamaAccountLoading && ollamaAccount?.detail && ollamaAccount.detail !== 'Not signed in'" class="muted account-detail">
-                  {{ ollamaAccount.detail }}
-                </p>
-              </div>
+
+          <div class="provider-status-actions">
+            <span class="badge" :class="getOllamaStatusClass()">
+              {{ getOllamaStatusText() }}
+            </span>
+            <button
+              class="secondary btn-check"
+              type="button"
+              :disabled="checkingProviders['ollama']"
+              @click="runProviderCheck('ollama')"
+            >
+              <RotateCw :size="13" :class="{ 'spinning': checkingProviders['ollama'] }" />
+              <span>{{ checkingProviders['ollama'] ? 'Testing…' : 'Test Connection' }}</span>
+            </button>
+          </div>
+        </div>
+
+        <p v-if="checkResults['ollama']?.detail" class="error check-error">
+          {{ checkResults['ollama'].detail }}
+        </p>
+
+        <div class="provider-form-body">
+          <div class="grid-2-cols">
+            <div>
+              <label>API Base URL</label>
+              <input v-model="providerForm.ollama_base_url" />
             </div>
+            <div>
+              <label>Cloud Account</label>
+              <input disabled :value="getOllamaAccountText()" />
+              <p v-if="!ollamaAccountLoading && ollamaAccount?.detail && ollamaAccount.detail !== 'Not signed in'" class="muted account-hint">
+                {{ ollamaAccount.detail }}
+              </p>
+            </div>
+          </div>
+
+          <div>
             <ProviderModelField
               :key="`ollama-${providerRefreshKey}`"
               provider="ollama"
-              label="Model"
+              label="Default Model"
               :model-value="providerForm.ollama_model"
               @update:model-value="(value: string) => providerForm.ollama_model = value"
             />
           </div>
         </div>
+      </div>
 
-        <div>
-          <div class="row" style="justify-content: space-between; align-items: center;">
-            <h3>Gemini</h3>
-            <div class="row gap-1" style="align-items: center;">
-              <span class="badge" :class="getProviderStatusClass('gemini')">
-                {{ getProviderStatusText('gemini') }}
-              </span>
-              <button class="secondary" type="button" :disabled="checkingProviders['gemini']" @click="runProviderCheck('gemini')">
-                {{ checkingProviders['gemini'] ? 'Checking…' : 'Check' }}
-              </button>
+      <!-- Gemini Provider Card -->
+      <div class="card-panel provider-item-card">
+        <div class="provider-card-header">
+          <div class="provider-title-group">
+            <Cpu :size="20" class="provider-icon" />
+            <div>
+              <h3 class="provider-title">Google Gemini</h3>
+              <p class="provider-desc">Google AI Studio API key integration.</p>
             </div>
           </div>
-          <p v-if="checkResults['gemini']?.detail" class="error" style="margin-top: 0.25rem; font-size: 0.85rem;">
-            {{ checkResults['gemini'].detail }}
-          </p>
-          <div class="provider-fields">
-            <div>
-              <label>API key</label>
-              <input v-model="geminiKeyInput" type="password" autocomplete="off" placeholder="paste new key or leave blank" />
-            </div>
+
+          <div class="provider-status-actions">
+            <span class="badge" :class="getProviderStatusClass('gemini')">
+              {{ getProviderStatusText('gemini') }}
+            </span>
+            <button
+              class="secondary btn-check"
+              type="button"
+              :disabled="checkingProviders['gemini']"
+              @click="runProviderCheck('gemini')"
+            >
+              <RotateCw :size="13" :class="{ 'spinning': checkingProviders['gemini'] }" />
+              <span>{{ checkingProviders['gemini'] ? 'Testing…' : 'Test Key' }}</span>
+            </button>
+          </div>
+        </div>
+
+        <p v-if="checkResults['gemini']?.detail" class="error check-error">
+          {{ checkResults['gemini'].detail }}
+        </p>
+
+        <div class="provider-form-body">
+          <div>
+            <label>API Key</label>
+            <input
+              v-model="geminiKeyInput"
+              type="password"
+              autocomplete="off"
+              placeholder="Paste new Gemini API key (leave blank to keep existing)"
+            />
+          </div>
+
+          <div>
             <ProviderModelField
               :key="`gemini-${providerRefreshKey}`"
               provider="gemini"
-              label="Model"
+              label="Default Model"
               :model-value="providerForm.gemini_model"
               @update:model-value="(value: string) => providerForm.gemini_model = value"
             />
           </div>
         </div>
+      </div>
 
-        <div>
-          <div class="row" style="justify-content: space-between; align-items: center;">
-            <h3>OpenRouter</h3>
-            <div class="row gap-1" style="align-items: center;">
-              <span class="badge" :class="getProviderStatusClass('openrouter')">
-                {{ getProviderStatusText('openrouter') }}
-              </span>
-              <button class="secondary" type="button" :disabled="checkingProviders['openrouter']" @click="runProviderCheck('openrouter')">
-                {{ checkingProviders['openrouter'] ? 'Checking…' : 'Check' }}
-              </button>
+      <!-- OpenRouter Provider Card -->
+      <div class="card-panel provider-item-card">
+        <div class="provider-card-header">
+          <div class="provider-title-group">
+            <Cpu :size="20" class="provider-icon" />
+            <div>
+              <h3 class="provider-title">OpenRouter</h3>
+              <p class="provider-desc">OpenRouter unified model routing API.</p>
             </div>
           </div>
-          <p v-if="checkResults['openrouter']?.detail" class="error" style="margin-top: 0.25rem; font-size: 0.85rem;">
-            {{ checkResults['openrouter'].detail }}
-          </p>
-          <div class="provider-fields">
-            <div>
-              <label>API key</label>
-              <input v-model="openrouterKeyInput" type="password" autocomplete="off" placeholder="paste new key or leave blank" />
-            </div>
+
+          <div class="provider-status-actions">
+            <span class="badge" :class="getProviderStatusClass('openrouter')">
+              {{ getProviderStatusText('openrouter') }}
+            </span>
+            <button
+              class="secondary btn-check"
+              type="button"
+              :disabled="checkingProviders['openrouter']"
+              @click="runProviderCheck('openrouter')"
+            >
+              <RotateCw :size="13" :class="{ 'spinning': checkingProviders['openrouter'] }" />
+              <span>{{ checkingProviders['openrouter'] ? 'Testing…' : 'Test Key' }}</span>
+            </button>
+          </div>
+        </div>
+
+        <p v-if="checkResults['openrouter']?.detail" class="error check-error">
+          {{ checkResults['openrouter'].detail }}
+        </p>
+
+        <div class="provider-form-body">
+          <div>
+            <label>API Key</label>
+            <input
+              v-model="openrouterKeyInput"
+              type="password"
+              autocomplete="off"
+              placeholder="Paste new OpenRouter API key (leave blank to keep existing)"
+            />
+          </div>
+
+          <div>
             <ProviderModelField
               :key="`openrouter-${providerRefreshKey}`"
               provider="openrouter"
-              label="Model"
+              label="Default Model"
               :model-value="providerForm.openrouter_model"
               @update:model-value="(value: string) => providerForm.openrouter_model = value"
             />
           </div>
         </div>
+      </div>
 
-        <div class="row gap-2" style="align-items: center;">
-          <button type="button" :disabled="providerPersisting" @click="saveProviderSettings">
-            {{ providerPersisting ? 'Saving…' : 'Save Providers' }}
+      <!-- Save Providers Bottom Bar -->
+      <div class="save-bar">
+        <button
+          type="button"
+          class="btn-primary"
+          :disabled="providerPersisting"
+          @click="saveProviderSettings"
+        >
+          <Save :size="16" />
+          <span>{{ providerPersisting ? 'Saving Changes…' : 'Save Provider Settings' }}</span>
+        </button>
+        <span v-if="providerPersistResult" class="save-feedback">
+          <Check :size="16" />
+          <span>Provider settings saved successfully.</span>
+        </span>
+      </div>
+    </section>
+
+    <!-- Tab 2: General / Translation Pipeline Parameters -->
+    <section v-else-if="activeTab === 'general'" class="settings-section">
+      <div v-if="settings.settings" class="card-panel config-card">
+        <h3 class="card-title">Runtime Translation Defaults</h3>
+        <p class="card-desc">Parameters used when constructing chapter chunks and LLM prompts.</p>
+
+        <div class="grid-form">
+          <div>
+            <label>Default Target Language</label>
+            <select :value="settings.settings.target_language" @change="patchSetting('target_language', ($event.target as HTMLSelectElement).value)">
+              <option value="vi">Vietnamese (Tiếng Việt)</option>
+              <option value="en">English</option>
+            </select>
+          </div>
+
+          <div>
+            <label>Chunk Splitting Mode</label>
+            <select :value="settings.settings.chunk_mode" @change="patchSetting('chunk_mode', ($event.target as HTMLSelectElement).value)">
+              <option value="chars">Characters</option>
+              <option value="tokens">Tokens (estimated)</option>
+            </select>
+          </div>
+
+          <div>
+            <label>Chunk Size ({{ settings.settings.chunk_mode === 'tokens' ? 'tokens' : 'characters' }})</label>
+            <input
+              type="number"
+              :value="settings.settings.chunk_size"
+              @change="patchSetting('chunk_size', Number(($event.target as HTMLInputElement).value))"
+            />
+          </div>
+
+          <div>
+            <label>Review Threshold</label>
+            <input
+              type="number"
+              step="0.05"
+              :value="settings.settings.review_threshold"
+              @change="patchSetting('review_threshold', Number(($event.target as HTMLInputElement).value))"
+            />
+          </div>
+
+          <div>
+            <label>Translation Temperature (0.0 – 1.0)</label>
+            <input
+              type="number"
+              step="0.05"
+              min="0"
+              max="1"
+              :value="settings.settings.translation_temperature"
+              @change="patchSetting('translation_temperature', Number(($event.target as HTMLInputElement).value))"
+            />
+          </div>
+        </div>
+
+        <div class="save-bar" style="margin-top: 1.5rem;">
+          <button type="button" class="btn-primary" :disabled="persisting" @click="saveSettings">
+            <Save :size="16" />
+            <span>{{ persisting ? 'Saving…' : 'Save Pipeline Defaults' }}</span>
           </button>
-          <span v-if="providerPersistResult" class="muted">
-            Provider settings saved.
+          <span v-if="persistResult" class="save-feedback">
+            <Check :size="16" />
+            <span>Runtime defaults saved.</span>
           </span>
         </div>
       </div>
-    </div>
+    </section>
 
-    <p v-if="settings.error" class="error">{{ settings.error }}</p>
-  </section>
+    <!-- Tab 3: Telegram -->
+    <section v-else-if="activeTab === 'telegram'" class="settings-section">
+      <div class="card-panel config-card">
+        <div class="card-title-row">
+          <div>
+            <h3 class="card-title">Telegram Alerts</h3>
+            <p class="card-desc">
+              Receive status notifications when large novel translation jobs finish or fail.
+            </p>
+          </div>
+          <span class="badge" :class="settings.settings?.telegram_configured ? 'ok' : 'danger'">
+            {{ settings.settings?.telegram_configured ? 'Bot Token Configured' : 'No Token in Environment' }}
+          </span>
+        </div>
+
+        <div class="grid-form">
+          <div class="check-row">
+            <label class="check">
+              <input v-model="telegramForm.telegram_enabled" type="checkbox" />
+              <span>Enable Telegram Notifications</span>
+            </label>
+            <label class="check">
+              <input v-model="telegramForm.telegram_silent" type="checkbox" />
+              <span>Send Silently (no notification sound)</span>
+            </label>
+          </div>
+
+          <div>
+            <label>API Base URL</label>
+            <input v-model="telegramForm.telegram_api_base" />
+          </div>
+
+          <div class="grid-2-cols">
+            <div>
+              <label>Parse Mode</label>
+              <select v-model="telegramForm.telegram_parse_mode">
+                <option value="HTML">HTML</option>
+                <option value="">Plain Text</option>
+              </select>
+            </div>
+
+            <div>
+              <label>Timeout (seconds)</label>
+              <input
+                v-model.number="telegramForm.telegram_timeout_seconds"
+                type="number"
+                min="0.1"
+                step="0.5"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div class="save-bar" style="margin-top: 1.5rem;">
+          <button
+            type="button"
+            class="btn-primary"
+            :disabled="telegramPersisting"
+            @click="saveTelegramSettings"
+          >
+            <Save :size="16" />
+            <span>{{ telegramPersisting ? 'Saving…' : 'Save Telegram Settings' }}</span>
+          </button>
+          <span v-if="telegramPersistResult" class="save-feedback">
+            <Check :size="16" />
+            <span>Telegram settings saved.</span>
+          </span>
+        </div>
+      </div>
+    </section>
+  </div>
 </template>
 
 <style scoped>
-.provider-fields {
+.settings-view-root {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  margin-top: 1rem;
+  gap: 1.5rem;
+  max-width: 60rem;
 }
 
-.ollama-account-row {
+.settings-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+}
+
+.header-icon-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: var(--radius-lg);
+  background: var(--accent-subtle);
+  border: 1px solid rgba(79, 125, 249, 0.25);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.settings-title {
+  margin: 0;
+  font-size: 1.45rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--fg-primary);
+  line-height: 1.2;
+}
+
+.settings-subtitle {
+  margin: 0.2rem 0 0;
+  font-size: 0.875rem;
+  color: var(--fg-secondary);
+}
+
+/* Nav Tabs */
+.settings-nav-tabs {
+  display: inline-flex;
+  gap: 0.5rem;
+  padding: 0.35rem;
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-lg);
+  align-self: flex-start;
+  flex-wrap: wrap;
+}
+
+.tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.15rem;
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  font-weight: 600;
+  background: transparent;
+  color: var(--fg-secondary);
+  border: 1px solid transparent;
+  cursor: pointer;
+  box-shadow: none;
+  transition: all var(--transition-fast);
+}
+
+.tab-btn:hover {
+  color: var(--fg-primary);
+  background: var(--bg-surface);
+  transform: none;
+}
+
+.tab-btn.active {
+  background: var(--bg-surface);
+  color: var(--accent);
+  border-color: var(--border-base);
+  box-shadow: var(--shadow-subtle);
+}
+
+/* Settings Section */
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  animation: modal-fade-in 0.18s ease;
+}
+
+.config-card {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: 1.5rem;
+}
+
+.card-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.card-title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--fg-primary);
+}
+
+.card-desc {
+  margin: 0.2rem 0 0;
+  font-size: 0.85rem;
+  color: var(--fg-secondary);
+}
+
+.grid-2-cols {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
 }
 
-.account-detail {
-  margin-top: 0.25rem;
+.grid-form {
+  display: grid;
+  gap: 1rem;
+}
+
+/* Provider Item Card */
+.provider-item-card {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.5rem;
+}
+
+.provider-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.provider-title-group {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+}
+
+.provider-icon {
+  color: var(--accent);
+  margin-top: 0.2rem;
+  flex-shrink: 0;
+}
+
+.provider-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--fg-primary);
+}
+
+.provider-desc {
+  margin: 0.15rem 0 0;
   font-size: 0.85rem;
+  color: var(--fg-secondary);
+}
+
+.provider-status-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.btn-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  padding: 0.35rem 0.75rem;
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+.check-error {
+  margin: 0;
+  font-size: 0.85rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-sm);
+  background: var(--danger-subtle);
+}
+
+.provider-form-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.account-hint {
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+}
+
+.save-bar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding-top: 0.5rem;
+}
+
+.save-feedback {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--ok);
+  font-size: 0.85rem;
+  font-weight: 500;
 }
 
 @media (max-width: 640px) {
-  .ollama-account-row {
+  .grid-2-cols {
     grid-template-columns: 1fr;
   }
 }
