@@ -114,37 +114,37 @@ watch(
           <table class="review-table">
             <thead>
               <tr>
-                <th>Severity</th>
-                <th>Check</th>
-                <th>Details</th>
-                <th>Status</th>
-                <th></th>
+                <th class="col-severity">Severity</th>
+                <th class="col-check">Check</th>
+                <th class="col-detail">Details</th>
+                <th class="col-status">Status</th>
+                <th class="col-action" style="text-align: right;">Action</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="item in review.items" :key="item.key">
-                <td>
+                <td class="col-severity">
                   <span :class="['badge', item.severity === 'error' ? 'danger' : 'warn']">
                     {{ item.severity }}
                   </span>
                 </td>
-                <td class="check-code">{{ formatCode(item.code) }}</td>
-                <td class="check-detail">
+                <td class="check-code col-check">{{ formatCode(item.code) }}</td>
+                <td class="check-detail col-detail">
                   <code v-if="item.code === 'contains_source_language_chars' && item.origin === 'output'">
                     {{ item.detail }}
                   </code>
                   <span v-else>{{ item.detail }}</span>
                 </td>
-                <td>
+                <td class="col-status">
                   <span v-if="item.ignored" class="badge ok">ignored</span>
                   <span v-else-if="item.origin === 'rejected'" class="badge danger">failed</span>
                   <span v-else class="badge warn">active</span>
                 </td>
-                <td class="review-action">
+                <td class="review-action col-action">
                   <button
                     v-if="item.reviewable"
                     type="button"
-                    class="secondary"
+                    class="secondary btn-review-action"
                     :disabled="loading"
                     @click="emit('reviewItem', item.key, !item.ignored)"
                   >
@@ -205,135 +205,171 @@ watch(
 </template>
 
 <style scoped>
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-  background: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(4px);
-}
-
-.modal-card {
-  display: flex;
-  flex-direction: column;
-  width: min(70rem, 100%);
-  max-height: 88vh;
-  background: var(--bg-elev);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
-}
-
-.modal-header,
-.modal-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 1rem 1.25rem;
-}
-
-.modal-header {
-  border-bottom: 1px solid var(--border);
-}
-
-.modal-header h3,
-.dialog-subtitle {
-  margin: 0;
+.post-check-dialog {
+  width: min(68rem, 94vw);
+  max-width: min(68rem, 94vw);
+  max-height: 90vh;
 }
 
 .dialog-subtitle {
-  margin-top: 0.2rem;
+  margin: 0.25rem 0 0;
   font-size: 0.85rem;
-}
-
-.modal-close {
-  width: 1.75rem;
-  height: 1.75rem;
-  padding: 0;
-  color: var(--fg-dim);
-  font-size: 1.5rem;
-  line-height: 1;
-  background: transparent;
-  border: 0;
-}
-
-.modal-body {
-  flex: 1;
-  padding: 1.25rem;
-  overflow: auto;
-}
-
-.modal-footer {
-  justify-content: flex-end;
-  border-top: 1px solid var(--border);
+  color: var(--fg-muted);
 }
 
 .review-table-wrap {
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-lg);
   overflow-x: auto;
+  background: var(--bg-surface);
 }
 
 .review-table {
   width: 100%;
-  min-width: 48rem;
+  border-collapse: separate;
+  border-spacing: 0;
 }
 
 .review-table th {
-  vertical-align: top;
+  padding: 0.85rem 1.15rem;
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--fg-muted);
+  background: var(--bg-surface-elevated);
+  border-bottom: 1px solid var(--border-base);
+  text-align: left;
+  white-space: nowrap;
 }
 
 .review-table td {
+  padding: 0.85rem 1.15rem;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--fg-primary);
   vertical-align: middle;
+  font-size: 0.875rem;
+}
+
+.review-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.review-table tbody tr {
+  transition: background-color var(--transition-fast);
+}
+
+.review-table tbody tr:hover {
+  background-color: var(--bg-surface-elevated);
+}
+
+.col-severity {
+  width: 6.5rem;
+  white-space: nowrap;
+}
+
+.col-check {
+  width: 14rem;
 }
 
 .check-code {
-  max-width: 14rem;
-  text-transform: none;
+  font-weight: 500;
+  color: var(--fg-primary);
+  text-transform: capitalize;
+}
+
+.col-detail {
+  min-width: 12rem;
 }
 
 .check-detail {
-  min-width: 16rem;
   white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+  color: var(--fg-secondary);
+}
+
+.check-detail code {
+  display: inline-block;
+  max-width: 100%;
+  padding: 0.25rem 0.5rem;
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  font-size: 0.825rem;
+  color: var(--danger);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.col-status {
+  width: 6.5rem;
+  white-space: nowrap;
+}
+
+.col-action {
+  width: 6.5rem;
+  text-align: right;
+  white-space: nowrap;
 }
 
 .review-action {
   text-align: right;
 }
 
+.btn-review-action {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+  border-radius: var(--radius-sm);
+}
+
 .candidate {
   margin-top: 1rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  overflow: hidden;
 }
 
 .candidate summary {
-  padding: 0.75rem 1rem;
+  padding: 0.85rem 1.25rem;
   cursor: pointer;
+  font-weight: 600;
+  color: var(--fg-primary);
+  background: var(--bg-surface-elevated);
+  transition: background-color var(--transition-fast);
+  user-select: none;
+}
+
+.candidate summary:hover {
+  background: var(--bg-surface-active);
 }
 
 .candidate pre {
-  max-height: 24rem;
+  max-height: 22rem;
   margin: 0;
-  padding: 1rem;
+  padding: 1.25rem;
   overflow: auto;
-  color: var(--fg);
-  font: inherit;
-  line-height: 1.65;
+  color: var(--fg-primary);
+  font-family: var(--font-serif);
+  font-size: 0.95rem;
+  line-height: 1.7;
   white-space: pre-wrap;
-  border-top: 1px solid var(--border);
+  word-break: break-word;
+  background: var(--bg-surface-subtle);
+  border-top: 1px solid var(--border-base);
 }
 
 .candidate-actions {
-  padding: 1rem;
-  border-top: 1px solid var(--border);
+  padding: 1rem 1.25rem;
+  border-top: 1px solid var(--border-base);
+  background: var(--bg-surface);
 }
 
 .candidate-actions p {
   margin: 0 0 0.75rem;
+  font-size: 0.875rem;
 }
 
 .candidate-warning {
@@ -343,6 +379,6 @@ watch(
 .candidate-buttons {
   display: flex;
   justify-content: flex-end;
-  gap: 0.5rem;
+  gap: 0.75rem;
 }
 </style>

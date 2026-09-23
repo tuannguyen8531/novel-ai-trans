@@ -86,9 +86,9 @@ const { authenticated, src: illustrationSrc } = useIllustrations(() => props.nov
   white-space: pre-wrap;
   word-break: break-word;
   overflow-wrap: break-word;
-  font-family: var(--font-serif);
-  font-size: 1.15rem;
-  line-height: 1.85;
+  font-family: 'Lora', var(--font-serif);
+  font-size: 20px;
+  line-height: 1.65;
   color: var(--fg-primary);
   text-align: justify;
   letter-spacing: 0.01em;

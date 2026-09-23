@@ -50,7 +50,7 @@
 
   /* Typography Stacks */
   --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-serif: 'Newsreader', 'Source Serif 4', 'Merriweather', 'Lora', Georgia, serif;
+  --font-serif: 'Lora', 'Newsreader', 'Source Serif 4', 'Merriweather', Georgia, serif;
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
   /* Radius */
@@ -588,8 +588,8 @@ code {
 /* Literary / Editorial Reading Typography */
 .editorial-body {
   font-family: var(--font-serif);
-  font-size: 1.15rem;
-  line-height: 1.85;
+  font-size: 20px;
+  line-height: 1.65;
   color: var(--fg-primary);
   max-width: 48rem;
   margin: 0 auto;
