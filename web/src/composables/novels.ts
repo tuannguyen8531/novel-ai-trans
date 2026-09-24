@@ -77,4 +77,3 @@ export function getNovelCoverUrl(name: string, illustrationUrl?: string | null):
   return api.coverUrl(name)
 }
 
-

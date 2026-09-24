@@ -1,20 +1,21 @@
 import { createRouter, createWebHistory, type RouteLocationNormalized } from 'vue-router'
+import { t } from '@/i18n'
 
 const APP_NAME = 'Novel AI Translation'
 
 const PAGE_TITLES: Record<string, string> = {
-  dashboard: 'Dashboard',
-  novels: 'Novels',
-  'novel-detail': 'Novel',
-  'chapter-reader': 'Chapter',
-  sources: 'Sources',
-  translate: 'Translate',
-  jobs: 'Jobs',
-  settings: 'Settings'
+  dashboard: 'dashboard',
+  novels: 'novels',
+  'novel-detail': 'novel',
+  'chapter-reader': 'chapter',
+  sources: 'sources',
+  translate: 'translate',
+  jobs: 'jobs',
+  settings: 'settings'
 }
 
 export function pageTitle(route: RouteLocationNormalized): string {
-  return PAGE_TITLES[String(route.name ?? '')] ?? 'Page'
+  return t(PAGE_TITLES[String(route.name ?? '')] ?? 'page')
 }
 
 export const router = createRouter({

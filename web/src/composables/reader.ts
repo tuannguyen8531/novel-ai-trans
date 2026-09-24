@@ -3,6 +3,8 @@ import { useRouter } from 'vue-router'
 import { api } from '@/api/client'
 import type { ChapterPostCheck, NovelChapterStatus } from '@/api/types'
 import { useSettingsStore } from '@/composables/settings'
+import { formatLanguage } from '@/language'
+import { t } from '@/i18n'
 
 export type ReaderLanguage = 'source' | 'vi' | 'en'
 
@@ -55,9 +57,7 @@ export function useReader(
   const targetLanguage = computed<'vi' | 'en'>(() =>
     settings.settings?.target_language === 'en' ? 'en' : 'vi'
   )
-  const targetLanguageLabel = computed(() =>
-    targetLanguage.value === 'vi' ? 'Vietnamese' : 'English'
-  )
+  const targetLanguageLabel = computed(() => formatLanguage(targetLanguage.value))
   const hasTargetTranslation = computed(() =>
     chapters.value.some((status) =>
       status.number === toValue(chapter) &&
@@ -81,7 +81,7 @@ export function useReader(
     return title
   })
 
-  const chapterLabel = computed(() => viewMode.value === 'vi' ? 'Chương' : 'Chapter')
+  const chapterLabel = computed(() => t('chapter_number', { number: toValue(chapter) }))
 
   async function loadChapters() {
     try {
@@ -343,7 +343,7 @@ export function useReader(
   watch(
     [() => toValue(chapter), displayTitle, chapterLabel],
     ([number, title, label]) => {
-      document.title = `${title} - ${label} ${number} - Novel AI Translation`
+      document.title = `${title} - ${label} - Novel AI Translation`
     },
     { immediate: true }
   )

@@ -73,21 +73,21 @@ onUnmounted(() => window.removeEventListener('click', closeMenu))
           class="novel-name-crumb"
           role="button"
           tabindex="0"
-          :title="`Back to novel: ${displayTitle}`"
+          :title="$t('back_to_novel', { title: displayTitle })"
           @click="emit('back')"
           @keydown.enter="emit('back')"
         >
           {{ displayTitle }}
         </span>
         <span class="crumb-slash">/</span>
-        <span class="chapter-name-crumb">{{ chapterLabel }} {{ chapter }}</span>
+        <span class="chapter-name-crumb">{{ chapterLabel }}</span>
       </div>
     </div>
 
     <div class="chapter-topbar-controls">
       <template v-if="!editing">
         <!-- Segmented Origin / Target Mode Toggle Switch -->
-        <div class="segmented-control" role="group" aria-label="Reading language">
+        <div class="segmented-control" role="group" :aria-label="$t('reading_language')">
           <span
             class="segmented-glider"
             :class="{ 'is-right': viewMode === targetLanguage }"
@@ -100,14 +100,14 @@ onUnmounted(() => window.removeEventListener('click', closeMenu))
             :disabled="loading"
             @click="emit('changeView', 'source')"
           >
-            <span>Source</span>
+            <span>{{ $t("source") }}</span>
           </button>
           <button
             type="button"
             class="segment-btn"
             :class="{ active: viewMode === targetLanguage }"
             :disabled="loading || !hasTargetTranslation"
-            :title="!hasTargetTranslation ? 'No translation available for this chapter' : ''"
+          :title="!hasTargetTranslation ? $t('no_chapter_translation') : ''"
             @click="emit('changeView', targetLanguage)"
           >
             <span>{{ targetLanguageLabel }}</span>
@@ -119,11 +119,11 @@ onUnmounted(() => window.removeEventListener('click', closeMenu))
           v-if="hasPostCheckReview"
           type="button"
           class="review-warning-btn"
-          title="Review translation quality issues"
+          :title="$t('review_translation_quality_issues')"
           @click="emit('reviewPostCheck')"
         >
           <AlertTriangle :size="14" />
-          <span>Review</span>
+          <span>{{ $t("review") }}</span>
         </button>
 
         <!-- Dropdown Menu -->
@@ -131,7 +131,7 @@ onUnmounted(() => window.removeEventListener('click', closeMenu))
           <button
             type="button"
             class="btn-icon-subtle menu-trigger"
-            aria-label="Chapter actions"
+            :aria-label="$t('chapter_actions')"
             :disabled="loading"
             @click.stop="showMenu = !showMenu"
           >
@@ -141,7 +141,7 @@ onUnmounted(() => window.removeEventListener('click', closeMenu))
           <div v-if="showMenu" class="dropdown-menu">
             <button type="button" class="menu-item" @click="selectAction('edit')">
               <Edit3 :size="14" />
-              <span>Edit content</span>
+              <span>{{ $t("edit_content") }}</span>
             </button>
             <button
               v-if="hasPostCheckReview"
@@ -150,7 +150,7 @@ onUnmounted(() => window.removeEventListener('click', closeMenu))
               @click="selectAction('review-warning')"
             >
               <AlertTriangle :size="14" />
-              <span>Review warnings</span>
+              <span>{{ $t("review_warnings") }}</span>
             </button>
             <button
               v-if="viewMode === 'source'"
@@ -159,7 +159,7 @@ onUnmounted(() => window.removeEventListener('click', closeMenu))
               @click="selectAction('delete')"
             >
               <Trash2 :size="14" />
-              <span>Delete chapter</span>
+              <span>{{ $t("delete_chapter") }}</span>
             </button>
           </div>
         </div>
@@ -174,7 +174,7 @@ onUnmounted(() => window.removeEventListener('click', closeMenu))
           @click="emit('save')"
         >
           <Save :size="15" />
-          <span>{{ saving ? 'Saving…' : 'Save Changes' }}</span>
+          <span>{{ saving ? $t('saving') : $t('save_changes') }}</span>
         </button>
         <button
           type="button"
@@ -183,7 +183,7 @@ onUnmounted(() => window.removeEventListener('click', closeMenu))
           @click="emit('cancel')"
         >
           <X :size="15" />
-          <span>Cancel</span>
+          <span>{{ $t("cancel") }}</span>
         </button>
       </template>
     </div>
@@ -198,17 +198,17 @@ onUnmounted(() => window.removeEventListener('click', closeMenu))
       @click="previousChapter !== null && emit('navigate', previousChapter)"
     >
       <ChevronLeft :size="16" />
-      <span>Previous</span>
+      <span>{{ $t("previous") }}</span>
     </button>
 
     <button
       type="button"
       class="toc-btn"
-      title="Open Table of Contents"
+      :title="$t('open_table_of_contents')"
       @click="emit('openToc')"
     >
       <List :size="15" />
-      <span>Chapter {{ currentIndex + 1 }} of {{ chapterCount }}</span>
+      <span>{{ $t("chapter_of_total", { chapter: currentIndex + 1, total: chapterCount }) }}</span>
     </button>
 
     <button
@@ -217,7 +217,7 @@ onUnmounted(() => window.removeEventListener('click', closeMenu))
       :disabled="nextChapter === null"
       @click="nextChapter !== null && emit('navigate', nextChapter)"
     >
-      <span>Next</span>
+      <span>{{ $t("next") }}</span>
       <ChevronRight :size="16" />
     </button>
   </div>

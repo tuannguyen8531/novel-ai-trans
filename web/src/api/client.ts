@@ -1,3 +1,4 @@
+import { t } from '@/i18n'
 import type {
   ArtifactInfo,
   ChapterContentResponse,
@@ -73,9 +74,19 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
           return path ? `${path}: ${entry.msg ?? 'invalid'}` : (entry.msg ?? 'invalid')
         })
       if (fields.length) {
-        displayMessage = `Request validation failed. ${fields.join('; ')}`
+        displayMessage = `${t('request_validation_failed')} ${fields.join('; ')}`
       }
     }
+    const publicMessages: Record<string, [string, string]> = {
+      validation_error: ['Invalid input.', 'invalid_input'],
+      not_found: ['Resource not found.', 'resource_not_found'],
+      conflict: ['Resource conflict.', 'resource_conflict'],
+      external_service_error: ['External service error.', 'external_service_error'],
+      persistence_error: ['Could not read or write required data.', 'could_not_read_or_write_required_data'],
+      cancelled: ['Operation cancelled.', 'operation_cancelled'],
+      application_error: ['Application error.', 'application_error']
+    }
+    if (publicMessages[code]?.[0] === message) displayMessage = t(publicMessages[code][1])
     const err = new Error(displayMessage) as Error & { code: string; status: number; details: Record<string, unknown> | null }
     err.code = code
     err.status = response.status
@@ -241,7 +252,7 @@ export const api = {
       { headers: headers() }
     )
     if (!response.ok) {
-      throw new Error(`Artifact download failed: ${response.status} ${response.statusText}`)
+      throw new Error(t('artifact_download_failed', { status: `${response.status} ${response.statusText}` }))
     }
     return response.blob()
   },

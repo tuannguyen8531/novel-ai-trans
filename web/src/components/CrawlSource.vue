@@ -9,6 +9,7 @@ import JobMonitor from '@/components/JobMonitor.vue'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import { useCrawl } from '@/composables/crawl'
 import { formatDateTime } from '@/datetime'
+import { t } from '@/i18n'
 
 const router = useRouter()
 const {
@@ -31,7 +32,7 @@ const configOptions = computed(() => {
     return [
       {
         value: '',
-        label: loadingConfigs.value ? 'Loading…' : 'No crawl setups found',
+        label: loadingConfigs.value ? t('loading') : t('no_crawl_setups_found'),
         disabled: true
       }
     ]
@@ -42,12 +43,12 @@ const configOptions = computed(() => {
   }))
 })
 
-const generateProviderOptions = [
-  { value: '', label: 'Use default' },
-  { value: 'ollama', label: 'ollama' },
-  { value: 'gemini', label: 'gemini' },
-  { value: 'openrouter', label: 'openrouter' }
-]
+const generateProviderOptions = computed(() => [
+  { value: '', label: t('use_default') },
+  { value: 'ollama', label: t('ollama') },
+  { value: 'gemini', label: t('gemini') },
+  { value: 'openrouter', label: t('openrouter') }
+])
 </script>
 
 <template>
@@ -60,12 +61,12 @@ const generateProviderOptions = [
       <div class="card">
         <div class="workflow-header">
           <div class="workflow-copy">
-            <h2>Crawl Novel Chapters</h2>
+            <h2>{{ $t("crawl_novel_chapters") }}</h2>
             <p class="muted">
-              Select a novel and start downloading its chapters.
+              {{ $t("crawl_novel_instructions") }}
             </p>
           </div>
-          <div class="workflow-switch" role="group" aria-label="Website workflow">
+          <div class="workflow-switch" role="group" :aria-label="$t('website_workflow')">
             <button
               type="button"
               class="workflow-btn"
@@ -73,7 +74,7 @@ const generateProviderOptions = [
               :aria-pressed="isWorkflowActive('crawl')"
               @click="activeTab = 'crawl'"
             >
-              Crawl
+              {{ $t("crawl") }}
             </button>
             <button
               type="button"
@@ -82,25 +83,25 @@ const generateProviderOptions = [
               :aria-pressed="isWorkflowActive('generate')"
               @click="activeTab = 'generate'"
             >
-              Generate
+              {{ $t("generate") }}
             </button>
           </div>
         </div>
 
       <div class="grid">
         <div>
-          <label>Crawl setup</label>
+          <label>{{ $t("crawl_setup") }}</label>
           <CustomSelect
             v-model="selectedConfig"
             :options="configOptions"
             :disabled="!configs.length"
-            placeholder="Select crawl setup…"
+            :placeholder="$t('select_crawl_setup')"
           />
           <p v-if="configsError" class="error" style="margin-top: 0.25rem;">{{ configsError }}</p>
         </div>
 
         <div>
-          <label>Browser mode</label>
+          <label>{{ $t("browser_mode") }}</label>
           <div class="check-row">
             <label class="check">
               <input
@@ -109,7 +110,7 @@ const generateProviderOptions = [
                 :checked="!browser && !headed"
                 @change="selectBrowserMode('none')"
               />
-              <span>Do not use a browser</span>
+              <span>{{ $t("do_not_use_a_browser") }}</span>
             </label>
             <label class="check">
               <input
@@ -118,7 +119,7 @@ const generateProviderOptions = [
                 :checked="browser && !headed"
                 @change="selectBrowserMode('headless')"
               />
-              <span>Background browser</span>
+              <span>{{ $t("background_browser") }}</span>
             </label>
             <label class="check">
               <input
@@ -127,39 +128,39 @@ const generateProviderOptions = [
                 :checked="headed"
                 @change="selectBrowserMode('headed')"
               />
-              <span>Visible browser</span>
+              <span>{{ $t("visible_browser") }}</span>
             </label>
           </div>
         </div>
 
         <div>
-          <label>Options</label>
+          <label>{{ $t("options") }}</label>
           <div class="check-row">
             <label class="check">
               <input v-model="ignoreRobots" type="checkbox" />
-              <span>Ignore robots.txt (only when you have permission)</span>
+              <span>{{ $t("ignore_robots_permission") }}</span>
             </label>
             <label class="check">
               <input v-model="overwrite" type="checkbox" />
-              <span>Overwrite already-downloaded chapters</span>
+              <span>{{ $t("overwrite_already_downloaded_chapters") }}</span>
             </label>
           </div>
         </div>
 
         <div>
-          <label>Download limits</label>
+          <label>{{ $t("download_limits") }}</label>
           <div class="row gap-2 download-limits">
             <label class="row gap-1 download-limit-field">
-              <span class="muted">At once</span>
+              <span class="muted">{{ $t("at_once") }}</span>
               <input v-model.number="workers" type="number" min="1" max="8" style="max-width: 5rem;" />
             </label>
             <label class="row gap-1 download-limit-field">
-              <span class="muted">Max chapters</span>
+              <span class="muted">{{ $t("max_chapters") }}</span>
               <input
                 v-model.number="maxChapters"
                 type="number"
                 min="0"
-                placeholder="unlimited"
+                :placeholder="$t('unlimited')"
                 style="max-width: 8rem;"
               />
             </label>
@@ -170,19 +171,19 @@ const generateProviderOptions = [
       <div class="row gap-2" style="margin-top: 1rem;">
         <button type="button" class="flex items-center gap-1.5" :disabled="!selectedConfig" @click="startCrawl">
           <Play :size="15" />
-          Start crawl
+          {{ $t("start_crawl") }}
         </button>
         <button class="secondary flex items-center gap-1.5" type="button" @click="router.push('/jobs')">
           <ArrowUpRight :size="15" />
-          View jobs
+          {{ $t("view_jobs") }}
         </button>
       </div>
       <p v-if="crawlError" class="error" style="margin-top: 0.5rem;">{{ crawlError }}</p>
       </div>
 
       <div v-if="selectedConfig" class="card">
-        <h3>Current setup — {{ selectedConfig }}</h3>
-        <p v-if="loadingSelectedConfig" class="muted">Loading setup...</p>
+        <h3>{{ $t("current_setup", { name: selectedConfig }) }}</h3>
+        <p v-if="loadingSelectedConfig" class="muted">{{ $t("loading_setup") }}</p>
         <textarea
           v-else
           v-model="selectedConfigText"
@@ -193,18 +194,18 @@ const generateProviderOptions = [
         <div v-if="!loadingSelectedConfig" class="row gap-2" style="margin-top: 0.75rem;">
           <button type="button" class="flex items-center gap-1.5" :disabled="savingSelectedConfig" @click="saveSelectedConfig">
             <Save :size="15" />
-            {{ savingSelectedConfig ? 'Saving…' : 'Save changes' }}
+            {{ savingSelectedConfig ? $t('saving') : $t('save_changes') }}
           </button>
           <button class="secondary flex items-center gap-1.5" type="button" :disabled="savingSelectedConfig" @click="loadSelectedConfig(selectedConfig)">
             <RefreshCw :size="15" :class="{ 'animate-spin': savingSelectedConfig }" />
-            Reload
+            {{ $t("reload") }}
           </button>
         </div>
-        <p v-if="selectedConfigMessage" class="muted" style="margin-top: 0.5rem;">{{ selectedConfigMessage }}</p>
+        <p v-if="selectedConfigMessage" class="muted" style="margin-top: 0.5rem;">{{ $t(selectedConfigMessage) }}</p>
       </div>
 
       <div v-if="crawlJobId" class="card">
-        <h3>Crawl job</h3>
+        <h3>{{ $t("crawl_job") }}</h3>
         <JobMonitor :job-id="crawlJobId" />
       </div>
     </div>
@@ -217,12 +218,12 @@ const generateProviderOptions = [
       <div class="card">
         <div class="workflow-header">
           <div class="workflow-copy">
-            <h2>Create Crawl Config</h2>
+            <h2>{{ $t("create_crawl_config") }}</h2>
             <p class="muted">
-              Enter the novel page URL, review the generated setup, then save it to start crawling.
+              {{ $t("crawl_setup_instructions") }}
             </p>
           </div>
-          <div class="workflow-switch" role="group" aria-label="Website workflow">
+          <div class="workflow-switch" role="group" :aria-label="$t('website_workflow')">
             <button
               type="button"
               class="workflow-btn"
@@ -230,7 +231,7 @@ const generateProviderOptions = [
               :aria-pressed="isWorkflowActive('crawl')"
               @click="activeTab = 'crawl'"
             >
-              Crawl
+              {{ $t("crawl") }}
             </button>
             <button
               type="button"
@@ -239,29 +240,29 @@ const generateProviderOptions = [
               :aria-pressed="isWorkflowActive('generate')"
               @click="activeTab = 'generate'"
             >
-              Generate
+              {{ $t("generate") }}
             </button>
           </div>
         </div>
 
       <div class="grid">
         <div>
-          <label>Novel information URL</label>
-          <input v-model="generateUrl" placeholder="https://example.com/novel" />
+          <label>{{ $t("novel_information_url") }}</label>
+          <input v-model="generateUrl" :placeholder="$t('novel_url_placeholder')" />
         </div>
         <div>
-          <label>Config name (optional)</label>
-          <input v-model="generateName" placeholder="derived from the URL if blank" />
+          <label>{{ $t("config_name_optional") }}</label>
+          <input v-model="generateName" :placeholder="$t('derived_from_the_url_if_blank')" />
         </div>
         <div>
-          <label>LLM provider (optional)</label>
+          <label>{{ $t("llm_provider_optional") }}</label>
           <CustomSelect
             v-model="generateProvider"
             :options="generateProviderOptions"
           />
         </div>
         <div>
-          <label>Browser mode</label>
+          <label>{{ $t("browser_mode") }}</label>
           <div class="check-row">
             <label class="check">
               <input
@@ -270,7 +271,7 @@ const generateProviderOptions = [
                 :checked="!generateUseBrowser && !generateHeaded"
                 @change="selectGenerateBrowserMode('none')"
               />
-              <span>Do not use a browser</span>
+              <span>{{ $t("do_not_use_a_browser") }}</span>
             </label>
             <label class="check">
               <input
@@ -279,7 +280,7 @@ const generateProviderOptions = [
                 :checked="generateUseBrowser && !generateHeaded"
                 @change="selectGenerateBrowserMode('headless')"
               />
-              <span>Background browser</span>
+              <span>{{ $t("background_browser") }}</span>
             </label>
             <label class="check">
               <input
@@ -288,20 +289,20 @@ const generateProviderOptions = [
                 :checked="generateHeaded"
                 @change="selectGenerateBrowserMode('headed')"
               />
-              <span>Visible browser</span>
+              <span>{{ $t("visible_browser") }}</span>
             </label>
           </div>
         </div>
         <div>
-          <label>Generation options</label>
+          <label>{{ $t("generation_options") }}</label>
           <div class="check-row">
             <label class="check">
               <input v-model="generateNoCache" type="checkbox" />
-              <span>Fetch fresh website data</span>
+              <span>{{ $t("fetch_fresh_website_data") }}</span>
             </label>
             <label class="check">
               <input v-model="generateIgnoreSample" type="checkbox" />
-              <span>Build a new setup from scratch</span>
+              <span>{{ $t("build_a_new_setup_from_scratch") }}</span>
             </label>
           </div>
         </div>
@@ -310,64 +311,63 @@ const generateProviderOptions = [
       <div class="row gap-2" style="margin-top: 1rem;">
         <button type="button" class="flex items-center gap-1.5" :disabled="!generateUrl.trim()" @click="startGenerate">
           <Sparkles :size="15" />
-          Generate
+          {{ $t("generate") }}
         </button>
         <button class="secondary flex items-center gap-1.5" type="button" @click="router.push('/jobs')">
           <ArrowUpRight :size="15" />
-          View jobs
+          {{ $t("view_jobs") }}
         </button>
       </div>
       <p v-if="generateError" class="error" style="margin-top: 0.5rem;">{{ generateError }}</p>
       </div>
 
       <div v-if="generateJobId" class="card">
-        <h3>Generation job</h3>
+        <h3>{{ $t("generation_job") }}</h3>
         <JobMonitor :job-id="generateJobId" />
       </div>
 
       <div class="card">
         <div class="row gap-2" style="justify-content: space-between; align-items: center;">
           <div>
-            <h3>Pending drafts</h3>
+            <h3>{{ $t("pending_drafts") }}</h3>
           </div>
         </div>
-        <p v-if="loadingDrafts" class="muted">Loading drafts…</p>
+        <p v-if="loadingDrafts" class="muted">{{ $t("loading_drafts") }}</p>
         <p v-else-if="draftsError" class="error">{{ draftsError }}</p>
-        <p v-else-if="!drafts.length" class="muted">No pending drafts.</p>
+        <p v-else-if="!drafts.length" class="muted">{{ $t("no_pending_drafts") }}</p>
         <div v-else class="flex-col gap-2 draft-list">
           <div v-for="draft in drafts" :key="draft.draft_id" class="row gap-2 draft-row">
             <div class="draft-summary">
               <strong><code>{{ draft.name }}</code></strong>
-              <span class="muted">{{ draft.source_url || 'No source URL' }}</span>
-              <small class="muted">Expires {{ formatDateTime(draft.expires_at) }}</small>
+              <span class="muted">{{ draft.source_url || $t('no_source_url') }}</span>
+              <small class="muted">{{ $t("expiry_date", { date: formatDateTime(draft.expires_at) }) }}</small>
             </div>
             <button class="secondary flex items-center gap-1 text-xs py-1 px-2.5" type="button" @click="loadDraft(draft.draft_id)">
               <Eye :size="13" />
-              Open
+              {{ $t("open") }}
             </button>
             <button class="danger flex items-center gap-1 text-xs py-1 px-2.5" type="button" @click="deleteDraft(draft.draft_id)">
               <Trash2 :size="13" />
-              Delete
+              {{ $t("delete") }}
             </button>
           </div>
         </div>
       </div>
 
       <div v-if="generatedDraft" class="card">
-        <h3>Review draft — {{ generatedDraft.name }}</h3>
+        <h3>{{ $t("review_draft", { name: generatedDraft.name }) }}</h3>
         <p class="muted">
-          Review the generated setup, make any changes, then save it.
-          Expires {{ formatDateTime(generatedDraft.expires_at) }}.
+          {{ $t("generated_setup_expiry", { date: formatDateTime(generatedDraft.expires_at) }) }}
         </p>
         <textarea v-model="draftConfigText" class="draft-editor" spellcheck="false"></textarea>
         <div class="row gap-2" style="margin-top: 0.75rem;">
           <button type="button" class="flex items-center gap-1.5" @click="saveGeneratedDraft">
             <Save :size="15" />
-            Save setup
+            {{ $t("save_setup") }}
           </button>
           <button class="danger flex items-center gap-1.5" type="button" @click="discardDraft">
             <Trash2 :size="15" />
-            Discard draft
+            {{ $t("discard_draft") }}
           </button>
         </div>
       </div>

@@ -11,7 +11,7 @@ const props = withDefaults(defineProps<{
   danger?: boolean
   loading?: boolean
 }>(), {
-  confirmLabel: 'Confirm',
+  confirmLabel: '',
   danger: false,
   loading: false
 })
@@ -81,7 +81,7 @@ watch(() => props.show, (isOpen) => {
         <button
           type="button"
           class="modal-close"
-          aria-label="Close"
+          :aria-label="$t('close')"
           :disabled="loading"
           @click="emit('cancel')"
         >
@@ -92,13 +92,13 @@ watch(() => props.show, (isOpen) => {
         <p class="modal-message">{{ message }}</p>
       </div>
       <footer class="modal-footer">
-        <button type="button" class="secondary" :disabled="loading" @click="emit('cancel')">Cancel</button>
+        <button type="button" class="secondary" :disabled="loading" @click="emit('cancel')">{{ $t("cancel") }}</button>
         <button
           type="button"
           :class="{ danger }"
           :disabled="loading"
           @click="emit('confirm')"
-        >{{ loading ? 'Processing...' : confirmLabel }}</button>
+        >{{ loading ? $t('processing') : confirmLabel || $t('confirm') }}</button>
       </footer>
     </div>
   </div>

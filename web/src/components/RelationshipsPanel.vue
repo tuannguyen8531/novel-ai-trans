@@ -83,8 +83,8 @@ async function saveEdit() {
       <div class="flex items-center gap-2">
         <GitFork :size="18" class="text-indigo-400 shrink-0" />
         <div>
-          <h3>Relationships</h3>
-          <p class="muted">{{ relationships.length }} edges between characters</p>
+          <h3>{{ $t("relationships") }}</h3>
+          <p class="muted">{{ $t("character_relationships", { count: relationships.length }) }}</p>
         </div>
       </div>
       <div class="gloss-controls">
@@ -92,7 +92,7 @@ async function saveEdit() {
           <Search :size="14" class="absolute left-2.5 text-zinc-500 pointer-events-none" />
           <input
             v-model="filter"
-            placeholder="Filter relationships…"
+            :placeholder="$t('filter_relationships')"
             class="gloss-filter !pl-8"
           />
         </div>
@@ -102,20 +102,20 @@ async function saveEdit() {
           @click="showAdd = !showAdd"
         >
           <component :is="showAdd ? X : Plus" :size="14" />
-          {{ showAdd ? 'Cancel' : 'Add relationship' }}
+          {{ showAdd ? $t('cancel') : $t('add_relationship') }}
         </button>
       </div>
     </header>
 
     <div v-if="showAdd" class="gloss-add p-3 bg-zinc-900/60 dark:bg-zinc-900/80 rounded-lg border border-indigo-500/30">
-      <input v-model="newRelationship.from" placeholder="From character (original)" class="flex-1" />
-      <input v-model="newRelationship.to" placeholder="To character (original)" class="flex-1" />
-      <input v-model="newRelationship.relationship" placeholder="Relationship (e.g. friend)" class="flex-1" />
+      <input v-model="newRelationship.from" :placeholder="$t('from_character_original')" class="flex-1" />
+      <input v-model="newRelationship.to" :placeholder="$t('to_character_original')" class="flex-1" />
+      <input v-model="newRelationship.relationship" :placeholder="$t('relationship_e_g_friend')" class="flex-1" />
       <input
         v-model.number="newRelationship.since"
         type="number"
         min="0"
-        placeholder="Since ch. (opt)"
+        :placeholder="$t('since_ch_opt')"
         class="since-input !max-w-32"
       />
       <button
@@ -125,7 +125,7 @@ async function saveEdit() {
         @click="add"
       >
         <Save :size="14" />
-        Save
+        {{ $t("save") }}
       </button>
     </div>
 
@@ -133,11 +133,11 @@ async function saveEdit() {
       <table v-if="filteredRelationships.length">
         <thead>
           <tr>
-            <th>From</th>
+            <th>{{ $t("from") }}</th>
             <th class="w-8"></th>
-            <th>To</th>
-            <th>Relationship</th>
-            <th>Since</th>
+            <th>{{ $t("to") }}</th>
+            <th>{{ $t("relationship") }}</th>
+            <th>{{ $t("since") }}</th>
             <th class="actions"></th>
           </tr>
         </thead>
@@ -168,11 +168,11 @@ async function saveEdit() {
                     @click="saveEdit"
                   >
                     <Save :size="13" />
-                    Save
+                    {{ $t("save") }}
                   </button>
                   <button class="secondary flex items-center gap-1" type="button" @click="editing = null">
                     <X :size="13" />
-                    Cancel
+                    {{ $t("cancel") }}
                   </button>
                 </div>
               </td>
@@ -182,7 +182,7 @@ async function saveEdit() {
               <td class="arrow text-center"><ArrowRight :size="14" class="text-zinc-500 inline" /></td>
               <td class="gloss-original font-medium text-zinc-100">{{ edge.to }}</td>
               <td><span class="inline-block px-2 py-0.5 text-xs rounded bg-zinc-800 text-zinc-200 border border-zinc-700">{{ edge.relationship }}</span></td>
-              <td class="text-zinc-400 text-sm">{{ edge.since !== null ? `Ch. ${edge.since}` : '—' }}</td>
+              <td class="text-zinc-400 text-sm">{{ edge.since !== null ? $t('chapter_number', { number: edge.since }) : '—' }}</td>
               <td class="actions">
                 <div class="row gap-1 row-actions">
                   <button
@@ -191,7 +191,7 @@ async function saveEdit() {
                     @click="startEdit(edge, index)"
                   >
                     <Edit2 :size="12" />
-                    Edit
+                    {{ $t("edit") }}
                   </button>
                   <button
                     class="secondary flex items-center gap-1 text-xs py-1 px-2 text-rose-400 hover:text-rose-300"
@@ -199,7 +199,7 @@ async function saveEdit() {
                     @click="removeRelationship(edge.from, edge.to)"
                   >
                     <Trash2 :size="12" />
-                    Remove
+                    {{ $t("remove") }}
                   </button>
                 </div>
               </td>
@@ -208,7 +208,7 @@ async function saveEdit() {
         </tbody>
       </table>
       <p v-else class="muted gloss-empty">
-        {{ filter ? 'No relationships match the filter.' : 'No relationships yet.' }}
+        {{ filter ? $t('no_relationships_match_the_filter') : $t('no_relationships_yet') }}
       </p>
     </div>
   </section>

@@ -2,6 +2,7 @@ import { onMounted, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import type { ConfigSummary, DraftDetail, DraftSummary } from '@/api/types'
 import { useJobsStore } from '@/composables/jobs'
+import { t } from '@/i18n'
 
 export function useCrawl() {
   const jobs = useJobsStore()
@@ -84,7 +85,7 @@ export function useCrawl() {
   function parseConfigDocument(text: string): Record<string, unknown> {
     const parsed: unknown = JSON.parse(text)
     if (parsed === null || Array.isArray(parsed) || typeof parsed !== 'object') {
-      throw new Error('Config must be a JSON object.')
+      throw new Error(t('config_must_be_a_json_object'))
     }
     return parsed as Record<string, unknown>
   }
@@ -97,13 +98,13 @@ export function useCrawl() {
     try {
       parsed = parseConfigDocument(selectedConfigText.value)
     } catch (err) {
-      selectedConfigError.value = `Invalid JSON: ${(err as Error).message}`
+      selectedConfigError.value = t('invalid_json', { error: (err as Error).message })
       return
     }
     savingSelectedConfig.value = true
     try {
       await api.saveConfig(selectedConfig.value, parsed)
-      selectedConfigMessage.value = 'Config validated and saved.'
+      selectedConfigMessage.value = 'config_validated_and_saved'
       await loadConfigs()
     } catch (err) {
       selectedConfigError.value = (err as Error).message
@@ -115,7 +116,7 @@ export function useCrawl() {
   async function startCrawl() {
     crawlError.value = null
     if (!selectedConfig.value) {
-      crawlError.value = 'Choose a novel config.'
+      crawlError.value = t('choose_a_novel_config')
       return
     }
     try {
@@ -138,7 +139,7 @@ export function useCrawl() {
     generateError.value = null
     generatedDraft.value = null
     if (!generateUrl.value.trim()) {
-      generateError.value = 'A URL is required.'
+      generateError.value = t('a_url_is_required')
       return
     }
     const payload: Record<string, unknown> = {
@@ -187,7 +188,7 @@ export function useCrawl() {
     try {
       parsed = parseConfigDocument(draftConfigText.value)
     } catch (err) {
-      generateError.value = `Invalid JSON: ${(err as Error).message}`
+      generateError.value = t('invalid_json', { error: (err as Error).message })
       return
     }
     try {
@@ -198,7 +199,7 @@ export function useCrawl() {
       await Promise.all([loadConfigs(), loadDrafts()])
       selectedConfig.value = savedName
       await loadSelectedConfig(savedName)
-      selectedConfigMessage.value = 'Generated config saved and ready to crawl.'
+      selectedConfigMessage.value = 'crawl_config_ready'
       activeTab.value = 'crawl'
     } catch (err) {
       generateError.value = (err as Error).message

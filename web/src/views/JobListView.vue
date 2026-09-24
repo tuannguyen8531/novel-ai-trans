@@ -17,20 +17,21 @@ import StatusBadge from '@/components/common/StatusBadge.vue'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import { formatDateTime } from '@/datetime'
 import type { JobModel } from '@/api/types'
+import { formatJobKind, t } from '@/i18n'
 
 const jobs = useJobsStore()
 const selectedId = ref<string | null>(null)
 const statusFilter = ref<'all' | JobModel['status']>('all')
-const statusOptions: Array<{ value: 'all' | JobModel['status']; label: string }> = [
-  { value: 'all', label: 'All Statuses' },
-  { value: 'queued', label: 'Queued' },
-  { value: 'running', label: 'Running' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'degraded', label: 'Degraded' },
-  { value: 'failed', label: 'Failed' },
-  { value: 'cancelling', label: 'Cancelling' },
-  { value: 'cancelled', label: 'Cancelled' }
-]
+const statusOptions = computed<Array<{ value: 'all' | JobModel['status']; label: string }>>(() => [
+  { value: 'all', label: t('all_statuses') },
+  { value: 'queued', label: t('queued') },
+  { value: 'running', label: t('running') },
+  { value: 'completed', label: t('completed') },
+  { value: 'degraded', label: t('degraded') },
+  { value: 'failed', label: t('failed') },
+  { value: 'cancelling', label: t('cancelling') },
+  { value: 'cancelled', label: t('cancelled') }
+])
 const TERMINAL_STATUSES = new Set<JobModel['status']>([
   'completed',
   'degraded',
@@ -177,16 +178,16 @@ async function handleClearAll() {
           <Activity :size="22" />
         </div>
         <div>
-          <h2 class="jobs-title">Operations & Jobs</h2>
+          <h2 class="jobs-title">{{ $t("operations_jobs") }}</h2>
           <p class="jobs-subtitle">
-            Monitor real-time translation pipelines, crawler execution, and packaging tasks.
+            {{ $t("job_monitor_description") }}
           </p>
         </div>
       </div>
 
       <div class="header-right">
         <div class="status-filter-wrap">
-          <span class="filter-label">Filter:</span>
+          <span class="filter-label">{{ $t("filter") }}</span>
           <CustomSelect
             v-model="statusFilter"
             :options="statusOptions"
@@ -197,22 +198,22 @@ async function handleClearAll() {
         <button
           class="secondary btn-refresh"
           type="button"
-          title="Refresh job lists"
+          :title="$t('refresh_job_lists')"
           @click="jobs.refresh()"
         >
           <RotateCw :size="15" />
-          <span>Refresh</span>
+          <span>{{ $t("refresh") }}</span>
         </button>
 
         <button
           v-if="hasInactiveJobs"
           class="secondary btn-clear-all"
           type="button"
-          title="Remove all inactive history jobs"
+          :title="$t('remove_all_inactive_history_jobs')"
           @click="confirmClearAll"
         >
           <Trash2 :size="15" />
-          <span>Clear History</span>
+          <span>{{ $t("clear_history") }}</span>
         </button>
       </div>
     </header>
@@ -225,7 +226,7 @@ async function handleClearAll() {
         </div>
         <div class="stat-text">
           <span class="stat-num">{{ runningCount }}</span>
-          <span class="stat-lbl">Active Operations</span>
+          <span class="stat-lbl">{{ $t("active_operations") }}</span>
         </div>
       </div>
 
@@ -235,7 +236,7 @@ async function handleClearAll() {
         </div>
         <div class="stat-text">
           <span class="stat-num">{{ completedCount }}</span>
-          <span class="stat-lbl">Completed</span>
+          <span class="stat-lbl">{{ $t("completed") }}</span>
         </div>
       </div>
 
@@ -245,7 +246,7 @@ async function handleClearAll() {
         </div>
         <div class="stat-text">
           <span class="stat-num">{{ failedCount }}</span>
-          <span class="stat-lbl">Failed / Degraded</span>
+          <span class="stat-lbl">{{ $t("failed_degraded") }}</span>
         </div>
       </div>
     </div>
@@ -255,13 +256,13 @@ async function handleClearAll() {
       <table class="jobs-table">
         <thead>
           <tr>
-            <th style="width: 100px;">Job ID</th>
-            <th>Type</th>
-            <th>Novel</th>
-            <th>Status</th>
-            <th>Progress</th>
-            <th>Timestamp</th>
-            <th style="text-align: right;">Action</th>
+            <th style="width: 100px;">{{ $t("job_id") }}</th>
+            <th>{{ $t("type") }}</th>
+            <th>{{ $t("novel") }}</th>
+            <th>{{ $t("status") }}</th>
+            <th>{{ $t("progress") }}</th>
+            <th>{{ $t("timestamp") }}</th>
+            <th style="text-align: right;">{{ $t("action") }}</th>
           </tr>
         </thead>
         <tbody>
@@ -275,10 +276,10 @@ async function handleClearAll() {
               <code class="job-id-cell">{{ row.id.slice(0, 8) }}</code>
             </td>
             <td>
-              <span class="kind-tag">{{ row.kind }}</span>
+              <span class="kind-tag">{{ formatJobKind(row.kind) }}</span>
             </td>
             <td>
-              <span class="novel-cell" :title="row.novel ?? 'None'">
+              <span class="novel-cell" :title="row.novel ?? $t('none')">
                 {{ row.novel ?? '—' }}
               </span>
             </td>
@@ -289,8 +290,12 @@ async function handleClearAll() {
               <template v-if="progressFor(row)">
                 <div class="progress-details-row">
                   <span class="progress-ch">
-                    <template v-if="progressFor(row)?.chapter !== null">Ch. {{ progressFor(row)?.chapter }} &middot; </template>
-                    {{ progressFor(row)?.current }} / {{ progressFor(row)?.total }}
+                    <template v-if="progressFor(row)?.chapter !== null">
+                      {{ $t("chapter_position", { chapter: progressFor(row)?.chapter ?? 0, current: progressFor(row)?.current ?? 0, total: progressFor(row)?.total ?? 0 }) }}
+                    </template>
+                    <template v-else>
+                      {{ $t("current_of_total", { current: progressFor(row)?.current ?? 0, total: progressFor(row)?.total ?? 0 }) }}
+                    </template>
                   </span>
                   <span class="progress-pct">{{ progressFor(row)?.pct.toFixed(0) }}%</span>
                 </div>
@@ -311,14 +316,14 @@ async function handleClearAll() {
                   :class="{ active: selectedId === row.id }"
                   @click="select(row.id)"
                 >
-                  <span>Inspect</span>
+                  <span>{{ $t("inspect") }}</span>
                   <ChevronRight :size="13" />
                 </button>
                 <button
                   v-if="isTerminal(row.status)"
                   type="button"
                   class="btn-icon-subtle danger"
-                  title="Delete job"
+                  :title="$t('delete_job')"
                   @click="confirmDelete(row.id)"
                 >
                   <Trash2 :size="14" />
@@ -328,7 +333,7 @@ async function handleClearAll() {
           </tr>
           <tr v-if="!rows.length">
             <td colspan="7" class="empty-table-msg">
-              {{ allRows.length ? 'No jobs match this status filter.' : 'No recorded jobs yet.' }}
+              {{ allRows.length ? $t('no_jobs_match_this_status_filter') : $t('no_recorded_jobs_yet') }}
             </td>
           </tr>
         </tbody>
@@ -340,12 +345,12 @@ async function handleClearAll() {
       <div class="inspector-header">
         <div class="inspector-title">
           <Activity :size="18" class="inspect-icon" />
-          <h3>Inspector: <code>{{ selectedId }}</code></h3>
+          <h3>{{ $t("inspector_id", { id: selectedId }) }}</h3>
         </div>
         <button
           type="button"
           class="btn-close-inspect"
-          aria-label="Close inspector"
+          :aria-label="$t('close_inspector')"
           @click="selectedId = null"
         >
           <X :size="16" />
@@ -358,9 +363,9 @@ async function handleClearAll() {
     <!-- Confirm Dialogs -->
     <ConfirmDialog
       :show="showDeleteDialog"
-      title="Delete Job History"
-      :message="`Delete job '${deleteJobId?.slice(0, 8)}'?\n\nThis permanently removes the job logs and execution history. This cannot be undone.`"
-      confirm-label="Delete Job"
+      :title="$t('delete_job_history')"
+      :message="$t('confirm_delete_job', { id: deleteJobId?.slice(0, 8) ?? '' })"
+      :confirm-label="$t('delete_job')"
       :danger="true"
       :loading="deleteJobSaving"
       @confirm="handleDelete"
@@ -369,9 +374,9 @@ async function handleClearAll() {
 
     <ConfirmDialog
       :show="showClearDialog"
-      title="Delete All Inactive Jobs"
-      :message="`Are you sure you want to delete all completed, degraded, failed, and cancelled jobs?\n\nThis permanently clears all archived job history.`"
-      confirm-label="Clear All History"
+      :title="$t('delete_all_inactive_jobs')"
+      :message="$t('confirm_clear_job_history')"
+      :confirm-label="$t('clear_all_history')"
       :danger="true"
       :loading="clearSaving"
       @confirm="handleClearAll"

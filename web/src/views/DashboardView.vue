@@ -66,26 +66,26 @@ const featuredNovels = computed(() => novels.novels.slice(0, 4))
       <div class="welcome-info">
         <div class="welcome-badge">
           <Sparkles :size="14" />
-          <span>AI-Powered Novel Translation</span>
+          <span>{{ $t("ai_powered_novel_translation") }}</span>
         </div>
-        <h2 class="welcome-title">Novel Workspace</h2>
+        <h2 class="welcome-title">{{ $t("workspace") }}</h2>
         <p class="welcome-desc">
-          Translate, refine, and compile web novels and light novels with precision LLM models.
+          {{ $t("app_description") }}
         </p>
       </div>
 
       <div class="quick-actions">
         <RouterLink to="/translate" class="quick-btn primary">
           <Sparkles :size="16" />
-          <span>Translate Studio</span>
+          <span>{{ $t("translation_studio") }}</span>
         </RouterLink>
         <RouterLink to="/sources" class="quick-btn secondary">
           <FolderDown :size="16" />
-          <span>Add Source</span>
+          <span>{{ $t("add_source") }}</span>
         </RouterLink>
         <RouterLink to="/novels" class="quick-btn secondary">
           <BookOpen :size="16" />
-          <span>View Library</span>
+          <span>{{ $t("view_library") }}</span>
         </RouterLink>
       </div>
     </section>
@@ -98,7 +98,7 @@ const featuredNovels = computed(() => novels.novels.slice(0, 4))
         </div>
         <div class="metric-body">
           <span class="metric-value">{{ novels.novels.length }}</span>
-          <span class="metric-label">Novels in Library</span>
+          <span class="metric-label">{{ $t("novels_in_library") }}</span>
         </div>
       </div>
 
@@ -108,7 +108,7 @@ const featuredNovels = computed(() => novels.novels.slice(0, 4))
         </div>
         <div class="metric-body">
           <span class="metric-value">{{ totalTranslated }} <span class="metric-subval">/ {{ totalInput }}</span></span>
-          <span class="metric-label">Chapters Translated</span>
+          <span class="metric-label">{{ $t("chapters_translated") }}</span>
         </div>
       </div>
 
@@ -118,7 +118,7 @@ const featuredNovels = computed(() => novels.novels.slice(0, 4))
         </div>
         <div class="metric-body">
           <span class="metric-value">{{ activeJobs.length }}</span>
-          <span class="metric-label">Active Background Jobs</span>
+          <span class="metric-label">{{ $t("active_background_jobs") }}</span>
         </div>
       </div>
     </section>
@@ -129,9 +129,9 @@ const featuredNovels = computed(() => novels.novels.slice(0, 4))
         <AlertTriangle :size="20" />
       </div>
       <div class="attention-content">
-        <h4 class="attention-title">Translation Attention Required</h4>
+        <h4 class="attention-title">{{ $t("translation_attention_required") }}</h4>
         <p class="attention-desc">
-          {{ problemNovels.length }} novel{{ problemNovels.length === 1 ? '' : 's' }} have chapters with translation warnings or failures.
+          {{ problemNovels.length === 1 ? $t('single_novel_translation_issues') : $t('novels_with_translation_issues', { count: problemNovels.length }) }}
         </p>
         <div class="attention-links">
           <RouterLink
@@ -152,10 +152,10 @@ const featuredNovels = computed(() => novels.novels.slice(0, 4))
       <div class="section-header">
         <div class="header-left">
           <Activity :size="18" class="section-icon" />
-          <h3>Active Operations</h3>
+          <h3>{{ $t("active_operations") }}</h3>
         </div>
         <RouterLink to="/jobs" class="view-all-link">
-          All Jobs <ArrowRight :size="14" />
+          {{ $t("all_jobs") }} <ArrowRight :size="14" />
         </RouterLink>
       </div>
 
@@ -171,10 +171,10 @@ const featuredNovels = computed(() => novels.novels.slice(0, 4))
       <div class="section-header">
         <div class="header-left">
           <BookOpen :size="18" class="section-icon" />
-          <h3>Library Highlights</h3>
+          <h3>{{ $t("library_highlights") }}</h3>
         </div>
         <RouterLink v-if="novels.novels.length" to="/novels" class="view-all-link">
-          Explore all {{ novels.novels.length }} novels <ArrowRight :size="14" />
+          {{ $t("explore_all_novels", { count: novels.novels.length }) }} <ArrowRight :size="14" />
         </RouterLink>
       </div>
 
@@ -190,15 +190,15 @@ const featuredNovels = computed(() => novels.novels.slice(0, 4))
       <EmptyState
         v-else
         :icon="Library"
-        title="Your novel library is empty"
-        description="Add a web novel by URL crawl or import an existing EPUB book to begin translating."
+        :title="$t('your_novel_library_is_empty')"
+        :description="$t('add_source_description')"
       >
         <template #action>
           <div class="empty-actions">
             <RouterLink to="/sources">
               <button type="button">
                 <FolderDown :size="16" />
-                <span>Import or Crawl Novel</span>
+                <span>{{ $t("import_or_crawl_novel") }}</span>
               </button>
             </RouterLink>
           </div>

@@ -1,6 +1,7 @@
 import { computed, ref, toValue, type MaybeRefOrGetter } from 'vue'
 import { api } from '@/api/client'
 import type { GlossaryApplyResponse, GlossaryResponse } from '@/api/types'
+import { t } from '@/i18n'
 
 export interface GlossaryEdge {
   from: string
@@ -101,9 +102,9 @@ export function useGlossary(
     let overwrite = false
     if (oldOriginal !== original && terms.value[original]) {
       overwrite = await askConfirm(
-        'Overwrite Term',
-        `Term "${original}" already exists. Overwrite it?`,
-        { confirmLabel: 'Overwrite', danger: true }
+        t('overwrite_term'),
+        t('term_already_exists_overwrite_it', { term: original }),
+        { confirmLabel: t('overwrite'), danger: true }
       )
       if (!overwrite) return false
     }
@@ -124,9 +125,9 @@ export function useGlossary(
 
   async function removeTerm(original: string): Promise<boolean> {
     if (!await askConfirm(
-      'Remove Term',
-      `Remove term "${original}"?`,
-      { confirmLabel: 'Remove', danger: true }
+      t('remove_term'),
+      t('confirm_remove_term', { term: original }),
+      { confirmLabel: t('remove'), danger: true }
     )) return false
     try {
       data.value = await api.removeTerm(toValue(novel), original)
@@ -159,9 +160,9 @@ export function useGlossary(
 
   async function removeCharacter(original: string): Promise<boolean> {
     if (!await askConfirm(
-      'Remove Character',
-      `Remove character "${original}"? This will also remove their relationships.`,
-      { confirmLabel: 'Remove', danger: true }
+      t('remove_character'),
+      t('confirm_remove_character', { name: original }),
+      { confirmLabel: t('remove'), danger: true }
     )) return false
     try {
       data.value = await api.removeCharacter(toValue(novel), original)
@@ -216,9 +217,9 @@ export function useGlossary(
 
   async function removeRelationship(from: string, to: string): Promise<boolean> {
     if (!await askConfirm(
-      'Remove Relationship',
-      `Remove relationship between "${from}" and "${to}"?`,
-      { confirmLabel: 'Remove', danger: true }
+      t('remove_relationship'),
+      t('confirm_remove_relationship', { from, to }),
+      { confirmLabel: t('remove'), danger: true }
     )) return false
     try {
       data.value = await api.removeRelationship(toValue(novel), from, to)
@@ -231,9 +232,9 @@ export function useGlossary(
 
   async function dismissReplacements() {
     if (!await askConfirm(
-      'Dismiss Pending Replacements',
-      'Dismiss all pending glossary replacements? Glossary values and translated files will remain unchanged; only the pending-change notice will be cleared.',
-      { confirmLabel: 'Dismiss' }
+      t('dismiss_pending_replacements'),
+      t('confirm_dismiss_replacements'),
+      { confirmLabel: t('dismiss') }
     )) return
     loading.value = true
     error.value = null
@@ -281,9 +282,9 @@ export function useGlossary(
   async function rollbackReplacements(): Promise<boolean> {
     const backupId = previewData.value?.backup_id
     if (!backupId || !await askConfirm(
-      'Rollback Glossary',
-      'Restore every translated chapter changed by this apply operation? Current glossary values will remain unchanged, and pending replacements will be restored.',
-      { confirmLabel: 'Rollback' }
+      t('rollback_glossary'),
+      t('confirm_rollback_glossary'),
+      { confirmLabel: t('rollback') }
     )) return false
 
     rollbackLoading.value = true
@@ -292,7 +293,7 @@ export function useGlossary(
     try {
       await api.rollbackGlossary(toValue(novel), backupId)
       await load()
-      actionMessage.value = `Restored translated chapters from backup ${backupId}.`
+      actionMessage.value = t('glossary_chapters_restored', { id: backupId })
       return true
     } catch (err) {
       error.value = (err as Error).message

@@ -26,15 +26,13 @@ watch(() => props.active, (active) => {
   >
     <div class="rules-editor">
       <DetailPanelHeader
-        title="Novel Translation Rules"
-        description="These instructions apply only to this novel. Markdown is supported."
+        :title="$t('novel_translation_rules')"
+        :description="$t('novel_rules_help')"
       />
       <textarea
         v-model="rules"
         class="rules-textarea font-mono text-sm leading-relaxed"
-        placeholder="e.g.
-- Xưng hô 'ta' - 'ngươi' giữa hai nhân vật chính.
-- Giữ nguyên tên chiêu thức bằng Hán-Việt."
+        :placeholder="$t('novel_rules_placeholder')"
         :disabled="loading"
       ></textarea>
       <div class="row gap-2 rules-actions">
@@ -45,7 +43,7 @@ watch(() => props.active, (active) => {
           @click="save"
         >
           <Save :size="15" />
-          {{ saving ? 'Saving...' : 'Save Rules' }}
+          {{ saving ? $t('saving') : $t('save_rules') }}
         </button>
         <button
           class="secondary flex items-center gap-1.5"
@@ -54,7 +52,7 @@ watch(() => props.active, (active) => {
           @click="load"
         >
           <RefreshCw :size="15" :class="{ 'animate-spin': loading }" />
-          {{ loading ? 'Reloading...' : 'Reload' }}
+          {{ loading ? $t('reloading') : $t('reload') }}
         </button>
       </div>
       <div v-if="error" class="error flex items-center gap-1.5 text-rose-400 mt-2">
@@ -63,7 +61,7 @@ watch(() => props.active, (active) => {
       </div>
       <div v-if="successMessage" class="success-message flex items-center gap-1.5 text-emerald-400 mt-2">
         <CheckCircle2 :size="16" />
-        <span>{{ successMessage }}</span>
+        <span>{{ $t(successMessage) }}</span>
       </div>
     </div>
   </div>

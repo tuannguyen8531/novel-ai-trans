@@ -13,6 +13,7 @@ import { useSettingsStore } from '@/composables/settings'
 import type { OllamaAccount, ProviderInfo, SettingsPatch } from '@/api/types'
 import ProviderModelField from '@/components/ProviderModelField.vue'
 import CustomSelect from '@/components/common/CustomSelect.vue'
+import { t } from '@/i18n'
 
 const settings = useSettingsStore()
 const activeTab = ref<'general' | 'providers' | 'telegram'>('providers')
@@ -49,37 +50,37 @@ const providerForm = reactive({
 
 const ALL_PROVIDER_NAMES = ['ollama', 'gemini', 'openrouter'] as const
 
-const primaryProviderOptions = [
-  { value: 'ollama', label: 'Ollama' },
-  { value: 'gemini', label: 'Gemini' },
-  { value: 'openrouter', label: 'OpenRouter' }
-]
+const primaryProviderOptions = computed(() => [
+  { value: 'ollama', label: t('ollama') },
+  { value: 'gemini', label: t('gemini') },
+  { value: 'openrouter', label: t('openrouter') }
+])
 
 const fallbackOptions = computed(() => {
   const current = providerForm.llm_provider
   return [
-    { value: '', label: '(none)' },
+    { value: '', label: `(${t('none')})` },
     ...ALL_PROVIDER_NAMES.filter((name) => name !== current).map((name) => ({
       value: name,
-      label: name === 'openrouter' ? 'OpenRouter' : name.charAt(0).toUpperCase() + name.slice(1)
+      label: t(name)
     }))
   ]
 })
 
-const targetLanguageOptions = [
-  { value: 'vi', label: 'Tiếng Việt' },
-  { value: 'en', label: 'English' }
-]
+const targetLanguageOptions = computed(() => [
+  { value: 'vi', label: t('vietnamese') },
+  { value: 'en', label: t('english') }
+])
 
-const chunkModeOptions = [
-  { value: 'chars', label: 'Characters' },
-  { value: 'tokens', label: 'Tokens (estimated)' }
-]
+const chunkModeOptions = computed(() => [
+  { value: 'chars', label: t('characters') },
+  { value: 'tokens', label: t('tokens_estimated') }
+])
 
-const telegramParseModeOptions = [
-  { value: 'HTML', label: 'HTML' },
-  { value: '', label: 'Plain Text' }
-]
+const telegramParseModeOptions = computed(() => [
+  { value: 'HTML', label: t('html') },
+  { value: '', label: t('plain_text') }
+])
 
 onMounted(async () => {
   await settings.refresh()
@@ -141,9 +142,9 @@ function getProviderStatusClass(provider: string): string {
 function getProviderStatusText(provider: string): string {
   const result = checkResults.value[provider]
   if (result) {
-    return result.ok ? 'check: ok' : 'check: failed'
+    return result.ok ? t('check_ok') : t('check_failed')
   }
-  return providerConfigured(provider) ? 'configured' : 'missing key'
+  return providerConfigured(provider) ? t('configured') : t('missing_key')
 }
 
 function getOllamaStatusClass(): string {
@@ -157,25 +158,25 @@ function getOllamaStatusClass(): string {
 function getOllamaStatusText(): string {
   const result = checkResults.value.ollama
   if (result) {
-    return result.ok ? 'check: ok' : 'check: failed'
+    return result.ok ? t('check_ok') : t('check_failed')
   }
   if (ollamaAccountLoading.value) {
-    return 'checking account…'
+    return t('checking_account')
   }
-  return ollamaAccount.value?.signed_in ? 'signed in' : 'not signed in'
+  return ollamaAccount.value?.signed_in ? t('signed_in') : t('not_signed_in')
 }
 
 function getOllamaAccountText(): string {
   if (ollamaAccountLoading.value) {
-    return 'Checking…'
+    return t('checking')
   }
   if (ollamaAccount.value?.username) {
     return ollamaAccount.value.username
   }
   if (ollamaAccount.value?.detail === 'Not signed in') {
-    return 'Not signed in to Ollama Cloud.'
+    return t('not_signed_in_to_ollama_cloud')
   }
-  return 'Unavailable'
+  return t('unavailable')
 }
 
 async function refreshOllamaAccount() {
@@ -205,7 +206,7 @@ async function runProviderCheck(provider: string) {
     if (provider === 'ollama') {
       if (res.ok) {
         await refreshOllamaAccount()
-      } else if (res.detail?.toLowerCase().includes('not signed in')) {
+      } else if (res.detail?.toLowerCase().includes('not_signed_in')) {
         ollamaAccount.value = {
           signed_in: false,
           username: null,
@@ -286,15 +287,15 @@ async function saveTelegramSettings() {
         <SlidersHorizontal :size="22" />
       </div>
       <div>
-        <h2 class="settings-title">System Settings</h2>
+        <h2 class="settings-title">{{ $t("system_settings") }}</h2>
         <p class="settings-subtitle">
-          Configure translation parameters, AI provider credentials, models, and notifications.
+          {{ $t("settings_description") }}
         </p>
       </div>
     </header>
 
     <!-- Nav Tabs -->
-    <nav class="settings-nav-tabs" aria-label="Settings Category">
+    <nav class="settings-nav-tabs" :aria-label="$t('settings_category')">
       <button
         type="button"
         class="tab-btn"
@@ -302,7 +303,7 @@ async function saveTelegramSettings() {
         @click="activeTab = 'providers'"
       >
         <Cpu :size="16" />
-        <span>LLM Providers</span>
+        <span>{{ $t("llm_providers") }}</span>
       </button>
 
       <button
@@ -312,7 +313,7 @@ async function saveTelegramSettings() {
         @click="activeTab = 'general'"
       >
         <SlidersHorizontal :size="16" />
-        <span>Translation Pipeline</span>
+        <span>{{ $t("translation_pipeline") }}</span>
       </button>
 
       <button
@@ -322,7 +323,7 @@ async function saveTelegramSettings() {
         @click="activeTab = 'telegram'"
       >
         <Send :size="16" />
-        <span>Telegram Notifications</span>
+        <span>{{ $t("telegram_notifications") }}</span>
       </button>
     </nav>
 
@@ -334,21 +335,21 @@ async function saveTelegramSettings() {
       <div class="card-panel config-card">
         <div class="card-title-row">
           <div>
-            <h3 class="card-title">Default & Fallback Providers</h3>
-            <p class="card-desc">Set which AI backend novel-ai-trans prioritizes for translation tasks.</p>
+            <h3 class="card-title">{{ $t("default_fallback_providers") }}</h3>
+            <p class="card-desc">{{ $t("default_provider_help") }}</p>
           </div>
         </div>
 
         <div class="grid-2-cols">
           <div>
-            <label>Primary Provider</label>
+            <label>{{ $t("primary_provider") }}</label>
             <CustomSelect
               v-model="providerForm.llm_provider"
               :options="primaryProviderOptions"
             />
           </div>
           <div>
-            <label>Fallback Provider</label>
+            <label>{{ $t("fallback_provider") }}</label>
             <CustomSelect
               v-model="providerForm.fallback_provider"
               :options="fallbackOptions"
@@ -363,8 +364,8 @@ async function saveTelegramSettings() {
           <div class="provider-title-group">
             <Server :size="20" class="provider-icon" />
             <div>
-              <h3 class="provider-title">Ollama (Local / Cloud)</h3>
-              <p class="provider-desc">Connect to local Ollama instance or signed-in Ollama account.</p>
+              <h3 class="provider-title">{{ $t("ollama_local_cloud") }}</h3>
+              <p class="provider-desc">{{ $t("ollama_connection_description") }}</p>
             </div>
           </div>
 
@@ -379,7 +380,7 @@ async function saveTelegramSettings() {
               @click="runProviderCheck('ollama')"
             >
               <RotateCw :size="13" :class="{ 'spinning': checkingProviders['ollama'] }" />
-              <span>{{ checkingProviders['ollama'] ? 'Testing…' : 'Test Connection' }}</span>
+              <span>{{ checkingProviders['ollama'] ? $t('testing') : $t('test_connection') }}</span>
             </button>
           </div>
         </div>
@@ -391,11 +392,11 @@ async function saveTelegramSettings() {
         <div class="provider-form-body">
           <div class="grid-2-cols">
             <div>
-              <label>API Base URL</label>
+              <label>{{ $t("api_base_url") }}</label>
               <input v-model="providerForm.ollama_base_url" />
             </div>
             <div>
-              <label>Cloud Account</label>
+              <label>{{ $t("cloud_account") }}</label>
               <input disabled :value="getOllamaAccountText()" />
               <p v-if="!ollamaAccountLoading && ollamaAccount?.detail && ollamaAccount.detail !== 'Not signed in'" class="muted account-hint">
                 {{ ollamaAccount.detail }}
@@ -407,7 +408,7 @@ async function saveTelegramSettings() {
             <ProviderModelField
               :key="`ollama-${providerRefreshKey}`"
               provider="ollama"
-              label="Default Model"
+              :label="$t('default_model')"
               :model-value="providerForm.ollama_model"
               @update:model-value="(value: string) => providerForm.ollama_model = value"
             />
@@ -421,8 +422,8 @@ async function saveTelegramSettings() {
           <div class="provider-title-group">
             <Cpu :size="20" class="provider-icon" />
             <div>
-              <h3 class="provider-title">Google Gemini</h3>
-              <p class="provider-desc">Google AI Studio API key integration.</p>
+              <h3 class="provider-title">{{ $t("google_gemini") }}</h3>
+              <p class="provider-desc">{{ $t("google_ai_studio_api_key_integration") }}</p>
             </div>
           </div>
 
@@ -437,7 +438,7 @@ async function saveTelegramSettings() {
               @click="runProviderCheck('gemini')"
             >
               <RotateCw :size="13" :class="{ 'spinning': checkingProviders['gemini'] }" />
-              <span>{{ checkingProviders['gemini'] ? 'Testing…' : 'Test Key' }}</span>
+              <span>{{ checkingProviders['gemini'] ? $t('testing') : $t('test_key') }}</span>
             </button>
           </div>
         </div>
@@ -448,12 +449,12 @@ async function saveTelegramSettings() {
 
         <div class="provider-form-body">
           <div>
-            <label>API Key</label>
+            <label>{{ $t("api_key") }}</label>
             <input
               v-model="geminiKeyInput"
               type="password"
               autocomplete="off"
-              placeholder="Paste new Gemini API key (leave blank to keep existing)"
+              :placeholder="$t('gemini_key_placeholder')"
             />
           </div>
 
@@ -461,7 +462,7 @@ async function saveTelegramSettings() {
             <ProviderModelField
               :key="`gemini-${providerRefreshKey}`"
               provider="gemini"
-              label="Default Model"
+              :label="$t('default_model')"
               :model-value="providerForm.gemini_model"
               @update:model-value="(value: string) => providerForm.gemini_model = value"
             />
@@ -475,8 +476,8 @@ async function saveTelegramSettings() {
           <div class="provider-title-group">
             <Cpu :size="20" class="provider-icon" />
             <div>
-              <h3 class="provider-title">OpenRouter</h3>
-              <p class="provider-desc">OpenRouter unified model routing API.</p>
+              <h3 class="provider-title">{{ $t("openrouter") }}</h3>
+              <p class="provider-desc">{{ $t("openrouter_unified_model_routing_api") }}</p>
             </div>
           </div>
 
@@ -491,7 +492,7 @@ async function saveTelegramSettings() {
               @click="runProviderCheck('openrouter')"
             >
               <RotateCw :size="13" :class="{ 'spinning': checkingProviders['openrouter'] }" />
-              <span>{{ checkingProviders['openrouter'] ? 'Testing…' : 'Test Key' }}</span>
+              <span>{{ checkingProviders['openrouter'] ? $t('testing') : $t('test_key') }}</span>
             </button>
           </div>
         </div>
@@ -502,12 +503,12 @@ async function saveTelegramSettings() {
 
         <div class="provider-form-body">
           <div>
-            <label>API Key</label>
+            <label>{{ $t("api_key") }}</label>
             <input
               v-model="openrouterKeyInput"
               type="password"
               autocomplete="off"
-              placeholder="Paste new OpenRouter API key (leave blank to keep existing)"
+              :placeholder="$t('openrouter_key_placeholder')"
             />
           </div>
 
@@ -515,7 +516,7 @@ async function saveTelegramSettings() {
             <ProviderModelField
               :key="`openrouter-${providerRefreshKey}`"
               provider="openrouter"
-              label="Default Model"
+              :label="$t('default_model')"
               :model-value="providerForm.openrouter_model"
               @update:model-value="(value: string) => providerForm.openrouter_model = value"
             />
@@ -532,11 +533,11 @@ async function saveTelegramSettings() {
           @click="saveProviderSettings"
         >
           <Save :size="16" />
-          <span>{{ providerPersisting ? 'Saving Changes…' : 'Save Provider Settings' }}</span>
+          <span>{{ providerPersisting ? $t('saving_changes') : $t('save_provider_settings') }}</span>
         </button>
         <span v-if="providerPersistResult" class="save-feedback">
           <Check :size="16" />
-          <span>Provider settings saved successfully.</span>
+          <span>{{ $t("provider_settings_saved_successfully") }}</span>
         </span>
       </div>
     </section>
@@ -544,12 +545,12 @@ async function saveTelegramSettings() {
     <!-- Tab 2: General / Translation Pipeline Parameters -->
     <section v-else-if="activeTab === 'general'" class="settings-section">
       <div v-if="settings.settings" class="card-panel config-card">
-        <h3 class="card-title">Runtime Translation Defaults</h3>
-        <p class="card-desc">Parameters used when constructing chapter chunks and LLM prompts.</p>
+        <h3 class="card-title">{{ $t("runtime_translation_defaults") }}</h3>
+        <p class="card-desc">{{ $t("chunk_parameters_description") }}</p>
 
         <div class="grid-2-cols">
           <div>
-            <label>Default Target Language</label>
+            <label>{{ $t("default_target_language") }}</label>
             <CustomSelect
               :model-value="settings.settings.target_language"
               :options="targetLanguageOptions"
@@ -558,7 +559,7 @@ async function saveTelegramSettings() {
           </div>
 
           <div>
-            <label>Chunk Splitting Mode</label>
+            <label>{{ $t("chunk_splitting_mode") }}</label>
             <CustomSelect
               :model-value="settings.settings.chunk_mode"
               :options="chunkModeOptions"
@@ -567,7 +568,7 @@ async function saveTelegramSettings() {
           </div>
 
           <div>
-            <label>Chunk Size ({{ settings.settings.chunk_mode === 'tokens' ? 'tokens' : 'characters' }})</label>
+            <label>{{ $t("chunk_size", { unit: settings.settings.chunk_mode === 'tokens' ? $t('tokens') : $t('characters') }) }}</label>
             <input
               type="number"
               :value="settings.settings.chunk_size"
@@ -576,7 +577,7 @@ async function saveTelegramSettings() {
           </div>
 
           <div>
-            <label>Review Threshold</label>
+            <label>{{ $t("review_threshold") }}</label>
             <input
               type="number"
               step="0.05"
@@ -586,7 +587,7 @@ async function saveTelegramSettings() {
           </div>
 
           <div>
-            <label>Translation Temperature (0.0 – 1.0)</label>
+            <label>{{ $t("translation_temperature_range") }}</label>
             <input
               type="number"
               step="0.05"
@@ -601,11 +602,11 @@ async function saveTelegramSettings() {
         <div class="save-bar" style="margin-top: 1.5rem;">
           <button type="button" class="btn-primary" :disabled="persisting" @click="saveSettings">
             <Save :size="16" />
-            <span>{{ persisting ? 'Saving…' : 'Save Pipeline Defaults' }}</span>
+            <span>{{ persisting ? $t('saving') : $t('save_pipeline_defaults') }}</span>
           </button>
           <span v-if="persistResult" class="save-feedback">
             <Check :size="16" />
-            <span>Runtime defaults saved.</span>
+            <span>{{ $t("runtime_defaults_saved") }}</span>
           </span>
         </div>
       </div>
@@ -616,13 +617,13 @@ async function saveTelegramSettings() {
       <div class="card-panel config-card">
         <div class="card-title-row">
           <div>
-            <h3 class="card-title">Telegram Alerts</h3>
+            <h3 class="card-title">{{ $t("telegram_notifications") }}</h3>
             <p class="card-desc">
-              Receive status notifications when large novel translation jobs finish or fail.
+              {{ $t("telegram_notifications_help") }}
             </p>
           </div>
           <span class="badge" :class="settings.settings?.telegram_configured ? 'ok' : 'danger'">
-            {{ settings.settings?.telegram_configured ? 'Bot Token Configured' : 'No Token in Environment' }}
+            {{ settings.settings?.telegram_configured ? $t('bot_token_configured') : $t('no_token_in_environment') }}
           </span>
         </div>
 
@@ -630,22 +631,22 @@ async function saveTelegramSettings() {
           <div class="check-row">
             <label class="check">
               <input v-model="telegramForm.telegram_enabled" type="checkbox" />
-              <span>Enable Telegram Notifications</span>
+              <span>{{ $t("enable_telegram_notifications") }}</span>
             </label>
             <label class="check">
               <input v-model="telegramForm.telegram_silent" type="checkbox" />
-              <span>Send Silently (no notification sound)</span>
+              <span>{{ $t("send_silently_no_notification_sound") }}</span>
             </label>
           </div>
 
           <div>
-            <label>API Base URL</label>
+            <label>{{ $t("api_base_url") }}</label>
             <input v-model="telegramForm.telegram_api_base" />
           </div>
 
           <div class="grid-2-cols">
             <div>
-              <label>Parse Mode</label>
+              <label>{{ $t("parse_mode") }}</label>
               <CustomSelect
                 v-model="telegramForm.telegram_parse_mode"
                 :options="telegramParseModeOptions"
@@ -653,7 +654,7 @@ async function saveTelegramSettings() {
             </div>
 
             <div>
-              <label>Timeout (seconds)</label>
+              <label>{{ $t("timeout_seconds") }}</label>
               <input
                 v-model.number="telegramForm.telegram_timeout_seconds"
                 type="number"
@@ -672,11 +673,11 @@ async function saveTelegramSettings() {
             @click="saveTelegramSettings"
           >
             <Save :size="16" />
-            <span>{{ telegramPersisting ? 'Saving…' : 'Save Telegram Settings' }}</span>
+            <span>{{ telegramPersisting ? $t('saving') : $t('save_telegram_settings') }}</span>
           </button>
           <span v-if="telegramPersistResult" class="save-feedback">
             <Check :size="16" />
-            <span>Telegram settings saved.</span>
+            <span>{{ $t("telegram_settings_saved") }}</span>
           </span>
         </div>
       </div>

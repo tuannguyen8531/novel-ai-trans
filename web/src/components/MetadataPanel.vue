@@ -1,16 +1,17 @@
 <script setup lang="ts">
-import { onMounted, toRef, watch } from 'vue'
+import { computed, onMounted, toRef, watch } from 'vue'
 import { X } from '@lucide/vue'
 import { useMetadata, type MetadataDisplay, type TargetLanguage } from '@/composables/metadata'
 import { useBodyScrollLock } from '@/composables/scrolllock'
 import CustomSelect from '@/components/common/CustomSelect.vue'
+import { t } from '@/i18n'
 
-const sourceLanguageOptions = [
-  { value: '', label: '(Auto-detect)' },
-  { value: 'korean', label: 'Korean' },
-  { value: 'japanese', label: 'Japanese' },
-  { value: 'chinese', label: 'Chinese' }
-]
+const sourceLanguageOptions = computed(() => [
+  { value: '', label: `(${t('auto_detect')})` },
+  { value: 'korean', label: t('korean') },
+  { value: 'japanese', label: t('japanese') },
+  { value: 'chinese', label: t('chinese') }
+])
 
 const props = defineProps<{
   novel: string
@@ -101,61 +102,61 @@ defineExpose({ load })
       tabindex="-1"
     >
       <header class="modal-header">
-        <h3 id="metadata-title">Edit Metadata</h3>
+        <h3 id="metadata-title">{{ $t("edit_metadata") }}</h3>
         <button
           type="button"
           class="modal-close"
-          aria-label="Close"
+          :aria-label="$t('close')"
           @click="close"
         >
           <X :size="18" />
         </button>
       </header>
       <div class="modal-body">
-        <p v-if="loading" class="muted">Loading metadata…</p>
-        <p v-else-if="loadError" class="error">Failed to load metadata: {{ loadError }}</p>
+        <p v-if="loading" class="muted">{{ $t("loading_metadata") }}</p>
+        <p v-else-if="loadError" class="error">{{ $t("failed_to_load_metadata", { error: loadError }) }}</p>
         <p v-else-if="!metadata" class="muted">
-          No metadata yet. Fill in the fields below and save when ready.
+          {{ $t("metadata_empty_instructions") }}
         </p>
 
         <div v-if="!loading" class="metadata-fields">
           <div>
-            <label>Original title</label>
-            <input v-model="title" placeholder="원제목 / タイトル / title" />
+            <label>{{ $t("original_title") }}</label>
+            <input v-model="title" :placeholder="$t('original_title_placeholder')" />
           </div>
           <div>
-            <label>Author</label>
-            <input v-model="author" placeholder="author name" />
+            <label>{{ $t("author") }}</label>
+            <input v-model="author" :placeholder="$t('author_name')" />
           </div>
           <div>
-            <label>Source URL</label>
-            <input v-model="sourceUrl" placeholder="https://..." />
+            <label>{{ $t("source_url") }}</label>
+            <input v-model="sourceUrl" :placeholder="$t('url_placeholder')" />
           </div>
           <div>
-            <label for="metadata-cover-file">Upload cover</label>
+            <label for="metadata-cover-file">{{ $t("upload_cover") }}</label>
             <input
               id="metadata-cover-file"
               type="file"
               accept="image/jpeg,image/png,image/webp,image/gif"
               @change="selectCover"
             />
-            <p class="muted cover-help">JPEG, PNG, WebP, or GIF; up to 10 MiB.</p>
-            <img v-if="display.illustrationSrc" class="cover-preview" :src="display.illustrationSrc" alt="Cover preview" />
+            <p class="muted cover-help">{{ $t("cover_image_formats_hint") }}</p>
+            <img v-if="display.illustrationSrc" class="cover-preview" :src="display.illustrationSrc" :alt="$t('cover_preview')" />
           </div>
           <div>
-            <label>Remote cover URL</label>
+            <label>{{ $t("remote_cover_url") }}</label>
             <input
               v-model="illustrationUrl"
               :disabled="Boolean(coverFile)"
-              placeholder="https://... (alternative to upload)"
+              :placeholder="$t('https_alternative_to_upload')"
             />
           </div>
           <div>
-            <label>Summary</label>
-            <textarea v-model="summary" class="metadata-summary-input" placeholder="novel synopsis (optional)"></textarea>
+            <label>{{ $t("summary") }}</label>
+            <textarea v-model="summary" class="metadata-summary-input" :placeholder="$t('novel_synopsis_optional')"></textarea>
           </div>
           <div>
-            <label>Source language</label>
+            <label>{{ $t("source_language") }}</label>
             <CustomSelect
               v-model="sourceLanguage"
               :options="sourceLanguageOptions"
@@ -165,18 +166,18 @@ defineExpose({ load })
             class="genre-fieldset"
             :disabled="!sourceLanguage || genreLoading || Boolean(genreLoadError)"
           >
-            <legend>Genres</legend>
+            <legend>{{ $t("genres") }}</legend>
             <p v-if="!sourceLanguage" class="muted genre-help">
-              Select a source language before choosing genre profiles.
+              {{ $t("select_source_for_genres") }}
             </p>
             <p v-else-if="genreLoading" class="muted genre-help">
-              Loading genre profiles…
+              {{ $t("loading_genre_profiles") }}
             </p>
             <p v-else-if="genreLoadError" class="error genre-help">
-              Failed to load genre profiles: {{ genreLoadError }}
+              {{ $t("failed_to_load_genre_profiles", { error: genreLoadError }) }}
             </p>
             <p v-else-if="!availableGenres.length" class="muted genre-help">
-              No specialized genre profiles are available.
+              {{ $t("no_genre_profiles") }}
             </p>
             <div v-else class="genre-options">
               <label v-for="genre in availableGenres" :key="genre" class="check genre-option">
@@ -187,24 +188,24 @@ defineExpose({ load })
           </fieldset>
           <div class="localization-fields">
             <div>
-              <label>Translated title — {{ targetLanguage }}</label>
-              <input v-model="targetTitle" :placeholder="`${targetLanguageLabel} title`" />
+              <label>{{ $t("translated_title", { language: targetLanguageLabel }) }}</label>
+              <input v-model="targetTitle" :placeholder="$t('localized_title', { language: targetLanguageLabel })" />
             </div>
             <div>
-              <label>Translated summary — {{ targetLanguage }}</label>
+              <label>{{ $t("translated_summary", { language: targetLanguageLabel }) }}</label>
               <textarea
                 v-model="targetSummary"
                 class="metadata-summary-input"
-                :placeholder="`${targetLanguageLabel} summary`"
+                :placeholder="$t('localized_summary', { language: targetLanguageLabel })"
               ></textarea>
             </div>
             <label class="check">
               <input v-model="force" type="checkbox" />
-              <span>Regenerate existing AI translations</span>
+              <span>{{ $t("regenerate_existing_ai_translations") }}</span>
             </label>
             <div class="row gap-2">
               <button class="secondary" type="button" :disabled="saving" @click="saveAndLocalize">
-                Save and translate {{ targetLanguageLabel }}
+                {{ $t("save_and_translate_into", { language: targetLanguageLabel }) }}
               </button>
             </div>
           </div>
@@ -212,10 +213,10 @@ defineExpose({ load })
         <p v-if="error" class="error operation-error">{{ error }}</p>
       </div>
       <footer class="modal-footer">
-        <button class="secondary" type="button" :disabled="saving" @click="close">Cancel</button>
-        <button class="secondary" type="button" :disabled="saving" @click="load">Revert</button>
+        <button class="secondary" type="button" :disabled="saving" @click="close">{{ $t("cancel") }}</button>
+        <button class="secondary" type="button" :disabled="saving" @click="load">{{ $t("revert") }}</button>
         <button type="button" :disabled="saving" @click="saveAndClose">
-          {{ saving ? 'Saving…' : 'Save metadata' }}
+          {{ saving ? $t('saving') : $t('save_metadata') }}
         </button>
       </footer>
     </div>

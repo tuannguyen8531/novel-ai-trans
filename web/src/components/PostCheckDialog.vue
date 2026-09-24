@@ -89,15 +89,15 @@ watch(
     >
       <header class="modal-header">
         <div>
-          <h3 :id="titleId">Post-check Review</h3>
+          <h3 :id="titleId">{{ $t("post_check_review") }}</h3>
           <p v-if="review" class="muted dialog-subtitle">
-            Chapter {{ review.chapter }} · {{ formatLanguage(review.target) }}
+            {{ $t("chapter_language", { chapter: review.chapter, language: formatLanguage(review.target) }) }}
           </p>
         </div>
         <button
           type="button"
           class="modal-close"
-          aria-label="Close"
+          :aria-label="$t('close')"
           :disabled="loading"
           @click="close"
         >
@@ -107,18 +107,18 @@ watch(
 
       <div class="modal-body">
         <p v-if="error" class="error">{{ error }}</p>
-        <p v-if="loading && !review" class="muted">Loading post-check results...</p>
-        <p v-else-if="!review?.items.length" class="muted">No post-check issues for this chapter.</p>
+        <p v-if="loading && !review" class="muted">{{ $t("loading_post_check_results") }}</p>
+        <p v-else-if="!review?.items.length" class="muted">{{ $t("no_post_check_issues_for_this_chapter") }}</p>
 
         <div v-else class="review-table-wrap">
           <table class="review-table">
             <thead>
               <tr>
-                <th class="col-severity">Severity</th>
-                <th class="col-check">Check</th>
-                <th class="col-detail">Details</th>
-                <th class="col-status">Status</th>
-                <th class="col-action" style="text-align: right;">Action</th>
+                <th class="col-severity">{{ $t("severity") }}</th>
+                <th class="col-check">{{ $t("check") }}</th>
+                <th class="col-detail">{{ $t("details") }}</th>
+                <th class="col-status">{{ $t("status") }}</th>
+                <th class="col-action" style="text-align: right;">{{ $t("action") }}</th>
               </tr>
             </thead>
             <tbody>
@@ -136,9 +136,9 @@ watch(
                   <span v-else>{{ item.detail }}</span>
                 </td>
                 <td class="col-status">
-                  <span v-if="item.ignored" class="badge ok">ignored</span>
-                  <span v-else-if="item.origin === 'rejected'" class="badge danger">failed</span>
-                  <span v-else class="badge warn">active</span>
+                  <span v-if="item.ignored" class="badge ok">{{ $t("ignored") }}</span>
+                  <span v-else-if="item.origin === 'rejected'" class="badge danger">{{ $t("failed") }}</span>
+                  <span v-else class="badge warn">{{ $t("active") }}</span>
                 </td>
                 <td class="review-action col-action">
                   <button
@@ -148,7 +148,7 @@ watch(
                     :disabled="loading"
                     @click="emit('reviewItem', item.key, !item.ignored)"
                   >
-                    {{ item.ignored ? 'Restore' : 'Ignore' }}
+                    {{ item.ignored ? $t('restore') : $t('ignore') }}
                   </button>
                   <span v-else class="muted">—</span>
                 </td>
@@ -159,16 +159,16 @@ watch(
 
         <details v-if="review && review.candidate_translation !== null" class="candidate">
           <summary>
-            Rejected candidate
+            {{ $t("rejected_candidate") }}
             <span v-if="review?.partial" class="muted">
-              (partial, failed at chunk {{ (review.failed_chunk_index ?? 0) + 1 }}/{{ review.total_chunks }})
+              {{ $t("chunk_translation_failed", { chunk: (review.failed_chunk_index ?? 0) + 1, total: review.total_chunks ?? 0 }) }}
             </span>
           </summary>
-          <pre>{{ review?.candidate_translation || '(empty translation)' }}</pre>
+          <pre>{{ review?.candidate_translation || $t('empty_translation') }}</pre>
           <div v-if="candidateAcceptable" class="candidate-actions">
             <template v-if="confirmingOverwrite">
               <p class="candidate-warning">
-                This replaces the current translated chapter. The existing output remains safe until publication commits.
+                {{ $t("translation_publish_explanation") }}
               </p>
               <div class="candidate-buttons">
                 <button
@@ -176,21 +176,21 @@ watch(
                   class="secondary"
                   :disabled="loading"
                   @click="confirmingOverwrite = false"
-                >Keep current output</button>
+                >{{ $t("keep_current_output") }}</button>
                 <button
                   type="button"
                   class="danger"
                   :disabled="loading"
                   @click="confirmCandidateOverwrite"
-                >{{ loading ? 'Publishing...' : 'Replace output' }}</button>
+                >{{ loading ? $t('publishing') : $t('replace_output') }}</button>
               </div>
             </template>
             <template v-else>
               <p class="muted">
-                Accepting publishes this candidate without running learning, summary, or glossary updates.
+                {{ $t("accept_candidate_explanation") }}
               </p>
               <button type="button" :disabled="loading" @click="requestCandidateAcceptance">
-                {{ loading ? 'Publishing...' : 'Accept candidate' }}
+                {{ loading ? $t('publishing') : $t('accept_candidate') }}
               </button>
             </template>
           </div>
@@ -198,7 +198,7 @@ watch(
       </div>
 
       <footer class="modal-footer">
-        <button type="button" class="secondary" :disabled="loading" @click="close">Close</button>
+        <button type="button" class="secondary" :disabled="loading" @click="close">{{ $t("close") }}</button>
       </footer>
     </div>
   </div>

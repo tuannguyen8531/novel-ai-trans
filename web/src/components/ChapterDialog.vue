@@ -78,11 +78,11 @@ watch(() => props.show, (isOpen) => {
       @keydown="handleKeydown"
     >
       <header class="modal-header">
-        <h3 id="add-chapter-title">Insert Chapter</h3>
+        <h3 id="add-chapter-title">{{ $t("insert_chapter") }}</h3>
         <button
           type="button"
           class="modal-close"
-          aria-label="Close"
+          :aria-label="$t('close')"
           :disabled="saving"
           @click="requestCancel"
         >
@@ -92,22 +92,22 @@ watch(() => props.show, (isOpen) => {
       <div class="modal-body">
         <p v-if="error" class="error">{{ error }}</p>
         <div>
-          <label>Chapter number</label>
+          <label>{{ $t("chapter_number_label") }}</label>
           <input v-model.number="chapterNumber" type="number" min="1" />
-          <p class="muted insert-hint">This chapter and every later chapter will move forward.</p>
+          <p class="muted insert-hint">{{ $t("insert_chapter_shift_warning") }}</p>
         </div>
         <div class="content-field">
-          <label>Content (optional)</label>
+          <label>{{ $t("content_optional") }}</label>
           <textarea v-model="content" class="chapter-edit-area"></textarea>
         </div>
       </div>
       <footer class="modal-footer">
-        <button type="button" class="secondary" :disabled="saving" @click="requestCancel">Cancel</button>
+        <button type="button" class="secondary" :disabled="saving" @click="requestCancel">{{ $t("cancel") }}</button>
         <button
           type="button"
           :disabled="saving || chapterNumber === null || chapterNumber < 1"
           @click="chapterNumber !== null && emit('confirm', chapterNumber, content)"
-        >{{ saving ? 'Starting...' : 'Insert' }}</button>
+        >{{ saving ? $t('starting') : $t('insert') }}</button>
       </footer>
     </div>
   </div>

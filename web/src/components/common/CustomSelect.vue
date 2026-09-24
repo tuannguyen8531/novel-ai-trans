@@ -14,7 +14,7 @@ const props = withDefaults(defineProps<{
   placeholder?: string
   disabled?: boolean
 }>(), {
-  placeholder: 'Select an option…',
+  placeholder: '',
   disabled: false
 })
 
@@ -119,7 +119,7 @@ onUnmounted(() => {
         {{ selectedOption.label }}
       </span>
       <span v-else class="placeholder-label">
-        {{ placeholder }}
+        {{ placeholder || $t('select_an_option') }}
       </span>
 
       <ChevronDown :size="16" class="chevron-icon" :class="{ 'is-flipped': isOpen }" />

@@ -1,3 +1,5 @@
+import { t } from '@/i18n'
+
 // Lightweight fetch-based SSE client. Native EventSource cannot attach
 // Authorization headers, which the API needs in remote mode.
 
@@ -36,7 +38,7 @@ export function openSse(
   fetch(url, { method: 'GET', headers, signal: controller.signal })
     .then(async (response) => {
       if (!response.ok || !response.body) {
-        handlers.onError?.(new Error(`SSE failed: ${response.status}`))
+        handlers.onError?.(new Error(t('sse_failed', { status: response.status })))
         return
       }
       handlers.onOpen?.()

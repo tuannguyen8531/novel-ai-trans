@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watchEffect } from 'vue'
 import { RouterView, RouterLink, useRoute } from 'vue-router'
 import {
   LayoutDashboard,
@@ -18,6 +18,8 @@ import {
 } from '@lucide/vue'
 import { setAuthToken, getAuthToken } from '@/api/client'
 import { pageTitle } from '@/router'
+import { formatJobKind } from '@/i18n'
+import LanguageDropdown from '@/components/common/LanguageDropdown.vue'
 import { useJobsStore } from '@/composables/jobs'
 import { useBodyScrollLock } from '@/composables/scrolllock'
 
@@ -41,6 +43,10 @@ function handleKeydown(event: KeyboardEvent) {
 const pageHeading = computed(() => pageTitle(route))
 const activeJobsCount = computed(() => jobs.activeJobs.length)
 const runningJob = computed(() => jobs.activeJobs[0] ?? null)
+
+watchEffect(() => {
+  document.title = `${pageHeading.value} — Novel AI Translation`
+})
 
 onMounted(() => {
   window.addEventListener('keydown', handleKeydown)
@@ -104,18 +110,18 @@ function closeMobileMenu() {
       <div class="brand-container">
         <RouterLink to="/" class="brand-link" @click="closeMobileMenu">
           <div class="brand-logo-frame">
-            <img class="brand-logo-img" src="/icon.png" alt="Logo" width="36" height="36" />
+            <img class="brand-logo-img" src="/icon.png" :alt="$t('logo')" width="36" height="36" />
           </div>
           <div class="brand-text">
-            <span class="brand-title">NOVEL TRANS</span>
-            <span class="brand-subtitle">AI Translation Studio</span>
+            <span class="brand-title">{{ $t("novel_trans") }}</span>
+            <span class="brand-subtitle">{{ $t("ai_translation_studio") }}</span>
           </div>
         </RouterLink>
 
         <button
           type="button"
           class="btn-icon mobile-close-btn"
-          aria-label="Close menu"
+          :aria-label="$t('close_menu')"
           @click="closeMobileMenu"
         >
           <X :size="18" />
@@ -123,7 +129,7 @@ function closeMobileMenu() {
       </div>
 
       <!-- Navigation Links -->
-      <nav class="nav-menu" aria-label="Main Navigation">
+      <nav class="nav-menu" :aria-label="$t('main_navigation')">
         <RouterLink
           to="/"
           class="nav-item"
@@ -131,7 +137,7 @@ function closeMobileMenu() {
           @click="closeMobileMenu"
         >
           <LayoutDashboard :size="18" class="nav-icon" />
-          <span class="nav-text">Dashboard</span>
+          <span class="nav-text">{{ $t("dashboard") }}</span>
         </RouterLink>
 
         <RouterLink
@@ -141,7 +147,7 @@ function closeMobileMenu() {
           @click="closeMobileMenu"
         >
           <BookOpen :size="18" class="nav-icon" />
-          <span class="nav-text">Novels</span>
+          <span class="nav-text">{{ $t("novels") }}</span>
         </RouterLink>
 
         <RouterLink
@@ -151,7 +157,7 @@ function closeMobileMenu() {
           @click="closeMobileMenu"
         >
           <Sparkles :size="18" class="nav-icon" />
-          <span class="nav-text">Translate</span>
+          <span class="nav-text">{{ $t("translate") }}</span>
         </RouterLink>
 
         <RouterLink
@@ -161,7 +167,7 @@ function closeMobileMenu() {
           @click="closeMobileMenu"
         >
           <FolderDown :size="18" class="nav-icon" />
-          <span class="nav-text">Sources</span>
+          <span class="nav-text">{{ $t("sources") }}</span>
         </RouterLink>
 
         <RouterLink
@@ -171,7 +177,7 @@ function closeMobileMenu() {
           @click="closeMobileMenu"
         >
           <Activity :size="18" class="nav-icon" />
-          <span class="nav-text">Jobs</span>
+          <span class="nav-text">{{ $t("jobs") }}</span>
           <span v-if="activeJobsCount > 0" class="nav-badge pulse">
             {{ activeJobsCount }}
           </span>
@@ -184,7 +190,7 @@ function closeMobileMenu() {
           @click="closeMobileMenu"
         >
           <Settings :size="18" class="nav-icon" />
-          <span class="nav-text">Settings</span>
+          <span class="nav-text">{{ $t("settings") }}</span>
         </RouterLink>
       </nav>
 
@@ -194,11 +200,11 @@ function closeMobileMenu() {
           <button
             type="button"
             class="footer-btn"
-            title="Configure remote API Key"
+            :title="$t('configure_remote_api_key')"
             @click="showApiKeyModal = true"
           >
             <KeyRound :size="16" />
-            <span>{{ apiKey ? 'API Key Set' : 'Remote Key' }}</span>
+            <span>{{ apiKey ? $t('api_key_set') : $t('remote_key') }}</span>
           </button>
         </div>
       </div>
@@ -212,15 +218,15 @@ function closeMobileMenu() {
           <button
             type="button"
             class="mobile-menu-toggle"
-            aria-label="Toggle navigation"
+            :aria-label="$t('toggle_navigation')"
             @click="mobileMenuOpen = !mobileMenuOpen"
           >
             <Menu :size="20" />
           </button>
 
           <!-- Breadcrumbs -->
-          <nav class="breadcrumb-nav" aria-label="Breadcrumb">
-            <RouterLink to="/" class="breadcrumb-link">Workspace</RouterLink>
+          <nav class="breadcrumb-nav" :aria-label="$t('breadcrumb')">
+            <RouterLink to="/" class="breadcrumb-link">{{ $t("workspace") }}</RouterLink>
             <ChevronRight :size="14" class="breadcrumb-separator" />
             <span class="breadcrumb-current">{{ pageHeading }}</span>
             <template v-if="route.params.name">
@@ -236,7 +242,7 @@ function closeMobileMenu() {
             </template>
             <template v-if="route.params.chapter">
               <ChevronRight :size="14" class="breadcrumb-separator" />
-              <span class="breadcrumb-current">Ch. {{ route.params.chapter }}</span>
+              <span class="breadcrumb-current">{{ $t("chapter_number", { number: String(route.params.chapter) }) }}</span>
             </template>
           </nav>
         </div>
@@ -247,14 +253,17 @@ function closeMobileMenu() {
             v-if="runningJob"
             to="/jobs"
             class="active-job-indicator"
-            title="Active Job in progress"
+            :title="$t('active_job_in_progress')"
           >
             <Loader2 :size="14" class="spinning-icon" />
             <span class="active-job-text">
-              {{ runningJob.kind }}
+              {{ formatJobKind(runningJob.kind) }}
               <template v-if="runningJob.novel">({{ runningJob.novel }})</template>
             </span>
           </RouterLink>
+
+          <!-- Language Dropdown -->
+          <LanguageDropdown />
 
           <!-- Smooth Theme Switch -->
           <button
@@ -263,7 +272,7 @@ function closeMobileMenu() {
             class="theme-switch"
             :class="{ 'is-dark': theme === 'dark' }"
             :aria-checked="theme === 'dark'"
-            :title="theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'"
+            :title="theme === 'dark' ? $t('switch_to_light_mode') : $t('switch_to_dark_mode')"
             @click="toggleTheme"
           >
             <span class="theme-switch-track">
@@ -296,11 +305,11 @@ function closeMobileMenu() {
     >
       <div class="modal-card">
         <header class="modal-header">
-          <h3>Remote Server Authentication</h3>
+          <h3>{{ $t("remote_server_authentication") }}</h3>
           <button
             type="button"
             class="modal-close"
-            aria-label="Close"
+            :aria-label="$t('close')"
             @click="showApiKeyModal = false"
           >
             <X :size="18" />
@@ -308,15 +317,15 @@ function closeMobileMenu() {
         </header>
         <div class="modal-body flex-col gap-3">
           <p class="muted" style="margin: 0;">
-            Provide an API authentication key when connecting to a remote or protected novel-ai-trans server instance.
+            {{ $t("remote_api_key_help") }}
           </p>
           <div>
-            <label for="modal-api-key">API Key (Bearer token)</label>
+            <label for="modal-api-key">{{ $t("api_key_bearer_token") }}</label>
             <input
               id="modal-api-key"
               v-model="apiKey"
               type="password"
-              placeholder="Paste secret token..."
+              :placeholder="$t('paste_secret_token')"
               autocomplete="off"
               @keyup.enter="applyApiKey"
             />
@@ -329,17 +338,17 @@ function closeMobileMenu() {
             class="secondary"
             @click="clearApiKey"
           >
-            Clear Key
+            {{ $t("clear_key") }}
           </button>
           <button
             type="button"
             class="secondary"
             @click="showApiKeyModal = false"
           >
-            Cancel
+            {{ $t("cancel") }}
           </button>
           <button type="button" @click="applyApiKey">
-            Save Key
+            {{ $t("save_key") }}
           </button>
         </footer>
       </div>

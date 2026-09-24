@@ -43,7 +43,7 @@ const { authenticated, src: illustrationSrc } = useIllustrations(() => props.nov
   <div class="reader-container">
     <div class="reader-prose">
       <template v-if="!hasIllustrations">
-        <pre class="chapter-content-text">{{ content || 'This chapter has no content.' }}</pre>
+        <pre class="chapter-content-text">{{ content || $t('this_chapter_has_no_content') }}</pre>
       </template>
       <template v-else>
         <template v-for="(seg, i) in segments" :key="i">
@@ -52,12 +52,12 @@ const { authenticated, src: illustrationSrc } = useIllustrations(() => props.nov
             <img
               v-if="seg.type === 'illustration' && (illustrationSrc(seg.filename) || !authenticated())"
               :src="illustrationSrc(seg.filename)"
-              :alt="`Illustration: ${seg.filename}`"
+              :alt="$t('illustration', { filename: seg.filename })"
               class="chapter-illustration-img"
               loading="lazy"
             />
             <div v-else class="chapter-illustration-loading muted">
-              Loading illustration…
+              {{ $t("loading_illustration") }}
             </div>
             <figcaption class="illustration-caption">{{ seg.filename }}</figcaption>
           </figure>

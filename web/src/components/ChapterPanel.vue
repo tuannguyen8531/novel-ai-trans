@@ -17,6 +17,7 @@ import { useChapters } from '@/composables/chapters'
 import ChapterDialog from '@/components/ChapterDialog.vue'
 import DetailPanelHeader from '@/components/DetailPanelHeader.vue'
 import type { NovelTranslationProgress } from '@/api/types'
+import { t } from '@/i18n'
 
 const props = withDefaults(
   defineProps<{
@@ -104,11 +105,11 @@ watch([filteredNumbers, displayTotalPages], () => {
 })
 
 function getChapterStatusTitle(number: number): string {
-  if (failedSet.value.has(number)) return `Chapter ${number}: Translation Failed - click to inspect`
-  if (importantWarningSet.value.has(number)) return `Chapter ${number}: Critical Translation Warning - click to review`
-  if (warningSet.value.has(number)) return `Chapter ${number}: Quality Warning - click to review`
-  if (completedSet.value.has(number)) return `Chapter ${number}: Translated`
-  return `Chapter ${number}: Untranslated (Source only)`
+  if (failedSet.value.has(number)) return t('chapter_translation_failed', { number })
+  if (importantWarningSet.value.has(number)) return t('chapter_critical_warning', { number })
+  if (warningSet.value.has(number)) return t('chapter_quality_warning', { number })
+  if (completedSet.value.has(number)) return t('chapter_translated', { number })
+  return t('chapter_untranslated_source_only', { number })
 }
 
 const showAddDialog = ref(false)
@@ -152,40 +153,40 @@ async function addChapter(chapter: number, content: string) {
     role="tabpanel"
     aria-labelledby="chapters-tab"
   >
-    <DetailPanelHeader title="Chapter List">
+    <DetailPanelHeader :title="$t('chapter_list')">
       <template #actions>
         <button
           v-if="activeFilter === 'issues' && warningSet.size > 0"
           type="button"
           class="secondary panel-action-button"
-          title="Ignore all unresolved warnings"
+          :title="$t('ignore_all_unresolved_warnings')"
           @click="emit('ignoreWarnings')"
         >
           <CheckCheck :size="13" />
-          <span>Ignore all</span>
+          <span>{{ $t("ignore_all") }}</span>
         </button>
         <button
           v-if="activeFilter === 'issues'"
           type="button"
           class="secondary panel-action-button"
-          title="Retranslate"
+          :title="$t('retranslate')"
           @click="emit('retranslate')"
         >
           <RotateCw :size="13" />
-          <span>Retranslate</span>
+          <span>{{ $t("retranslate") }}</span>
         </button>
         <button
           type="button"
           class="secondary sort-toggle panel-action-button"
-          :title="ascending ? 'Ascending' : 'Descending'"
+          :title="ascending ? $t('ascending') : $t('descending')"
           @click="ascending = !ascending"
         >
           <ArrowUpDown :size="13" />
-          <span>{{ ascending ? 'Asc' : 'Desc' }}</span>
+          <span>{{ ascending ? $t('asc') : $t('desc') }}</span>
         </button>
         <button type="button" class="secondary panel-action-button" @click="openAddDialog">
           <Plus :size="13" />
-          <span>Insert chapter</span>
+          <span>{{ $t("insert_chapter") }}</span>
         </button>
       </template>
     </DetailPanelHeader>
@@ -197,7 +198,7 @@ async function addChapter(chapter: number, content: string) {
         :class="{ active: activeFilter === 'all' }"
         @click="setFilter('all')"
       >
-        <span>All</span>
+        <span>{{ $t("all") }}</span>
         <span class="count-pill">{{ allCount }}</span>
       </button>
 
@@ -208,7 +209,7 @@ async function addChapter(chapter: number, content: string) {
         :class="{ active: activeFilter === 'issues' }"
         @click="setFilter('issues')"
       >
-        <span>Attention</span>
+        <span>{{ $t("attention") }}</span>
         <span class="count-pill pill-danger">{{ issuesCount }}</span>
       </button>
 
@@ -218,7 +219,7 @@ async function addChapter(chapter: number, content: string) {
         :class="{ active: activeFilter === 'completed' }"
         @click="setFilter('completed')"
       >
-        <span>Completed</span>
+        <span>{{ $t("completed") }}</span>
         <span class="count-pill">{{ completedCount }}</span>
       </button>
 
@@ -228,15 +229,15 @@ async function addChapter(chapter: number, content: string) {
         :class="{ active: activeFilter === 'untranslated' }"
         @click="setFilter('untranslated')"
       >
-        <span>Untranslated</span>
+        <span>{{ $t("untranslated") }}</span>
         <span class="count-pill">{{ untranslatedCount }}</span>
       </button>
     </div>
 
-    <p v-if="!numbers.length" class="muted empty-message">No chapters yet.</p>
+    <p v-if="!numbers.length" class="muted empty-message">{{ $t("no_chapters_yet") }}</p>
     <div v-else ref="containerRef" class="input-chapter-container">
       <div v-if="!filteredNumbers.length" class="empty-filter-state">
-        <p class="muted">No chapters match this filter.</p>
+        <p class="muted">{{ $t("no_chapters_match_this_filter") }}</p>
       </div>
       <div v-else class="input-chapter-list">
         <button
@@ -253,20 +254,20 @@ async function addChapter(chapter: number, content: string) {
           @click="emit('openChapter', number)"
         >
           <div class="chapter-info">
-            <span class="chapter-label">Chapter</span>
+            <span class="chapter-label">{{ $t("chapter") }}</span>
             <span class="chapter-num">{{ formatNumber(number) }}</span>
           </div>
 
-          <div v-if="failedSet.has(number)" class="chapter-status-badge badge-failed" title="Translation failed">
+          <div v-if="failedSet.has(number)" class="chapter-status-badge badge-failed" :title="$t('translation_failed')">
             <AlertCircle :size="12" />
           </div>
-          <div v-else-if="warningSet.has(number)" class="chapter-status-badge badge-warning" title="Quality warning">
+          <div v-else-if="warningSet.has(number)" class="chapter-status-badge badge-warning" :title="$t('quality_warning')">
             <AlertTriangle :size="12" />
           </div>
-          <div v-else-if="completedSet.has(number)" class="chapter-status-badge badge-completed" title="Translated">
+          <div v-else-if="completedSet.has(number)" class="chapter-status-badge badge-completed" :title="$t('translated')">
             <Check :size="12" />
           </div>
-          <div v-else class="chapter-status-badge badge-untranslated" title="Untranslated">
+          <div v-else class="chapter-status-badge badge-untranslated" :title="$t('untranslated')">
             <CircleDashed :size="12" />
           </div>
         </button>
@@ -274,11 +275,11 @@ async function addChapter(chapter: number, content: string) {
       <div v-if="displayTotalPages > 1" class="input-pagination">
         <button type="button" class="secondary" :disabled="page <= 1" @click="page--">
           <ChevronLeft :size="14" />
-          <span>Prev</span>
+          <span>{{ $t("prev") }}</span>
         </button>
         <span class="muted pagination-label">{{ page }} / {{ displayTotalPages }}</span>
         <button type="button" class="secondary" :disabled="page >= displayTotalPages" @click="page++">
-          <span>Next</span>
+          <span>{{ $t("next") }}</span>
           <ChevronRight :size="14" />
         </button>
       </div>
