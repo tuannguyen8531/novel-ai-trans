@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, toRef } from 'vue'
+import { onMounted, onUnmounted, ref, toRef } from 'vue'
 import { ArrowUp, AlertCircle } from '@lucide/vue'
 import ChapterEditor from '@/components/ChapterEditor.vue'
 import ChapterToc from '@/components/ChapterToc.vue'
@@ -50,6 +50,18 @@ const {
 
 const showToc = ref(false)
 const showPostCheckDialog = ref(false)
+const bottomNavigation = ref<HTMLElement | null>(null)
+const bottomNavigationVisible = ref(false)
+let navigationObserver: IntersectionObserver | undefined
+
+onMounted(() => {
+  navigationObserver = new IntersectionObserver(([entry]) => {
+    bottomNavigationVisible.value = entry.isIntersecting
+  })
+  if (bottomNavigation.value) navigationObserver.observe(bottomNavigation.value)
+})
+
+onUnmounted(() => navigationObserver?.disconnect())
 </script>
 
 <template>
@@ -107,26 +119,28 @@ const showPostCheckDialog = ref(false)
     </div>
 
     <!-- Bottom Navigation Bar -->
-    <ReaderToolbar
-      :show-controls="false"
-      :display-title="displayTitle"
-      :chapter-label="chapterLabel"
-      :chapter="chapter"
-      :editing="editing"
-      :saving="saving"
-      :loading="loading"
-      :view-loading="viewLoading"
-      :view-mode="viewMode"
-      :target-language="targetLanguage"
-      :target-language-label="targetLanguageLabel"
-      :has-target-translation="hasTargetTranslation"
-      :previous-chapter="previousChapter"
-      :next-chapter="nextChapter"
-      :current-index="currentIndex"
-      :chapter-count="chapterCount"
-      @navigate="goTo"
-      @open-toc="showToc = true"
-    />
+    <div ref="bottomNavigation">
+      <ReaderToolbar
+        :show-controls="false"
+        :display-title="displayTitle"
+        :chapter-label="chapterLabel"
+        :chapter="chapter"
+        :editing="editing"
+        :saving="saving"
+        :loading="loading"
+        :view-loading="viewLoading"
+        :view-mode="viewMode"
+        :target-language="targetLanguage"
+        :target-language-label="targetLanguageLabel"
+        :has-target-translation="hasTargetTranslation"
+        :previous-chapter="previousChapter"
+        :next-chapter="nextChapter"
+        :current-index="currentIndex"
+        :chapter-count="chapterCount"
+        @navigate="goTo"
+        @open-toc="showToc = true"
+      />
+    </div>
 
     <!-- Table of Contents Modal -->
     <ChapterToc
@@ -164,7 +178,7 @@ const showPostCheckDialog = ref(false)
 
     <!-- Floating Scroll To Top Button -->
     <button
-      v-show="showScrollToTop"
+      v-show="showScrollToTop && !bottomNavigationVisible"
       type="button"
       class="scroll-to-top-btn"
       aria-label="Scroll to top"
