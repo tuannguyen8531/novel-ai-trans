@@ -1,45 +1,51 @@
+/* Glossary & Rules Styling */
 .gloss-section {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: 1rem;
 }
 
 .gloss-section h3 {
   margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--fg-primary);
 }
 
 .gloss-section p.muted {
   margin: 0;
-  font-size: 0.8rem;
+  font-size: 0.875rem;
+  color: var(--fg-secondary);
 }
 
 .gloss-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: 1rem;
   flex-wrap: wrap;
 }
 
 .gloss-controls {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.75rem;
   flex: 0 1 auto;
 }
 
 .gloss-filter {
-  width: 14rem;
+  width: 16rem;
 }
 
 .gloss-add {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
-  gap: 0.5rem;
-  padding: 0.6rem;
-  background: var(--bg-elev-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.75rem;
+  padding: 1rem;
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-subtle);
 }
 
 .gloss-add button {
@@ -47,10 +53,11 @@
 }
 
 .gloss-table-wrap {
-  max-height: 22rem;
+  max-height: 28rem;
   overflow: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
 }
 
 .gloss-section table {
@@ -60,21 +67,19 @@
 .gloss-section thead th {
   position: sticky;
   top: 0;
-  background: var(--bg-elev-2);
-  z-index: 1;
-}
-
-.gloss-section tbody tr:hover {
-  background: var(--bg-elev-2);
+  background: var(--bg-surface-elevated);
+  z-index: 2;
+  box-shadow: 0 1px 0 var(--border-base);
 }
 
 .gloss-original {
-  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-family: var(--font-mono);
   font-size: 0.85rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 18rem;
+  color: var(--accent-light);
 }
 
 .gloss-section .actions {
@@ -85,17 +90,20 @@
 
 .arrow {
   text-align: center;
-  color: var(--fg-dim);
-  font-family: ui-monospace, SFMono-Regular, monospace;
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
 }
 
 .gloss-empty {
-  padding: 1rem;
+  padding: 2.5rem 1rem;
   text-align: center;
+  color: var(--fg-muted);
 }
 
 .inline-edit-input {
-  font-size: 0.85rem;
-  padding: 0.25rem 0.45rem;
-  background: var(--bg-elev-2);
+  font-size: 0.875rem;
+  padding: 0.35rem 0.6rem;
+  background: var(--bg-surface-active);
+  border: 1px solid var(--border-focus);
 }

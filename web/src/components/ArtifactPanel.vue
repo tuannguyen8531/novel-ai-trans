@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { ref, toRef, watch } from 'vue'
+import { X, Download, Trash2, Package } from '@lucide/vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import DetailPanelHeader from '@/components/DetailPanelHeader.vue'
 import { useArtifacts } from '@/composables/artifacts'
 import type { TargetLanguage } from '@/composables/metadata'
 import { formatDateTime } from '@/datetime'
+import { formatLanguage } from '@/language'
 import { useBodyScrollLock } from '@/composables/scrolllock'
 
 const props = defineProps<{
@@ -87,14 +89,14 @@ function formatFileSize(bytes: number): string {
   >
     <DetailPanelHeader title="Artifacts" />
     <p v-if="error" class="error">{{ error }}</p>
-    <p v-if="!visible.length" class="muted">No {{ targetLanguage.toUpperCase() }} artifacts yet.</p>
+    <p v-if="!visible.length" class="muted">No {{ formatLanguage(targetLanguage) }} artifacts yet.</p>
     <div v-else class="artifact-list">
       <div v-for="artifact in visible" :key="artifact.name" class="artifact-item">
         <div class="artifact-info">
           <div class="artifact-name">{{ artifact.name }}</div>
           <div class="artifact-meta">
             <span class="artifact-badge">{{ artifact.format.toUpperCase() }}</span>
-            <span class="artifact-badge">{{ artifact.target_language.toUpperCase() }}</span>
+            <span class="artifact-badge">{{ formatLanguage(artifact.target_language) }}</span>
             <span v-if="artifact.metadata_status === 'inferred'" class="artifact-badge artifact-badge-warning">
               Metadata inferred
             </span>
@@ -117,7 +119,14 @@ function formatFileSize(bytes: number): string {
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="pack-title" tabindex="-1">
       <header class="modal-header">
         <h3 id="pack-title">Pack Novel</h3>
-        <button type="button" class="modal-close" aria-label="Close" @click="closePack">&times;</button>
+        <button
+          type="button"
+          class="modal-close"
+          aria-label="Close"
+          @click="closePack"
+        >
+          <X :size="18" />
+        </button>
       </header>
       <div class="modal-body">
         <div class="pack-target">

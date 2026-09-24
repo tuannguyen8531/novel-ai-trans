@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { Sparkles, Package, FileEdit } from '@lucide/vue'
 import type { NovelDetail } from '@/api/types'
 import type { MetadataDisplay, TargetLanguage } from '@/composables/metadata'
+import { formatLanguage } from '@/language'
 import placeholderCover from '@/assets/placeholder-cover.png'
 
 const props = defineProps<{
@@ -18,15 +20,18 @@ const emit = defineEmits<{
 }>()
 
 const coverBroken = ref(false)
+
 const displayTitle = computed(() => (
   props.metadata.targetTitle.trim() ||
   props.metadata.title.trim() ||
   props.novel.title ||
   props.novel.name
 ))
+
 const displayAuthor = computed(() => (
-  props.metadata.author.trim() || props.novel.author?.trim() || 'Not updated'
+  props.metadata.author.trim() || props.novel.author?.trim() || 'Not specified'
 ))
+
 const displayGenres = computed(() => (
   props.metadata.genres
     .map((genre) => genre
@@ -35,12 +40,20 @@ const displayGenres = computed(() => (
       .join(' '))
     .join(', ')
 ))
+
 const displaySummary = computed(() => (
   props.metadata.targetSummary.trim() || props.metadata.summary.trim()
 ))
+
 const coverSrc = computed(() => (
   coverBroken.value ? placeholderCover : props.metadata.illustrationSrc || placeholderCover
 ))
+
+const progressPct = computed(() => {
+  const total = props.novel.total_input_chapters
+  if (!total) return 0
+  return Math.min(100, Math.round((props.translatedCount / total) * 100))
+})
 
 watch(() => props.metadata.illustrationSrc, () => {
   coverBroken.value = false
@@ -52,214 +65,351 @@ function metaDisplayValue(current: string, fallback: string | null | undefined):
 </script>
 
 <template>
-  <div class="card">
-    <div class="novel-cover-row">
-      <img
-        class="novel-cover"
-        :src="coverSrc"
-        :alt="`Cover for ${displayTitle}`"
-        @error="coverBroken = true"
-      />
-      <div class="novel-cover-info">
-        <h2 :title="displayTitle">{{ displayTitle }}</h2>
-        <p
-          class="novel-author"
-          :title="`Author: ${displayAuthor}${displayGenres ? `    Genres: ${displayGenres}` : ''}`"
-        >
-          <span>Author:</span> {{ displayAuthor }}
-          <template v-if="displayGenres">
-            <span class="novel-meta-separator" aria-hidden="true">    </span>
-            <span>Genres:</span> {{ displayGenres }}
-          </template>
-        </p>
-        <div v-if="displaySummary" class="novel-summary">
-          <span class="novel-summary-label">Summary</span>
-          <div class="novel-summary-content">{{ displaySummary }}</div>
+  <div class="novel-header-card card-panel">
+    <div class="header-main-layout">
+      <!-- Cover Column -->
+      <div class="cover-wrapper">
+        <img
+          class="novel-cover-image"
+          :src="coverSrc"
+          :alt="`Cover for ${displayTitle}`"
+          referrerpolicy="no-referrer"
+          @error="coverBroken = true"
+        />
+        <div class="cover-lang-chip">
+          {{ formatLanguage(props.novel.source_language, 'Korean') }} &rarr; {{ formatLanguage(props.targetLanguage, 'Vietnamese') }}
+        </div>
+      </div>
+
+      <!-- Info Column -->
+      <div class="info-wrapper">
+        <div class="title-section">
+          <div class="badge-row">
+            <span class="novel-slug-pill">
+              <code>{{ props.novel.name }}</code>
+            </span>
+            <span v-if="props.novel.has_illustrations" class="illus-badge">
+              Illustrated
+            </span>
+          </div>
+
+          <h2 class="novel-main-title" :title="displayTitle">{{ displayTitle }}</h2>
+
+          <div class="novel-subinfo">
+            <span class="subinfo-item">
+              <strong class="subinfo-label">Author:</strong> {{ displayAuthor }}
+            </span>
+            <span v-if="displayGenres" class="subinfo-item">
+              <strong class="subinfo-label">Genres:</strong> {{ displayGenres }}
+            </span>
+          </div>
+        </div>
+
+        <!-- Summary if exists -->
+        <div v-if="displaySummary" class="novel-summary-box">
+          <span class="summary-label">Synopsis</span>
+          <div class="summary-text">{{ displaySummary }}</div>
+        </div>
+
+        <!-- Quick Progress Bar -->
+        <div class="header-progress-box">
+          <div class="progress-details">
+            <span class="progress-title">Translation Progress</span>
+            <span class="progress-ratio">
+              <strong>{{ translatedCount }}</strong> / {{ props.novel.total_input_chapters }} chapters
+              <span class="pct-badge">({{ progressPct }}%)</span>
+            </span>
+          </div>
+          <div class="progress">
+            <div class="fill" :style="{ width: `${progressPct}%` }" />
+          </div>
+        </div>
+
+        <!-- Action Bar -->
+        <div class="actions-wrapper">
+          <button type="button" class="btn-primary" @click="emit('translate')">
+            <Sparkles :size="16" />
+            <span>Translate Chapters</span>
+          </button>
+          <button type="button" class="secondary" @click="emit('pack')">
+            <Package :size="16" />
+            <span>Pack EPUB</span>
+          </button>
+          <button type="button" class="secondary" @click="emit('metadata')">
+            <FileEdit :size="16" />
+            <span>Edit Metadata</span>
+          </button>
         </div>
       </div>
     </div>
 
-    <div v-if="metadata.exists || metadata.loadError" class="meta-summary">
-      <div v-if="metadata.title || novel.title" class="meta-row">
-        <span class="meta-label">Title</span>
-        <span>{{ metaDisplayValue(metadata.title, novel.title) }}</span>
+    <!-- Metadata Details Strip (if loaded) -->
+    <div v-if="metadata.exists || metadata.loadError" class="meta-details-strip">
+      <div v-if="metadata.title || novel.title" class="meta-pill">
+        <span class="meta-label">Original Title</span>
+        <span class="meta-val">{{ metaDisplayValue(metadata.title, novel.title) }}</span>
       </div>
-      <div v-if="metadata.author || novel.author" class="meta-row">
+      <div v-if="metadata.targetTitle" class="meta-pill">
+        <span class="meta-label">Target Title ({{ targetLanguage }})</span>
+        <span class="meta-val">{{ metadata.targetTitle }}</span>
+      </div>
+      <div v-if="metadata.author || novel.author" class="meta-pill">
         <span class="meta-label">Author</span>
-        <span>{{ metaDisplayValue(metadata.author, novel.author) }}</span>
+        <span class="meta-val">{{ metaDisplayValue(metadata.author, novel.author) }}</span>
       </div>
-      <div v-if="metadata.sourceLanguage || novel.source_language" class="meta-row">
-        <span class="meta-label">Language</span>
-        <span class="capitalize">{{ metaDisplayValue(metadata.sourceLanguage, novel.source_language) }}</span>
+      <div class="meta-pill">
+        <span class="meta-label">Glossary</span>
+        <span class="meta-val">{{ novel.glossary_terms }} terms, {{ novel.glossary_entities }} characters</span>
       </div>
-      <div v-if="metadata.targetTitle" class="meta-row">
-        <span class="meta-label">Title ({{ targetLanguage }})</span>
-        <span>{{ metadata.targetTitle }}</span>
-      </div>
-      <div class="meta-row">
-        <span class="meta-label">Total</span>
-        <span>{{ novel.total_input_chapters }} chapter{{ novel.total_input_chapters === 1 ? '' : 's' }}</span>
-      </div>
-      <div class="meta-row">
-        <span class="meta-label">Translated</span>
-        <span>{{ translatedCount }} chapter{{ translatedCount === 1 ? '' : 's' }}</span>
-      </div>
+
       <p v-if="metadata.loadError" class="error meta-empty">
         Failed to load metadata: {{ metadata.loadError }}
       </p>
       <p v-else-if="!metadata.hasAny" class="muted meta-empty">
-        No metadata fields filled in yet — click <strong>Edit metadata</strong> to add some.
+        No additional metadata filled in yet — click <strong>Edit metadata</strong> to add details.
       </p>
-    </div>
-
-    <div class="actions-row">
-      <div class="row gap-2 action-buttons">
-        <button type="button" @click="emit('translate')">Translate</button>
-        <button type="button" class="secondary" @click="emit('pack')">Pack</button>
-        <button type="button" class="secondary" @click="emit('metadata')">Metadata</button>
-      </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-.actions-row {
-  margin-top: 0.75rem;
+.novel-header-card {
+  padding: 1.5rem 1.75rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
 }
 
-.action-buttons {
-  align-items: center;
-}
-
-.meta-summary {
+.header-main-layout {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
-  gap: 0.35rem 1rem;
-  margin-top: 0.75rem;
-  padding: 0.6rem 0.75rem;
-  font-size: 0.9rem;
-  background: var(--bg-elev-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  grid-template-columns: clamp(9rem, 20vw, 13rem) minmax(0, 1fr);
+  gap: 1.75rem;
 }
 
-.meta-row {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 0.1rem;
-}
-
-.meta-row > span:not(.meta-label) {
+/* Cover */
+.cover-wrapper {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  border-radius: var(--radius-lg);
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-base);
+  box-shadow: var(--shadow-floating);
+}
+
+.novel-cover-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.4s var(--ease-spring);
+}
+
+.novel-cover-image:hover {
+  transform: scale(1.03);
+}
+
+.cover-lang-chip {
+  position: absolute;
+  bottom: 0.6rem;
+  left: 0.6rem;
+  right: 0.6rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-xs);
+  background: rgba(11, 14, 20, 0.85);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  font-size: 0.725rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-align: center;
+}
+
+/* Info Column */
+.info-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.title-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.badge-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.novel-slug-pill {
+  font-size: 0.8rem;
+}
+
+.illus-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.45rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: var(--accent-subtle);
+  border: 1px solid rgba(79, 125, 249, 0.25);
+  color: var(--accent);
+}
+
+.novel-main-title {
+  margin: 0;
+  font-size: 1.625rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--fg-primary);
+  line-height: 1.25;
+}
+
+.novel-subinfo {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+  font-size: 0.875rem;
+  color: var(--fg-secondary);
+}
+
+.subinfo-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.subinfo-label {
+  color: var(--fg-muted);
+  font-weight: 500;
+}
+
+/* Summary Box */
+.novel-summary-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-md);
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-base);
+  max-height: 7rem;
+  overflow-y: auto;
+}
+
+.summary-label {
+  font-size: 0.725rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+.summary-text {
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--fg-primary);
+  white-space: pre-wrap;
+  text-align: justify;
+}
+
+/* Progress Box */
+.header-progress-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.progress-details {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.8rem;
+}
+
+.progress-title {
+  color: var(--fg-secondary);
+  font-weight: 500;
+}
+
+.progress-ratio {
+  color: var(--fg-primary);
+}
+
+.pct-badge {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Action Buttons */
+.actions-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: auto;
+  padding-top: 0.5rem;
+}
+
+/* Meta Details Strip */
+.meta-details-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.meta-pill {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-md);
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-subtle);
+  font-size: 0.85rem;
 }
 
 .meta-label {
-  color: var(--fg-dim);
-  font-size: 0.75rem;
-  letter-spacing: 0.05em;
+  font-size: 0.7rem;
+  font-weight: 600;
   text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--fg-muted);
+}
+
+.meta-val {
+  color: var(--fg-primary);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .meta-empty {
   grid-column: 1 / -1;
   margin: 0;
-  padding-top: 0.25rem;
+  font-size: 0.85rem;
 }
 
-.capitalize {
-  text-transform: capitalize;
-}
+@media (max-width: 768px) {
+  .header-main-layout {
+    grid-template-columns: 1fr;
+  }
 
-.novel-cover-row {
-  display: grid;
-  grid-template-columns: clamp(7rem, 24vw, 11.25rem) minmax(0, 1fr);
-  height: clamp(10.5rem, 36vw, 16.875rem);
-  gap: 1.25rem;
-  margin-bottom: 1rem;
-}
-
-.novel-cover {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  background: var(--bg-elev-2);
-  border-radius: var(--radius);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
-}
-
-.novel-cover-info {
-  display: flex;
-  min-width: 0;
-  min-height: 0;
-  height: 100%;
-  flex-direction: column;
-}
-
-.novel-cover-info h2 {
-  flex-shrink: 0;
-  margin: 0;
-  padding-block: 0.08em;
-  overflow: hidden;
-  font-size: 1.35rem;
-  line-height: 1.4;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.novel-author {
-  flex-shrink: 0;
-  margin: 0.25rem 0 0;
-  overflow: hidden;
-  color: var(--fg-dim);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.novel-author span {
-  color: var(--fg);
-  font-weight: 600;
-}
-
-.novel-author .novel-meta-separator {
-  margin: 0 0.35rem;
-  color: var(--fg-dim);
-  font-weight: 400;
-}
-
-.novel-summary {
-  display: flex;
-  min-height: 0;
-  flex: 1 1 auto;
-  flex-direction: column;
-  margin-top: 0.75rem;
-  padding: 0.6rem 0.75rem;
-  overflow: hidden;
-  font-size: 0.9rem;
-  line-height: 1.5;
-  background: var(--bg-elev-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-}
-
-.novel-summary-label {
-  flex-shrink: 0;
-  margin-bottom: 0.25rem;
-  color: var(--fg-dim);
-  font-size: 0.75rem;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-
-.novel-summary-content {
-  min-height: 0;
-  overflow: auto;
-  padding-right: 0.25rem;
-  white-space: pre-wrap;
-  overflow-wrap: break-word;
-  text-align: justify;
-  text-justify: inter-word;
+  .cover-wrapper {
+    max-width: 10rem;
+    margin: 0 auto;
+  }
 }
 </style>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { Plus, Search, Edit2, Trash2, Save, X, BookA } from '@lucide/vue'
 
 const props = defineProps<{
   terms: Record<string, string>
@@ -49,26 +50,45 @@ async function saveEdit() {
 <template>
   <section class="gloss-section card">
     <header class="gloss-header">
-      <div>
-        <h3>Terms</h3>
-        <p class="muted">{{ Object.keys(terms).length }} glossary entries</p>
+      <div class="flex items-center gap-2">
+        <BookA :size="18" class="text-indigo-400 shrink-0" />
+        <div>
+          <h3>Terms</h3>
+          <p class="muted">{{ Object.keys(terms).length }} glossary entries</p>
+        </div>
       </div>
       <div class="gloss-controls">
-        <input v-model="filter" placeholder="Filter terms…" class="gloss-filter" />
-        <button type="button" class="secondary" @click="showAdd = !showAdd">
+        <div class="relative flex items-center">
+          <Search :size="14" class="absolute left-2.5 text-zinc-500 pointer-events-none" />
+          <input
+            v-model="filter"
+            placeholder="Filter terms…"
+            class="gloss-filter !pl-8"
+          />
+        </div>
+        <button
+          type="button"
+          class="secondary flex items-center gap-1.5"
+          @click="showAdd = !showAdd"
+        >
+          <component :is="showAdd ? X : Plus" :size="14" />
           {{ showAdd ? 'Cancel' : 'Add term' }}
         </button>
       </div>
     </header>
 
-    <div v-if="showAdd" class="gloss-add">
-      <input v-model="newTerm.original" placeholder="Original (source language)" />
-      <input v-model="newTerm.translated" placeholder="Translated" />
+    <div v-if="showAdd" class="gloss-add p-3 bg-zinc-900/60 dark:bg-zinc-900/80 rounded-lg border border-indigo-500/30">
+      <input v-model="newTerm.original" placeholder="Original (source language)" class="flex-1" />
+      <input v-model="newTerm.translated" placeholder="Translated" class="flex-1" />
       <button
         type="button"
+        class="flex items-center gap-1.5"
         :disabled="!newTerm.original || !newTerm.translated"
         @click="add"
-      >Save</button>
+      >
+        <Save :size="14" />
+        Save
+      </button>
     </div>
 
     <div class="gloss-table-wrap">
@@ -89,20 +109,41 @@ async function saveEdit() {
                 <div class="row gap-1">
                   <button
                     type="button"
+                    class="flex items-center gap-1"
                     :disabled="!editing.original || !editing.translated"
                     @click="saveEdit"
-                  >Save</button>
-                  <button class="secondary" type="button" @click="editing = null">Cancel</button>
+                  >
+                    <Save :size="13" />
+                    Save
+                  </button>
+                  <button class="secondary flex items-center gap-1" type="button" @click="editing = null">
+                    <X :size="13" />
+                    Cancel
+                  </button>
                 </div>
               </td>
             </template>
             <template v-else>
-              <td class="gloss-original">{{ original }}</td>
-              <td>{{ translated }}</td>
+              <td class="gloss-original font-medium text-zinc-100">{{ original }}</td>
+              <td class="text-zinc-300">{{ translated }}</td>
               <td class="actions">
                 <div class="row gap-1 row-actions">
-                  <button class="secondary" type="button" @click="startEdit(original, translated)">Edit</button>
-                  <button class="secondary" type="button" @click="removeTerm(original)">Remove</button>
+                  <button
+                    class="secondary flex items-center gap-1 text-xs py-1 px-2"
+                    type="button"
+                    @click="startEdit(original, translated)"
+                  >
+                    <Edit2 :size="12" />
+                    Edit
+                  </button>
+                  <button
+                    class="secondary flex items-center gap-1 text-xs py-1 px-2 text-rose-400 hover:text-rose-300"
+                    type="button"
+                    @click="removeTerm(original)"
+                  >
+                    <Trash2 :size="12" />
+                    Remove
+                  </button>
                 </div>
               </td>
             </template>

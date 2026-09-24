@@ -163,6 +163,7 @@ class NovelSummary(BaseModel):
     total_input_chapters: int
     targets: list[NovelTargetProgress]
     has_illustrations: bool
+    illustration_url: str | None = None
 
 
 class NovelDetail(NovelSummary):

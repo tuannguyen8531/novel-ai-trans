@@ -1,7 +1,16 @@
 <script setup lang="ts">
 import { onMounted, toRef, watch } from 'vue'
+import { X } from '@lucide/vue'
 import { useMetadata, type MetadataDisplay, type TargetLanguage } from '@/composables/metadata'
 import { useBodyScrollLock } from '@/composables/scrolllock'
+import CustomSelect from '@/components/common/CustomSelect.vue'
+
+const sourceLanguageOptions = [
+  { value: '', label: '(Auto-detect)' },
+  { value: 'korean', label: 'Korean' },
+  { value: 'japanese', label: 'Japanese' },
+  { value: 'chinese', label: 'Chinese' }
+]
 
 const props = defineProps<{
   novel: string
@@ -93,7 +102,14 @@ defineExpose({ load })
     >
       <header class="modal-header">
         <h3 id="metadata-title">Edit Metadata</h3>
-        <button type="button" class="modal-close" aria-label="Close" @click="close">&times;</button>
+        <button
+          type="button"
+          class="modal-close"
+          aria-label="Close"
+          @click="close"
+        >
+          <X :size="18" />
+        </button>
       </header>
       <div class="modal-body">
         <p v-if="loading" class="muted">Loading metadata…</p>
@@ -140,12 +156,10 @@ defineExpose({ load })
           </div>
           <div>
             <label>Source language</label>
-            <select v-model="sourceLanguage">
-              <option value="">(Auto-detect)</option>
-              <option value="korean">Korean</option>
-              <option value="japanese">Japanese</option>
-              <option value="chinese">Chinese</option>
-            </select>
+            <CustomSelect
+              v-model="sourceLanguage"
+              :options="sourceLanguageOptions"
+            />
           </div>
           <fieldset
             class="genre-fieldset"

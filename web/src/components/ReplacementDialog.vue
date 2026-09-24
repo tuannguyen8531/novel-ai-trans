@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
+import { X } from '@lucide/vue'
 import type { GlossaryApplyResponse, GlossaryReplacementReport } from '@/api/types'
+import { formatLanguage } from '@/language'
 import { useBodyScrollLock } from '@/composables/scrolllock'
 
 const props = defineProps<{
@@ -107,7 +109,9 @@ watch(busy, (isBusy) => {
           aria-label="Close glossary preview"
           :disabled="busy"
           @click="close"
-        >&times;</button>
+        >
+          <X :size="18" />
+        </button>
       </header>
       <div class="modal-body">
         <p v-if="error" class="error">{{ error }}</p>
@@ -118,7 +122,7 @@ watch(busy, (isBusy) => {
           <div class="preview-summary">
             <p>
               Novel: <strong>{{ previewData.novel }}</strong> |
-              Target language: <strong>{{ previewData.target }}</strong>
+              Target language: <strong>{{ formatLanguage(previewData.target) }}</strong>
             </p>
             <p>Chapters to update: <strong>{{ previewData.changed_files }}</strong></p>
             <p v-if="previewData.conflicted" class="error">

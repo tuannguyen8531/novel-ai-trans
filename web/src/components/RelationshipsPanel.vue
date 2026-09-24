@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { Plus, Search, Edit2, Trash2, Save, X, ArrowRight, GitFork } from '@lucide/vue'
 import type { GlossaryEdge } from '@/composables/glossary'
 
 const props = defineProps<{
@@ -79,34 +80,53 @@ async function saveEdit() {
 <template>
   <section class="gloss-section card">
     <header class="gloss-header">
-      <div>
-        <h3>Relationships</h3>
-        <p class="muted">{{ relationships.length }} edges between characters</p>
+      <div class="flex items-center gap-2">
+        <GitFork :size="18" class="text-indigo-400 shrink-0" />
+        <div>
+          <h3>Relationships</h3>
+          <p class="muted">{{ relationships.length }} edges between characters</p>
+        </div>
       </div>
       <div class="gloss-controls">
-        <input v-model="filter" placeholder="Filter relationships…" class="gloss-filter" />
-        <button type="button" class="secondary" @click="showAdd = !showAdd">
+        <div class="relative flex items-center">
+          <Search :size="14" class="absolute left-2.5 text-zinc-500 pointer-events-none" />
+          <input
+            v-model="filter"
+            placeholder="Filter relationships…"
+            class="gloss-filter !pl-8"
+          />
+        </div>
+        <button
+          type="button"
+          class="secondary flex items-center gap-1.5"
+          @click="showAdd = !showAdd"
+        >
+          <component :is="showAdd ? X : Plus" :size="14" />
           {{ showAdd ? 'Cancel' : 'Add relationship' }}
         </button>
       </div>
     </header>
 
-    <div v-if="showAdd" class="gloss-add">
-      <input v-model="newRelationship.from" placeholder="From character (original)" />
-      <input v-model="newRelationship.to" placeholder="To character (original)" />
-      <input v-model="newRelationship.relationship" placeholder="Relationship (e.g. friend)" />
+    <div v-if="showAdd" class="gloss-add p-3 bg-zinc-900/60 dark:bg-zinc-900/80 rounded-lg border border-indigo-500/30">
+      <input v-model="newRelationship.from" placeholder="From character (original)" class="flex-1" />
+      <input v-model="newRelationship.to" placeholder="To character (original)" class="flex-1" />
+      <input v-model="newRelationship.relationship" placeholder="Relationship (e.g. friend)" class="flex-1" />
       <input
         v-model.number="newRelationship.since"
         type="number"
         min="0"
-        placeholder="Since chapter (optional)"
-        class="since-input"
+        placeholder="Since ch. (opt)"
+        class="since-input !max-w-32"
       />
       <button
         type="button"
+        class="flex items-center gap-1.5"
         :disabled="!newRelationship.from || !newRelationship.to || !newRelationship.relationship"
         @click="add"
-      >Save</button>
+      >
+        <Save :size="14" />
+        Save
+      </button>
     </div>
 
     <div class="gloss-table-wrap">
@@ -114,7 +134,7 @@ async function saveEdit() {
         <thead>
           <tr>
             <th>From</th>
-            <th></th>
+            <th class="w-8"></th>
             <th>To</th>
             <th>Relationship</th>
             <th>Since</th>
@@ -128,7 +148,7 @@ async function saveEdit() {
           >
             <template v-if="editing?.key === edgeKey(edge, index)">
               <td class="gloss-original">{{ edge.from }}</td>
-              <td class="arrow">→</td>
+              <td class="arrow text-center"><ArrowRight :size="14" class="text-zinc-500 inline" /></td>
               <td class="gloss-original">{{ edge.to }}</td>
               <td><input v-model="editing.relationship" class="inline-edit-input" /></td>
               <td>
@@ -141,21 +161,46 @@ async function saveEdit() {
               </td>
               <td class="actions">
                 <div class="row gap-1">
-                  <button type="button" :disabled="!editing.relationship" @click="saveEdit">Save</button>
-                  <button class="secondary" type="button" @click="editing = null">Cancel</button>
+                  <button
+                    type="button"
+                    class="flex items-center gap-1"
+                    :disabled="!editing.relationship"
+                    @click="saveEdit"
+                  >
+                    <Save :size="13" />
+                    Save
+                  </button>
+                  <button class="secondary flex items-center gap-1" type="button" @click="editing = null">
+                    <X :size="13" />
+                    Cancel
+                  </button>
                 </div>
               </td>
             </template>
             <template v-else>
-              <td class="gloss-original">{{ edge.from }}</td>
-              <td class="arrow">→</td>
-              <td class="gloss-original">{{ edge.to }}</td>
-              <td>{{ edge.relationship }}</td>
-              <td>{{ edge.since ?? '—' }}</td>
+              <td class="gloss-original font-medium text-zinc-100">{{ edge.from }}</td>
+              <td class="arrow text-center"><ArrowRight :size="14" class="text-zinc-500 inline" /></td>
+              <td class="gloss-original font-medium text-zinc-100">{{ edge.to }}</td>
+              <td><span class="inline-block px-2 py-0.5 text-xs rounded bg-zinc-800 text-zinc-200 border border-zinc-700">{{ edge.relationship }}</span></td>
+              <td class="text-zinc-400 text-sm">{{ edge.since !== null ? `Ch. ${edge.since}` : '—' }}</td>
               <td class="actions">
                 <div class="row gap-1 row-actions">
-                  <button class="secondary" type="button" @click="startEdit(edge, index)">Edit</button>
-                  <button class="secondary" type="button" @click="removeRelationship(edge.from, edge.to)">Remove</button>
+                  <button
+                    class="secondary flex items-center gap-1 text-xs py-1 px-2"
+                    type="button"
+                    @click="startEdit(edge, index)"
+                  >
+                    <Edit2 :size="12" />
+                    Edit
+                  </button>
+                  <button
+                    class="secondary flex items-center gap-1 text-xs py-1 px-2 text-rose-400 hover:text-rose-300"
+                    type="button"
+                    @click="removeRelationship(edge.from, edge.to)"
+                  >
+                    <Trash2 :size="12" />
+                    Remove
+                  </button>
                 </div>
               </td>
             </template>

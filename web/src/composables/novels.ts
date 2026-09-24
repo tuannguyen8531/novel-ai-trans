@@ -63,5 +63,18 @@ export const useNovelsStore = defineStore('novels', () => {
     await refresh()
   }
 
-  return { novels, detail, error, loading, refresh, load, remove, create, progress, ignoreWarnings, uploadCover }
+  function coverUrl(name: string, illustrationUrl?: string | null): string {
+    return getNovelCoverUrl(name, illustrationUrl)
+  }
+
+  return { novels, detail, error, loading, refresh, load, remove, create, progress, ignoreWarnings, uploadCover, coverUrl }
 })
+
+export function getNovelCoverUrl(name: string, illustrationUrl?: string | null): string {
+  if (illustrationUrl && (illustrationUrl.startsWith('http://') || illustrationUrl.startsWith('https://'))) {
+    return illustrationUrl
+  }
+  return api.coverUrl(name)
+}
+
+

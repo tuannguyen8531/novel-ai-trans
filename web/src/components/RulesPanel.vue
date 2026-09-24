@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { toRef, watch } from 'vue'
+import { Save, RefreshCw, AlertCircle, CheckCircle2 } from '@lucide/vue'
 import DetailPanelHeader from '@/components/DetailPanelHeader.vue'
 import { useRules } from '@/composables/rules'
 
@@ -30,22 +31,40 @@ watch(() => props.active, (active) => {
       />
       <textarea
         v-model="rules"
-        class="rules-textarea"
+        class="rules-textarea font-mono text-sm leading-relaxed"
         placeholder="e.g.
 - Xưng hô 'ta' - 'ngươi' giữa hai nhân vật chính.
 - Giữ nguyên tên chiêu thức bằng Hán-Việt."
         :disabled="loading"
       ></textarea>
       <div class="row gap-2 rules-actions">
-        <button type="button" :disabled="saving || loading" @click="save">
+        <button
+          type="button"
+          class="flex items-center gap-1.5"
+          :disabled="saving || loading"
+          @click="save"
+        >
+          <Save :size="15" />
           {{ saving ? 'Saving...' : 'Save Rules' }}
         </button>
-        <button class="secondary" type="button" :disabled="saving || loading" @click="load">
+        <button
+          class="secondary flex items-center gap-1.5"
+          type="button"
+          :disabled="saving || loading"
+          @click="load"
+        >
+          <RefreshCw :size="15" :class="{ 'animate-spin': loading }" />
           {{ loading ? 'Reloading...' : 'Reload' }}
         </button>
       </div>
-      <div v-if="error" class="error">{{ error }}</div>
-      <div v-if="successMessage" class="success-message">{{ successMessage }}</div>
+      <div v-if="error" class="error flex items-center gap-1.5 text-rose-400 mt-2">
+        <AlertCircle :size="16" />
+        <span>{{ error }}</span>
+      </div>
+      <div v-if="successMessage" class="success-message flex items-center gap-1.5 text-emerald-400 mt-2">
+        <CheckCircle2 :size="16" />
+        <span>{{ successMessage }}</span>
+      </div>
     </div>
   </div>
 </template>

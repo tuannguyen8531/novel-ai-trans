@@ -40,70 +40,88 @@ const { authenticated, src: illustrationSrc } = useIllustrations(() => props.nov
 </script>
 
 <template>
-  <div class="chapter-content-rendered">
-    <template v-if="!hasIllustrations">
-      <pre class="chapter-content">{{ content || 'Empty chapter.' }}</pre>
-    </template>
-    <template v-else>
-      <template v-for="(seg, i) in segments" :key="i">
-        <pre v-if="seg.type === 'text'" class="chapter-content chapter-content-segment">{{ seg.text }}</pre>
-        <figure v-else class="chapter-illustration">
-          <img
-            v-if="seg.type === 'illustration' && (illustrationSrc(seg.filename) || !authenticated())"
-            :src="illustrationSrc(seg.filename)"
-            :alt="`Illustration: ${seg.filename}`"
-            class="chapter-illustration-img"
-          />
-          <div v-else class="chapter-illustration-loading muted">
-            Loading illustration…
-          </div>
-        </figure>
+  <div class="reader-container">
+    <div class="reader-prose">
+      <template v-if="!hasIllustrations">
+        <pre class="chapter-content-text">{{ content || 'This chapter has no content.' }}</pre>
       </template>
-    </template>
+      <template v-else>
+        <template v-for="(seg, i) in segments" :key="i">
+          <pre v-if="seg.type === 'text'" class="chapter-content-text">{{ seg.text }}</pre>
+          <figure v-else class="chapter-illustration">
+            <img
+              v-if="seg.type === 'illustration' && (illustrationSrc(seg.filename) || !authenticated())"
+              :src="illustrationSrc(seg.filename)"
+              :alt="`Illustration: ${seg.filename}`"
+              class="chapter-illustration-img"
+              loading="lazy"
+            />
+            <div v-else class="chapter-illustration-loading muted">
+              Loading illustration…
+            </div>
+            <figcaption class="illustration-caption">{{ seg.filename }}</figcaption>
+          </figure>
+        </template>
+      </template>
+    </div>
   </div>
 </template>
 
 <style scoped>
-.chapter-content-rendered {
-  display: contents;
+.reader-container {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  padding: 1.5rem 0.5rem;
 }
 
-.chapter-content {
+.reader-prose {
+  width: 100%;
+  max-width: 52rem;
+  margin: 0 auto;
+}
+
+.chapter-content-text {
   margin: 0;
   white-space: pre-wrap;
   word-break: break-word;
   overflow-wrap: break-word;
-  font-family: var(--font);
-  font-size: 1rem;
-  line-height: 1.7;
+  font-family: 'Lora', var(--font-serif);
+  font-size: 20px;
+  line-height: 1.65;
+  color: var(--fg-primary);
   text-align: justify;
-}
-
-.chapter-content-segment {
-  margin: 0;
-  margin-bottom: 0;
-}
-
-.chapter-content-segment + .chapter-illustration,
-.chapter-illustration + .chapter-content-segment {
-  margin-top: 1rem;
+  letter-spacing: 0.01em;
 }
 
 .chapter-illustration {
-  margin: 1rem 0;
+  margin: 2rem 0;
   text-align: center;
 }
 
 .chapter-illustration-img {
   max-width: 100%;
+  max-height: 38rem;
   height: auto;
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
   display: block;
   margin: 0 auto;
+  border: 1px solid var(--border-base);
+}
+
+.illustration-caption {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--fg-muted);
+  font-family: var(--font-sans);
 }
 
 .chapter-illustration-loading {
-  padding: 1rem;
+  padding: 2rem;
   font-size: 0.875rem;
+  background: var(--bg-surface-elevated);
+  border-radius: var(--radius-md);
+  border: 1px dashed var(--border-base);
 }
 </style>

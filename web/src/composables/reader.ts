@@ -117,15 +117,32 @@ export function useReader(
     }
   }
 
+  const contentCache = new Map<string, string>()
+
+  function getCacheKey(num: number, mode: ReaderLanguage): string {
+    return `${toValue(novel)}:${num}:${mode}`
+  }
+
   async function loadContent(number: number, mode: ReaderLanguage = 'source') {
     loading.value = true
     error.value = null
-    content.value = ''
     viewMode.value = mode
+    const key = getCacheKey(number, mode)
+    const cached = contentCache.get(key)
+    if (cached !== undefined) {
+      content.value = cached
+      editContent.value = cached
+      loading.value = false
+      void loadPostCheck(number, mode === 'source' ? targetLanguage.value : mode)
+      return
+    }
+
+    content.value = ''
     try {
       const view = mode === 'source' ? 'source' : 'translation'
       const target = mode === 'source' ? undefined : mode
       const response = await api.getChapterContent(toValue(novel), number, view, target)
+      contentCache.set(key, response.content)
       content.value = response.content
       editContent.value = response.content
       await loadPostCheck(number, mode === 'source' ? targetLanguage.value : mode)
@@ -138,6 +155,19 @@ export function useReader(
 
   async function changeView(mode: ReaderLanguage) {
     if (viewLoading.value || mode === viewMode.value) return
+    const key = getCacheKey(toValue(chapter), mode)
+    const cached = contentCache.get(key)
+    if (cached !== undefined) {
+      content.value = cached
+      editContent.value = cached
+      viewMode.value = mode
+      void loadPostCheck(
+        toValue(chapter),
+        mode === 'source' ? targetLanguage.value : mode
+      )
+      return
+    }
+
     viewLoading.value = true
     error.value = null
     try {
@@ -149,6 +179,7 @@ export function useReader(
         view,
         target
       )
+      contentCache.set(key, response.content)
       content.value = response.content
       editContent.value = response.content
       viewMode.value = mode
@@ -186,6 +217,7 @@ export function useReader(
         view,
         target
       )
+      contentCache.set(getCacheKey(toValue(chapter), viewMode.value), response.content)
       content.value = response.content
       editContent.value = response.content
       editing.value = false
@@ -237,6 +269,7 @@ export function useReader(
           'translation',
           viewMode.value
         )
+        contentCache.set(getCacheKey(toValue(chapter), viewMode.value), response.content)
         content.value = response.content
         editContent.value = response.content
       }
@@ -251,6 +284,9 @@ export function useReader(
     deleteLoading.value = true
     try {
       await api.deleteChapter(toValue(novel), toValue(chapter))
+      contentCache.delete(getCacheKey(toValue(chapter), 'source'))
+      contentCache.delete(getCacheKey(toValue(chapter), 'vi'))
+      contentCache.delete(getCacheKey(toValue(chapter), 'en'))
       const destination = previousChapter.value ?? nextChapter.value
       if (destination !== null) {
         await router.replace({

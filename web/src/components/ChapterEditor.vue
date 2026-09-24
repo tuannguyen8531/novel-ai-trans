@@ -11,14 +11,14 @@ const content = defineModel<string>({ required: true })
   width: 100%;
   min-height: 60vh;
   box-sizing: border-box;
-  font-family: inherit;
-  font-size: 0.95rem;
-  line-height: 1.7;
+  font-family: 'Lora', var(--font-serif);
+  font-size: 20px;
+  line-height: 1.65;
   resize: vertical;
-  background: var(--bg-elev-2);
-  color: var(--fg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 1rem;
+  background: var(--bg-surface-elevated);
+  color: var(--fg-primary);
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
 }
 </style>
