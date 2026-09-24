@@ -28,9 +28,9 @@ export function useRules(novel: MaybeRefOrGetter<string>) {
     successMessage.value = null
     try {
       await api.saveNovelRules(toValue(novel), rules.value)
-      successMessage.value = 'Rules saved successfully.'
+      successMessage.value = 'rules_saved_successfully'
       setTimeout(() => {
-        if (successMessage.value === 'Rules saved successfully.') successMessage.value = null
+        if (successMessage.value === 'rules_saved_successfully') successMessage.value = null
       }, 3000)
     } catch (err) {
       error.value = (err as Error).message

@@ -5,6 +5,7 @@ import CustomSelect from '@/components/common/CustomSelect.vue'
 import type { NovelChapterStatus } from '@/api/types'
 import type { ReaderLanguage } from '@/composables/reader'
 import { useBodyScrollLock } from '@/composables/scrolllock'
+import { t } from '@/i18n'
 
 const props = defineProps<{
   open: boolean
@@ -22,7 +23,7 @@ const emit = defineEmits<{
 
 const language = ref<ReaderLanguage>('source')
 const languageOptions = computed(() => [
-  { value: 'source', label: 'Origin (Source)' },
+  { value: 'source', label: t('original') },
   { value: props.targetLanguage, label: props.targetLanguageLabel }
 ])
 const modal = ref<HTMLElement | null>(null)
@@ -120,11 +121,11 @@ watch([language, filteredChapters], async () => {
       @keydown.esc="close"
     >
       <header class="modal-header">
-        <h3 id="toc-title">Table of Contents</h3>
+        <h3 id="toc-title">{{ $t("table_of_contents") }}</h3>
         <button
           type="button"
           class="modal-close"
-          aria-label="Close"
+          :aria-label="$t('close')"
           @click="close"
         >
           <X :size="18" />
@@ -133,7 +134,7 @@ watch([language, filteredChapters], async () => {
       <div class="modal-body toc-body">
         <div class="toc-controls">
           <div class="toc-lang-group">
-            <span class="toc-label">Language:</span>
+            <span class="toc-label">{{ $t("language") }}:</span>
             <CustomSelect
               id="toc-lang-select"
               v-model="language"
@@ -147,7 +148,7 @@ watch([language, filteredChapters], async () => {
             <input
               v-model="searchQuery"
               type="search"
-              placeholder="Filter chapters..."
+              :placeholder="$t('filter_chapters')"
               class="toc-search-input"
             />
           </div>
@@ -155,7 +156,7 @@ watch([language, filteredChapters], async () => {
 
         <div ref="tocList" class="toc-list">
           <div v-if="filteredChapters.length === 0" class="muted empty-toc">
-            No chapters found.
+            {{ $t("no_chapters_found") }}
           </div>
           <button
             v-for="chapter in filteredChapters"
@@ -165,8 +166,8 @@ watch([language, filteredChapters], async () => {
             :class="{ active: chapter.number === currentChapter }"
             @click="select(chapter.number)"
           >
-            <span class="toc-item-number">Ch. {{ chapter.number }}</span>
-            <span class="toc-item-title">{{ (language === 'source' ? chapter.source_title : chapter.title) || 'Untitled' }}</span>
+            <span class="toc-item-number">{{ $t("chapter_number", { number: chapter.number }) }}</span>
+            <span class="toc-item-title">{{ (language === 'source' ? chapter.source_title : chapter.title) || $t('untitled') }}</span>
           </button>
         </div>
       </div>

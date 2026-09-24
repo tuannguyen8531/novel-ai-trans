@@ -5,6 +5,7 @@ import type { NovelDetail } from '@/api/types'
 import type { MetadataDisplay, TargetLanguage } from '@/composables/metadata'
 import { formatLanguage } from '@/language'
 import placeholderCover from '@/assets/placeholder-cover.png'
+import { t } from '@/i18n'
 
 const props = defineProps<{
   novel: NovelDetail
@@ -29,7 +30,7 @@ const displayTitle = computed(() => (
 ))
 
 const displayAuthor = computed(() => (
-  props.metadata.author.trim() || props.novel.author?.trim() || 'Not specified'
+  props.metadata.author.trim() || props.novel.author?.trim() || t('not_specified')
 ))
 
 const displayGenres = computed(() => (
@@ -72,12 +73,12 @@ function metaDisplayValue(current: string, fallback: string | null | undefined):
         <img
           class="novel-cover-image"
           :src="coverSrc"
-          :alt="`Cover for ${displayTitle}`"
+          :alt="$t('cover_for', { title: displayTitle })"
           referrerpolicy="no-referrer"
           @error="coverBroken = true"
         />
         <div class="cover-lang-chip">
-          {{ formatLanguage(props.novel.source_language, 'Korean') }} &rarr; {{ formatLanguage(props.targetLanguage, 'Vietnamese') }}
+          {{ formatLanguage(props.novel.source_language, 'korean') }} &rarr; {{ formatLanguage(props.targetLanguage, 'vietnamese') }}
         </div>
       </div>
 
@@ -89,7 +90,7 @@ function metaDisplayValue(current: string, fallback: string | null | undefined):
               <code>{{ props.novel.name }}</code>
             </span>
             <span v-if="props.novel.has_illustrations" class="illus-badge">
-              Illustrated
+              {{ $t("illustrated") }}
             </span>
           </div>
 
@@ -97,26 +98,26 @@ function metaDisplayValue(current: string, fallback: string | null | undefined):
 
           <div class="novel-subinfo">
             <span class="subinfo-item">
-              <strong class="subinfo-label">Author:</strong> {{ displayAuthor }}
+              <strong class="subinfo-label">{{ $t("author") }}:</strong> {{ displayAuthor }}
             </span>
             <span v-if="displayGenres" class="subinfo-item">
-              <strong class="subinfo-label">Genres:</strong> {{ displayGenres }}
+              <strong class="subinfo-label">{{ $t("genres") }}:</strong> {{ displayGenres }}
             </span>
           </div>
         </div>
 
         <!-- Summary if exists -->
         <div v-if="displaySummary" class="novel-summary-box">
-          <span class="summary-label">Synopsis</span>
+          <span class="summary-label">{{ $t("summary") }}</span>
           <div class="summary-text">{{ displaySummary }}</div>
         </div>
 
         <!-- Quick Progress Bar -->
         <div class="header-progress-box">
           <div class="progress-details">
-            <span class="progress-title">Translation Progress</span>
+            <span class="progress-title">{{ $t("translation_progress") }}</span>
             <span class="progress-ratio">
-              <strong>{{ translatedCount }}</strong> / {{ props.novel.total_input_chapters }} chapters
+              {{ $t("chapters_translated_of_total", { completed: translatedCount, total: props.novel.total_input_chapters }) }}
               <span class="pct-badge">({{ progressPct }}%)</span>
             </span>
           </div>
@@ -129,15 +130,15 @@ function metaDisplayValue(current: string, fallback: string | null | undefined):
         <div class="actions-wrapper">
           <button type="button" class="btn-primary" @click="emit('translate')">
             <Sparkles :size="16" />
-            <span>Translate Chapters</span>
+            <span>{{ $t("translate_chapters") }}</span>
           </button>
           <button type="button" class="secondary" @click="emit('pack')">
             <Package :size="16" />
-            <span>Pack EPUB</span>
+            <span>{{ $t("pack_epub") }}</span>
           </button>
           <button type="button" class="secondary" @click="emit('metadata')">
             <FileEdit :size="16" />
-            <span>Edit Metadata</span>
+            <span>{{ $t("edit_metadata") }}</span>
           </button>
         </div>
       </div>
@@ -146,27 +147,27 @@ function metaDisplayValue(current: string, fallback: string | null | undefined):
     <!-- Metadata Details Strip (if loaded) -->
     <div v-if="metadata.exists || metadata.loadError" class="meta-details-strip">
       <div v-if="metadata.title || novel.title" class="meta-pill">
-        <span class="meta-label">Original Title</span>
+        <span class="meta-label">{{ $t("original_title") }}</span>
         <span class="meta-val">{{ metaDisplayValue(metadata.title, novel.title) }}</span>
       </div>
       <div v-if="metadata.targetTitle" class="meta-pill">
-        <span class="meta-label">Target Title ({{ targetLanguage }})</span>
+        <span class="meta-label">{{ $t("target_title_language", { language: formatLanguage(targetLanguage) }) }}</span>
         <span class="meta-val">{{ metadata.targetTitle }}</span>
       </div>
       <div v-if="metadata.author || novel.author" class="meta-pill">
-        <span class="meta-label">Author</span>
+        <span class="meta-label">{{ $t("author") }}</span>
         <span class="meta-val">{{ metaDisplayValue(metadata.author, novel.author) }}</span>
       </div>
       <div class="meta-pill">
-        <span class="meta-label">Glossary</span>
-        <span class="meta-val">{{ novel.glossary_terms }} terms, {{ novel.glossary_entities }} characters</span>
+        <span class="meta-label">{{ $t("glossary") }}</span>
+        <span class="meta-val">{{ $t("terms_characters_count", { terms: novel.glossary_terms, characters: novel.glossary_entities }) }}</span>
       </div>
 
       <p v-if="metadata.loadError" class="error meta-empty">
-        Failed to load metadata: {{ metadata.loadError }}
+        {{ $t("failed_to_load_metadata", { error: metadata.loadError }) }}
       </p>
       <p v-else-if="!metadata.hasAny" class="muted meta-empty">
-        No additional metadata filled in yet — click <strong>Edit metadata</strong> to add details.
+        {{ $t("metadata_missing_action", { action: $t("edit_metadata") }) }}
       </p>
     </div>
   </div>

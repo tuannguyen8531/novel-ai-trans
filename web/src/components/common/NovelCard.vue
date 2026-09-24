@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router'
 import { AlertCircle } from '@lucide/vue'
 import type { NovelSummary, NovelTargetProgress } from '@/api/types'
 import { getNovelCoverUrl } from '@/composables/novels'
+import { t } from '@/i18n'
 import placeholderCover from '@/assets/placeholder-cover.png'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 
@@ -40,11 +41,11 @@ const percent = computed(() => {
 
 const languageLabel = computed(() => {
   const lang = (props.novel.source_language || '').toLowerCase()
-  if (lang === 'ko' || lang === 'korean') return 'Korean'
-  if (lang === 'ja' || lang === 'japanese') return 'Japanese'
-  if (lang === 'zh' || lang === 'chinese') return 'Chinese'
+  if (lang === 'ko' || lang === 'korean') return t('korean')
+  if (lang === 'ja' || lang === 'japanese') return t('japanese')
+  if (lang === 'zh' || lang === 'chinese') return t('chinese')
   if (lang) return lang.toUpperCase()
-  return 'Auto'
+  return t('auto')
 })
 </script>
 
@@ -63,7 +64,7 @@ const languageLabel = computed(() => {
         <span class="lang-tag">{{ languageLabel }}</span>
         <div v-if="failedChapters > 0 || warningChapters > 0" class="issues-tag">
           <AlertCircle :size="12" />
-          <span>{{ failedChapters > 0 ? `${failedChapters} failed` : `${warningChapters} warn` }}</span>
+          <span>{{ failedChapters > 0 ? $t('failed_count', { count: failedChapters }) : $t('warnings_count', { count: warningChapters }) }}</span>
         </div>
       </div>
     </RouterLink>
@@ -74,8 +75,8 @@ const languageLabel = computed(() => {
           {{ novel.title || novel.name }}
         </RouterLink>
         <div class="card-meta">
-          <span class="card-author" :title="novel.author || 'Unknown Author'">
-            {{ novel.author || 'Unknown author' }}
+          <span class="card-author" :title="novel.author || $t('unknown_author')">
+            {{ novel.author || $t('unknown_author') }}
           </span>
           <span class="card-slug" :title="novel.name">
             <code>{{ novel.name }}</code>
@@ -85,7 +86,7 @@ const languageLabel = computed(() => {
 
       <div class="progress-section">
         <div class="progress-meta">
-          <span class="progress-label">Chapters</span>
+          <span class="progress-label">{{ $t("chapters") }}</span>
           <span class="progress-count">
             <strong>{{ completedChapters }}</strong> / {{ totalChapters }}
             <span class="progress-pct">({{ percent }}%)</span>
@@ -101,31 +102,31 @@ const languageLabel = computed(() => {
           <StatusBadge
             v-if="failedChapters > 0"
             status="failed"
-            :label="`${failedChapters} failed`"
+            :label="$t('failed_count', { count: failedChapters })"
             size="sm"
           />
           <StatusBadge
             v-else-if="warningChapters > 0"
             status="warn"
-            :label="`${warningChapters} warnings`"
+            :label="$t('warnings_count', { count: warningChapters })"
             size="sm"
           />
           <StatusBadge
             v-else-if="completedChapters > 0 && completedChapters === totalChapters"
             status="completed"
-            label="Translated"
+            :label="$t('translated')"
             size="sm"
           />
           <StatusBadge
             v-else-if="completedChapters > 0"
             status="running"
-            label="In Progress"
+            :label="$t('in_progress')"
             size="sm"
           />
           <StatusBadge
             v-else
             status="normal"
-            label="Untranslated"
+            :label="$t('untranslated')"
             size="sm"
           />
         </div>

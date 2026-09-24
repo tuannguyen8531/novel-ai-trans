@@ -3,14 +3,15 @@ import { computed, ref } from 'vue'
 import { Plus, Search, Edit2, Trash2, Save, X, Users, User } from '@lucide/vue'
 import type { GlossaryCharacter } from '@/composables/glossary'
 import CustomSelect from '@/components/common/CustomSelect.vue'
+import { t } from '@/i18n'
 
-const roleOptions = [
-  { value: '', label: '(role unchanged)' },
-  { value: 'protagonist', label: 'Protagonist' },
-  { value: 'antagonist', label: 'Antagonist' },
-  { value: 'supporting', label: 'Supporting' },
-  { value: 'minor', label: 'Minor' }
-]
+const roleOptions = computed(() => [
+  { value: '', label: t('role_unchanged') },
+  { value: 'protagonist', label: t('protagonist') },
+  { value: 'antagonist', label: t('antagonist') },
+  { value: 'supporting', label: t('supporting') },
+  { value: 'minor', label: t('minor') }
+])
 
 const props = defineProps<{
   characters: Record<string, GlossaryCharacter>
@@ -91,8 +92,8 @@ function roleBadgeClass(role?: string) {
       <div class="flex items-center gap-2">
         <Users :size="18" class="text-indigo-400 shrink-0" />
         <div>
-          <h3>Characters</h3>
-          <p class="muted">{{ Object.keys(characters).length }} character entities</p>
+          <h3>{{ $t("characters") }}</h3>
+          <p class="muted">{{ $t("character_entities", { count: Object.keys(characters).length }) }}</p>
         </div>
       </div>
       <div class="gloss-controls">
@@ -100,7 +101,7 @@ function roleBadgeClass(role?: string) {
           <Search :size="14" class="absolute left-2.5 text-zinc-500 pointer-events-none" />
           <input
             v-model="filter"
-            placeholder="Filter characters…"
+            :placeholder="$t('filter_characters')"
             class="gloss-filter !pl-8"
           />
         </div>
@@ -110,20 +111,20 @@ function roleBadgeClass(role?: string) {
           @click="showAdd = !showAdd"
         >
           <component :is="showAdd ? X : Plus" :size="14" />
-          {{ showAdd ? 'Cancel' : 'Add character' }}
+          {{ showAdd ? $t('cancel') : $t('add_character') }}
         </button>
       </div>
     </header>
 
     <div v-if="showAdd" class="gloss-add p-3 bg-zinc-900/60 dark:bg-zinc-900/80 rounded-lg border border-indigo-500/30">
-      <input v-model="newCharacter.original" placeholder="Original name" class="flex-1" />
-      <input v-model="newCharacter.translatedName" placeholder="Translated name" class="flex-1" />
+      <input v-model="newCharacter.original" :placeholder="$t('original_name')" class="flex-1" />
+      <input v-model="newCharacter.translatedName" :placeholder="$t('translated_name')" class="flex-1" />
       <CustomSelect
         v-model="newCharacter.role"
         :options="roleOptions"
-        placeholder="Role (optional)"
+        :placeholder="$t('role_optional')"
       />
-      <input v-model="newCharacter.pronoun" placeholder="Pronoun / reference style" class="flex-1" />
+      <input v-model="newCharacter.pronoun" :placeholder="$t('pronoun_reference_style')" class="flex-1" />
       <button
         type="button"
         class="flex items-center gap-1.5"
@@ -131,7 +132,7 @@ function roleBadgeClass(role?: string) {
         @click="add"
       >
         <Save :size="14" />
-        Save
+        {{ $t("save") }}
       </button>
     </div>
 
@@ -139,10 +140,10 @@ function roleBadgeClass(role?: string) {
       <table v-if="filteredCharacters.length">
         <thead>
           <tr>
-            <th>Original</th>
-            <th>Translated</th>
-            <th>Role</th>
-            <th>Pronoun</th>
+            <th>{{ $t("original") }}</th>
+            <th>{{ $t("translated") }}</th>
+            <th>{{ $t("role") }}</th>
+            <th>{{ $t("pronoun") }}</th>
             <th class="actions"></th>
           </tr>
         </thead>
@@ -162,18 +163,18 @@ function roleBadgeClass(role?: string) {
                 <input
                   v-model="editing.pronoun"
                   class="inline-edit-input"
-                  placeholder="Pronoun / reference style"
+                  :placeholder="$t('pronoun_reference_style')"
                 />
               </td>
               <td class="actions">
                 <div class="row gap-1">
                   <button type="button" class="flex items-center gap-1" @click="saveEdit">
                     <Save :size="13" />
-                    Save
+                    {{ $t("save") }}
                   </button>
                   <button class="secondary flex items-center gap-1" type="button" @click="editing = null">
                     <X :size="13" />
-                    Cancel
+                    {{ $t("cancel") }}
                   </button>
                 </div>
               </td>
@@ -200,7 +201,7 @@ function roleBadgeClass(role?: string) {
                     @click="startEdit(original, info)"
                   >
                     <Edit2 :size="12" />
-                    Edit
+                    {{ $t("edit") }}
                   </button>
                   <button
                     class="secondary flex items-center gap-1 text-xs py-1 px-2 text-rose-400 hover:text-rose-300"
@@ -208,7 +209,7 @@ function roleBadgeClass(role?: string) {
                     @click="removeCharacter(original)"
                   >
                     <Trash2 :size="12" />
-                    Remove
+                    {{ $t("remove") }}
                   </button>
                 </div>
               </td>
@@ -217,7 +218,7 @@ function roleBadgeClass(role?: string) {
         </tbody>
       </table>
       <p v-else class="muted gloss-empty">
-        {{ filter ? 'No characters match the filter.' : 'No characters yet.' }}
+        {{ filter ? $t('no_characters_match_the_filter') : $t('no_characters_yet') }}
       </p>
     </div>
   </section>

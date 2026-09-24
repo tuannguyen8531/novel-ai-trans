@@ -27,6 +27,7 @@ import JobMonitor from '@/components/JobMonitor.vue'
 import MetadataPanel from '@/components/MetadataPanel.vue'
 import NovelHeader from '@/components/NovelHeader.vue'
 import RulesPanel from '@/components/RulesPanel.vue'
+import { formatLanguage } from '@/language'
 
 const props = defineProps<{ name: string }>()
 const route = useRoute()
@@ -57,9 +58,7 @@ const novelName = computed(() => props.name || String(route.params.name || ''))
 const targetLanguage = computed<TargetLanguage>(() => (
   settings.settings?.target_language === 'en' ? 'en' : 'vi'
 ))
-const targetLanguageLabel = computed(() => (
-  targetLanguage.value === 'vi' ? 'Vietnamese' : 'English'
-))
+const targetLanguageLabel = computed(() => formatLanguage(targetLanguage.value))
 const translatedChapterCount = computed(() => (
   novels.detail?.targets.find((progress) => progress.target === targetLanguage.value)?.completed ?? 0
 ))
@@ -203,14 +202,14 @@ function startInsertJob(id: string) {
           </div>
           <div class="attention-banner-info">
             <div class="attention-banner-heading">
-              <h4 class="attention-banner-title">Translation Attention Required</h4>
+              <h4 class="attention-banner-title">{{ $t("translation_attention_required") }}</h4>
             </div>
             <p class="attention-banner-desc">
               <span v-if="failedChapters.length > 0" class="desc-failed">
-                <strong>{{ failedChapters.length }}</strong> chapter{{ failedChapters.length === 1 ? '' : 's' }} failed during translation.
+                {{ failedChapters.length === 1 ? $t('single_chapter_failed') : $t('chapters_failed_count', { count: failedChapters.length }) }}
               </span>
               <span v-if="warningChapters.length > 0" class="desc-warning">
-                <strong>{{ warningChapters.length }}</strong> chapter{{ warningChapters.length === 1 ? '' : 's' }} flagged with quality warnings.
+                {{ warningChapters.length === 1 ? $t('single_chapter_warning') : $t('chapters_warning_count', { count: warningChapters.length }) }}
               </span>
             </p>
           </div>
@@ -224,7 +223,7 @@ function startInsertJob(id: string) {
             @click="retranslateFailed"
           >
             <RotateCw :size="14" />
-            <span>Retranslate Failed ({{ failedChapters.length }})</span>
+            <span>{{ $t("retranslate_failed", { count: failedChapters.length }) }}</span>
           </button>
           <button
             v-else
@@ -233,7 +232,7 @@ function startInsertJob(id: string) {
             @click="retranslateNovel"
           >
             <RotateCw :size="14" />
-            <span>Retranslate</span>
+            <span>{{ $t("retranslate") }}</span>
           </button>
 
           <button
@@ -243,7 +242,7 @@ function startInsertJob(id: string) {
             @click="showIgnoreDialog = true"
           >
             <CheckCheck :size="14" />
-            <span>Ignore All Warnings</span>
+            <span>{{ $t("ignore_all_warnings") }}</span>
           </button>
 
           <button
@@ -253,7 +252,7 @@ function startInsertJob(id: string) {
             @click="showIssues"
           >
             <Filter :size="14" />
-            <span>{{ tab === 'chapters' && currentFilter === 'issues' ? 'Showing Problem Chapters' : 'Show Problem Chapters' }}</span>
+            <span>{{ tab === 'chapters' && currentFilter === 'issues' ? $t('showing_problem_chapters') : $t('show_problem_chapters') }}</span>
           </button>
         </div>
       </section>
@@ -262,14 +261,14 @@ function startInsertJob(id: string) {
       <div v-if="jobId" class="card-panel job-card">
         <div class="job-card-header">
           <Activity :size="18" class="job-icon" />
-          <h3>Current Workspace Operation</h3>
+          <h3>{{ $t("current_workspace_operation") }}</h3>
         </div>
         <JobMonitor :job-id="jobId" />
       </div>
 
       <!-- Detail Work Tabs Container -->
       <div class="detail-tabs-shell">
-        <nav class="detail-tabs" aria-label="Novel details" role="tablist">
+        <nav class="detail-tabs" :aria-label="$t('novel_details')" role="tablist">
           <button
             id="chapters-tab"
             type="button"
@@ -280,7 +279,7 @@ function startInsertJob(id: string) {
             @click="tab = 'chapters'"
           >
             <BookOpen :size="16" />
-            <span>Chapters</span>
+            <span>{{ $t("chapters") }}</span>
             <span class="tab-badge">{{ novels.detail.total_input_chapters }}</span>
           </button>
 
@@ -294,7 +293,7 @@ function startInsertJob(id: string) {
             @click="tab = 'glossary'"
           >
             <BookMarked :size="16" />
-            <span>Glossary</span>
+            <span>{{ $t("glossary") }}</span>
             <span class="tab-badge">{{ novels.detail.glossary_terms + novels.detail.glossary_entities }}</span>
           </button>
 
@@ -308,7 +307,7 @@ function startInsertJob(id: string) {
             @click="tab = 'artifacts'"
           >
             <Package :size="16" />
-            <span>Artifacts</span>
+            <span>{{ $t("artifacts") }}</span>
             <span class="tab-badge">{{ novels.detail.artifacts?.length || 0 }}</span>
           </button>
 
@@ -322,7 +321,7 @@ function startInsertJob(id: string) {
             @click="tab = 'rules'"
           >
             <ScrollText :size="16" />
-            <span>Rules</span>
+            <span>{{ $t("rules") }}</span>
           </button>
         </nav>
 
@@ -347,7 +346,7 @@ function startInsertJob(id: string) {
           role="tabpanel"
           aria-labelledby="glossary-tab"
         >
-          <DetailPanelHeader title="Glossary & Character Dictionary" />
+          <DetailPanelHeader :title="$t('glossary_character_dictionary')" />
           <GlossaryEditor :novel="novelName" />
         </div>
 
@@ -380,9 +379,9 @@ function startInsertJob(id: string) {
     <!-- Confirm Ignore Warnings Dialog -->
     <ConfirmDialog
       :show="showIgnoreDialog"
-      title="Ignore All Warnings"
-      :message="`Ignore all ${warningChapters.length} unresolved quality warnings for '${displayTitle}'? The current translation content will be accepted.`"
-      confirm-label="Ignore All Warnings"
+      :title="$t('ignore_all_warnings')"
+      :message="$t('confirm_ignore_quality_warnings', { count: warningChapters.length, title: displayTitle })"
+      :confirm-label="$t('ignore_all_warnings')"
       :loading="ignoringWarnings"
       @confirm="confirmIgnoreWarnings"
       @cancel="showIgnoreDialog = false"

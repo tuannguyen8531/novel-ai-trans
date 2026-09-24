@@ -13,6 +13,7 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import { useJobsStore } from '@/composables/jobs'
 import type { JobModel } from '@/api/types'
+import { formatJobKind } from '@/i18n'
 
 const props = withDefaults(defineProps<{ job?: JobModel; jobId?: string; live?: boolean }>(), {
   live: true
@@ -112,12 +113,12 @@ async function copyLogs() {
 <template>
   <div class="job-monitor-root">
     <div v-if="error" class="alert-error">{{ error }}</div>
-    <div v-else-if="!localJob" class="muted loading-hint">Awaiting job status…</div>
+    <div v-else-if="!localJob" class="muted loading-hint">{{ $t("awaiting_job_status") }}</div>
     <div v-else class="monitor-content">
       <!-- Header Strip -->
       <div class="monitor-top-row">
         <div class="job-identity">
-          <span class="job-kind-badge">{{ localJob.kind }}</span>
+          <span class="job-kind-badge">{{ formatJobKind(localJob.kind) }}</span>
           <span v-if="localJob.novel" class="job-novel-tag">{{ localJob.novel }}</span>
           <code class="job-id-code">{{ localJob.id.slice(0, 8) }}</code>
         </div>
@@ -128,8 +129,8 @@ async function copyLogs() {
       <div v-if="progress && progress.total > 0" class="monitor-progress-box">
         <div class="progress-labels">
           <span class="progress-message">
-            <template v-if="progress.chapter">Chapter {{ progress.chapter }} &middot; </template>
-            {{ progress.message || 'Processing chapters…' }}
+            <template v-if="progress.chapter">{{ $t("chapter_message", { chapter: progress.chapter, message: progress.message || $t('processing_chapters') }) }}</template>
+            <template v-else>{{ progress.message || $t('processing_chapters') }}</template>
           </span>
           <span class="progress-count">
             <strong>{{ progress.current }}</strong> / {{ progress.total }}
@@ -154,7 +155,7 @@ async function copyLogs() {
           @click="cancel"
         >
           <XCircle :size="14" />
-          <span>{{ cancellingRequest || localJob.status === 'cancelling' ? 'Cancelling…' : 'Cancel Job' }}</span>
+          <span>{{ cancellingRequest || localJob.status === 'cancelling' ? $t('cancelling') + '…' : $t('cancel_job') }}</span>
         </button>
 
         <button
@@ -165,7 +166,7 @@ async function copyLogs() {
           @click="showForceStopDialog = true"
         >
           <AlertOctagon :size="14" />
-          <span>{{ forceStoppingRequest ? 'Stopping…' : 'Force Stop' }}</span>
+          <span>{{ forceStoppingRequest ? $t('stopping') : $t('force_stop') }}</span>
         </button>
       </div>
 
@@ -173,7 +174,7 @@ async function copyLogs() {
       <details v-if="localJob.error" class="details-accordion error-details">
         <summary class="details-summary error">
           <AlertTriangle :size="14" />
-          <span>Job Error Details</span>
+          <span>{{ $t("job_error_details") }}</span>
         </summary>
         <pre class="terminal-box error-box">{{ JSON.stringify(localJob.error, null, 2) }}</pre>
       </details>
@@ -182,7 +183,7 @@ async function copyLogs() {
       <details v-if="localJob.result" class="details-accordion">
         <summary class="details-summary">
           <FileCode :size="14" />
-          <span>Execution Output Result</span>
+          <span>{{ $t("execution_output_result") }}</span>
         </summary>
         <pre class="terminal-box">{{ JSON.stringify(localJob.result, null, 2) }}</pre>
       </details>
@@ -192,17 +193,17 @@ async function copyLogs() {
         <div class="console-header">
           <div class="console-title">
             <Terminal :size="14" />
-            <span>Console Logs ({{ localJob.logs.length }} lines)</span>
+            <span>{{ $t("console_logs_lines", { count: localJob.logs.length }) }}</span>
           </div>
           <button
             type="button"
             class="btn-copy-logs"
-            title="Copy logs to clipboard"
+            :title="$t('copy_logs_to_clipboard')"
             @click="copyLogs"
           >
             <Check v-if="copied" :size="13" />
             <Copy v-else :size="13" />
-            <span>{{ copied ? 'Copied' : 'Copy' }}</span>
+            <span>{{ copied ? $t('copied') : $t('copy') }}</span>
           </button>
         </div>
         <pre ref="consoleLog" class="terminal-box console-box">{{ localJob.logs.join('\n') }}</pre>
@@ -212,9 +213,9 @@ async function copyLogs() {
     <!-- Force Stop Dialog -->
     <ConfirmDialog
       :show="showForceStopDialog"
-      title="Force Stop Translation"
-      :message="`Stop this translation immediately?\n\nChanges already saved will be kept. Incomplete chapter output will not be saved.`"
-      confirm-label="Force Stop"
+      :title="$t('force_stop_translation')"
+      :message="$t('confirm_stop_translation')"
+      :confirm-label="$t('force_stop')"
       :danger="true"
       :loading="forceStoppingRequest"
       @confirm="forceStop"

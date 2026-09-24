@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { RefreshCw } from '@lucide/vue'
 import { useProviderModels } from '@/composables/models'
 import CustomSelect from '@/components/common/CustomSelect.vue'
+import { t } from '@/i18n'
 
 const props = defineProps<{
   provider: 'ollama' | 'gemini' | 'openrouter'
@@ -20,10 +21,10 @@ const knownModel = computed(() => models.value.includes(props.modelValue))
 
 const modelOptions = computed(() => {
   const placeholder = loading.value
-    ? 'Loading models…'
+    ? t('loading_models')
     : models.value.length
-      ? '(pick from list)'
-      : 'No models available'
+      ? t('pick_from_list')
+      : t('no_models_available')
   return [
     { value: '', label: placeholder },
     ...models.value.map((m) => ({ value: m, label: m }))
@@ -42,7 +43,7 @@ const onInput = (event: Event) => {
   emit('update:modelValue', value)
 }
 
-const refreshLabel = computed(() => (loading.value ? 'Refreshing…' : 'Refresh'))
+const refreshLabel = computed(() => (loading.value ? t('refreshing') : t('refresh')))
 </script>
 
 <template>
@@ -59,7 +60,7 @@ const refreshLabel = computed(() => (loading.value ? 'Refreshing…' : 'Refresh'
       <input
         type="text"
         :value="modelValue"
-        :placeholder="knownModel ? 'Selected from list — type to override' : 'Type model id, or pick from the list'"
+        :placeholder="knownModel ? $t('model_list_override_hint') : $t('type_model_id_or_pick_from_the_list')"
         class="model-text-input"
         @input="onInput"
       />

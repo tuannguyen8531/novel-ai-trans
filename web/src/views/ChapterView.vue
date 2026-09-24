@@ -167,9 +167,9 @@ onUnmounted(() => navigationObserver?.disconnect())
     <!-- Delete Chapter Confirmation Dialog -->
     <ConfirmDialog
       :show="showDeleteDialog"
-      title="Delete Chapter"
-      :message="`Delete Chapter ${chapter}?\n\nThis permanently deletes the source chapter. Existing translations are kept. This cannot be undone.`"
-      confirm-label="Delete Chapter"
+      :title="$t('delete_chapter')"
+      :message="$t('confirm_delete_source_chapter', { number: chapter })"
+      :confirm-label="$t('delete_chapter')"
       :danger="true"
       :loading="deleteLoading"
       @confirm="confirmDelete"
@@ -181,8 +181,8 @@ onUnmounted(() => navigationObserver?.disconnect())
       v-show="showScrollToTop && !bottomNavigationVisible"
       type="button"
       class="scroll-to-top-btn"
-      aria-label="Scroll to top"
-      title="Scroll to top"
+      :aria-label="$t('scroll_to_top')"
+      :title="$t('scroll_to_top')"
       @click="scrollToTop"
     >
       <ArrowUp :size="18" />

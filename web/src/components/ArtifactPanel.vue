@@ -87,9 +87,9 @@ function formatFileSize(bytes: number): string {
     role="tabpanel"
     aria-labelledby="artifacts-tab"
   >
-    <DetailPanelHeader title="Artifacts" />
+    <DetailPanelHeader :title="$t('artifacts')" />
     <p v-if="error" class="error">{{ error }}</p>
-    <p v-if="!visible.length" class="muted">No {{ formatLanguage(targetLanguage) }} artifacts yet.</p>
+    <p v-if="!visible.length" class="muted">{{ $t("no_artifacts_yet", { language: formatLanguage(targetLanguage) }) }}</p>
     <div v-else class="artifact-list">
       <div v-for="artifact in visible" :key="artifact.name" class="artifact-item">
         <div class="artifact-info">
@@ -98,9 +98,9 @@ function formatFileSize(bytes: number): string {
             <span class="artifact-badge">{{ artifact.format.toUpperCase() }}</span>
             <span class="artifact-badge">{{ formatLanguage(artifact.target_language) }}</span>
             <span v-if="artifact.metadata_status === 'inferred'" class="artifact-badge artifact-badge-warning">
-              Metadata inferred
+              {{ $t("metadata_inferred") }}
             </span>
-            <span class="muted">{{ artifact.chapter_count }} chapters</span>
+            <span class="muted">{{ $t("chapter_count", { count: artifact.chapter_count }) }}</span>
             <span class="muted">—</span>
             <span class="muted">{{ formatFileSize(artifact.size) }}</span>
             <span class="muted">—</span>
@@ -108,8 +108,8 @@ function formatFileSize(bytes: number): string {
           </div>
         </div>
         <div class="artifact-actions">
-          <button class="secondary" type="button" @click="download(artifact.name)">Download</button>
-          <button class="secondary danger" type="button" @click="confirmDelete(artifact.name)">Delete</button>
+          <button class="secondary" type="button" @click="download(artifact.name)">{{ $t("download") }}</button>
+          <button class="secondary danger" type="button" @click="confirmDelete(artifact.name)">{{ $t("delete") }}</button>
         </div>
       </div>
     </div>
@@ -118,11 +118,11 @@ function formatFileSize(bytes: number): string {
   <div v-if="packOpen" class="modal-overlay">
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="pack-title" tabindex="-1">
       <header class="modal-header">
-        <h3 id="pack-title">Pack Novel</h3>
+        <h3 id="pack-title">{{ $t("pack_novel") }}</h3>
         <button
           type="button"
           class="modal-close"
-          aria-label="Close"
+          :aria-label="$t('close')"
           @click="closePack"
         >
           <X :size="18" />
@@ -130,33 +130,33 @@ function formatFileSize(bytes: number): string {
       </header>
       <div class="modal-body">
         <div class="pack-target">
-          <label>Target language</label>
+          <label>{{ $t("target_language") }}</label>
           <div>{{ targetLanguageLabel }} ({{ targetLanguage }})</div>
         </div>
         <div class="pack-meta">
           <div>
-            <label>Custom title (optional)</label>
-            <input v-model="packTitle" placeholder="defaults to metadata title" />
+            <label>{{ $t("custom_title_optional") }}</label>
+            <input v-model="packTitle" :placeholder="$t('defaults_to_metadata_title')" />
           </div>
           <div>
-            <label>Custom author (optional)</label>
-            <input v-model="packAuthor" placeholder="defaults to metadata author" />
+            <label>{{ $t("custom_author_optional") }}</label>
+            <input v-model="packAuthor" :placeholder="$t('defaults_to_metadata_author')" />
           </div>
         </div>
         <p v-if="packError" class="error pack-error">{{ packError }}</p>
       </div>
       <footer class="modal-footer">
-        <button type="button" class="secondary" @click="closePack">Cancel</button>
-        <button type="button" @click="submitPack">Start pack</button>
+        <button type="button" class="secondary" @click="closePack">{{ $t("cancel") }}</button>
+        <button type="button" @click="submitPack">{{ $t("pack_epub") }}</button>
       </footer>
     </div>
   </div>
 
   <ConfirmDialog
     :show="showDeleteDialog"
-    title="Delete Artifact"
-    :message="`Delete artifact '${deleteName}'?\n\nThis permanently removes the exported file. This cannot be undone.`"
-    confirm-label="Delete"
+    :title="$t('delete_artifact')"
+    :message="$t('confirm_delete_artifact', { name: deleteName ?? '' })"
+    :confirm-label="$t('delete')"
     :danger="true"
     :loading="deleteSaving"
     @confirm="deleteArtifact"

@@ -19,6 +19,7 @@ import { useTranslation } from '@/composables/translation'
 import { getNovelCoverUrl } from '@/composables/novels'
 import { formatLanguage } from '@/language'
 import placeholderCover from '@/assets/placeholder-cover.png'
+import { t } from '@/i18n'
 
 const {
   novel, target, source, provider, start, end, limit, force, resume, failedOnly, review,
@@ -29,28 +30,28 @@ const {
 const novelSelectOptions = computed(() => {
   return novelOptions.value.map((item) => ({
     value: item.name,
-    label: `${item.title || item.name} (${remainingChapters(item)} ch. remaining)`
+    label: t('title_remaining_chapters', { title: item.title || item.name, count: remainingChapters(item) })
   }))
 })
 
-const sourceOptions = [
-  { value: '', label: 'Auto Detect' },
-  { value: 'korean', label: 'Korean (한국어)' },
-  { value: 'japanese', label: 'Japanese (日本語)' },
-  { value: 'chinese', label: 'Chinese (中文)' }
-]
+const sourceOptions = computed(() => [
+  { value: '', label: t('auto_detect') },
+  { value: 'korean', label: `${t('korean')} (한국어)` },
+  { value: 'japanese', label: `${t('japanese')} (日本語)` },
+  { value: 'chinese', label: `${t('chinese')} (中文)` }
+])
 
-const targetOptions = [
-  { value: 'vi', label: 'Vietnamese (Tiếng Việt)' },
-  { value: 'en', label: 'English' }
-]
+const targetOptions = computed(() => [
+  { value: 'vi', label: t('vietnamese') },
+  { value: 'en', label: t('english') }
+])
 
-const providerOptions = [
-  { value: '', label: 'Default Configured Provider' },
-  { value: 'ollama', label: 'Ollama (Local)' },
-  { value: 'gemini', label: 'Google Gemini' },
-  { value: 'openrouter', label: 'OpenRouter API' }
-]
+const providerOptions = computed(() => [
+  { value: '', label: t('default_configured_provider') },
+  { value: 'ollama', label: t('ollama_local') },
+  { value: 'gemini', label: t('google_gemini') },
+  { value: 'openrouter', label: t('openrouter_api') }
+])
 
 const advancedOpen = ref(false)
 
@@ -111,9 +112,9 @@ function toggleScopePreset(preset: 'all' | 'failed') {
         <Sparkles :size="22" />
       </div>
       <div>
-        <h2 class="studio-title">Translation Studio</h2>
+        <h2 class="studio-title">{{ $t("translation_studio") }}</h2>
         <p class="studio-subtitle">
-          Configure translation parameters, chapter ranges, and start high-fidelity AI translation pipelines.
+          {{ $t("translation_setup_description") }}
         </p>
       </div>
     </header>
@@ -132,14 +133,14 @@ function toggleScopePreset(preset: 'all' | 'failed') {
         <div class="card-panel step-card">
           <div class="step-badge">1</div>
           <div class="step-content">
-            <h3 class="step-title">Select Novel</h3>
-            <p class="step-desc">Pick a novel from your library to translate.</p>
+            <h3 class="step-title">{{ $t("select_novel") }}</h3>
+            <p class="step-desc">{{ $t("select_novel_to_translate") }}</p>
 
             <div class="field-wrap">
               <CustomSelect
                 v-model="novel"
                 :options="novelSelectOptions"
-                placeholder="— Select novel from library —"
+                :placeholder="$t('select_novel_from_library')"
               />
             </div>
 
@@ -154,16 +155,16 @@ function toggleScopePreset(preset: 'all' | 'failed') {
               />
               <div class="mini-info">
                 <h4 class="mini-title">{{ selectedNovelObj.title || selectedNovelObj.name }}</h4>
-                <span class="mini-author">{{ selectedNovelObj.author || 'Unknown author' }}</span>
+                <span class="mini-author">{{ selectedNovelObj.author || $t('unknown_author') }}</span>
                 <div class="mini-progress-row">
                   <span class="mini-stat">
-                    <strong>{{ completedCount }}</strong> / {{ totalChapters }} chapters translated
+                    {{ $t("chapters_translated_of_total", { completed: completedCount, total: totalChapters }) }}
                   </span>
                   <span v-if="remainingCount > 0" class="badge accent">
-                    {{ remainingCount }} left
+                    {{ $t("chapters_left", { count: remainingCount }) }}
                   </span>
                   <span v-else class="badge ok">
-                    Up to date
+                    {{ $t("up_to_date") }}
                   </span>
                 </div>
               </div>
@@ -175,12 +176,12 @@ function toggleScopePreset(preset: 'all' | 'failed') {
         <div class="card-panel step-card">
           <div class="step-badge">2</div>
           <div class="step-content">
-            <h3 class="step-title">Language Pair & Provider</h3>
-            <p class="step-desc">Set source and target languages, and optionally select a specific provider override.</p>
+            <h3 class="step-title">{{ $t("language_pair_provider") }}</h3>
+            <p class="step-desc">{{ $t("language_provider_help") }}</p>
 
             <div class="grid-2-cols">
               <div>
-                <label>Source Language</label>
+                <label>{{ $t("source_language") }}</label>
                 <CustomSelect
                   v-model="source"
                   :options="sourceOptions"
@@ -188,7 +189,7 @@ function toggleScopePreset(preset: 'all' | 'failed') {
               </div>
 
               <div>
-                <label>Target Language</label>
+                <label>{{ $t("target_language") }}</label>
                 <CustomSelect
                   v-model="target"
                   :options="targetOptions"
@@ -197,7 +198,7 @@ function toggleScopePreset(preset: 'all' | 'failed') {
             </div>
 
             <div style="margin-top: 1rem;">
-              <label>Provider Override (optional)</label>
+              <label>{{ $t("provider_override_optional") }}</label>
               <CustomSelect
                 v-model="provider"
                 :options="providerOptions"
@@ -212,8 +213,8 @@ function toggleScopePreset(preset: 'all' | 'failed') {
           <div class="step-content">
             <div class="step-header-row">
               <div>
-                <h3 class="step-title">Chapter Scope</h3>
-                <p class="step-desc">Select which chapters to process in this run.</p>
+                <h3 class="step-title">{{ $t("chapter_scope") }}</h3>
+                <p class="step-desc">{{ $t("chapter_scope_help") }}</p>
               </div>
 
               <!-- Scope Presets -->
@@ -226,7 +227,7 @@ function toggleScopePreset(preset: 'all' | 'failed') {
                   @click="toggleScopePreset('all')"
                 >
                   <Check v-if="activePreset === 'all'" :size="13" class="preset-check" />
-                  <span>All Remaining</span>
+                  <span>{{ $t("all_remaining") }}</span>
                 </button>
                 <button
                   type="button"
@@ -236,43 +237,43 @@ function toggleScopePreset(preset: 'all' | 'failed') {
                   @click="toggleScopePreset('failed')"
                 >
                   <Check v-if="activePreset === 'failed'" :size="13" class="preset-check" />
-                  <span>Failed Only</span>
+                  <span>{{ $t("failed_only") }}</span>
                 </button>
               </div>
             </div>
 
             <div class="scope-inputs-row">
               <div class="scope-field">
-                <label>Start Chapter</label>
+                <label>{{ $t("start_chapter") }}</label>
                 <input
                   v-model.number="start"
                   type="number"
                   min="0"
-                  placeholder="0 (first)"
+                  :placeholder="$t('first_chapter_index')"
                 />
-                <span class="field-hint">0 = from beginning</span>
+                <span class="field-hint">{{ $t("zero_from_beginning") }}</span>
               </div>
 
               <div class="scope-field">
-                <label>End Chapter</label>
+                <label>{{ $t("end_chapter") }}</label>
                 <input
                   v-model.number="end"
                   type="number"
                   min="0"
-                  placeholder="0 (last)"
+                  :placeholder="$t('last_chapter_index')"
                 />
-                <span class="field-hint">0 = to the end</span>
+                <span class="field-hint">{{ $t("zero_to_end") }}</span>
               </div>
 
               <div class="scope-field">
-                <label>Limit Count</label>
+                <label>{{ $t("limit_count") }}</label>
                 <input
                   v-model.number="limit"
                   type="number"
                   min="0"
-                  placeholder="0 (unlimited)"
+                  :placeholder="$t('unlimited_count')"
                 />
-                <span class="field-hint">0 = process all in range</span>
+                <span class="field-hint">{{ $t("zero_all_in_range") }}</span>
               </div>
             </div>
           </div>
@@ -287,7 +288,7 @@ function toggleScopePreset(preset: 'all' | 'failed') {
           >
             <div class="advanced-toggle-title">
               <Sliders :size="16" />
-              <span>Advanced Pipeline Options</span>
+              <span>{{ $t("advanced_pipeline_options") }}</span>
             </div>
             <ChevronUp v-if="advancedOpen" :size="16" />
             <ChevronDown v-else :size="16" />
@@ -297,32 +298,32 @@ function toggleScopePreset(preset: 'all' | 'failed') {
             <div class="options-grid">
               <label class="check">
                 <input v-model="resume" type="checkbox" />
-                <span>Skip chapters that already have translations (Resume)</span>
+                <span>{{ $t("skip_existing_resume") }}</span>
               </label>
 
               <label class="check">
                 <input v-model="failedOnly" type="checkbox" />
-                <span>Only re-translate chapters with failed status</span>
+                <span>{{ $t("retranslate_failed_only") }}</span>
               </label>
 
               <label class="check">
                 <input v-model="force" type="checkbox" />
-                <span>Force re-translate all targeted chapters (Overwrite)</span>
+                <span>{{ $t("force_retranslate_chapters") }}</span>
               </label>
 
               <label class="check">
                 <input v-model="review" type="checkbox" />
-                <span>Run translation review validation</span>
+                <span>{{ $t("run_translation_review_validation") }}</span>
               </label>
 
               <label class="check">
                 <input v-model="summary" type="checkbox" />
-                <span>Generate chapter summaries</span>
+                <span>{{ $t("generate_chapter_summaries") }}</span>
               </label>
 
               <label class="check">
                 <input v-model="translateMetadata" type="checkbox" />
-                <span>Translate novel title and synopsis metadata</span>
+                <span>{{ $t("translate_novel_metadata") }}</span>
               </label>
             </div>
           </div>
@@ -332,56 +333,56 @@ function toggleScopePreset(preset: 'all' | 'failed') {
       <!-- Action & Summary Sidebar Column -->
       <div class="action-column">
         <div class="card-panel summary-blueprint-card">
-          <h3 class="blueprint-title">Job Blueprint</h3>
-          <p class="blueprint-subtitle">Verify your configuration before starting.</p>
+          <h3 class="blueprint-title">{{ $t("job_blueprint") }}</h3>
+          <p class="blueprint-subtitle">{{ $t("verify_configuration") }}</p>
 
           <div class="blueprint-details">
             <div class="blueprint-item">
-              <span class="bp-label">Novel</span>
-              <span class="bp-val" :title="selectedNovelObj?.title || novel || 'None'">
-                {{ selectedNovelObj?.title || novel || 'None selected' }}
+              <span class="bp-label">{{ $t("novel") }}</span>
+              <span class="bp-val" :title="selectedNovelObj?.title || novel || $t('none')">
+                {{ selectedNovelObj?.title || novel || $t('none_selected') }}
               </span>
             </div>
 
             <div class="blueprint-item">
-              <span class="bp-label">Language</span>
+              <span class="bp-label">{{ $t("language") }}</span>
               <span class="bp-val">
-                {{ formatLanguage(source, 'Auto') }} &rarr; {{ formatLanguage(target, 'Vietnamese') }}
+                {{ formatLanguage(source, 'auto') }} &rarr; {{ formatLanguage(target, 'vietnamese') }}
               </span>
             </div>
 
             <div class="blueprint-item">
-              <span class="bp-label">Engine</span>
+              <span class="bp-label">{{ $t("engine") }}</span>
               <span class="bp-val">
-                {{ provider || 'System Default' }}
+                {{ provider ? $t(provider) : $t('system_default') }}
               </span>
             </div>
 
             <div class="blueprint-item">
-              <span class="bp-label">Scope</span>
+              <span class="bp-label">{{ $t("scope") }}</span>
               <span class="bp-val">
-                {{ failedOnly ? 'Failed chapters only' : (start || end || limit ? `Range: ${start || 1}–${end || 'end'} (limit: ${limit || 'none'})` : (resume ? 'All remaining' : 'All scheduled')) }}
+                {{ failedOnly ? $t('failed_chapters_only') : (start || end || limit ? $t('range_limit', { start: start || 1, end: end || $t('end'), limit: limit || $t('unlimited') }) : (resume ? $t('all_remaining') : $t('all_scheduled'))) }}
               </span>
             </div>
 
             <div class="blueprint-item">
-              <span class="bp-label">Mode</span>
+              <span class="bp-label">{{ $t("mode") }}</span>
               <span class="bp-val">
-                {{ force ? 'Force overwrite' : (resume ? 'Skip existing (Resume)' : 'Standard') }}
+                {{ force ? $t('force_overwrite') : (resume ? $t('skip_existing_resume') : $t('standard')) }}
               </span>
             </div>
 
             <div class="blueprint-item">
-              <span class="bp-label">Review</span>
+              <span class="bp-label">{{ $t("review") }}</span>
               <span class="bp-val" :class="{ 'bp-val-highlight': review }">
-                {{ review ? 'Enabled' : 'Disabled' }}
+                {{ review ? $t('enabled') : $t('disabled') }}
               </span>
             </div>
 
             <div class="blueprint-item">
-              <span class="bp-label">Summary</span>
+              <span class="bp-label">{{ $t("summary") }}</span>
               <span class="bp-val" :class="{ 'bp-val-highlight': summary }">
-                {{ summary ? 'Enabled' : 'Disabled' }}
+                {{ summary ? $t('enabled') : $t('disabled') }}
               </span>
             </div>
           </div>
@@ -393,7 +394,7 @@ function toggleScopePreset(preset: 'all' | 'failed') {
             @click="startTranslation"
           >
             <Play :size="16" />
-            <span>Launch Translation Job</span>
+            <span>{{ $t("launch_translation_job") }}</span>
           </button>
         </div>
 
@@ -401,7 +402,7 @@ function toggleScopePreset(preset: 'all' | 'failed') {
         <div v-if="jobId" class="card-panel active-job-card">
           <div class="job-card-header">
             <div class="live-dot" />
-            <h4 class="job-card-title">Live Job Progress</h4>
+            <h4 class="job-card-title">{{ $t("live_job_progress") }}</h4>
           </div>
           <JobMonitor :job-id="jobId" />
         </div>

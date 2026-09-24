@@ -21,15 +21,15 @@ function selectSource(source: SourceKind) {
         <FolderDown :size="22" />
       </div>
       <div>
-        <h2 class="sources-title">Novel Ingestion & Sources</h2>
+        <h2 class="sources-title">{{ $t("novel_ingestion_sources") }}</h2>
         <p class="sources-subtitle">
-          Import content from digital EPUB publications or crawl chapters directly from web novel repositories.
+          {{ $t("import_sources_description") }}
         </p>
       </div>
     </header>
 
     <!-- Source Type Navigation Tabs -->
-    <nav class="source-nav-tabs" aria-label="Source type" role="tablist">
+    <nav class="source-nav-tabs" :aria-label="$t('source_type')" role="tablist">
       <button
         id="website-source-tab"
         type="button"
@@ -41,7 +41,7 @@ function selectSource(source: SourceKind) {
         @click="selectSource('website')"
       >
         <Globe :size="16" />
-        <span>From Website</span>
+        <span>{{ $t("from_website") }}</span>
       </button>
 
       <button
@@ -55,7 +55,7 @@ function selectSource(source: SourceKind) {
         @click="selectSource('epub')"
       >
         <BookUp :size="16" />
-        <span>From EPUB File</span>
+        <span>{{ $t("from_epub_file") }}</span>
       </button>
     </nav>
 

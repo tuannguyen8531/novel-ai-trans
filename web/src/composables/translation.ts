@@ -3,6 +3,7 @@ import { useRoute } from 'vue-router'
 import { api } from '@/api/client'
 import type { NovelSummary } from '@/api/types'
 import { useNovelsStore } from '@/composables/novels'
+import { t } from '@/i18n'
 
 export function useTranslation() {
   const novels = useNovelsStore()
@@ -37,7 +38,7 @@ export function useTranslation() {
   async function startTranslation() {
     error.value = null
     if (!novel.value) {
-      error.value = 'Choose a novel.'
+      error.value = t('choose_a_novel')
       return
     }
     const payload: Record<string, unknown> = {

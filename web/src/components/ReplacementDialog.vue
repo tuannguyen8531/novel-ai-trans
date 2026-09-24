@@ -4,6 +4,7 @@ import { X } from '@lucide/vue'
 import type { GlossaryApplyResponse, GlossaryReplacementReport } from '@/api/types'
 import { formatLanguage } from '@/language'
 import { useBodyScrollLock } from '@/composables/scrolllock'
+import { t } from '@/i18n'
 
 const props = defineProps<{
   open: boolean
@@ -70,8 +71,16 @@ function statusClass(status: string) {
 }
 
 function statusLabel(replacement: GlossaryReplacementReport) {
-  if (props.previewData?.write && replacement.status === 'safe') return 'APPLIED'
-  return replacement.status.toUpperCase()
+  if (props.previewData?.write && replacement.status === 'safe') return t('applied')
+  const labels: Record<string, string> = {
+    safe: 'safe',
+    applied: 'applied',
+    already_applied: 'already_applied',
+    ambiguous: 'ambiguous',
+    missing_output: 'missing_output',
+    conflict: 'conflict'
+  }
+  return t(labels[replacement.status] ?? replacement.status).toUpperCase()
 }
 
 watch(() => props.open, (isOpen) => {
@@ -102,11 +111,11 @@ watch(busy, (isBusy) => {
       @keydown="handleKeydown"
     >
       <header class="modal-header">
-        <h3 id="glossary-preview-title">Preview & Apply Glossary Changes</h3>
+        <h3 id="glossary-preview-title">{{ $t("preview_apply_glossary_changes") }}</h3>
         <button
           type="button"
           class="modal-close"
-          aria-label="Close glossary preview"
+          :aria-label="$t('close_glossary_preview')"
           :disabled="busy"
           @click="close"
         >
@@ -116,21 +125,26 @@ watch(busy, (isBusy) => {
       <div class="modal-body">
         <p v-if="error" class="error">{{ error }}</p>
         <div v-if="previewLoading" class="preview-spinner">
-          <p>Scanning translated chapters...</p>
+          <p>{{ $t("scanning_translated_chapters") }}</p>
         </div>
         <div v-else-if="previewData">
           <div class="preview-summary">
             <p>
-              Novel: <strong>{{ previewData.novel }}</strong> |
-              Target language: <strong>{{ formatLanguage(previewData.target) }}</strong>
+              {{ $t("novel_target_language", { novel: previewData.novel, language: formatLanguage(previewData.target) }) }}
             </p>
-            <p>Chapters to update: <strong>{{ previewData.changed_files }}</strong></p>
+            <p>{{ $t("chapters_to_update_count", { count: previewData.changed_files }) }}</p>
             <p v-if="previewData.conflicted" class="error">
-              ⚠️ Conflict detected. You cannot overwrite the translation while conflicts exist.
+              {{ $t("translation_conflict_warning") }}
             </p>
             <p v-else-if="previewData.write" class="notice">
-              Updated {{ previewData.changed_files }} chapter(s).
-              <template v-if="unresolvedCount">{{ unresolvedCount }} issue(s) remain pending.</template>
+              {{ previewData.changed_files === 1
+                ? $t("single_chapter_updated")
+                : $t("chapters_updated", { count: previewData.changed_files }) }}
+              <template v-if="unresolvedCount">
+                {{ unresolvedCount === 1
+                  ? $t("single_pending_issue")
+                  : $t("pending_issues_count", { count: unresolvedCount }) }}
+              </template>
             </p>
           </div>
 
@@ -138,17 +152,17 @@ watch(busy, (isBusy) => {
             <table>
               <thead>
                 <tr>
-                  <th>Chapter</th>
-                  <th>Kind</th>
-                  <th>Original</th>
-                  <th>Old translation</th>
-                  <th>New translation</th>
-                  <th>Status</th>
+                  <th>{{ $t("chapter") }}</th>
+                  <th>{{ $t("kind") }}</th>
+                  <th>{{ $t("original") }}</th>
+                  <th>{{ $t("old_translation") }}</th>
+                  <th>{{ $t("new_translation") }}</th>
+                  <th>{{ $t("status") }}</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="(replacement, index) in previewData.replacements" :key="index">
-                  <td>Ch.{{ replacement.chapter }}</td>
+                  <td>{{ $t("chapter_number", { number: replacement.chapter }) }}</td>
                   <td>{{ replacement.kind }}</td>
                   <td>{{ replacement.sources.join('/') }}</td>
                   <td>{{ replacement.old }}</td>
@@ -163,7 +177,7 @@ watch(busy, (isBusy) => {
             </table>
           </div>
           <p v-else class="muted">
-            No matching text was found in the translated chapters.
+            {{ $t("no_matching_translated_text") }}
           </p>
         </div>
       </div>
@@ -174,16 +188,16 @@ watch(busy, (isBusy) => {
           class="secondary"
           :disabled="busy"
           @click="rollback"
-        >{{ rollbackLoading ? 'Restoring...' : 'Restore previous version' }}</button>
+        >{{ rollbackLoading ? $t('restoring') : $t('restore_previous_version') }}</button>
         <button type="button" class="secondary" :disabled="busy" @click="close">
-          {{ previewData?.write ? 'Close' : 'Cancel' }}
+          {{ previewData?.write ? $t('close') : $t('cancel') }}
         </button>
         <button
           v-if="previewData && !previewLoading && !previewData.write"
           type="button"
           :disabled="previewData.conflicted || applyLoading"
           @click="apply"
-        >{{ applyLoading ? 'Applying...' : 'Confirm & Apply' }}</button>
+        >{{ applyLoading ? $t('applying') : $t('confirm_apply') }}</button>
       </footer>
     </div>
   </div>

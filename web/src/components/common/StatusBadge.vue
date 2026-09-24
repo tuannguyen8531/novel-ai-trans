@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { t } from '@/i18n'
 
 const props = withDefaults(
   defineProps<{
@@ -29,8 +30,34 @@ const normalizedStatus = computed(() => {
 
 const displayLabel = computed(() => {
   if (props.label) return props.label
-  const s = props.status || 'normal'
-  return s.replace(/_/g, ' ')
+  const status = (props.status || 'normal').toLowerCase()
+  const labels: Record<string, string> = {
+    normal: 'normal',
+    completed: 'completed',
+    ok: 'completed',
+    success: 'completed',
+    configured: 'configured',
+    safe: 'safe',
+    warn: 'warning',
+    warning: 'warning',
+    degraded: 'degraded',
+    cancelling: 'cancelling',
+    cancelled: 'cancelled',
+    ambiguous: 'ambiguous',
+    danger: 'error',
+    error: 'error',
+    failed: 'failed',
+    'missing key': 'missing_key',
+    conflict: 'conflict',
+    running: 'running',
+    translating: 'translating',
+    active: 'active',
+    queued: 'queued',
+    pending: 'pending',
+    waiting: 'waiting',
+    reviewed: 'reviewed'
+  }
+  return t(labels[status] ?? status.replace(/_/g, ' '))
 })
 </script>
 

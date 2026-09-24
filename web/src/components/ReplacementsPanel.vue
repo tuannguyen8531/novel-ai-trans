@@ -17,14 +17,13 @@ const emit = defineEmits<{
     <div class="pending-banner-text">
       <AlertTriangle :size="18" class="text-amber-400 shrink-0" />
       <span>
-        You have <strong>{{ pendingCount }}</strong> pending glossary changes waiting to be
-        applied to translated chapters.
+        {{ $t("pending_glossary_changes_count", { count: pendingCount }) }}
       </span>
     </div>
     <div class="pending-banner-actions">
-      <button type="button" :disabled="loading" @click="emit('preview')">Preview & Apply</button>
+      <button type="button" :disabled="loading" @click="emit('preview')">{{ $t("preview_apply") }}</button>
       <button type="button" class="secondary" :disabled="loading" @click="emit('dismiss')">
-        Dismiss
+        {{ $t("dismiss") }}
       </button>
     </div>
   </div>

@@ -53,8 +53,8 @@ async function saveEdit() {
       <div class="flex items-center gap-2">
         <BookA :size="18" class="text-indigo-400 shrink-0" />
         <div>
-          <h3>Terms</h3>
-          <p class="muted">{{ Object.keys(terms).length }} glossary entries</p>
+          <h3>{{ $t("terms") }}</h3>
+          <p class="muted">{{ $t("glossary_entries", { count: Object.keys(terms).length }) }}</p>
         </div>
       </div>
       <div class="gloss-controls">
@@ -62,7 +62,7 @@ async function saveEdit() {
           <Search :size="14" class="absolute left-2.5 text-zinc-500 pointer-events-none" />
           <input
             v-model="filter"
-            placeholder="Filter terms…"
+            :placeholder="$t('filter_terms')"
             class="gloss-filter !pl-8"
           />
         </div>
@@ -72,14 +72,14 @@ async function saveEdit() {
           @click="showAdd = !showAdd"
         >
           <component :is="showAdd ? X : Plus" :size="14" />
-          {{ showAdd ? 'Cancel' : 'Add term' }}
+          {{ showAdd ? $t('cancel') : $t('add_term') }}
         </button>
       </div>
     </header>
 
     <div v-if="showAdd" class="gloss-add p-3 bg-zinc-900/60 dark:bg-zinc-900/80 rounded-lg border border-indigo-500/30">
-      <input v-model="newTerm.original" placeholder="Original (source language)" class="flex-1" />
-      <input v-model="newTerm.translated" placeholder="Translated" class="flex-1" />
+      <input v-model="newTerm.original" :placeholder="$t('original_source_language')" class="flex-1" />
+      <input v-model="newTerm.translated" :placeholder="$t('translated')" class="flex-1" />
       <button
         type="button"
         class="flex items-center gap-1.5"
@@ -87,7 +87,7 @@ async function saveEdit() {
         @click="add"
       >
         <Save :size="14" />
-        Save
+        {{ $t("save") }}
       </button>
     </div>
 
@@ -95,8 +95,8 @@ async function saveEdit() {
       <table v-if="filteredTerms.length">
         <thead>
           <tr>
-            <th>Original</th>
-            <th>Translated</th>
+            <th>{{ $t("original") }}</th>
+            <th>{{ $t("translated") }}</th>
             <th class="actions"></th>
           </tr>
         </thead>
@@ -114,11 +114,11 @@ async function saveEdit() {
                     @click="saveEdit"
                   >
                     <Save :size="13" />
-                    Save
+                    {{ $t("save") }}
                   </button>
                   <button class="secondary flex items-center gap-1" type="button" @click="editing = null">
                     <X :size="13" />
-                    Cancel
+                    {{ $t("cancel") }}
                   </button>
                 </div>
               </td>
@@ -134,7 +134,7 @@ async function saveEdit() {
                     @click="startEdit(original, translated)"
                   >
                     <Edit2 :size="12" />
-                    Edit
+                    {{ $t("edit") }}
                   </button>
                   <button
                     class="secondary flex items-center gap-1 text-xs py-1 px-2 text-rose-400 hover:text-rose-300"
@@ -142,7 +142,7 @@ async function saveEdit() {
                     @click="removeTerm(original)"
                   >
                     <Trash2 :size="12" />
-                    Remove
+                    {{ $t("remove") }}
                   </button>
                 </div>
               </td>
@@ -151,7 +151,7 @@ async function saveEdit() {
         </tbody>
       </table>
       <p v-else class="muted gloss-empty">
-        {{ filter ? 'No terms match the filter.' : 'No terms yet.' }}
+        {{ filter ? $t('no_terms_match_the_filter') : $t('no_terms_yet') }}
       </p>
     </div>
   </section>

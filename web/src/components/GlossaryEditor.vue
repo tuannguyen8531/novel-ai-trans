@@ -21,7 +21,7 @@ const confirmDialog = ref<{
   show: false,
   title: '',
   message: '',
-  confirmLabel: 'Confirm',
+  confirmLabel: 'confirm',
   danger: false,
   resolve: null
 })
@@ -32,7 +32,7 @@ const askConfirm: ConfirmAction = (title, message, options = {}) =>
       show: true,
       title,
       message,
-      confirmLabel: options.confirmLabel ?? 'Confirm',
+      confirmLabel: options.confirmLabel ?? 'confirm',
       danger: options.danger ?? false,
       resolve
     }
@@ -127,9 +127,9 @@ async function openReplacementDialog() {
 
     <ConfirmDialog
       :show="confirmDialog.show"
-      :title="confirmDialog.title"
-      :message="confirmDialog.message"
-      :confirm-label="confirmDialog.confirmLabel"
+      :title="$t(confirmDialog.title)"
+      :message="$t(confirmDialog.message)"
+      :confirm-label="$t(confirmDialog.confirmLabel)"
       :danger="confirmDialog.danger"
       @confirm="resolveConfirmation(true)"
       @cancel="resolveConfirmation(false)"

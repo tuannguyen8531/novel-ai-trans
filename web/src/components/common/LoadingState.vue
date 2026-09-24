@@ -5,7 +5,6 @@ withDefaults(
     height?: string
   }>(),
   {
-    label: 'Loading...',
     height: '10rem'
   }
 )
@@ -14,7 +13,7 @@ withDefaults(
 <template>
   <div class="loading-state" :style="{ minHeight: height }">
     <div class="spinner" aria-hidden="true" />
-    <span v-if="label" class="loading-label">{{ label }}</span>
+    <span class="loading-label">{{ label || $t('loading') }}</span>
   </div>
 </template>
 

@@ -24,6 +24,7 @@ import EmptyState from '@/components/common/EmptyState.vue'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import { formatLanguage } from '@/language'
 import placeholderCover from '@/assets/placeholder-cover.png'
+import { t } from '@/i18n'
 
 const novels = useNovelsStore()
 const settings = useSettingsStore()
@@ -35,25 +36,25 @@ const searchQuery = ref('')
 const filterLanguage = ref<string>('all')
 const filterStatus = ref<string>('all')
 
-const languageFilterOptions = [
-  { value: 'all', label: 'All Languages' },
-  { value: 'ko', label: 'Korean' },
-  { value: 'ja', label: 'Japanese' },
-  { value: 'zh', label: 'Chinese' }
-]
+const languageFilterOptions = computed(() => [
+  { value: 'all', label: t('all_languages') },
+  { value: 'ko', label: t('korean') },
+  { value: 'ja', label: t('japanese') },
+  { value: 'zh', label: t('chinese') }
+])
 
-const sourceLanguageOptions = [
-  { value: 'ko', label: 'Korean' },
-  { value: 'ja', label: 'Japanese' },
-  { value: 'zh', label: 'Chinese' }
-]
+const sourceLanguageOptions = computed(() => [
+  { value: 'ko', label: t('korean') },
+  { value: 'ja', label: t('japanese') },
+  { value: 'zh', label: t('chinese') }
+])
 
-const statusFilterOptions = [
-  { value: 'all', label: 'All Statuses' },
-  { value: 'in_progress', label: 'In Progress' },
-  { value: 'completed', label: 'Translated' },
-  { value: 'issues', label: 'Needs Attention' }
-]
+const statusFilterOptions = computed(() => [
+  { value: 'all', label: t('all_statuses') },
+  { value: 'in_progress', label: t('in_progress') },
+  { value: 'completed', label: t('translated') },
+  { value: 'issues', label: t('needs_attention') }
+])
 
 const deletingNovel = ref<string | null>(null)
 const deleteError = ref<string | null>(null)
@@ -318,9 +319,9 @@ function closeWarningDialog() {
 
 function warningChapterTooltip(chapter: number): string {
   if (importantWarningChapters.value.has(chapter)) {
-    return 'Contains source-language characters or is missing a translated title'
+    return t('source_text_or_missing_title')
   }
-  return 'Contains unresolved translation quality warnings'
+  return t('unresolved_quality_warnings')
 }
 
 function requestIgnoreWarnings() {
@@ -351,8 +352,8 @@ async function confirmIgnoreWarnings() {
 }
 
 const ignoreWarningsMessage = computed(() => {
-  const name = warningNovel.value?.name ?? 'this novel'
-  return `Ignore all current warning chapters for "${name}"? The warning decisions will apply to the current translation content.`
+  const name = warningNovel.value?.name ?? t('this_novel')
+  return t('confirm_ignore_novel_warnings', { name })
 })
 
 const deleteMessage = computed(() => {
@@ -360,7 +361,7 @@ const deleteMessage = computed(() => {
   const label = novelToDelete.value.title
     ? `"${novelToDelete.value.title}" (${novelToDelete.value.name})`
     : `"${novelToDelete.value.name}"`
-  return `Delete ${label}?\n\nThis permanently removes all chapters, translations, glossary data, illustrations, and artifacts. This cannot be undone.`
+  return t('confirm_delete_novel', { label })
 })
 </script>
 
@@ -374,9 +375,9 @@ const deleteMessage = computed(() => {
             <Library :size="20" />
           </div>
           <div>
-            <h2 class="library-title">Novel Library</h2>
+            <h2 class="library-title">{{ $t("novel_library") }}</h2>
             <p class="library-count">
-              {{ novels.novels.length }} novel{{ novels.novels.length === 1 ? '' : 's' }} in collection
+              {{ novels.novels.length === 1 ? $t('single_novel_in_collection') : $t('novels_in_collection_count', { count: novels.novels.length }) }}
             </p>
           </div>
         </div>
@@ -389,7 +390,7 @@ const deleteMessage = computed(() => {
           <input
             v-model="searchQuery"
             type="search"
-            placeholder="Search by title, author, slug..."
+            :placeholder="$t('search_by_title_author_slug')"
             class="search-input"
           />
           <button
@@ -421,7 +422,7 @@ const deleteMessage = computed(() => {
             type="button"
             class="toggle-btn"
             :class="{ active: viewMode === 'grid' }"
-            title="Bookshelf Grid View"
+            :title="$t('bookshelf_grid_view')"
             @click="setViewMode('grid')"
           >
             <LayoutGrid :size="16" />
@@ -430,7 +431,7 @@ const deleteMessage = computed(() => {
             type="button"
             class="toggle-btn"
             :class="{ active: viewMode === 'table' }"
-            title="List Table View"
+            :title="$t('list_table_view')"
             @click="setViewMode('table')"
           >
             <List :size="16" />
@@ -440,7 +441,7 @@ const deleteMessage = computed(() => {
         <!-- Add Novel Button -->
         <button type="button" class="add-novel-btn" @click="showAddModal = true">
           <Plus :size="16" />
-          <span>New Novel</span>
+          <span>{{ $t("new_novel") }}</span>
         </button>
       </div>
     </header>
@@ -459,19 +460,19 @@ const deleteMessage = computed(() => {
     <EmptyState
       v-if="!novels.novels.length"
       :icon="Library"
-      title="No novels yet"
-      description="Start by crawling a web novel chapter list or importing an EPUB."
+      :title="$t('no_novels_yet')"
+      :description="$t('empty_library_instructions')"
     >
       <template #action>
         <div class="row gap-2">
           <button type="button" @click="showAddModal = true">
             <Plus :size="16" />
-            <span>Create Empty Novel</span>
+            <span>{{ $t("create_empty_novel") }}</span>
           </button>
           <RouterLink to="/sources">
             <button type="button" class="secondary">
               <FolderDown :size="16" />
-              <span>Import Sources</span>
+              <span>{{ $t("import_sources") }}</span>
             </button>
           </RouterLink>
         </div>
@@ -480,9 +481,9 @@ const deleteMessage = computed(() => {
 
     <!-- Filtered Empty State -->
     <div v-else-if="!filteredNovels.length" class="empty-filter-state card-panel">
-      <p class="muted">No novels matching your current search and filter criteria.</p>
+      <p class="muted">{{ $t("no_matching_novels") }}</p>
       <button type="button" class="secondary" @click="searchQuery = ''; filterLanguage = 'all'; filterStatus = 'all'">
-        Clear Filters
+        {{ $t("clear_filters") }}
       </button>
     </div>
 
@@ -504,9 +505,9 @@ const deleteMessage = computed(() => {
               @error="($event.target as HTMLImageElement).src = placeholderCover"
             />
             <div class="cover-overlay">
-              <span class="lang-tag">{{ formatLanguage(novel.source_language, 'Auto') }}</span>
+              <span class="lang-tag">{{ formatLanguage(novel.source_language, 'auto') }}</span>
               <div v-if="(translatedProgress(novel)?.failed ?? 0) > 0" class="badge-failed">
-                {{ translatedProgress(novel)?.failed }} failed
+                {{ $t("failed_count", { count: translatedProgress(novel)?.failed ?? 0 }) }}
               </div>
             </div>
           </div>
@@ -515,13 +516,13 @@ const deleteMessage = computed(() => {
             <RouterLink :to="`/novels/${novel.name}`" class="novel-card-title" :title="novel.title || novel.name">
               {{ novel.title || novel.name }}
             </RouterLink>
-            <span class="novel-card-author">{{ novel.author || 'Unknown author' }}</span>
+              <span class="novel-card-author">{{ novel.author || $t('unknown_author') }}</span>
             <span class="novel-card-slug"><code>{{ novel.name }}</code></span>
 
             <!-- Progress Bar -->
             <div class="progress-wrap">
               <div class="progress-info">
-                <span>{{ translatedProgress(novel)?.completed ?? 0 }} / {{ translatedProgress(novel)?.total ?? novel.total_input_chapters }} ch.</span>
+                <span>{{ $t("chapters_completed_of_total", { completed: translatedProgress(novel)?.completed ?? 0, total: translatedProgress(novel)?.total ?? novel.total_input_chapters }) }}</span>
                 <span>{{ progressPercent(novel) }}%</span>
               </div>
               <div class="progress">
@@ -537,22 +538,22 @@ const deleteMessage = computed(() => {
                 class="badge danger status-badge"
                 @click="showFailedChapters(novel)"
               >
-                failed: {{ translatedProgress(novel)?.failed }}
+                {{ $t("failed_count_label", { count: translatedProgress(novel)?.failed ?? 0 }) }}
               </button>
               <button
                 v-if="(translatedProgress(novel)?.warnings ?? 0) > 0"
                 type="button"
                 class="badge warn status-badge"
-                title="Chapters with unresolved translation quality warnings"
+                :title="$t('chapters_with_quality_warnings')"
                 @click="showWarningChapters(novel)"
               >
-                warning: {{ translatedProgress(novel)?.warnings }}
+                {{ $t("warnings_count_label", { count: translatedProgress(novel)?.warnings ?? 0 }) }}
               </button>
               <span
                 v-if="(translatedProgress(novel)?.failed ?? 0) === 0 && (translatedProgress(novel)?.warnings ?? 0) === 0"
                 class="badge ok"
               >
-                normal
+                {{ $t("normal") }}
               </span>
             </div>
 
@@ -561,22 +562,22 @@ const deleteMessage = computed(() => {
               <RouterLink
                 :to="{ name: 'translate', query: { novel: novel.name } }"
                 class="btn-action primary"
-                title="Translate this novel"
+                :title="$t('translate_this_novel')"
               >
                 <Sparkles :size="13" />
-                <span>Translate</span>
+                <span>{{ $t("translate") }}</span>
               </RouterLink>
               <RouterLink
                 :to="`/novels/${novel.name}`"
                 class="btn-action secondary"
-                title="Open workspace"
+                :title="$t('open_workspace')"
               >
-                Workspace
+                {{ $t("details") }}
               </RouterLink>
               <button
                 type="button"
                 class="btn-action danger"
-                title="Delete novel"
+                :title="$t('delete_novel')"
                 :disabled="deletingNovel !== null"
                 @click="deleteNovel(novel)"
               >
@@ -593,13 +594,13 @@ const deleteMessage = computed(() => {
       <table class="library-table">
         <thead>
           <tr>
-            <th style="width: 50px;">Cover</th>
-            <th>Title & Slug</th>
-            <th>Author</th>
-            <th>Language</th>
-            <th>Progress</th>
-            <th>Status</th>
-            <th class="actions-col" style="text-align: right;">Actions</th>
+            <th style="width: 50px;">{{ $t("cover") }}</th>
+            <th>{{ $t("title_slug") }}</th>
+            <th>{{ $t("author") }}</th>
+            <th>{{ $t("language") }}</th>
+            <th>{{ $t("progress") }}</th>
+            <th>{{ $t("status") }}</th>
+            <th class="actions-col" style="text-align: right;">{{ $t("actions") }}</th>
           </tr>
         </thead>
         <tbody>
@@ -627,12 +628,12 @@ const deleteMessage = computed(() => {
               {{ novel.author || '—' }}
             </td>
             <td>
-              <span class="badge">{{ formatLanguage(novel.source_language, 'Auto') }}</span>
+              <span class="badge">{{ formatLanguage(novel.source_language, 'auto') }}</span>
             </td>
             <td style="min-width: 140px;">
               <div class="table-progress-cell">
                 <div class="progress-info">
-                  <span>{{ translatedProgress(novel)?.completed ?? 0 }} / {{ translatedProgress(novel)?.total ?? novel.total_input_chapters }}</span>
+                  <span>{{ $t("chapters_completed_of_total", { completed: translatedProgress(novel)?.completed ?? 0, total: translatedProgress(novel)?.total ?? novel.total_input_chapters }) }}</span>
                   <span>{{ progressPercent(novel) }}%</span>
                 </div>
                 <div class="progress">
@@ -648,22 +649,22 @@ const deleteMessage = computed(() => {
                   class="badge danger status-badge"
                   @click="showFailedChapters(novel)"
                 >
-                  failed: {{ translatedProgress(novel)?.failed }}
+                  {{ $t("failed_count_label", { count: translatedProgress(novel)?.failed ?? 0 }) }}
                 </button>
                 <button
                   v-if="(translatedProgress(novel)?.warnings ?? 0) > 0"
                   type="button"
                   class="badge warn status-badge"
-                  title="Chapters with unresolved translation quality warnings"
+                  :title="$t('chapters_with_quality_warnings')"
                   @click="showWarningChapters(novel)"
                 >
-                  warning: {{ translatedProgress(novel)?.warnings }}
+                  {{ $t("warnings_count_label", { count: translatedProgress(novel)?.warnings ?? 0 }) }}
                 </button>
                 <span
                   v-if="(translatedProgress(novel)?.failed ?? 0) === 0 && (translatedProgress(novel)?.warnings ?? 0) === 0"
                   class="badge ok"
                 >
-                  normal
+                  {{ $t("normal") }}
                 </span>
               </div>
             </td>
@@ -672,27 +673,27 @@ const deleteMessage = computed(() => {
                 <RouterLink
                   :to="{ name: 'translate', query: { novel: novel.name } }"
                   class="btn-action primary"
-                  title="Translate novel"
+                  :title="$t('translate_novel')"
                 >
                   <Sparkles :size="13" />
-                  <span>Translate</span>
+                  <span>{{ $t("translate") }}</span>
                 </RouterLink>
                 <RouterLink
                   :to="`/novels/${novel.name}`"
                   class="btn-action secondary"
-                  title="Open workspace"
+                  :title="$t('open_workspace')"
                 >
-                  <span>Workspace</span>
+                  <span>{{ $t("details") }}</span>
                 </RouterLink>
                 <button
                   type="button"
                   class="btn-action danger"
-                  title="Delete novel"
+                  :title="$t('delete_novel')"
                   :disabled="deletingNovel !== null"
                   @click="deleteNovel(novel)"
                 >
                   <Trash2 :size="13" />
-                  <span>Delete</span>
+                  <span>{{ $t("delete") }}</span>
                 </button>
               </div>
             </td>
@@ -704,9 +705,9 @@ const deleteMessage = computed(() => {
     <!-- Confirm Delete Dialog -->
     <ConfirmDialog
       :show="showDeleteDialog"
-      title="Delete Novel"
+      :title="$t('delete_novel')"
       :message="deleteMessage"
-      confirm-label="Delete Novel"
+      :confirm-label="$t('delete_novel')"
       :danger="true"
       :loading="deletingNovel !== null"
       @confirm="confirmDelete"
@@ -718,16 +719,16 @@ const deleteMessage = computed(() => {
       <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="failed-chapters-title">
         <header class="modal-header">
           <h3 id="failed-chapters-title">
-            Failed chapters — {{ failedNovel?.name }}
+            {{ $t("failed_chapters_for", { novel: failedNovel?.name ?? '' }) }}
           </h3>
-          <button class="modal-close" type="button" aria-label="Close" @click="closeFailedDialog">
+          <button class="modal-close" type="button" :aria-label="$t('close')" @click="closeFailedDialog">
             <X :size="18" />
           </button>
         </header>
         <div class="modal-body">
-          <p v-if="failedChaptersLoading" class="muted">Loading failed chapters...</p>
+          <p v-if="failedChaptersLoading" class="muted">{{ $t("loading_failed_chapters") }}</p>
           <p v-else-if="failedChaptersError" class="error">{{ failedChaptersError }}</p>
-          <p v-else-if="!failedChapters.length" class="muted">No failed chapters.</p>
+          <p v-else-if="!failedChapters.length" class="muted">{{ $t("no_failed_chapters") }}</p>
           <div v-else class="failed-chapter-list">
             <RouterLink
               v-for="chapter in failedChapters"
@@ -736,7 +737,7 @@ const deleteMessage = computed(() => {
               :to="`/novels/${failedNovel?.name}/chapters/${chapter}`"
               @click="closeFailedDialog"
             >
-              Chapter {{ chapter }}
+              {{ $t("chapter_number", { number: chapter }) }}
             </RouterLink>
           </div>
         </div>
@@ -747,7 +748,7 @@ const deleteMessage = computed(() => {
             :disabled="failedChaptersLoading || !failedNovel"
             @click="retranslateFailed"
           >
-            Retranslate
+            {{ $t("retranslate") }}
           </button>
         </footer>
       </div>
@@ -758,17 +759,17 @@ const deleteMessage = computed(() => {
       <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="warning-chapters-title">
         <header class="modal-header">
           <h3 id="warning-chapters-title">
-            Warning chapters — {{ warningNovel?.name }}
+            {{ $t("warning_chapters_for", { novel: warningNovel?.name ?? '' }) }}
           </h3>
-          <button class="modal-close" type="button" aria-label="Close" @click="closeWarningDialog">
+          <button class="modal-close" type="button" :aria-label="$t('close')" @click="closeWarningDialog">
             <X :size="18" />
           </button>
         </header>
         <div class="modal-body">
           <p v-if="ignoreWarningsError" class="error">{{ ignoreWarningsError }}</p>
-          <p v-if="warningChaptersLoading" class="muted">Loading warning chapters...</p>
+          <p v-if="warningChaptersLoading" class="muted">{{ $t("loading_warning_chapters") }}</p>
           <p v-else-if="warningChaptersError" class="error">{{ warningChaptersError }}</p>
-          <p v-else-if="!warningChapters.length" class="muted">No warning chapters.</p>
+          <p v-else-if="!warningChapters.length" class="muted">{{ $t("no_warning_chapters") }}</p>
           <div v-else class="failed-chapter-list">
             <RouterLink
               v-for="chapter in warningChapters"
@@ -779,7 +780,7 @@ const deleteMessage = computed(() => {
               :to="`/novels/${warningNovel?.name}/chapters/${chapter}`"
               @click="closeWarningDialog"
             >
-              Chapter {{ chapter }}
+              {{ $t("chapter_number", { number: chapter }) }}
             </RouterLink>
           </div>
         </div>
@@ -790,7 +791,7 @@ const deleteMessage = computed(() => {
             :disabled="warningChaptersLoading || !warningChapters.length || Boolean(warningChaptersError)"
             @click="requestIgnoreWarnings"
           >
-            Ignore All Warnings
+            {{ $t("ignore_all_warnings") }}
           </button>
         </footer>
       </div>
@@ -799,9 +800,9 @@ const deleteMessage = computed(() => {
     <!-- Ignore Warnings Confirm Dialog -->
     <ConfirmDialog
       :show="showIgnoreWarningsDialog"
-      title="Ignore Warnings"
+      :title="$t('ignore_warnings')"
       :message="ignoreWarningsMessage"
-      confirm-label="Ignore"
+      :confirm-label="$t('ignore')"
       :danger="true"
       :loading="ignoringWarnings"
       @confirm="confirmIgnoreWarnings"
@@ -812,7 +813,7 @@ const deleteMessage = computed(() => {
     <div v-if="showAddModal" class="modal-overlay" @click.self="closeAddModal">
       <div class="modal-card">
         <header class="modal-header">
-          <h3>Create New Novel</h3>
+          <h3>{{ $t("create_new_novel") }}</h3>
           <button class="modal-close" type="button" @click="closeAddModal">
             <X :size="18" />
           </button>
@@ -820,34 +821,34 @@ const deleteMessage = computed(() => {
         <div class="modal-body flex-col gap-3">
           <div v-if="addError" class="error">{{ addError }}</div>
           <div>
-            <label for="new-slug">Short Identifier / Slug <span class="danger">*</span></label>
+            <label for="new-slug">{{ $t("short_identifier_slug") }} <span class="danger">*</span></label>
             <input
               id="new-slug"
               v-model="newSlug"
               :disabled="Boolean(createdSlug)"
-              placeholder="e.g. shadow-slave (letters, numbers, dashes, underscores)"
+              :placeholder="$t('slug_placeholder')"
             />
           </div>
           <div>
-            <label for="new-title">Novel Title</label>
+            <label for="new-title">{{ $t("novel_title") }}</label>
             <input
               id="new-title"
               v-model="newTitle"
               :disabled="Boolean(createdSlug)"
-              placeholder="e.g. Shadow Slave"
+              :placeholder="$t('e_g_shadow_slave')"
             />
           </div>
           <div>
-            <label for="new-author">Author</label>
+            <label for="new-author">{{ $t("author") }}</label>
             <input
               id="new-author"
               v-model="newAuthor"
               :disabled="Boolean(createdSlug)"
-              placeholder="e.g. Guiltythree"
+              :placeholder="$t('e_g_guiltythree')"
             />
           </div>
           <div>
-            <label for="new-lang">Source Language</label>
+            <label for="new-lang">{{ $t("source_language") }}</label>
             <CustomSelect
               id="new-lang"
               v-model="newSourceLang"
@@ -856,7 +857,7 @@ const deleteMessage = computed(() => {
             />
           </div>
           <div>
-            <label for="new-cover">Cover Image Upload</label>
+            <label for="new-cover">{{ $t("upload_cover") }}</label>
             <div class="cover-upload-area">
               <input
                 id="new-cover"
@@ -867,26 +868,26 @@ const deleteMessage = computed(() => {
               />
               <label for="new-cover" class="upload-dropzone">
                 <Upload :size="20" class="upload-icon" />
-                <span class="upload-label">{{ newCoverFile ? newCoverFile.name : 'Choose image file or drag here' }}</span>
-                <span class="upload-hint">JPEG, PNG, WebP or GIF up to 10 MiB</span>
+                <span class="upload-label">{{ newCoverFile ? newCoverFile.name : $t('choose_image_file_or_drag_here') }}</span>
+                <span class="upload-hint">{{ $t("cover_image_formats_hint") }}</span>
               </label>
             </div>
-            <img v-if="newCoverPreview" class="cover-preview" :src="newCoverPreview" alt="Cover preview" />
+            <img v-if="newCoverPreview" class="cover-preview" :src="newCoverPreview" :alt="$t('cover_preview')" />
           </div>
           <div>
-            <label for="new-illustration">Alternative Remote Cover URL</label>
+            <label for="new-illustration">{{ $t("alternative_remote_cover_url") }}</label>
             <input
               id="new-illustration"
               v-model="newIllustrationUrl"
               :disabled="Boolean(newCoverFile) || Boolean(createdSlug)"
-              placeholder="https://example.com/cover.jpg"
+              :placeholder="$t('cover_url_placeholder')"
             />
           </div>
         </div>
         <footer class="modal-footer">
-          <button class="secondary" type="button" :disabled="adding" @click="closeAddModal">Cancel</button>
+          <button class="secondary" type="button" :disabled="adding" @click="closeAddModal">{{ $t("cancel") }}</button>
           <button type="button" :disabled="adding || !newSlug.trim()" @click="submitAddNovel">
-            {{ adding ? 'Saving…' : (createdSlug ? 'Retry cover upload' : 'Create Novel') }}
+            {{ adding ? $t('saving') : (createdSlug ? $t('retry_cover_upload') : $t('create_novel')) }}
           </button>
         </footer>
       </div>
@@ -1142,6 +1143,7 @@ const deleteMessage = computed(() => {
   text-decoration: none;
   line-height: 1.3;
   display: -webkit-box;
+  line-clamp: 2;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
