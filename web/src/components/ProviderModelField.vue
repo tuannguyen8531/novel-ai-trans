@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { RefreshCw } from '@lucide/vue'
 import { useProviderModels } from '@/composables/models'
+import CustomSelect from '@/components/common/CustomSelect.vue'
 
 const props = defineProps<{
   provider: 'ollama' | 'gemini' | 'openrouter'
@@ -17,11 +18,23 @@ const { models, loading, loadError, refresh } = useProviderModels(() => props.pr
 
 const knownModel = computed(() => models.value.includes(props.modelValue))
 
-const onSelect = (event: Event) => {
-  const value = (event.target as HTMLSelectElement).value
+const modelOptions = computed(() => {
+  const placeholder = loading.value
+    ? 'Loading models…'
+    : models.value.length
+      ? '(pick from list)'
+      : 'No models available'
+  return [
+    { value: '', label: placeholder },
+    ...models.value.map((m) => ({ value: m, label: m }))
+  ]
+})
+
+const onSelect = (value: string | number) => {
+  const val = String(value)
   // The empty option is a no-op so the user can keep typing freely.
-  if (!value) return
-  emit('update:modelValue', value)
+  if (!val) return
+  emit('update:modelValue', val)
 }
 
 const onInput = (event: Event) => {
@@ -35,32 +48,29 @@ const refreshLabel = computed(() => (loading.value ? 'Refreshing…' : 'Refresh'
 <template>
   <div class="model-field">
     <label v-if="label">{{ label }}</label>
-    <div class="row gap-1" style="align-items: center;">
-      <select
-        :value="knownModel ? modelValue : ''"
+    <div class="model-input-row">
+      <CustomSelect
+        :model-value="knownModel ? modelValue : ''"
+        :options="modelOptions"
         :disabled="loading || !models.length"
+        class="model-select"
         @change="onSelect"
-      >
-        <option value="">
-          {{ loading ? 'Loading models…' : (models.length ? '(custom / not listed)' : 'No models available') }}
-        </option>
-        <option v-for="m in models" :key="m" :value="m">{{ m }}</option>
-      </select>
+      />
       <input
         type="text"
         :value="modelValue"
         :placeholder="knownModel ? 'Selected from list — type to override' : 'Type model id, or pick from the list'"
+        class="model-text-input"
         @input="onInput"
-        style="flex: 1 1 auto;"
       />
       <button
         type="button"
-        class="secondary flex items-center gap-1.5"
+        class="secondary flex items-center gap-1.5 btn-refresh-models"
         :disabled="loading"
         @click="refresh"
       >
         <RefreshCw :size="13" :class="{ 'animate-spin': loading }" />
-        {{ refreshLabel }}
+        <span>{{ refreshLabel }}</span>
       </button>
     </div>
     <p v-if="loadError" class="error" style="margin-top: 0.25rem; font-size: 0.85rem;">
@@ -73,6 +83,37 @@ const refreshLabel = computed(() => (loading.value ? 'Refreshing…' : 'Refresh'
 .model-field {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.35rem;
+}
+
+.model-input-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.model-select {
+  width: 17rem;
+  flex-shrink: 0;
+}
+
+.model-text-input {
+  flex: 1 1 auto;
+  min-width: 10rem;
+}
+
+.btn-refresh-models {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+  .model-input-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .model-select {
+    width: 100%;
+  }
 }
 </style>

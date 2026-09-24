@@ -5,8 +5,6 @@ import {
   Cpu,
   Send,
   Save,
-  CheckCircle,
-  AlertTriangle,
   RotateCw,
   Check,
   Server
@@ -14,7 +12,7 @@ import {
 import { useSettingsStore } from '@/composables/settings'
 import type { OllamaAccount, ProviderInfo, SettingsPatch } from '@/api/types'
 import ProviderModelField from '@/components/ProviderModelField.vue'
-import StatusBadge from '@/components/common/StatusBadge.vue'
+import CustomSelect from '@/components/common/CustomSelect.vue'
 
 const settings = useSettingsStore()
 const activeTab = ref<'general' | 'providers' | 'telegram'>('providers')
@@ -51,6 +49,38 @@ const providerForm = reactive({
 
 const ALL_PROVIDER_NAMES = ['ollama', 'gemini', 'openrouter'] as const
 
+const primaryProviderOptions = [
+  { value: 'ollama', label: 'Ollama' },
+  { value: 'gemini', label: 'Gemini' },
+  { value: 'openrouter', label: 'OpenRouter' }
+]
+
+const fallbackOptions = computed(() => {
+  const current = providerForm.llm_provider
+  return [
+    { value: '', label: '(none)' },
+    ...ALL_PROVIDER_NAMES.filter((name) => name !== current).map((name) => ({
+      value: name,
+      label: name === 'openrouter' ? 'OpenRouter' : name.charAt(0).toUpperCase() + name.slice(1)
+    }))
+  ]
+})
+
+const targetLanguageOptions = [
+  { value: 'vi', label: 'Tiếng Việt' },
+  { value: 'en', label: 'English' }
+]
+
+const chunkModeOptions = [
+  { value: 'chars', label: 'Characters' },
+  { value: 'tokens', label: 'Tokens (estimated)' }
+]
+
+const telegramParseModeOptions = [
+  { value: 'HTML', label: 'HTML' },
+  { value: '', label: 'Plain Text' }
+]
+
 onMounted(async () => {
   await settings.refresh()
   if (settings.settings) {
@@ -68,14 +98,6 @@ onMounted(async () => {
   }
   providers.value = await settings.listProviders()
   await refreshOllamaAccount()
-})
-
-const fallbackOptions = computed(() => {
-  const current = providerForm.llm_provider
-  return [
-    { value: '', label: '(none)' },
-    ...ALL_PROVIDER_NAMES.filter((name) => name !== current).map((name) => ({ value: name, label: name }))
-  ]
 })
 
 watch(
@@ -320,15 +342,17 @@ async function saveTelegramSettings() {
         <div class="grid-2-cols">
           <div>
             <label>Primary Provider</label>
-            <select v-model="providerForm.llm_provider" class="select-field">
-              <option v-for="name in ALL_PROVIDER_NAMES" :key="name" :value="name">{{ name }}</option>
-            </select>
+            <CustomSelect
+              v-model="providerForm.llm_provider"
+              :options="primaryProviderOptions"
+            />
           </div>
           <div>
             <label>Fallback Provider</label>
-            <select v-model="providerForm.fallback_provider" class="select-field">
-              <option v-for="option in fallbackOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
-            </select>
+            <CustomSelect
+              v-model="providerForm.fallback_provider"
+              :options="fallbackOptions"
+            />
           </div>
         </div>
       </div>
@@ -523,21 +547,23 @@ async function saveTelegramSettings() {
         <h3 class="card-title">Runtime Translation Defaults</h3>
         <p class="card-desc">Parameters used when constructing chapter chunks and LLM prompts.</p>
 
-        <div class="grid-form">
+        <div class="grid-2-cols">
           <div>
             <label>Default Target Language</label>
-            <select :value="settings.settings.target_language" @change="patchSetting('target_language', ($event.target as HTMLSelectElement).value)">
-              <option value="vi">Vietnamese (Tiếng Việt)</option>
-              <option value="en">English</option>
-            </select>
+            <CustomSelect
+              :model-value="settings.settings.target_language"
+              :options="targetLanguageOptions"
+              @change="(val) => patchSetting('target_language', String(val))"
+            />
           </div>
 
           <div>
             <label>Chunk Splitting Mode</label>
-            <select :value="settings.settings.chunk_mode" @change="patchSetting('chunk_mode', ($event.target as HTMLSelectElement).value)">
-              <option value="chars">Characters</option>
-              <option value="tokens">Tokens (estimated)</option>
-            </select>
+            <CustomSelect
+              :model-value="settings.settings.chunk_mode"
+              :options="chunkModeOptions"
+              @change="(val) => patchSetting('chunk_mode', String(val))"
+            />
           </div>
 
           <div>
@@ -620,10 +646,10 @@ async function saveTelegramSettings() {
           <div class="grid-2-cols">
             <div>
               <label>Parse Mode</label>
-              <select v-model="telegramForm.telegram_parse_mode">
-                <option value="HTML">HTML</option>
-                <option value="">Plain Text</option>
-              </select>
+              <CustomSelect
+                v-model="telegramForm.telegram_parse_mode"
+                :options="telegramParseModeOptions"
+              />
             </div>
 
             <div>

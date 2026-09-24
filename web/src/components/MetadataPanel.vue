@@ -3,6 +3,14 @@ import { onMounted, toRef, watch } from 'vue'
 import { X } from '@lucide/vue'
 import { useMetadata, type MetadataDisplay, type TargetLanguage } from '@/composables/metadata'
 import { useBodyScrollLock } from '@/composables/scrolllock'
+import CustomSelect from '@/components/common/CustomSelect.vue'
+
+const sourceLanguageOptions = [
+  { value: '', label: '(Auto-detect)' },
+  { value: 'korean', label: 'Korean' },
+  { value: 'japanese', label: 'Japanese' },
+  { value: 'chinese', label: 'Chinese' }
+]
 
 const props = defineProps<{
   novel: string
@@ -148,12 +156,10 @@ defineExpose({ load })
           </div>
           <div>
             <label>Source language</label>
-            <select v-model="sourceLanguage">
-              <option value="">(Auto-detect)</option>
-              <option value="korean">Korean</option>
-              <option value="japanese">Japanese</option>
-              <option value="chinese">Chinese</option>
-            </select>
+            <CustomSelect
+              v-model="sourceLanguage"
+              :options="sourceLanguageOptions"
+            />
           </div>
           <fieldset
             class="genre-fieldset"

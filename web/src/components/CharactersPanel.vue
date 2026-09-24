@@ -2,6 +2,15 @@
 import { computed, ref } from 'vue'
 import { Plus, Search, Edit2, Trash2, Save, X, Users, User } from '@lucide/vue'
 import type { GlossaryCharacter } from '@/composables/glossary'
+import CustomSelect from '@/components/common/CustomSelect.vue'
+
+const roleOptions = [
+  { value: '', label: '(role unchanged)' },
+  { value: 'protagonist', label: 'Protagonist' },
+  { value: 'antagonist', label: 'Antagonist' },
+  { value: 'supporting', label: 'Supporting' },
+  { value: 'minor', label: 'Minor' }
+]
 
 const props = defineProps<{
   characters: Record<string, GlossaryCharacter>
@@ -109,13 +118,11 @@ function roleBadgeClass(role?: string) {
     <div v-if="showAdd" class="gloss-add p-3 bg-zinc-900/60 dark:bg-zinc-900/80 rounded-lg border border-indigo-500/30">
       <input v-model="newCharacter.original" placeholder="Original name" class="flex-1" />
       <input v-model="newCharacter.translatedName" placeholder="Translated name" class="flex-1" />
-      <select v-model="newCharacter.role">
-        <option value="">(role unchanged)</option>
-        <option value="protagonist">protagonist</option>
-        <option value="antagonist">antagonist</option>
-        <option value="supporting">supporting</option>
-        <option value="minor">minor</option>
-      </select>
+      <CustomSelect
+        v-model="newCharacter.role"
+        :options="roleOptions"
+        placeholder="Role (optional)"
+      />
       <input v-model="newCharacter.pronoun" placeholder="Pronoun / reference style" class="flex-1" />
       <button
         type="button"
@@ -145,13 +152,11 @@ function roleBadgeClass(role?: string) {
               <td class="gloss-original">{{ original }}</td>
               <td><input v-model="editing.translatedName" class="inline-edit-input" /></td>
               <td>
-                <select v-model="editing.role" class="inline-edit-input">
-                  <option value="">(role unchanged)</option>
-                  <option value="protagonist">protagonist</option>
-                  <option value="antagonist">antagonist</option>
-                  <option value="supporting">supporting</option>
-                  <option value="minor">minor</option>
-                </select>
+                <CustomSelect
+                  v-model="editing.role"
+                  :options="roleOptions"
+                  class="role-select-inline"
+                />
               </td>
               <td>
                 <input
@@ -222,5 +227,9 @@ function roleBadgeClass(role?: string) {
 <style scoped>
 .row-actions {
   display: inline-flex;
+}
+
+.role-select-inline {
+  min-width: 9rem;
 }
 </style>

@@ -41,7 +41,7 @@ function selectSource(source: SourceKind) {
         @click="selectSource('website')"
       >
         <Globe :size="16" />
-        <span>From Website (Crawler)</span>
+        <span>From Website</span>
       </button>
 
       <button
