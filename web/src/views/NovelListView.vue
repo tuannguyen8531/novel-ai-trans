@@ -19,10 +19,9 @@ import { useSettingsStore } from '@/composables/settings'
 import type { NovelSummary, NovelTargetProgress } from '@/api/types'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import { useBodyScrollLock } from '@/composables/scrolllock'
-import StatusBadge from '@/components/common/StatusBadge.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import CustomSelect from '@/components/common/CustomSelect.vue'
-import { formatLanguage } from '@/language'
+import { formatLanguage, normalizeLanguage } from '@/language'
 import placeholderCover from '@/assets/placeholder-cover.png'
 import { t } from '@/i18n'
 
@@ -38,9 +37,9 @@ const filterStatus = ref<string>('all')
 
 const languageFilterOptions = computed(() => [
   { value: 'all', label: t('all_languages') },
-  { value: 'ko', label: t('korean') },
-  { value: 'ja', label: t('japanese') },
-  { value: 'zh', label: t('chinese') }
+  { value: 'korean', label: t('korean') },
+  { value: 'japanese', label: t('japanese') },
+  { value: 'chinese', label: t('chinese') }
 ])
 
 const sourceLanguageOptions = computed(() => [
@@ -206,7 +205,7 @@ const filteredNovels = computed(() => {
 
   // Language filter
   if (filterLanguage.value !== 'all') {
-    list = list.filter((n) => (n.source_language || '').toLowerCase() === filterLanguage.value)
+    list = list.filter((n) => normalizeLanguage(n.source_language) === filterLanguage.value)
   }
 
   // Status filter

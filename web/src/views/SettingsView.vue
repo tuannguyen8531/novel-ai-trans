@@ -73,7 +73,7 @@ const targetLanguageOptions = computed(() => [
 ])
 
 const chunkModeOptions = computed(() => [
-  { value: 'chars', label: t('characters') },
+  { value: 'chars', label: t('text_characters') },
   { value: 'tokens', label: t('tokens_estimated') }
 ])
 
@@ -568,7 +568,7 @@ async function saveTelegramSettings() {
           </div>
 
           <div>
-            <label>{{ $t("chunk_size", { unit: settings.settings.chunk_mode === 'tokens' ? $t('tokens') : $t('characters') }) }}</label>
+            <label>{{ $t("chunk_size", { unit: settings.settings.chunk_mode === 'tokens' ? $t('tokens') : $t('text_characters') }) }}</label>
             <input
               type="number"
               :value="settings.settings.chunk_size"

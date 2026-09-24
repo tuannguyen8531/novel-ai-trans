@@ -61,6 +61,8 @@ const failedSet = computed(() => new Set(props.translationProgress?.failed ?? []
 const warningSet = computed(() => new Set(props.translationProgress?.warnings ?? []))
 const importantWarningSet = computed(() => new Set(props.translationProgress?.important_warnings ?? []))
 const completedSet = computed(() => new Set(props.translationProgress?.completed ?? []))
+const hasImportantWarnings = computed(() => [...importantWarningSet.value].some((n) => warningSet.value.has(n) && !failedSet.value.has(n)))
+const hasRegularWarnings = computed(() => [...warningSet.value].some((n) => !importantWarningSet.value.has(n) && !failedSet.value.has(n)))
 
 const activeFilter = ref<'all' | 'issues' | 'completed' | 'untranslated'>(props.initialFilter)
 
@@ -106,7 +108,7 @@ watch([filteredNumbers, displayTotalPages], () => {
 
 function getChapterStatusTitle(number: number): string {
   if (failedSet.value.has(number)) return t('chapter_translation_failed', { number })
-  if (importantWarningSet.value.has(number)) return t('chapter_critical_warning', { number })
+  if (importantWarningSet.value.has(number)) return `${t('chapter_critical_warning', { number })} — ${t('source_text_or_missing_title')}`
   if (warningSet.value.has(number)) return t('chapter_quality_warning', { number })
   if (completedSet.value.has(number)) return t('chapter_translated', { number })
   return t('chapter_untranslated_source_only', { number })
@@ -210,7 +212,7 @@ async function addChapter(chapter: number, content: string) {
         @click="setFilter('issues')"
       >
         <span>{{ $t("attention") }}</span>
-        <span class="count-pill pill-danger">{{ issuesCount }}</span>
+        <span class="count-pill">{{ issuesCount }}</span>
       </button>
 
       <button
@@ -234,6 +236,12 @@ async function addChapter(chapter: number, content: string) {
       </button>
     </div>
 
+    <div v-if="activeFilter === 'issues'" class="issue-legend">
+      <span v-if="failedSet.size" class="issue-legend-item badge-failed"><AlertCircle :size="13" />{{ $t('translation_failed') }}</span>
+      <span v-if="hasImportantWarnings" class="issue-legend-item badge-critical"><AlertTriangle :size="13" />{{ $t('critical_warning') }}</span>
+      <span v-if="hasRegularWarnings" class="issue-legend-item badge-warning"><AlertTriangle :size="13" />{{ $t('quality_warning') }}</span>
+    </div>
+
     <p v-if="!numbers.length" class="muted empty-message">{{ $t("no_chapters_yet") }}</p>
     <div v-else ref="containerRef" class="input-chapter-container">
       <div v-if="!filteredNumbers.length" class="empty-filter-state">
@@ -247,10 +255,12 @@ async function addChapter(chapter: number, content: string) {
           class="input-chapter-item"
           :class="{
             'item-failed': failedSet.has(number),
-            'item-warning': warningSet.has(number) && !failedSet.has(number),
+            'item-critical': importantWarningSet.has(number) && !failedSet.has(number),
+            'item-warning': warningSet.has(number) && !importantWarningSet.has(number) && !failedSet.has(number),
             'item-completed': completedSet.has(number) && !warningSet.has(number) && !failedSet.has(number)
           }"
           :title="getChapterStatusTitle(number)"
+          :aria-label="getChapterStatusTitle(number)"
           @click="emit('openChapter', number)"
         >
           <div class="chapter-info">
@@ -260,6 +270,9 @@ async function addChapter(chapter: number, content: string) {
 
           <div v-if="failedSet.has(number)" class="chapter-status-badge badge-failed" :title="$t('translation_failed')">
             <AlertCircle :size="12" />
+          </div>
+          <div v-else-if="importantWarningSet.has(number)" class="chapter-status-badge badge-critical" :title="$t('source_text_or_missing_title')">
+            <AlertTriangle :size="12" />
           </div>
           <div v-else-if="warningSet.has(number)" class="chapter-status-badge badge-warning" :title="$t('quality_warning')">
             <AlertTriangle :size="12" />
@@ -383,14 +396,23 @@ async function addChapter(chapter: number, content: string) {
   color: #0b0e14;
 }
 
-.count-pill.pill-danger {
-  background: rgba(244, 63, 94, 0.2);
-  color: var(--danger);
+.filter-tab.tab-issues:not(.active) .count-pill {
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
 }
 
-.filter-tab.tab-issues.active .count-pill.pill-danger {
-  background: rgba(0, 0, 0, 0.2);
-  color: #0b0e14;
+.issue-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.85rem;
+  margin: -0.2rem 0 0.7rem;
+}
+
+.issue-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.75rem;
 }
 
 .input-chapter-container {
@@ -446,6 +468,14 @@ async function addChapter(chapter: number, content: string) {
   border-color: #f59e0b;
 }
 
+.input-chapter-item.item-critical {
+  border-color: var(--danger);
+}
+
+.input-chapter-item.item-critical:hover {
+  background: var(--danger-subtle);
+}
+
 .input-chapter-item.item-failed {
   border-color: rgba(244, 63, 94, 0.35);
 }
@@ -481,6 +511,10 @@ async function addChapter(chapter: number, content: string) {
 }
 
 .badge-failed {
+  color: var(--danger);
+}
+
+.badge-critical {
   color: var(--danger);
 }
 
