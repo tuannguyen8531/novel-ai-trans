@@ -813,7 +813,7 @@ const deleteMessage = computed(() => {
       <div class="modal-card">
         <header class="modal-header">
           <h3>{{ $t("create_new_novel") }}</h3>
-          <button class="modal-close" type="button" @click="closeAddModal">
+          <button class="modal-close" type="button" :aria-label="$t('close')" @click="closeAddModal">
             <X :size="18" />
           </button>
         </header>
