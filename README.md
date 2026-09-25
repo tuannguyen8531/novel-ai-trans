@@ -17,6 +17,8 @@ Website / EPUB
     -> EPUB
 ```
 
+![Dashboard](docs/images/dashboard.png)
+
 ## Highlights
 
 - Crawl public novel sites with reusable selector configurations.
