@@ -63,7 +63,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
         message = body.error.message
         details = body.error.details ?? null
       }
-    } catch (_) {
+    } catch {
       // ignore parse errors
     }
     let displayMessage = message

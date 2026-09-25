@@ -98,7 +98,7 @@ watch(() => props.show, (isOpen) => {
         </div>
         <div class="content-field">
           <label>{{ $t("content_optional") }}</label>
-          <textarea v-model="content" class="chapter-edit-area"></textarea>
+          <textarea v-model="content" class="chapter-edit-area" />
         </div>
       </div>
       <footer class="modal-footer">
@@ -107,7 +107,9 @@ watch(() => props.show, (isOpen) => {
           type="button"
           :disabled="saving || chapterNumber === null || chapterNumber < 1"
           @click="chapterNumber !== null && emit('confirm', chapterNumber, content)"
-        >{{ saving ? $t('starting') : $t('insert') }}</button>
+        >
+          {{ saving ? $t('starting') : $t('insert') }}
+        </button>
       </footer>
     </div>
   </div>

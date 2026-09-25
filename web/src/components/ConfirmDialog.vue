@@ -98,7 +98,9 @@ watch(() => props.show, (isOpen) => {
           :class="{ danger }"
           :disabled="loading"
           @click="emit('confirm')"
-        >{{ loading ? $t('processing') : confirmLabel || $t('confirm') }}</button>
+        >
+          {{ loading ? $t('processing') : confirmLabel || $t('confirm') }}
+        </button>
       </footer>
     </div>
   </div>

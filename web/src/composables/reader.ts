@@ -342,7 +342,7 @@ export function useReader(
 
   watch(
     [() => toValue(chapter), displayTitle, chapterLabel],
-    ([number, title, label]) => {
+    ([, title, label]) => {
       document.title = `${title} - ${label} - Novel AI Translation`
     },
     { immediate: true }

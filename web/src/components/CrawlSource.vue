@@ -2,8 +2,8 @@
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import {
-  Globe, Sparkles, Play, FileCode, Save, RefreshCw,
-  Trash2, Eye, AlertCircle, ArrowUpRight
+  Sparkles, Play, Save, RefreshCw,
+  Trash2, Eye, ArrowUpRight
 } from '@lucide/vue'
 import JobMonitor from '@/components/JobMonitor.vue'
 import CustomSelect from '@/components/common/CustomSelect.vue'
@@ -189,7 +189,7 @@ const generateProviderOptions = computed(() => [
           v-model="selectedConfigText"
           class="draft-editor"
           spellcheck="false"
-        ></textarea>
+        />
         <p v-if="selectedConfigError" class="error" style="margin-top: 0.5rem;">{{ selectedConfigError }}</p>
         <div v-if="!loadingSelectedConfig" class="row gap-2" style="margin-top: 0.75rem;">
           <button type="button" class="flex items-center gap-1.5" :disabled="savingSelectedConfig" @click="saveSelectedConfig">
@@ -359,7 +359,7 @@ const generateProviderOptions = computed(() => [
         <p class="muted">
           {{ $t("generated_setup_expiry", { date: formatDateTime(generatedDraft.expires_at) }) }}
         </p>
-        <textarea v-model="draftConfigText" class="draft-editor" spellcheck="false"></textarea>
+        <textarea v-model="draftConfigText" class="draft-editor" spellcheck="false" />
         <div class="row gap-2" style="margin-top: 0.75rem;">
           <button type="button" class="flex items-center gap-1.5" @click="saveGeneratedDraft">
             <Save :size="15" />

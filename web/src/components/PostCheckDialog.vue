@@ -176,13 +176,17 @@ watch(
                   class="secondary"
                   :disabled="loading"
                   @click="confirmingOverwrite = false"
-                >{{ $t("keep_current_output") }}</button>
+                >
+                  {{ $t("keep_current_output") }}
+                </button>
                 <button
                   type="button"
                   class="danger"
                   :disabled="loading"
                   @click="confirmCandidateOverwrite"
-                >{{ loading ? $t('publishing') : $t('replace_output') }}</button>
+                >
+                  {{ loading ? $t('publishing') : $t('replace_output') }}
+                </button>
               </div>
             </template>
             <template v-else>

@@ -28,7 +28,7 @@ reports, locks, and crawler state belong under `runtime/`.
 
 ## Validation
 
-Run the standard validation pipeline:
+Run the standard validation pipeline (Python checks, Vue lint, and unit tests):
 
 ```bash
 uv run test
@@ -40,7 +40,8 @@ Apply safe Ruff fixes and formatting before validation:
 uv run test --fix
 ```
 
-Build and type-check the frontend after changes under `web/`:
+Use `uv run test --no-frontend` for backend-only validation. Build and type-check
+the frontend after changes under `web/`:
 
 ```bash
 uv run build

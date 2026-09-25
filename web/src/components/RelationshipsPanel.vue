@@ -134,11 +134,11 @@ async function saveEdit() {
         <thead>
           <tr>
             <th>{{ $t("from") }}</th>
-            <th class="w-8"></th>
+            <th class="w-8" />
             <th>{{ $t("to") }}</th>
             <th>{{ $t("relationship") }}</th>
             <th>{{ $t("since") }}</th>
-            <th class="actions"></th>
+            <th class="actions" />
           </tr>
         </thead>
         <tbody>

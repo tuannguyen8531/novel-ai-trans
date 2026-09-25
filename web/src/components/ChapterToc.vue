@@ -34,7 +34,7 @@ let previousFocus: HTMLElement | null = null
 useBodyScrollLock(() => props.open)
 
 const filteredChapters = computed(() => {
-  let list: Array<{ number: number; title?: string | null; source_title?: string | null }> = []
+  let list: Array<{ number: number; title?: string | null; source_title?: string | null }>
 
   if (language.value === 'source') {
     const unique = new Map<number, {

@@ -3,7 +3,7 @@ const content = defineModel<string>({ required: true })
 </script>
 
 <template>
-  <textarea v-model="content" class="chapter-edit-area"></textarea>
+  <textarea v-model="content" class="chapter-edit-area" />
 </template>
 
 <style scoped>

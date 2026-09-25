@@ -2,15 +2,11 @@
 import { computed, ref } from 'vue'
 import {
   Sparkles,
-  BookOpen,
-  ArrowRight,
   Sliders,
   ChevronDown,
   ChevronUp,
   AlertCircle,
   Play,
-  RotateCcw,
-  CheckCircle2,
   Check
 } from '@lucide/vue'
 import JobMonitor from '@/components/JobMonitor.vue'

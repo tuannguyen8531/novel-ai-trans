@@ -141,18 +141,20 @@ Run a workflow command such as `uv run translate --help`, or see the
 
 ## Development
 
-Apply safe formatting and lint fixes, then run the full validation pipeline:
+Apply safe formatting and lint fixes, then run the full validation pipeline (Python checks, Vue lint, and unit tests):
 
 ```bash
 uv run test --fix
 uv run test
 ```
 
-After changing the frontend, also run:
+Run frontend checks on their own with `cd web && npm run lint` and `cd web && npm run test:unit`. After changing the frontend, also run:
 
 ```bash
 uv run build
 ```
+
+Use `uv run test --no-frontend` for Python-only validation.
 
 ## License
 

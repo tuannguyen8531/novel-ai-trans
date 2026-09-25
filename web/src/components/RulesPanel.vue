@@ -34,7 +34,7 @@ watch(() => props.active, (active) => {
         class="rules-textarea font-mono text-sm leading-relaxed"
         :placeholder="$t('novel_rules_placeholder')"
         :disabled="loading"
-      ></textarea>
+      />
       <div class="row gap-2 rules-actions">
         <button
           type="button"

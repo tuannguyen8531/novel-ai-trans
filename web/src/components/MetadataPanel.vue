@@ -153,7 +153,7 @@ defineExpose({ load })
           </div>
           <div>
             <label>{{ $t("summary") }}</label>
-            <textarea v-model="summary" class="metadata-summary-input" :placeholder="$t('novel_synopsis_optional')"></textarea>
+            <textarea v-model="summary" class="metadata-summary-input" :placeholder="$t('novel_synopsis_optional')" />
           </div>
           <div>
             <label>{{ $t("source_language") }}</label>
@@ -197,7 +197,7 @@ defineExpose({ load })
                 v-model="targetSummary"
                 class="metadata-summary-input"
                 :placeholder="$t('localized_summary', { language: targetLanguageLabel })"
-              ></textarea>
+              />
             </div>
             <label class="check">
               <input v-model="force" type="checkbox" />

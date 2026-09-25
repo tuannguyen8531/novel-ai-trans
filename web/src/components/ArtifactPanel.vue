@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, toRef, watch } from 'vue'
-import { X, Download, Trash2, Package } from '@lucide/vue'
+import { X } from '@lucide/vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import DetailPanelHeader from '@/components/DetailPanelHeader.vue'
 import { useArtifacts } from '@/composables/artifacts'

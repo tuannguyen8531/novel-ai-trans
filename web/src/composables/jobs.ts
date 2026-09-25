@@ -195,7 +195,7 @@ export const useJobsStore = defineStore('jobs', () => {
                 closeStream(jobId)
               }
             }
-          } catch (_) {
+          } catch {
             // ignore JSON parse errors
           }
         },

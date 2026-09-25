@@ -32,7 +32,7 @@ function close() {
   emit('update:open', false)
 }
 
-async function rollback() {
+async function handleRollback() {
   if (await props.rollback()) close()
 }
 
@@ -187,8 +187,10 @@ watch(busy, (isBusy) => {
           type="button"
           class="secondary"
           :disabled="busy"
-          @click="rollback"
-        >{{ rollbackLoading ? $t('restoring') : $t('restore_previous_version') }}</button>
+          @click="handleRollback"
+        >
+          {{ rollbackLoading ? $t('restoring') : $t('restore_previous_version') }}
+        </button>
         <button type="button" class="secondary" :disabled="busy" @click="close">
           {{ previewData?.write ? $t('close') : $t('cancel') }}
         </button>
@@ -197,7 +199,9 @@ watch(busy, (isBusy) => {
           type="button"
           :disabled="previewData.conflicted || applyLoading"
           @click="apply"
-        >{{ applyLoading ? $t('applying') : $t('confirm_apply') }}</button>
+        >
+          {{ applyLoading ? $t('applying') : $t('confirm_apply') }}
+        </button>
       </footer>
     </div>
   </div>

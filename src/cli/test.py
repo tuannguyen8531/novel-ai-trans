@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -17,12 +18,12 @@ def _clean_output(stdout: str, stderr: str) -> str:
 
 
 def _summary(output: str) -> str:
-    lines = [line.strip(" =") for line in output.splitlines() if line.strip()]
-    return lines[-1] if lines else "passed"
+    lines = [line.strip(" =") for line in output.splitlines() if line.strip() and not line.strip().startswith(">")]
+    return lines[-1] if lines else "All checks passed!"
 
 
-def _run(label: str, command: list[str], project_root: Path) -> bool:
-    result = subprocess.run(command, cwd=project_root, capture_output=True, text=True)
+def _run(label: str, command: list[str], working_directory: Path) -> bool:
+    result = subprocess.run(command, cwd=working_directory, capture_output=True, text=True)
     output = _clean_output(result.stdout, result.stderr)
     if result.returncode == 0:
         print(f"PASS {label}: {_summary(output)}", flush=True)
@@ -35,20 +36,22 @@ def _run(label: str, command: list[str], project_root: Path) -> bool:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Run all Python lint, formatting, type, and test checks."""
+    """Run Python checks, frontend lint, and unit tests."""
     parser = argparse.ArgumentParser(
         prog="novel-ai-trans test",
-        description="Run ruff, pyright, and pytest checks.",
+        description="Run ruff, pyright, pytest, frontend lint, and unit tests.",
     )
     parser.add_argument(
         "--fix",
         action="store_true",
-        help="Apply safe ruff lint fixes and format files before validation.",
+        help="Apply safe Python and frontend lint fixes before validation.",
     )
     parser.add_argument("--no-lint", action="store_true", help="Skip ruff lint check.")
     parser.add_argument("--no-format", action="store_true", help="Skip ruff format check.")
     parser.add_argument("--no-pyright", action="store_true", help="Skip pyright check.")
     parser.add_argument("--no-pytest", action="store_true", help="Skip pytest.")
+    parser.add_argument("--no-frontend", action="store_true", help="Skip frontend lint and unit tests.")
+    parser.add_argument("--no-frontend-lint", action="store_true", help="Skip frontend ESLint check.")
     parser.add_argument(
         "pytest_args",
         nargs=argparse.REMAINDER,
@@ -57,20 +60,32 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     project_root = Path(__file__).resolve().parents[2]
-    commands: list[tuple[str, list[str]]] = []
+    commands: list[tuple[str, list[str], Path]] = []
     if not args.no_lint:
         lint_command = [sys.executable, "-m", "ruff", "check"]
         if args.fix:
             lint_command.append("--fix")
-        commands.append(("ruff check", [*lint_command, "."]))
+        commands.append(("ruff check", [*lint_command, "."], project_root))
     if not args.no_format:
         format_mode = ["--quiet"] if args.fix else ["--check"]
-        commands.append(("ruff format", [sys.executable, "-m", "ruff", "format", *format_mode, "."]))
+        commands.append(("ruff format", [sys.executable, "-m", "ruff", "format", *format_mode, "."], project_root))
     if not args.no_pyright:
-        commands.append(("pyright", [sys.executable, "-m", "pyright"]))
+        commands.append(("pyright", [sys.executable, "-m", "pyright"], project_root))
     if not args.no_pytest:
         extra = args.pytest_args[1:] if args.pytest_args[:1] == ["--"] else args.pytest_args
-        commands.append(("pytest", [sys.executable, "-m", "pytest", "tests/", "-q", *extra]))
+        commands.append(("pytest", [sys.executable, "-m", "pytest", "tests/", "-q", *extra], project_root))
 
-    passed = [_run(label, command, project_root) for label, command in commands]
+    if not args.no_frontend:
+        npm = shutil.which("npm")
+        if npm is None:
+            print("FAIL frontend: npm not found on PATH", flush=True)
+            return 1
+        if not args.no_frontend_lint:
+            lint_command = [npm, "run", "lint"]
+            if args.fix:
+                lint_command.extend(["--", "--fix"])
+            commands.append(("frontend lint", lint_command, project_root / "web"))
+        commands.append(("frontend unit", [npm, "run", "test:unit"], project_root / "web"))
+
+    passed = [_run(label, command, working_directory) for label, command, working_directory in commands]
     return 0 if all(passed) else 1

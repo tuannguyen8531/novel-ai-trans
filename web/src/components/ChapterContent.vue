@@ -10,15 +10,13 @@ const props = defineProps<{
 // Parse content into segments: plain text blocks and illustration filenames
 type Segment = { type: 'text'; text: string } | { type: 'illustration'; filename: string }
 
-const ILLUSTRATION_RE = /\[\[ILLUSTRATION:([A-Za-z0-9][A-Za-z0-9._-]*)\]\]/g
-
 const segments = computed<Segment[]>(() => {
   const result: Segment[] = []
   let lastIndex = 0
   const text = props.content
-  ILLUSTRATION_RE.lastIndex = 0
+  const illustrationRe = /\[\[ILLUSTRATION:([A-Za-z0-9][A-Za-z0-9._-]*)\]\]/g
   let match: RegExpExecArray | null
-  while ((match = ILLUSTRATION_RE.exec(text)) !== null) {
+  while ((match = illustrationRe.exec(text)) !== null) {
     if (match.index > lastIndex) {
       result.push({ type: 'text', text: text.slice(lastIndex, match.index) })
     }

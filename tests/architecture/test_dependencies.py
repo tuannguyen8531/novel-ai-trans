@@ -139,7 +139,7 @@ def test_frontend_api_operations_live_in_composables() -> None:
         if path.suffix not in {".ts", ".vue"}:
             continue
         relative = path.relative_to(WEB_ROOT)
-        if relative.parts[0] in {"api", "composables"}:
+        if relative.parts[0] in {"api", "composables", "tests"}:
             continue
         text = path.read_text(encoding="utf-8")
         if API_IMPORT.search(text):

@@ -171,7 +171,7 @@ The standard `uv run test` pipeline runs static architecture tests that reject:
 - forbidden backend layer imports and import cycles;
 - direct raw persistence in application modules;
 - `print()` calls in domain, graph, and service infrastructure;
-- API/SSE imports outside frontend composables and the API transport;
+- API/SSE imports outside frontend composables, API transport, and tests;
 - reintroduction of superseded pre-refactor modules.
 
 Architecture checks complement review. They cannot prove that an adapter is

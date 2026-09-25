@@ -5,6 +5,7 @@ withDefaults(
     height?: string
   }>(),
   {
+    label: '',
     height: '10rem'
   }
 )

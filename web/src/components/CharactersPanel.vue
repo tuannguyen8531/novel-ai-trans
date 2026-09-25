@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Plus, Search, Edit2, Trash2, Save, X, Users, User } from '@lucide/vue'
+import { Plus, Search, Edit2, Trash2, Save, X, Users } from '@lucide/vue'
 import type { GlossaryCharacter } from '@/composables/glossary'
 import CustomSelect from '@/components/common/CustomSelect.vue'
 import { t } from '@/i18n'
@@ -144,7 +144,7 @@ function roleBadgeClass(role?: string) {
             <th>{{ $t("translated") }}</th>
             <th>{{ $t("role") }}</th>
             <th>{{ $t("pronoun") }}</th>
-            <th class="actions"></th>
+            <th class="actions" />
           </tr>
         </thead>
         <tbody>

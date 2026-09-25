@@ -97,7 +97,7 @@ async function saveEdit() {
           <tr>
             <th>{{ $t("original") }}</th>
             <th>{{ $t("translated") }}</th>
-            <th class="actions"></th>
+            <th class="actions" />
           </tr>
         </thead>
         <tbody>

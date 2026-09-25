@@ -16,6 +16,8 @@ import type { JobModel } from '@/api/types'
 import { formatJobKind } from '@/i18n'
 
 const props = withDefaults(defineProps<{ job?: JobModel; jobId?: string; live?: boolean }>(), {
+  job: undefined,
+  jobId: undefined,
   live: true
 })
 const jobs = useJobsStore()
