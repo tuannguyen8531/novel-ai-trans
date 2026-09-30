@@ -1,16 +1,10 @@
-"""
-Learner Node — Extract glossary terms and create chapter summary.
-
-Runs after all chunks are translated. Responsible for:
-1. Extracting new terms (character names, place names, special terms)
-2. Creating a chapter summary for cross-chapter context
-3. Saving both to the glossary JSON file
-"""
+"""Learn translation memory, analyze dialogue address, and optionally summarize a chapter."""
 
 import logging
 import re
 
 from src.domain.candidates import ADDRESS_RULE_CANDIDATE_VERDICTS
+from src.domain.context import merge_character_context
 from src.domain.entities import (
     get_character_translated_name,
     resolve_character_ref,
@@ -18,6 +12,8 @@ from src.domain.entities import (
 from src.domain.language import target_language_name
 from src.domain.relationships import normalize_character_edges
 from src.domain.terms import filter_extracted_terms
+from src.graph.nodes.address import analyze_address
+from src.models.learning import LearningResponse
 from src.models.state import TranslationState
 from src.prompts import render_prompt
 from src.services.chapters import format_translated_chapter_heading, strip_numeric_title_suffix
@@ -27,6 +23,7 @@ from src.services.glossary.repository import (
     save_glossary,
 )
 from src.services.llm import get_llm
+from src.services.llm.cancellation import GenerationCancelledError
 from src.services.logger import log_ai_call, log_error
 from src.services.metadata import save_source_language
 from src.utils.json import parse_json_object
@@ -633,7 +630,14 @@ def _clean_title_translation(value: object, *, hint: str = "", strip_series_suff
     return strip_numeric_title_suffix(cleaned) if strip_series_suffix else cleaned
 
 
-def learner_node(state: TranslationState, *, summary: bool = False) -> dict:
+def learner_node(
+    state: TranslationState,
+    *,
+    summary: bool = False,
+    address_chunk_size: int = 5000,
+    address_chunk_overlap: int = 100,
+    address_chunk_mode: str = "chars",
+) -> dict:
     """Extract terms and create summary from the translated chapter."""
     novel_name = state["novel_name"]
     chapter_number = state["chapter_number"]
@@ -659,8 +663,6 @@ def learner_node(state: TranslationState, *, summary: bool = False) -> dict:
     existing_chars_str = _build_existing_chars_str(
         existing_entities,
         existing_edges,
-        existing_address_rules,
-        existing_address_rule_candidates,
     )
     translation_rules = state.get("translation_rules", "").strip() or "(none)"
 
@@ -687,11 +689,22 @@ def learner_node(state: TranslationState, *, summary: bool = False) -> dict:
     new_characters = {}
     translated_title_base = ""
     learn_response = ""
-    learn_succeeded = False
+    learn_data: dict = {}
     try:
-        learn_response = get_llm().generate(learn_system_prompt, learn_user_prompt, "learn")
+        for attempt in range(2):
+            learn_response = get_llm().generate(learn_system_prompt, learn_user_prompt, "learn")
+            try:
+                learn_data = LearningResponse.model_validate(parse_json_object(learn_response)).model_dump(exclude_unset=True)
+                break
+            except ValueError as error:
+                if attempt:
+                    raise
+                log_error("Invalid learner response; retrying once", error, chapter=chapter_number)
+                _logger.warning("Invalid learner response for chapter %s; retrying once: %s", chapter_number, error)
+                learn_user_prompt += (
+                    "\n\nReturn one complete JSON object with terms and characters.entities/edges; close all braces."
+                )
 
-        learn_data = parse_json_object(learn_response)
         new_terms = learn_data.get("terms", {})
         new_characters = learn_data.get("characters", {})
         translated_title_base = _clean_title_translation(
@@ -699,7 +712,8 @@ def learner_node(state: TranslationState, *, summary: bool = False) -> dict:
             hint=title_hint,
             strip_series_suffix=state.get("source_title_series", False),
         )
-        learn_succeeded = True
+    except GenerationCancelledError:
+        raise
     except Exception as e:
         log_error("Failed to extract terms and characters", e, chapter=chapter_number)
         _logger.warning(
@@ -794,19 +808,38 @@ def learner_node(state: TranslationState, *, summary: bool = False) -> dict:
         save_glossary(novel_name, new_terms)
 
     new_entities = new_characters.get("entities", {})
-    raw_address_rule_observations = new_characters.get("address_rules", [])
-    address_rule_observations = raw_address_rule_observations if isinstance(raw_address_rule_observations, list) else []
-    raw_candidate_verdicts = new_characters.get("address_rule_candidate_verdicts", [])
+    new_edges = new_characters.get("edges", [])
+    learned_context = merge_character_context(
+        {"entities": existing_entities, "edges": existing_edges},
+        new_entities,
+        new_edges,
+        chapter=chapter_number,
+    )
+    address_entities = learned_context["entities"]
+    address_context = _build_existing_chars_str(
+        address_entities,
+        learned_context["edges"],
+        existing_address_rules,
+        existing_address_rule_candidates,
+    )
+    address_data = analyze_address(
+        state,
+        address_context,
+        address_entities,
+        chunk_size=address_chunk_size,
+        chunk_overlap=address_chunk_overlap,
+        chunk_mode=address_chunk_mode,
+    )
+    address_rule_observations = address_data.get("address_rules", [])
     candidate_verdicts = (
         _prepare_address_rule_candidate_verdicts(
-            raw_candidate_verdicts,
+            address_data.get("address_rule_candidate_verdicts", []),
             existing_address_rule_candidates,
-            existing_entities,
+            address_entities,
         )
-        if learn_succeeded
+        if address_data
         else []
     )
-    new_edges = new_characters.get("edges", [])
 
     new_characters["address_rules"] = address_rule_observations
     new_characters["address_rule_candidate_verdicts"] = candidate_verdicts

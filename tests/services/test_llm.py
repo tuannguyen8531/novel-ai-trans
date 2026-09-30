@@ -132,7 +132,7 @@ class TestLLMService:
                 return MockClient.return_value.post.call_args.kwargs["json"]
 
     def test_ollama_structured_calls_use_json_mode_and_disable_thinking(self):
-        for call_type in ("learn", "review", "localize"):
+        for call_type in ("learn", "address", "review", "localize"):
             payload = self._ollama_payload_for_call(call_type)
 
             assert payload["format"] == "json"
@@ -143,7 +143,7 @@ class TestLLMService:
             payload = self._ollama_payload_for_call(call_type)
             assert payload["options"] == {"temperature": 0.3, "num_predict": 8192}
 
-        for call_type in ("learn", "detect", "review", "gen_novel_info", "gen_config_toc"):
+        for call_type in ("learn", "address", "detect", "review", "gen_novel_info", "gen_config_toc"):
             payload = self._ollama_payload_for_call(call_type)
             assert payload["options"] == {"temperature": 0.0, "num_predict": 2048}
 

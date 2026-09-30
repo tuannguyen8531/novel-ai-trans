@@ -6,13 +6,15 @@ import json
 import os
 from threading import Event
 from typing import Literal
+from unittest.mock import MagicMock
 
 import pytest
 
+from src.application.config import config_scope
 from src.application.errors import ApplicationValidationError
 from src.application.progress import ProgressEvent
 from src.application.translation.models import TranslationRequest
-from src.application.translation.workflow import TranslationWorkflow
+from src.application.translation.workflow import TranslationWorkflow, run_translation
 from src.config import Config
 from src.graph.builder import TranslationQualityError
 from src.models import TranslationProfile
@@ -394,3 +396,31 @@ def test_source_override_cannot_reinterpret_stored_genres(tmp_path) -> None:
 
     with pytest.raises(ApplicationValidationError, match="does not match"):
         workflow.run(TranslationRequest(novel="novel", source_language="korean"))
+
+
+def test_default_graph_factory_captures_address_chunk_settings_per_job(tmp_path, monkeypatch):
+    workflows = []
+
+    def record_workflow(self, request, **kwargs):
+        workflows.append(self)
+        return None
+
+    build = MagicMock()
+    monkeypatch.setattr(TranslationWorkflow, "run", record_workflow)
+    monkeypatch.setattr("src.application.translation.workflow.build_graph", build)
+    settings: list[tuple[int, int, Literal["chars", "tokens"]]] = [(731, 29, "tokens"), (2048, 100, "chars")]
+    for size, overlap, mode in settings:
+        snapshot = Config(chunk_size=size, chunk_overlap=overlap, chunk_mode=mode)
+        with config_scope(snapshot):
+            run_translation(TranslationRequest(novel="novel"), lock_dir=tmp_path / "locks")
+
+    # Invoke after both job scopes have ended: no late reads from global defaults.
+    for workflow, (size, overlap, mode) in zip(workflows, settings, strict=True):
+        workflow.graph_factory(review=True, summary=False)
+        build.assert_called_with(
+            review=True,
+            summary=False,
+            address_chunk_size=size,
+            address_chunk_overlap=overlap,
+            address_chunk_mode=mode,
+        )

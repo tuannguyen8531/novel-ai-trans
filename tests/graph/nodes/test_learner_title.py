@@ -50,7 +50,9 @@ def test_learner_does_not_invent_part_one_suffix() -> None:
         }
     )
     llm = MagicMock()
-    llm.generate.return_value = '{"translated_title_base":"Tô Vũ Tình trong đêm mưa bão! (1)"}'
+    llm.generate.return_value = (
+        '{"translated_title_base":"Tô Vũ Tình trong đêm mưa bão! (1)","terms":{},"characters":{"entities":{},"edges":[]}}'
+    )
 
     with (
         patch("src.graph.nodes.learner.get_llm", return_value=llm),

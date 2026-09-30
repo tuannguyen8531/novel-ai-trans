@@ -149,6 +149,10 @@ def _has_translatable_chunks(state: TranslationState) -> str:
 def build_graph(
     review: bool = False,
     summary: bool = False,
+    *,
+    address_chunk_size: int = 5000,
+    address_chunk_overlap: int = 100,
+    address_chunk_mode: str = "chars",
 ) -> CompiledStateGraph[
     TranslationState,
     None,
@@ -174,7 +178,13 @@ def build_graph(
     graph.add_node("reject_chunk", _reject_chunk)
 
     def configured_learner(state: TranslationState) -> dict:
-        return learner_node(state, summary=summary)
+        return learner_node(
+            state,
+            summary=summary,
+            address_chunk_size=address_chunk_size,
+            address_chunk_overlap=address_chunk_overlap,
+            address_chunk_mode=address_chunk_mode,
+        )
 
     graph.add_node("learn", configured_learner)
 

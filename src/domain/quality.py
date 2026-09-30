@@ -130,8 +130,9 @@ def post_check_translation(
             )
         )
 
+    folded_translation = translation.casefold()
     for original, translated in glossary.items():
-        if original in source and translated and translated not in translation:
+        if original in source and translated and translated.casefold() not in folded_translation:
             issues.append(
                 TranslationIssue(
                     "missing_glossary_term",

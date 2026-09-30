@@ -29,33 +29,33 @@ def _parse_candidate(text: str) -> dict[str, Any]:
 
 
 def _iter_balanced_objects(text: str):
-    for start, char in enumerate(text):
-        if char != "{":
+    """Yield complete outer objects, never nested fragments of a broken response."""
+    start = 0
+    depth = 0
+    in_string = False
+    escaped = False
+    for index, char in enumerate(text):
+        if depth == 0:
+            if char == "{":
+                start = index
+                depth = 1
             continue
-
-        in_string = False
-        escaped = False
-        depth = 0
-        for index in range(start, len(text)):
-            current = text[index]
-            if in_string:
-                if escaped:
-                    escaped = False
-                elif current == "\\":
-                    escaped = True
-                elif current == '"':
-                    in_string = False
-                continue
-
-            if current == '"':
-                in_string = True
-            elif current == "{":
-                depth += 1
-            elif current == "}":
-                depth -= 1
-                if depth == 0:
-                    yield text[start : index + 1]
-                    break
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                yield text[start : index + 1]
 
 
 def parse_json_object(text: str) -> dict[str, Any]:

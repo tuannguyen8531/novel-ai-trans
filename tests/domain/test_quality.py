@@ -83,3 +83,18 @@ def test_post_check_requires_illustration_markers_to_be_preserved():
 
     assert "illustration_marker_mismatch" in [issue.code for issue in issues]
     assert has_blocking_issues(issues)
+
+
+def test_post_check_accepts_glossary_term_with_different_capitalization():
+    issues = post_check_translation("小兔班的小朋友", "Các bạn nhỏ lớp Thỏ.", {"小兔班": "Lớp Thỏ"})
+    assert issues == []
+
+
+def test_post_check_accepts_exact_glossary_spelling_even_with_case_variants():
+    issues = post_check_translation("小兔班的小朋友", "Lớp Thỏ còn gọi là lớp Thỏ.", {"小兔班": "Lớp Thỏ"})
+    assert issues == []
+
+
+def test_post_check_keeps_missing_warning_when_accents_differ():
+    issues = post_check_translation("小兔班的小朋友", "Các bạn nhỏ lớp Thơ.", {"小兔班": "Lớp Thỏ"})
+    assert [issue.code for issue in issues] == ["missing_glossary_term"]

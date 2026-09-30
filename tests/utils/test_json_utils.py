@@ -45,3 +45,10 @@ def test_parse_json_object_rejects_arrays():
 def test_parse_json_object_raises_when_missing():
     with pytest.raises(json.JSONDecodeError):
         parse_json_object("no json here")
+
+
+@pytest.mark.parametrize("prefix", ["", "Result:\n```json\n"])
+def test_parse_json_object_rejects_nested_fragments_of_truncated_response(prefix):
+    text = prefix + '{"terms":{"前端":"front-end"},"characters":{"entities":{},"edges":[]}'
+    with pytest.raises(json.JSONDecodeError):
+        parse_json_object(text)

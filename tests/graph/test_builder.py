@@ -177,7 +177,7 @@ class TestQualityFlow:
         def chunk(_state):
             return {"chunks": ["source"], "current_chunk_index": 0, "translated_chunks": [], "retry_count": 0}
 
-        def learn(state, *, summary=False):
+        def learn(state, *, summary=False, **address_options):
             return {
                 "new_terms": {},
                 "new_characters": {},
@@ -268,7 +268,12 @@ def test_title_only_chapter_skips_translation_chunks() -> None:
     def context(_state):
         return {"translation_rules": "", "glossary": {}, "previous_summary": "", "characters": {}}
 
-    def learn(state, *, summary=False):
+    def learn(state, *, summary=False, **address_options):
+        assert address_options == {
+            "address_chunk_size": 731,
+            "address_chunk_overlap": 29,
+            "address_chunk_mode": "tokens",
+        }
         assert state["source_text"] == ""
         assert state["source_title"] == "新年"
         return {
@@ -284,7 +289,12 @@ def test_title_only_chapter_skips_translation_chunks() -> None:
         patch("src.graph.builder.context_node", context),
         patch("src.graph.builder.learner_node", learn),
     ):
-        result = build_graph(review=False).invoke(
+        result = build_graph(
+            review=False,
+            address_chunk_size=731,
+            address_chunk_overlap=29,
+            address_chunk_mode="tokens",
+        ).invoke(
             initial_state(
                 "第1章 新年\n\n",
                 "chinese",

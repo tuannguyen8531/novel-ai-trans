@@ -84,7 +84,6 @@ class TestRenderPrompt:
         assert "Dịch toàn bộ tên nhân vật sang Hán Việt" in result
         assert "term1 → dịch 1" in result
         assert "李明 (Lý Minh)" in result
-        assert '"since": 12' in result
         assert "{{translation_rules}}" not in result
         assert "{{existing_terms_str}}" not in result
         assert "{{existing_chars_str}}" not in result
@@ -280,9 +279,9 @@ class TestRenderPrompt:
         assert "address rules exactly when provided" not in result
 
     @pytest.mark.parametrize("target_language", ["vi", "en"])
-    def test_learner_requires_source_grounding_for_address_changes(self, target_language):
+    def test_address_requires_source_grounding_for_address_changes(self, target_language):
         result = render_prompt(
-            "learn",
+            "address",
             target_language=target_language,
             translation_rules="(none)",
             existing_terms_str="(none)",
@@ -290,6 +289,9 @@ class TestRenderPrompt:
             chapter_number="12",
         )
 
+        assert '"since": 12' in result
+        assert "{{" not in result
+        assert "Emit a clear new source-grounded form as uncertain rather than omit it" in result
         assert "Determine persistence primarily from source events" in result
         assert "Existing rules and pending hypotheses may have influenced the translation" in result
         assert "Treat an existing address rule as a prior default" in result
@@ -299,7 +301,7 @@ class TestRenderPrompt:
         assert "Return exactly one address_rule_candidate_verdict" in result
         assert "another chapter that continues the same relationship" in result
         assert "Exact source equivalents" in result
-        assert 'Use "inconclusive" only when this chapter has no relevant interaction' in result
+        assert 'Use "inconclusive" only when this source part has no relevant interaction' in result
         assert '"verdict": "confirmed | temporary | rejected | inconclusive"' in result
 
     @pytest.mark.parametrize("target_language", ["vi", "en"])
@@ -318,10 +320,11 @@ class TestRenderPrompt:
 
         assert "USE THIS NOVEL NAMING RULE" in result
         assert "pronoun is the stable reference used for this character in narration outside dialogue" in result
-        assert "It is not dialogue self-reference or direct address" in result
+        assert "Do not infer this field from dialogue self-reference or direct address." in result
         assert "Infer pronoun only for a new character or one whose existing pronoun is empty" in result
         assert "must not overwrite the narrative pronoun" in result
-        assert "Emit a clear new source-grounded form as uncertain rather than omit it" in result
+        assert "address_rule_candidate_verdicts" not in result
+        assert '"address_rules"' not in result
         assert "Do not repeat or reclassify established entity metadata" in result
         assert "Do not repeat an unchanged existing edge" in result
 

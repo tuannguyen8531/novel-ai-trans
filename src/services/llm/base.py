@@ -15,7 +15,7 @@ from src.config import config
 from src.services.llm.cancellation import check_cancelled, wait_for_retry
 from src.services.logger import log_api_request_received, log_api_request_sent, log_error
 
-STRUCTURED_JSON_CALL_TYPES = {"learn", "review", "localize"}
+STRUCTURED_JSON_CALL_TYPES = {"learn", "address", "review", "localize"}
 TRANSLATION_CALL_TYPES = {"translate", "summarize", "localize"}
 JOB_LOGGER_NAME = "novel_ai_trans.job"
 _job_logger = logging.getLogger(JOB_LOGGER_NAME)

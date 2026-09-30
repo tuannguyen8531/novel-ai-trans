@@ -6,6 +6,7 @@ import time
 from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 from threading import Event
 from typing import Protocol, cast
@@ -504,12 +505,21 @@ def run_translation(
         rule_snapshot_scope(),
         prompt_cache_scope(),
     ):
+        config = app_config.get_config()
         workflow = TranslationWorkflow(
-            config=app_config.get_config(),
+            config=config,
             storage=TranslationStorage(),
             checkpoints=CheckpointStore(),
             reports=ReportStore(),
-            graph_factory=cast(GraphFactory, build_graph),
+            graph_factory=cast(
+                GraphFactory,
+                partial(
+                    build_graph,
+                    address_chunk_size=config.chunk_size,
+                    address_chunk_overlap=config.chunk_overlap,
+                    address_chunk_mode=config.chunk_mode,
+                ),
+            ),
             profile_loader=load_translation_profile,
             progress_root=progress_root,
             report_root=report_root,
