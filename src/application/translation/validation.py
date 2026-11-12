@@ -35,3 +35,5 @@ def validate_provider(config: Config) -> None:
         raise ApplicationValidationError("Gemini API key is not configured.")
     if provider == "openrouter" and not config.openrouter_api_key:
         raise ApplicationValidationError("OpenRouter API key is not configured.")
+    if provider == "nvidia" and not config.nvidia_api_key:
+        raise ApplicationValidationError("NVIDIA API key is not configured.")

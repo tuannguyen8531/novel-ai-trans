@@ -1,15 +1,16 @@
 # Providers
 
-`novel-ai-trans` supports three LLM providers. Pick one in `runtime/settings.json` via
+`novel-ai-trans` supports four LLM providers. Pick one in `runtime/settings.json` via
 `llm_provider`, and optionally pair it with a different `fallback_provider` for
 automatic failover. Environment variables with the old names remain supported
-and override the JSON file.
+to seed a missing settings file; API keys always come from the environment.
 
 | Provider    | Type   | Get started                                         |
 | ----------- | ------ | --------------------------------------------------- |
 | **Ollama**  | Local  | [ollama.com](https://ollama.com/)                   |
 | **Gemini**  | Cloud  | [Google AI Studio](https://aistudio.google.com/apikey) |
 | **OpenRouter** | Cloud (200+ models) | [openrouter.ai/keys](https://openrouter.ai/keys) |
+| **NVIDIA** | Cloud (NIM) | [build.nvidia.com](https://build.nvidia.com/google/gemma-4-31b-it) |
 
 You can also override the provider per run with `translate --provider <name>` or
 `generate --provider <name>`.
@@ -19,6 +20,7 @@ You can also override the provider per run with `translate --provider <name>` or
 - [Ollama](#ollama)
 - [Gemini](#gemini)
 - [OpenRouter](#openrouter)
+- [NVIDIA](#nvidia)
 - [Fallback provider](#fallback-provider)
 - [Choosing a model](#choosing-a-model)
 - [Tuning generation](#tuning-generation)
@@ -149,6 +151,45 @@ The model id must match OpenRouter's exact slug. Browse the full catalog at
 Calls go to `https://openrouter.ai/api/v1/chat/completions` with a
 `Authorization: Bearer <key>` header (OpenAI-compatible). No custom endpoint
 override is supported.
+
+## NVIDIA
+
+Use NVIDIA's hosted NIM API with `google/gemma-4-31b-it` as the default model.
+
+1. Open the [Gemma 4 model page](https://build.nvidia.com/google/gemma-4-31b-it),
+   sign in, and select **Generate API Key**.
+2. Add the key to `.env`:
+
+   ```env
+   NVIDIA_API_KEY=nvapi-...
+   ```
+
+3. Select NVIDIA in the web GUI's provider settings, or update
+   `runtime/settings.json`:
+
+   ```json
+   {
+     "llm_provider": "nvidia",
+     "nvidia_model": "google/gemma-4-31b-it"
+   }
+   ```
+
+Calls use `https://integrate.api.nvidia.com/v1/chat/completions` with Bearer
+authentication, following the [NVIDIA API example](https://build.nvidia.com/google/gemma-4-31b-it).
+The GUI supports model discovery, manual model entry, and testing an unsaved
+key/model. The key test sends a short inference request with `max_tokens: 1`,
+because the model catalog is public and cannot verify credentials.
+
+If NVIDIA reports `DEGRADED function cannot be invoked`, the model endpoint is
+temporarily unavailable. Choose another model or retry later; changing the API
+key does not resolve that service condition. Translation calls can use a
+configured fallback provider after retries.
+
+NVIDIA can also be selected per run with `translate --provider nvidia` or used
+as `fallback_provider`. API keys stay in `.env` and are excluded from settings
+JSON and API responses. Gemma 4 thought-channel wrappers are removed from the
+returned text, as described in the
+[model documentation](https://docs.api.nvidia.com/nim/reference/google-gemma-4-31b-it).
 
 ## Fallback provider
 

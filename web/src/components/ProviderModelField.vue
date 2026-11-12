@@ -6,7 +6,7 @@ import CustomSelect from '@/components/common/CustomSelect.vue'
 import { t } from '@/i18n'
 
 const props = defineProps<{
-  provider: 'ollama' | 'gemini' | 'openrouter'
+  provider: 'ollama' | 'gemini' | 'openrouter' | 'nvidia'
   modelValue: string
   label?: string
 }>()

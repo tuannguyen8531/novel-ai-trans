@@ -32,6 +32,7 @@ SECRET_FIELDS: frozenset[str] = frozenset(
     {
         "gemini_api_key",
         "openrouter_api_key",
+        "nvidia_api_key",
         "telegram_bot_token",
         "telegram_chat_id",
     }
@@ -52,6 +53,8 @@ ENV_FIELDS: dict[str, str] = {
     "gemini_model": "GEMINI_MODEL",
     "openrouter_api_key": "OPENROUTER_API_KEY",
     "openrouter_model": "OPENROUTER_MODEL",
+    "nvidia_api_key": "NVIDIA_API_KEY",
+    "nvidia_model": "NVIDIA_MODEL",
     "target_language": "TARGET_LANGUAGE",
     "chunk_mode": "CHUNK_MODE",
     "chunk_size": "CHUNK_SIZE",
@@ -140,6 +143,8 @@ class Config:
     gemini_model: str = "gemini-2.5-flash"
     openrouter_api_key: str = ""
     openrouter_model: str = "qwen/qwen3-8b"
+    nvidia_api_key: str = ""
+    nvidia_model: str = "google/gemma-4-31b-it"
 
     # --- Translator settings ---
     target_language: str = "vi"

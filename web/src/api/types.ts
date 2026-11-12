@@ -12,6 +12,7 @@ export interface Settings {
   translation_max_tokens: number
   gemini_api_key_configured: boolean
   openrouter_api_key_configured: boolean
+  nvidia_api_key_configured: boolean
   telegram_enabled: boolean
   telegram_configured: boolean
   telegram_api_base: string
@@ -22,6 +23,7 @@ export interface Settings {
   ollama_model: string
   gemini_model: string
   openrouter_model: string
+  nvidia_model: string
 }
 
 export type SettingsPatch = Partial<Pick<Settings,
@@ -44,20 +46,24 @@ export interface TelegramSettings {
 }
 
 export interface ProviderSettings {
-  llm_provider: 'ollama' | 'gemini' | 'openrouter'
-  fallback_provider: '' | 'ollama' | 'gemini' | 'openrouter'
+  llm_provider: 'ollama' | 'gemini' | 'openrouter' | 'nvidia'
+  fallback_provider: '' | 'ollama' | 'gemini' | 'openrouter' | 'nvidia'
   ollama_base_url: string
   ollama_model: string
   gemini_model: string
   openrouter_model: string
+  nvidia_model: string
   gemini_api_key?: string
   openrouter_api_key?: string
+  nvidia_api_key?: string
 }
 
 export interface ProviderCheckSettings {
+  nvidia_model?: string
   ollama_base_url?: string
   gemini_api_key?: string
   openrouter_api_key?: string
+  nvidia_api_key?: string
 }
 
 export interface OllamaAccount {

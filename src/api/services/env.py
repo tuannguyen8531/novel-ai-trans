@@ -23,6 +23,7 @@ SECRET_FIELD_NAMES: frozenset[str] = frozenset(
     {
         "gemini_api_key",
         "openrouter_api_key",
+        "nvidia_api_key",
         "telegram_bot_token",
         "telegram_chat_id",
     }
@@ -45,6 +46,8 @@ _FIELD_TO_ENV: dict[str, str] = {
     "gemini_model": "GEMINI_MODEL",
     "openrouter_api_key": "OPENROUTER_API_KEY",
     "openrouter_model": "OPENROUTER_MODEL",
+    "nvidia_api_key": "NVIDIA_API_KEY",
+    "nvidia_model": "NVIDIA_MODEL",
     "target_language": "TARGET_LANGUAGE",
     "chunk_mode": "CHUNK_MODE",
     "chunk_size": "CHUNK_SIZE",

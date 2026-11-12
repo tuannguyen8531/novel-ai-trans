@@ -34,6 +34,7 @@ def build_settings_response() -> SettingsResponse:
         translation_max_tokens=config.translation_max_tokens,
         gemini_api_key_configured=bool(config.gemini_api_key),
         openrouter_api_key_configured=bool(config.openrouter_api_key),
+        nvidia_api_key_configured=bool(config.nvidia_api_key),
         telegram_enabled=config.telegram_enabled,
         telegram_configured=bool(config.telegram_bot_token and config.telegram_chat_id),
         telegram_api_base=config.telegram_api_base,
@@ -44,6 +45,7 @@ def build_settings_response() -> SettingsResponse:
         ollama_model=config.ollama_model,
         gemini_model=config.gemini_model,
         openrouter_model=config.openrouter_model,
+        nvidia_model=config.nvidia_model,
     )
 
 

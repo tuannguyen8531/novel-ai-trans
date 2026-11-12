@@ -13,6 +13,7 @@ from src.api.schemas import (
     ProvidersResponse,
 )
 from src.application import config as app_config
+from src.services.llm.base import response_error_message
 
 
 def list_providers() -> ProvidersResponse:
@@ -32,6 +33,11 @@ def list_providers() -> ProvidersResponse:
             name="openrouter",
             configured=bool(config.openrouter_api_key),
             default_model=config.openrouter_model,
+        ),
+        ProviderInfo(
+            name="nvidia",
+            configured=bool(config.nvidia_api_key),
+            default_model=config.nvidia_model,
         ),
     ]
     return ProvidersResponse(providers=providers, default_provider=config.llm_provider)
@@ -72,6 +78,7 @@ def list_provider_models(provider: str) -> ProviderModelsResponse:
     Ollama: pulled from ``/api/tags`` on the configured base URL.
     Gemini: ``GET /v1beta/models`` (requires the API key).
     OpenRouter: ``GET /api/v1/models`` (requires the API key).
+    NVIDIA: ``GET /v1/models``.
 
     On any network/parse failure we return an empty list rather than
     raising — the GUI can still let the user type a model name manually.
@@ -116,18 +123,21 @@ def list_provider_models(provider: str) -> ProviderModelsResponse:
                     }
                 ),
             )
-        if provider == "openrouter":
-            if not config.openrouter_api_key:
-                return ProviderModelsResponse(provider="openrouter", models=[])
+        if provider in {"openrouter", "nvidia"}:
+            api_key = getattr(config, f"{provider}_api_key")
+            if not api_key:
+                return ProviderModelsResponse(provider=provider, models=[])
             response = httpx.get(
-                "https://openrouter.ai/api/v1/models",
-                headers={"Authorization": f"Bearer {config.openrouter_api_key}"},
+                "https://openrouter.ai/api/v1/models"
+                if provider == "openrouter"
+                else "https://integrate.api.nvidia.com/v1/models",
+                headers={"Authorization": f"Bearer {api_key}"},
                 timeout=10.0,
             )
             response.raise_for_status()
             payload = response.json()
             return ProviderModelsResponse(
-                provider="openrouter",
+                provider=provider,
                 models=sorted(
                     {
                         str(item.get("id", "")).strip()
@@ -147,6 +157,8 @@ def check_provider_runtime(
     ollama_base_url: str | None = None,
     gemini_api_key: str | None = None,
     openrouter_api_key: str | None = None,
+    nvidia_api_key: str | None = None,
+    nvidia_model: str | None = None,
 ) -> ProviderCheckResponse:
     """Synchronously verify a provider is reachable."""
     config = app_config.get_config()
@@ -194,5 +206,32 @@ def check_provider_runtime(
             response.raise_for_status()
         except (httpx.HTTPError, OSError) as error:
             raise ExternalServiceError(f"OpenRouter check failed: {error}") from error
+        return ProviderCheckResponse(provider=provider, ok=True)
+    if provider == "nvidia":
+        api_key = nvidia_api_key or config.nvidia_api_key
+        model = nvidia_model or config.nvidia_model
+        if not api_key:
+            raise ExternalServiceError("NVIDIA API key is not configured.")
+        try:
+            # The model catalog is public; use inference to actually verify the key.
+            response = httpx.post(
+                "https://integrate.api.nvidia.com/v1/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}"},
+                json={
+                    "model": model,
+                    "messages": [{"role": "user", "content": "Hi"}],
+                    "max_tokens": 1,
+                    "stream": False,
+                },
+                timeout=30.0,
+            )
+            response.raise_for_status()
+        except httpx.HTTPStatusError as error:
+            detail = response_error_message(error.response).replace(api_key, "[redacted]")
+            if "degraded" in detail.lower():
+                detail = f"Model '{model}' is temporarily unavailable (DEGRADED). Choose another model or try again later."
+            raise ExternalServiceError(f"NVIDIA check failed (HTTP {error.response.status_code}): {detail}") from error
+        except (httpx.HTTPError, OSError) as error:
+            raise ExternalServiceError(f"NVIDIA check failed: {error}") from error
         return ProviderCheckResponse(provider=provider, ok=True)
     raise ExternalServiceError(f"Unknown provider: {provider}")

@@ -82,6 +82,8 @@ def persist_settings(
                 "gemini_model",
                 "openrouter_api_key",
                 "openrouter_model",
+                "nvidia_api_key",
+                "nvidia_model",
             }
         },
     )
@@ -126,11 +128,13 @@ def persist_provider_settings(
     _: AuthenticatedPrincipal,
 ) -> SettingsPersistResponse:
     """Update provider settings; keep API keys in ``.env``."""
-    patch = payload.model_dump()
+    patch = payload.model_dump(exclude_none=True)
     if not patch.get("gemini_api_key"):
         patch.pop("gemini_api_key", None)
     if not patch.get("openrouter_api_key"):
         patch.pop("openrouter_api_key", None)
+    if not patch.get("nvidia_api_key"):
+        patch.pop("nvidia_api_key", None)
     apply_settings_patch(patch)
     config = app_config.get_config()
     written = persist_config_to_settings(
@@ -143,12 +147,13 @@ def persist_provider_settings(
             "ollama_model",
             "gemini_model",
             "openrouter_model",
+            "nvidia_model",
         },
     )
     secret_written = persist_config_to_env(
         config,
         DEFAULT_ENV_PATH,
-        field_names={"gemini_api_key", "openrouter_api_key"},
+        field_names={"gemini_api_key", "openrouter_api_key", "nvidia_api_key"},
     )
     _logger.info("Persisted provider settings to %s and keys to %s", DEFAULT_SETTINGS_PATH, DEFAULT_ENV_PATH)
     return SettingsPersistResponse(
@@ -189,6 +194,8 @@ async def post_provider_check(
                 ollama_base_url=payload.ollama_base_url,
                 gemini_api_key=payload.gemini_api_key,
                 openrouter_api_key=payload.openrouter_api_key,
+                nvidia_api_key=payload.nvidia_api_key,
+                nvidia_model=payload.nvidia_model,
             )
         except ExternalServiceError as error:
             # Surface a non-OK response rather than raising so the caller sees

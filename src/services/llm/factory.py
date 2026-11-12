@@ -4,6 +4,7 @@ from src.config import config
 from src.services.llm.base import BaseProvider
 from src.services.llm.fallback import FallbackProvider
 from src.services.llm.gemini import GeminiProvider
+from src.services.llm.nvidia import NvidiaProvider
 from src.services.llm.ollama import OllamaProvider
 from src.services.llm.openrouter import OpenRouterProvider
 
@@ -11,6 +12,7 @@ _PROVIDER_MAP: dict[str, type[BaseProvider]] = {
     "ollama": OllamaProvider,
     "gemini": GeminiProvider,
     "openrouter": OpenRouterProvider,
+    "nvidia": NvidiaProvider,
 }
 
 _llm_instance: BaseProvider | None = None

@@ -40,6 +40,7 @@ class FallbackProvider(BaseProvider):
                 or "connect" in error_msg.lower()
                 or "connection" in error_msg.lower()
                 or "network" in error_msg.lower()
+                or "degraded" in error_msg.lower()
                 or "no candidates" in error_msg.lower()
                 or "blocked" in error_msg.lower()
                 or "PROHIBITED" in error_msg.upper()

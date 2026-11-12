@@ -47,7 +47,8 @@ const generateProviderOptions = computed(() => [
   { value: '', label: t('use_default') },
   { value: 'ollama', label: t('ollama') },
   { value: 'gemini', label: t('gemini') },
-  { value: 'openrouter', label: t('openrouter') }
+  { value: 'openrouter', label: t('openrouter') },
+  { value: 'nvidia', label: t('nvidia') }
 ])
 </script>
 

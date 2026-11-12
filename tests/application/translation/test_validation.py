@@ -35,7 +35,7 @@ def test_invalid_target_raises_application_validation_error() -> None:
 
 @pytest.mark.parametrize(
     ("provider", "field"),
-    [("gemini", "gemini_api_key"), ("openrouter", "openrouter_api_key")],
+    [("gemini", "gemini_api_key"), ("openrouter", "openrouter_api_key"), ("nvidia", "nvidia_api_key")],
 )
 def test_remote_provider_requires_api_key(provider, field) -> None:
     config = Config(llm_provider=provider)

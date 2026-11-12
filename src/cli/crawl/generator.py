@@ -32,7 +32,7 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
         "--provider",
         type=str,
         default=None,
-        help="LLM provider override (ollama/gemini).",
+        help="LLM provider override (ollama/gemini/openrouter/nvidia).",
     )
     browser_mode = parser.add_mutually_exclusive_group()
     browser_mode.add_argument(

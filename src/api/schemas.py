@@ -33,6 +33,7 @@ class SettingsResponse(BaseModel):
     translation_max_tokens: int
     gemini_api_key_configured: bool
     openrouter_api_key_configured: bool
+    nvidia_api_key_configured: bool
     telegram_enabled: bool
     telegram_configured: bool
     telegram_api_base: str
@@ -43,6 +44,7 @@ class SettingsResponse(BaseModel):
     ollama_model: str
     gemini_model: str
     openrouter_model: str
+    nvidia_model: str
 
 
 class SettingsPatch(BaseModel):
@@ -71,14 +73,16 @@ class TelegramSettingsPatch(BaseModel):
 class ProviderSettingsPatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    llm_provider: Literal["ollama", "gemini", "openrouter"]
-    fallback_provider: Literal["", "ollama", "gemini", "openrouter"]
+    llm_provider: Literal["ollama", "gemini", "openrouter", "nvidia"]
+    fallback_provider: Literal["", "ollama", "gemini", "openrouter", "nvidia"]
     ollama_base_url: str = Field(min_length=1)
     ollama_model: str = Field(min_length=1)
     gemini_model: str = Field(min_length=1)
     openrouter_model: str = Field(min_length=1)
     gemini_api_key: str | None = None
     openrouter_api_key: str | None = None
+    nvidia_api_key: str | None = None
+    nvidia_model: str | None = Field(None, min_length=1)
 
 
 class ProviderInfo(BaseModel):
@@ -104,6 +108,8 @@ class ProviderCheckRequest(BaseModel):
     ollama_base_url: str | None = None
     gemini_api_key: str | None = None
     openrouter_api_key: str | None = None
+    nvidia_api_key: str | None = None
+    nvidia_model: str | None = Field(None, min_length=1)
 
 
 class ProviderCheckResponse(BaseModel):
@@ -270,7 +276,7 @@ class MetadataLocalizationPayload(BaseModel):
         default_factory=lambda: ["title", "summary"],
         min_length=1,
     )
-    provider: Literal["", "ollama", "gemini", "openrouter"] | None = None
+    provider: Literal["", "ollama", "gemini", "openrouter", "nvidia"] | None = None
     force: bool = False
 
 
@@ -291,7 +297,7 @@ class TranslationRequestPayload(BaseModel):
     novel: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
     source_language: str | None = None
     target_language: Literal["", "vi", "en"] | None = None
-    provider: Literal["", "ollama", "gemini", "openrouter"] | None = None
+    provider: Literal["", "ollama", "gemini", "openrouter", "nvidia"] | None = None
     review: bool | None = None
     summary: bool | None = None
     translate_metadata: bool | None = None
@@ -358,7 +364,7 @@ class ConfigGenerateRequest(BaseModel):
 
     url: str
     name: str | None = None
-    provider: Literal["ollama", "gemini", "openrouter"] | None = None
+    provider: Literal["ollama", "gemini", "openrouter", "nvidia"] | None = None
     browser: bool | None = None
     headed: bool | None = None
     no_cache: bool | None = None

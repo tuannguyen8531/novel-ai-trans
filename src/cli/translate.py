@@ -109,7 +109,7 @@ Examples:
     parser.add_argument(
         "-p",
         "--provider",
-        choices=["ollama", "gemini", "openrouter"],
+        choices=["ollama", "gemini", "openrouter", "nvidia"],
         default=None,
         help="LLM provider (overrides .env)",
     )

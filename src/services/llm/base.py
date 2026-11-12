@@ -31,7 +31,23 @@ _RETRYABLE_ERROR_MARKERS = (
     "connect",
     "connection",
     "network",
+    "degraded",
 )
+
+
+def response_error_message(response: httpx.Response) -> str:
+    """Read OpenAI errors and NVIDIA problem details, with a plain-text fallback."""
+    try:
+        data = response.json()
+    except ValueError:
+        return response.text.strip()[:500] or response.reason_phrase
+    if isinstance(data, dict):
+        error = data.get("error")
+        message = error.get("message") if isinstance(error, dict) else error
+        message = message or data.get("detail") or data.get("message") or data.get("title")
+        if message:
+            return str(message)[:500]
+    return str(data)[:500]
 
 
 class BaseProvider(ABC):
@@ -204,12 +220,7 @@ class BaseProvider(ABC):
         if response.is_success:
             return
 
-        try:
-            error_data = response.json()
-            error_msg = error_data.get("error", {}).get("message", "") or str(error_data)
-        except Exception:
-            error_msg = response.text[:500]
-
+        error_msg = response_error_message(response)
         raise RuntimeError(f"{self.provider_name} API error ({response.status_code}): {error_msg}")
 
     def close(self):

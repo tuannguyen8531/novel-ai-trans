@@ -20,6 +20,7 @@ class TestConfig:
             config = Config()
             assert config.llm_provider == "ollama"
             assert config.ollama_model == "qwen3:8b"
+            assert config.nvidia_model == "google/gemma-4-31b-it"
             assert config.log_retention_days == 30
             assert config.translation_temperature == 0.3
             assert config.target_language == "vi"
@@ -47,6 +48,8 @@ class TestConfig:
             "TARGET_LANGUAGE": "en",
             "CHUNK_SIZE": "2200",
             "GEMINI_API_KEY": "secret-must-stay-out-of-json",
+            "NVIDIA_API_KEY": "nvapi-secret",
+            "NVIDIA_MODEL": "google/gemma-4-31b-it",
         }
         with patch.dict(os.environ, env, clear=True):
             Config.ensure_settings_file(settings_path)
@@ -57,6 +60,20 @@ class TestConfig:
         assert data["target_language"] == "en"
         assert data["chunk_size"] == 2200
         assert "gemini_api_key" not in data
+        assert "nvidia_api_key" not in data
+        assert data["nvidia_model"] == "google/gemma-4-31b-it"
+
+    def test_nvidia_key_comes_from_environment_and_model_from_settings(self, tmp_path):
+        settings_path = tmp_path / "settings.json"
+        settings_path.write_text(
+            json.dumps({"llm_provider": "nvidia", "nvidia_model": "custom/model", "nvidia_api_key": "untrusted"}),
+            encoding="utf-8",
+        )
+        with patch.dict(os.environ, {"NVIDIA_API_KEY": "nvapi-secret", "NVIDIA_MODEL": "ignored/model"}, clear=True):
+            cfg = Config.from_env(settings_path)
+        assert cfg.llm_provider == "nvidia"
+        assert cfg.nvidia_api_key == "nvapi-secret"
+        assert cfg.nvidia_model == "custom/model"
 
     def test_first_settings_file_uses_dotenv_when_process_environment_is_missing(self, tmp_path):
         settings_path = tmp_path / "settings.json"

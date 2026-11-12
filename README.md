@@ -12,7 +12,7 @@ the result through a CLI or web interface.
 ```text
 Website / EPUB
     -> source chapters
-    -> Ollama, Gemini, or OpenRouter
+    -> Ollama, Gemini, OpenRouter, or NVIDIA
     -> translated chapters
     -> EPUB
 ```
@@ -31,7 +31,7 @@ Website / EPUB
   automatically.
 - Resume interrupted runs, retry failed chapters, or retranslate a range.
 - Localize novel titles and summaries and package translated chapters as EPUB.
-- Use Ollama locally or Gemini and OpenRouter in the cloud, with optional
+- Use Ollama locally or Gemini, OpenRouter, and NVIDIA in the cloud, with optional
   provider fallback.
 - Run the complete workflow from either the CLI or the web GUI.
 
@@ -40,8 +40,9 @@ Website / EPUB
 - Python 3.14+
 - [uv](https://docs.astral.sh/uv/)
 - One supported LLM provider: [Ollama](https://ollama.com/),
-  [Gemini](https://aistudio.google.com/apikey), or
-  [OpenRouter](https://openrouter.ai/keys)
+  [Gemini](https://aistudio.google.com/apikey),
+  [OpenRouter](https://openrouter.ai/keys), or
+  [NVIDIA](https://build.nvidia.com/google/gemma-4-31b-it)
 - Node.js 20+ when building the web GUI
 - Playwright Chromium when crawling JavaScript-heavy sites
 
@@ -55,7 +56,7 @@ uv sync
 cp .env.example .env
 ```
 
-See the [provider guide](docs/PROVIDERS.md) for Gemini, OpenRouter, fallback,
+See the [provider guide](docs/PROVIDERS.md) for Gemini, OpenRouter, NVIDIA, fallback,
 and model settings.
 
 ### Run with Docker Compose
@@ -138,7 +139,7 @@ Run a workflow command such as `uv run translate --help`, or see the
 | --- | --- |
 | [Workflow guide](docs/GUIDE.md) | Crawl, generate, import, translate, glossary, and packaging |
 | [Web GUI](docs/GUI.md) | Build, serve, configure, and operate the browser interface |
-| [Providers](docs/PROVIDERS.md) | Ollama, Gemini, OpenRouter, fallback, and generation settings |
+| [Providers](docs/PROVIDERS.md) | Ollama, Gemini, OpenRouter, NVIDIA, fallback, and generation settings |
 | [Architecture](docs/ARCHITECTURE.md) | Module ownership and backend/frontend dependency direction |
 
 ## Development

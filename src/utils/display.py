@@ -49,6 +49,13 @@ def check_provider(config) -> bool:
         print(f"{GREEN}✓ OpenRouter API configured. Model: {config.openrouter_model}{RESET}")
         return True
 
+    elif provider == "nvidia":
+        if not config.nvidia_api_key:
+            print(f"{RED}✗ NVIDIA_API_KEY not set in .env{RESET}")
+            return False
+        print(f"{GREEN}✓ NVIDIA API configured. Model: {config.nvidia_model}{RESET}")
+        return True
+
     else:
         print(f"{RED}✗ Unknown provider: {provider}{RESET}")
         return False

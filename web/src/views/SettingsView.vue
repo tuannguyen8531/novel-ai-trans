@@ -39,21 +39,24 @@ const telegramForm = reactive({
 
 const geminiKeyInput = ref('')
 const openrouterKeyInput = ref('')
+const nvidiaKeyInput = ref('')
 const providerForm = reactive({
-  llm_provider: 'ollama' as 'ollama' | 'gemini' | 'openrouter',
-  fallback_provider: '' as '' | 'ollama' | 'gemini' | 'openrouter',
+  llm_provider: 'ollama' as 'ollama' | 'gemini' | 'openrouter' | 'nvidia',
+  fallback_provider: '' as '' | 'ollama' | 'gemini' | 'openrouter' | 'nvidia',
   ollama_base_url: 'http://localhost:11434',
   ollama_model: '',
   gemini_model: '',
-  openrouter_model: ''
+  openrouter_model: '',
+  nvidia_model: ''
 })
 
-const ALL_PROVIDER_NAMES = ['ollama', 'gemini', 'openrouter'] as const
+const ALL_PROVIDER_NAMES = ['ollama', 'gemini', 'openrouter', 'nvidia'] as const
 
 const primaryProviderOptions = computed(() => [
   { value: 'ollama', label: t('ollama') },
   { value: 'gemini', label: t('gemini') },
-  { value: 'openrouter', label: t('openrouter') }
+  { value: 'openrouter', label: t('openrouter') },
+  { value: 'nvidia', label: t('nvidia') }
 ])
 
 const fallbackOptions = computed(() => {
@@ -96,6 +99,7 @@ onMounted(async () => {
     providerForm.ollama_model = settings.settings.ollama_model
     providerForm.gemini_model = settings.settings.gemini_model
     providerForm.openrouter_model = settings.settings.openrouter_model
+    providerForm.nvidia_model = settings.settings.nvidia_model
   }
   providers.value = await settings.listProviders()
   await refreshOllamaAccount()
@@ -130,6 +134,8 @@ function clearProviderCheck(provider: string) {
 watch(() => providerForm.ollama_base_url, () => clearProviderCheck('ollama'))
 watch(geminiKeyInput, () => clearProviderCheck('gemini'))
 watch(openrouterKeyInput, () => clearProviderCheck('openrouter'))
+watch(nvidiaKeyInput, () => clearProviderCheck('nvidia'))
+watch(() => providerForm.nvidia_model, () => clearProviderCheck('nvidia'))
 
 function getProviderStatusClass(provider: string): string {
   const result = checkResults.value[provider]
@@ -199,9 +205,11 @@ async function runProviderCheck(provider: string) {
   checkingProviders.value = { ...checkingProviders.value, [provider]: true }
   try {
     const res = await settings.checkProvider(provider, {
+      nvidia_model: providerForm.nvidia_model,
       ollama_base_url: providerForm.ollama_base_url,
       gemini_api_key: geminiKeyInput.value.trim() || undefined,
-      openrouter_api_key: openrouterKeyInput.value.trim() || undefined
+      openrouter_api_key: openrouterKeyInput.value.trim() || undefined,
+      nvidia_api_key: nvidiaKeyInput.value.trim() || undefined
     })
     if (provider === 'ollama') {
       if (res.ok) {
@@ -241,11 +249,13 @@ async function saveProviderSettings() {
     providerPersistResult.value = await settings.persistProviders({
       ...providerForm,
       gemini_api_key: geminiKeyInput.value.trim() || undefined,
-      openrouter_api_key: openrouterKeyInput.value.trim() || undefined
+      openrouter_api_key: openrouterKeyInput.value.trim() || undefined,
+      nvidia_api_key: nvidiaKeyInput.value.trim() || undefined
     })
     if (providerPersistResult.value) {
       geminiKeyInput.value = ''
       openrouterKeyInput.value = ''
+      nvidiaKeyInput.value = ''
       providers.value = await settings.listProviders()
       checkResults.value = {}
       providerRefreshKey.value += 1
@@ -519,6 +529,60 @@ async function saveTelegramSettings() {
               :label="$t('default_model')"
               :model-value="providerForm.openrouter_model"
               @update:model-value="(value: string) => providerForm.openrouter_model = value"
+            />
+          </div>
+        </div>
+      </div>
+
+      <!-- NVIDIA Provider Card -->
+      <div class="card-panel provider-item-card">
+        <div class="provider-card-header">
+          <div class="provider-title-group">
+            <Cpu :size="20" class="provider-icon" />
+            <div>
+              <h3 class="provider-title">{{ $t("nvidia") }}</h3>
+              <p class="provider-desc">{{ $t("nvidia_description") }}</p>
+            </div>
+          </div>
+
+          <div class="provider-status-actions">
+            <span class="badge" :class="getProviderStatusClass('nvidia')">
+              {{ getProviderStatusText('nvidia') }}
+            </span>
+            <button
+              class="secondary btn-check"
+              type="button"
+              :disabled="checkingProviders['nvidia']"
+              @click="runProviderCheck('nvidia')"
+            >
+              <RotateCw :size="13" :class="{ 'spinning': checkingProviders['nvidia'] }" />
+              <span>{{ checkingProviders['nvidia'] ? $t('testing') : $t('test_key') }}</span>
+            </button>
+          </div>
+        </div>
+
+        <p v-if="checkResults['nvidia']?.detail" class="error check-error">
+          {{ checkResults['nvidia'].detail }}
+        </p>
+
+        <div class="provider-form-body">
+          <div>
+            <label>{{ $t("api_key") }}</label>
+            <input
+              v-model="nvidiaKeyInput"
+              type="password"
+              autocomplete="off"
+              :placeholder="$t('nvidia_key_placeholder')"
+            />
+          </div>
+
+          <div>
+            <ProviderModelField
+              :key="`nvidia-${providerRefreshKey}`"
+              provider="nvidia"
+              :label="$t('default_model')"
+              :model-value="providerForm.nvidia_model"
+              @update:model-value="(value: string) => providerForm.nvidia_model = value"
             />
           </div>
         </div>
